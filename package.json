@@ -1,0 +1,24 @@
+{
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@9.5.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r dev",
+    "lint": "eslint .",
+    "prepare": "tsx scripts/prepare.ts",
+    "release": "bumpp -r --no-push --commit \"release: v%s\"",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^2.22.2",
+    "@types/node": "^20.14.10",
+    "@zinkawaii/eslint-config": "^0.1.3",
+    "bumpp": "^9.4.1",
+    "eslint": "^9.7.0",
+    "tsup": "^8.1.0",
+    "tsx": "^4.16.2",
+    "vitest": "^2.0.2"
+  }
+}
