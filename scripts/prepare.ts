@@ -10,6 +10,11 @@ const destinations = [
     ["../README.md", "../packages/satorigear"]
 ];
 
-for (const [src, dest] of destinations) {
-    await link(resolve(src), resolve(dest, basename(src)));
+try {
+    for (const [src, dest] of destinations) {
+        await link(resolve(src), resolve(dest, basename(src)));
+    }
+}
+catch (err) {
+    console.error(err);
 }
