@@ -10,6 +10,7 @@
     "strict": true
   },
   "include": [
-    "packages/*/src"
+    "packages/*/src",
+    "playground/**/*"
   ]
 }

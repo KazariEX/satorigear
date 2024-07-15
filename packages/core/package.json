@@ -23,5 +23,9 @@
   "scripts": {
     "build": "tsup-node",
     "dev": "tsup-node --watch"
+  },
+  "dependencies": {
+    "defu": "^6.1.4",
+    "hookable": "^5.5.3"
   }
 }
