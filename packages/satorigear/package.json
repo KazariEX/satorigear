@@ -1,0 +1,24 @@
+{
+  "name": "satorigear",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "",
+  "author": "KazariEX",
+  "license": "MIT",
+  "repository": "KazariEX/satorigear",
+  "keywords": [],
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown -w",
+    "prepack": "pnpm run build",
+    "test": "vitest"
+  }
+}

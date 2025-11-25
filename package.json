@@ -1,0 +1,21 @@
+{
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@11.6.0",
+  "scripts": {
+    "build": "pnpm --filter satorigear... build",
+    "dev": "pnpm --filter satorigear... --parallel dev",
+    "prepare": "zin link satorigear",
+    "release": "bumpp -r --no-push -c \"release: v%s\"",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@zinkawaii/eslint-config": "catalog:",
+    "@zinkawaii/scripts": "catalog:default",
+    "@zinkawaii/tsconfig": "catalog:",
+    "bumpp": "catalog:",
+    "eslint": "catalog:",
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
+  }
+}
