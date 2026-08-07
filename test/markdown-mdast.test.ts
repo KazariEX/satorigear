@@ -27,6 +27,25 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it("decodes only valid CommonMark character references", () => {
+    const links = markdownToMdast([
+      "[valid](&ouml; \"&#35;\")",
+      "",
+      "[escaped](\\&amp; \"\\&copy;\")",
+      "",
+      "[oversized](&#87654321; \"&#xabcdef0;\")",
+      "",
+    ].join("\n"));
+    expect(links.children).toMatchObject([
+      { children: [{ type: "link", url: "ö", title: "#" }] },
+      { children: [{ type: "link", url: "&amp;", title: "&copy;" }] },
+      { children: [{ type: "link", url: "&#87654321;", title: "&#xabcdef0;" }] },
+    ]);
+
+    expect(markdownToMdast("``` &copy;\nx\n```\n").children[0]).toMatchObject({ lang: "©" });
+    expect(markdownToMdast("``` &#87654321;\nx\n```\n").children[0]).toMatchObject({ lang: "&#87654321;" });
+  });
+
   it("maps CST offsets to mdast positions", () => {
     const tree = markdownToMdast("  foo  \nbar\n");
     expect(tree.position).toEqual({

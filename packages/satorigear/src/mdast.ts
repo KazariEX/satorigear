@@ -153,10 +153,10 @@ function attachPositions(context: ProjectionContext, root: Root): Root {
   return root;
 }
 
-const escapable = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])/g;
+const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
 
 function semanticText(value: string): string {
-  return decodeHTMLStrict(value.replace(escapable, "$1"));
+  return value.replace(semanticCharacter, (match, escaped) => escaped ?? decodeHTMLStrict(match));
 }
 
 function identifier(value: string): string {
