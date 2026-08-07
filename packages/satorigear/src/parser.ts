@@ -78,8 +78,13 @@ interface CompositeBlockDescriptor {
   node: SyntaxTreeNode;
   offset: number;
   regionIds: readonly number[];
+  regionRevisions: readonly number[];
   source: string;
+  syntax: MarkdownSyntax;
+  version: number;
 }
+
+type CollectedBlock = Omit<CompositeBlockDescriptor, "regionRevisions" | "syntax" | "version">;
 
 function rangesOf(tree: SyntaxTree, node: SyntaxTreeNode): SourceRange[] {
   return tree.children(node).flatMap((child) => {
@@ -168,7 +173,16 @@ function changedLabels(previous: ReadonlySet<string>, next: ReadonlySet<string>)
 }
 
 function intersects(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  return [...left].some((value) => right.has(value));
+  for (const value of left) {
+    if (right.has(value)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sameNumbers(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 class MarkdownCompositeDocument implements MarkdownSyntax {
@@ -185,28 +199,14 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
     this.update(tree, source);
   }
 
-  blocks(): readonly {
-    id: number;
-    node: MarkdownSyntaxNode;
-    offset: number;
-    source: string;
-    syntax: MarkdownSyntax;
-    version: string;
-  }[] {
-    return this.#blocks.map((block) => ({
-      id: block.id,
-      node: block.node,
-      offset: block.offset,
-      source: block.source,
-      syntax: this,
-      version: block.regionIds.map((id) => `${id}:${this.#regions.get(id)?.revision}`).join("|"),
-    }));
+  blocks(): readonly CompositeBlockDescriptor[] {
+    return this.#blocks;
   }
 
   update(tree: SyntaxTree, source: string): void {
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
-    const blocks: CompositeBlockDescriptor[] = [];
+    const blocks: CollectedBlock[] = [];
     const collect = (node: SyntaxTreeNode, regionIds: number[]): void => {
       const rule = tree.ruleName(node);
       if (rule === "LinkDefinition") {
@@ -275,9 +275,29 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
         : createInlineRegion(descriptor, labels);
       regions.set(descriptor.id, region);
     }
+    const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));
+    const nextBlocks = blocks.map((block): CompositeBlockDescriptor => {
+      const previous = previousBlocks.get(block.id);
+      const regionRevisions = block.regionIds.map((id) => {
+        const region = regions.get(id);
+        if (!region) {
+          throw new Error(`Block references missing inline region ${id}`);
+        }
+        return region.revision;
+      });
+      const unchanged = previous?.source === block.source
+        && sameNumbers(previous.regionIds, block.regionIds)
+        && sameNumbers(previous.regionRevisions, regionRevisions);
+      return {
+        ...block,
+        regionRevisions,
+        syntax: this,
+        version: unchanged ? previous.version : (previous?.version ?? -1) + 1,
+      };
+    });
     this.#tree = tree;
     this.#source = source;
-    this.#blocks = blocks;
+    this.#blocks = nextBlocks;
     this.#labels = labels;
     this.#regions = regions;
   }

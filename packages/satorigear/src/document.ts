@@ -70,7 +70,7 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 class StatefulMarkdownDocument implements MarkdownDocument {
   #blocks: EmittedDocument;
   #composite: ReturnType<typeof createMarkdownCompositeDocument>;
-  #fragments = new Map<number, { fragment: MdastBlockFragment; source: string; version: string }>();
+  #fragments = new Map<number, { fragment: MdastBlockFragment; version: number }>();
   #tokenizer: ReturnType<typeof createMarkdownBlockTokenizer>;
 
   constructor(source: string) {
@@ -96,13 +96,13 @@ class StatefulMarkdownDocument implements MarkdownDocument {
   }
 
   toMdast(): Root {
-    const fragments = new Map<number, { fragment: MdastBlockFragment; source: string; version: string }>();
+    const fragments = new Map<number, { fragment: MdastBlockFragment; version: number }>();
     const blocks = this.#composite.blocks().map((block) => {
       const previous = this.#fragments.get(block.id);
-      const fragment = previous?.source === block.source && previous.version === block.version
+      const fragment = previous?.version === block.version
         ? previous.fragment
         : markdownSyntaxBlockToMdastFragment(block.node, this.source, block.syntax);
-      fragments.set(block.id, { fragment, source: block.source, version: block.version });
+      fragments.set(block.id, { fragment, version: block.version });
       return { fragment, offset: block.offset };
     });
     this.#fragments = fragments;
