@@ -385,40 +385,44 @@ export function reassociateMarkdownReferenceTails(
   source: string,
   tokens: readonly Token[],
   referenceLabels: ReadonlySet<string>,
-): Token[] {
-  const result: Token[] = [];
+): readonly Token[] {
+  let result: Token[] | undefined;
   for (let index = 0; index < tokens.length; index++) {
     const tail = tokens[index];
     const label = tail.type === "ReferenceTail" ? tail.text.slice(2, -1) : "";
     if (tail.type !== "ReferenceTail" || referenceLabels.has(normalizeMarkdownReferenceLabel(label))) {
-      result.push(tail);
+      result?.push(tail);
       continue;
     }
     const opener = tokens[index + 1];
     if (opener?.type !== "BracketOpen" || opener.offset !== tail.offset + tail.text.length) {
-      result.push(tail);
+      result?.push(tail);
       continue;
     }
     let closerIndex = index + 2;
+    let nested = false;
     while (closerIndex < tokens.length && tokens[closerIndex].type !== "ShortcutReferenceTail") {
+      const type = tokens[closerIndex].type;
+      nested ||= type === "BracketOpen" || type === "ImageOpen";
       closerIndex++;
     }
     const closer = tokens[closerIndex];
-    if (!closer || tokens.slice(index + 2, closerIndex).some((token) => token.type === "BracketOpen" || token.type === "ImageOpen")) {
-      result.push(tail);
+    if (!closer || nested) {
+      result?.push(tail);
       continue;
     }
     const nextLabel = source.slice(opener.offset + opener.text.length, closer.offset);
     if (!referenceLabels.has(normalizeMarkdownReferenceLabel(nextLabel))) {
-      result.push(tail);
+      result?.push(tail);
       continue;
     }
+    result ??= tokens.slice(0, index);
     result.push(...splitReferenceTail(tail).slice(0, -1));
     const offset = tail.offset + tail.text.length - 1;
     result.push(tokenFragment(tail, "ReferenceTail", source.slice(offset, closer.offset + closer.text.length), offset));
     index = closerIndex;
   }
-  return result;
+  return result ?? tokens;
 }
 
 export interface MarkdownReferenceState {
