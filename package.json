@@ -7,8 +7,8 @@
     "dev": "pnpm --filter satorigear... --parallel dev",
     "prepare": "zin link satorigear",
     "vendor:prepare": "node scripts/vendor.ts",
-    "test:markdown": "node test/markdown.ts",
-    "conformance:markdown": "node test/markdown-conformance.ts",
+    "test:markdown": "vitest run test/markdown.test.ts",
+    "conformance:markdown": "vitest run test/markdown-conformance.test.ts --reporter=verbose",
     "release": "bumpp -r --no-push -c \"release: v%s\"",
     "test": "vitest"
   },

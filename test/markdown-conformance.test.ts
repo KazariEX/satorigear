@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Parser as CommonMarkParser, HtmlRenderer } from "commonmark";
 import { tests } from "commonmark-spec";
+import { afterAll, describe, expect, it } from "vitest";
 import grammar from "../packages/satorigear/src/markdown.ts";
 import { createParser, type CstChild, type CstNode, getText } from "../vendors/monogram/src/gen-parser.ts";
 
@@ -257,35 +258,40 @@ for (const test of cases) {
   if (!full && failures.length < 20) failures.push({ number: test.number, section: test.section, kind: block ? "inline" : "block", markdown: source });
 }
 
-if (referenceHtmlMatches !== cases.length) {
-  throw new Error(`commonmark.js/spec package drift: reference renderer matched ${referenceHtmlMatches}/${cases.length} expected HTML cases`);
-}
-if (baseline.version !== VERSION || baseline.total !== cases.length) {
-  throw new Error(`CommonMark baseline is for ${baseline.version}/${baseline.total} cases, current corpus is ${VERSION}/${cases.length}`);
-}
-
 const pct = (n: number, total = counts.total): string => `${(100 * n / total).toFixed(1)}%`;
-console.log(`CommonMark ${VERSION}: ${counts.total} official examples`);
-console.log(`  accepted    ${counts.accepted}/${counts.total} (${pct(counts.accepted)})`);
-console.log(`  block exact ${counts.blockExact}/${counts.total} (${pct(counts.blockExact)})`);
-console.log(`  inline exact ${counts.inlineExact}/${counts.total} (${pct(counts.inlineExact)})`);
-console.log(`  full exact  ${counts.fullExact}/${counts.total} (${pct(counts.fullExact)})`);
-console.log("\nBy section:");
-for (const [name, c] of bySection) {
-  console.log(`  ${name.padEnd(40)} ${String(c.fullExact).padStart(3)}/${String(c.total).padEnd(3)} full · ${String(c.blockExact).padStart(3)} block · ${String(c.inlineExact).padStart(3)} inline`);
-}
-console.log("\nFirst divergences:");
-for (const f of failures) {
-  const sample = JSON.stringify(f.markdown.length > 70 ? f.markdown.slice(0, 67) + "..." : f.markdown);
-  console.log(`  #${f.number} [${f.section}] ${f.kind}: ${sample}`);
-}
 
-const regressions = (["accepted", "blockExact", "inlineExact", "fullExact"] as const)
-  .filter((key) => counts[key] < baseline[key])
-  .map((key) => `${key} ${counts[key]} < baseline ${baseline[key]}`);
-console.log("##COMMONMARK## " + JSON.stringify({ version: VERSION, ...counts }));
-if (regressions.length) {
-  console.error("\nCommonMark conformance regression: " + regressions.join("; "));
-  process.exit(1);
-}
-console.log("\n✓ CommonMark official-corpus baseline preserved");
+describe(`CommonMark ${VERSION} official corpus`, () => {
+  it("matches every expected HTML case with the reference implementation", () => {
+    expect(referenceHtmlMatches).toBe(cases.length);
+  });
+
+  it("uses a baseline for the current corpus", () => {
+    expect(baseline.version).toBe(VERSION);
+    expect(baseline.total).toBe(cases.length);
+  });
+
+  for (const key of ["accepted", "blockExact", "inlineExact", "fullExact"] as const) {
+    it(`preserves the ${key} baseline`, () => {
+      expect(counts[key]).toBeGreaterThanOrEqual(baseline[key]);
+    });
+  }
+});
+
+afterAll(() => {
+  console.log(`CommonMark ${VERSION}: ${counts.total} official examples`);
+  console.log(`  accepted    ${counts.accepted}/${counts.total} (${pct(counts.accepted)})`);
+  console.log(`  block exact ${counts.blockExact}/${counts.total} (${pct(counts.blockExact)})`);
+  console.log(`  inline exact ${counts.inlineExact}/${counts.total} (${pct(counts.inlineExact)})`);
+  console.log(`  full exact  ${counts.fullExact}/${counts.total} (${pct(counts.fullExact)})`);
+  console.log("\nBy section:");
+  for (const [name, c] of bySection) {
+    console.log(`  ${name.padEnd(40)} ${String(c.fullExact).padStart(3)}/${String(c.total).padEnd(3)} full · ${String(c.blockExact).padStart(3)} block · ${String(c.inlineExact).padStart(3)} inline`);
+  }
+  console.log("\nFirst divergences:");
+  for (const f of failures) {
+    const sample = JSON.stringify(f.markdown.length > 70 ? f.markdown.slice(0, 67) + "..." : f.markdown);
+    console.log(`  #${f.number} [${f.section}] ${f.kind}: ${sample}`);
+  }
+  console.log("##COMMONMARK## " + JSON.stringify({ version: VERSION, ...counts }));
+  console.log("\n✓ CommonMark official-corpus baseline preserved");
+});
