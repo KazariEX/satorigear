@@ -1,6 +1,6 @@
 import { createCompositeParser, rebaseCst } from "monogram/composite-parser.ts";
 import { type CstChild, type CstNode, getText } from "monogram/cst.ts";
-import { resolveDelimitedTokens } from "monogram/delimiter-parser.ts";
+import { createDelimitedTokenResolver } from "monogram/delimiter-parser.ts";
 import { createLexer, type Token } from "monogram/gen-lexer.ts";
 import { createSourceView, type SourceRange, type SourceView } from "monogram/source-view.ts";
 import {
@@ -25,6 +25,7 @@ import { changedTokenRange } from "./token-change.ts";
 
 export const markdownBlockParser = createCstParser(blockRuntime, tokenizeMarkdownBlocks);
 const inlineParser = createCstParser(inlineRuntime, createLexer(markdownInlineGrammar).tokenize);
+const inlineResolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
 
 function referenceLabel(definition: CstNode, source: string): string | null {
   return referenceLabelText(getText(definition, source));
@@ -76,9 +77,11 @@ function inlineParserFor(referenceLabels: ReadonlySet<string>) {
 
 function tokenizeInline(source: string, referenceLabels: ReadonlySet<string>): { candidates: Set<string>; tokens: Token[] } {
   const candidates = new Set<string>();
-  const pairs = markdownBracketPairs(referenceLabels, candidates);
   const tokens = reassociateMarkdownReferenceTails(source, inlineParser.tokenize(source), referenceLabels);
-  return { candidates, tokens: resolveDelimitedTokens(source, tokens, markdownDelimiterRuns, pairs) };
+  return {
+    candidates,
+    tokens: inlineResolver.resolve(source, tokens, { labels: referenceLabels, candidates }),
+  };
 }
 
 /**

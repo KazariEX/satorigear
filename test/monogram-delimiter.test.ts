@@ -1,9 +1,10 @@
-import { createDelimiterParser, resolveDelimitedTokens, resolveDelimiterRuns } from "monogram/delimiter-parser.ts";
+import { createDelimitedTokenResolver, createDelimiterParser, resolveDelimiterRuns } from "monogram/delimiter-parser.ts";
 import { createLexer } from "monogram/gen-lexer.ts";
 import { describe, expect, it } from "vitest";
 import { markdownBracketPairs, markdownDelimiterRuns, markdownInlineGrammar } from "../packages/satorigear/src/grammar-inline.ts";
 
 const lexer = createLexer(markdownInlineGrammar);
+const pairedResolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
 
 function tokenTypes(source: string): string[] {
   return resolveDelimiterRuns(source, lexer.tokenize(source), markdownDelimiterRuns).map((token) => token.type);
@@ -11,7 +12,7 @@ function tokenTypes(source: string): string[] {
 
 function pairedTokenTypes(source: string): string[] {
   const references = new Set(["CANDIDATE", "NESTED", "REF"]);
-  return resolveDelimitedTokens(source, lexer.tokenize(source), markdownDelimiterRuns, markdownBracketPairs(references))
+  return pairedResolver.resolve(source, lexer.tokenize(source), { labels: references })
     .map((token) => token.type);
 }
 

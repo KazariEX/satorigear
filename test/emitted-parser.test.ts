@@ -1,4 +1,4 @@
-import { resolveDelimitedTokens } from "monogram/delimiter-parser.ts";
+import { createDelimitedTokenResolver } from "monogram/delimiter-parser.ts";
 import { createLexer, type Token } from "monogram/gen-lexer.ts";
 import { createParser } from "monogram/gen-parser.ts";
 import { describe, expect, it } from "vitest";
@@ -131,6 +131,7 @@ describe("emitted parser", () => {
   it("matches the interpreter after inline delimiter resolution", () => {
     const labels = new Set(["reference"]);
     const lexer = createLexer(markdownInlineGrammar);
+    const resolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
     const emitted = createCstParser(inlineRuntime, lexer.tokenize);
     const interpreted = createParser(markdownInlineGrammar);
     const sources = [
@@ -140,12 +141,7 @@ describe("emitted parser", () => {
     ];
     for (const source of sources) {
       const tokens = reassociateMarkdownReferenceTails(source, lexer.tokenize(source), labels);
-      const resolved = resolveDelimitedTokens(
-        source,
-        tokens,
-        markdownDelimiterRuns,
-        markdownBracketPairs(labels),
-      );
+      const resolved = resolver.resolve(source, tokens, { labels });
       expect(emitted.parseTokens(source, resolved, "InlineLines"))
         .toEqual(interpreted.parseTokens(source, resolved, "InlineLines"));
     }

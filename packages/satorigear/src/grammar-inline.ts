@@ -421,76 +421,81 @@ export function reassociateMarkdownReferenceTails(
   return result;
 }
 
-export function markdownBracketPairs(
-  referenceLabels: ReadonlySet<string>,
-  candidateLabels?: Set<string>,
-): PairedTokenConfig[] {
-  const activatesReference = ({ closer, content }: { closer: { text: string }; content: string }): boolean => {
-    const explicit = closer.text.startsWith("][") ? closer.text.slice(2, -1) : "";
-    const label = normalizeMarkdownReferenceLabel(explicit || content);
-    candidateLabels?.add(label);
-    return referenceLabels.has(label);
-  };
-  return [
-    {
-      opener: "BracketOpen",
-      closer: "LinkTail",
-      open: "LinkOpen",
-      close: "LinkClose",
-      deactivateEarlier: ["BracketOpen"],
-      isolateDelimiters: true,
-    },
-    {
-      opener: "ImageOpen",
-      closer: "LinkTail",
-      open: "ImageLinkOpen",
-      close: "ImageLinkClose",
-    },
-    {
-      opener: "BracketOpen",
-      closer: "ReferenceTail",
-      open: "ReferenceOpen",
-      close: "ReferenceClose",
-      deactivateEarlier: ["BracketOpen"],
-      isolateDelimiters: true,
-      activate: activatesReference,
-      splitUnmatchedCloser: splitReferenceTail,
-    },
-    {
-      opener: "BracketOpen",
-      closer: "ShortcutReferenceTail",
-      open: "ReferenceOpen",
-      close: "ReferenceClose",
-      deactivateEarlier: ["BracketOpen"],
-      isolateDelimiters: true,
-      activate: activatesReference,
-      content: {
-        requireNonWhitespace: true,
-        maxCharacters: 999,
-        forbidTokens: ["BracketOpen", "ImageOpen"],
-      },
-    },
-    {
-      opener: "ImageOpen",
-      closer: "ReferenceTail",
-      open: "ImageReferenceOpen",
-      close: "ImageReferenceClose",
-      isolateDelimiters: true,
-      activate: activatesReference,
-      splitUnmatchedCloser: splitReferenceTail,
-    },
-    {
-      opener: "ImageOpen",
-      closer: "ShortcutReferenceTail",
-      open: "ImageReferenceOpen",
-      close: "ImageReferenceClose",
-      isolateDelimiters: true,
-      activate: activatesReference,
-      content: {
-        requireNonWhitespace: true,
-        maxCharacters: 999,
-        forbidTokens: ["BracketOpen", "ImageOpen"],
-      },
-    },
-  ];
+export interface MarkdownReferenceState {
+  candidates?: Set<string>;
+  labels: ReadonlySet<string>;
 }
+
+const activatesReference: NonNullable<PairedTokenConfig<MarkdownReferenceState>["activate"]> = ({
+  closer,
+  content,
+  state,
+}) => {
+  const explicit = closer.text.startsWith("][") ? closer.text.slice(2, -1) : "";
+  const label = normalizeMarkdownReferenceLabel(explicit || content);
+  state.candidates?.add(label);
+  return state.labels.has(label);
+};
+
+export const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[] = [
+  {
+    opener: "BracketOpen",
+    closer: "LinkTail",
+    open: "LinkOpen",
+    close: "LinkClose",
+    deactivateEarlier: ["BracketOpen"],
+    isolateDelimiters: true,
+  },
+  {
+    opener: "ImageOpen",
+    closer: "LinkTail",
+    open: "ImageLinkOpen",
+    close: "ImageLinkClose",
+  },
+  {
+    opener: "BracketOpen",
+    closer: "ReferenceTail",
+    open: "ReferenceOpen",
+    close: "ReferenceClose",
+    deactivateEarlier: ["BracketOpen"],
+    isolateDelimiters: true,
+    activate: activatesReference,
+    splitUnmatchedCloser: splitReferenceTail,
+  },
+  {
+    opener: "BracketOpen",
+    closer: "ShortcutReferenceTail",
+    open: "ReferenceOpen",
+    close: "ReferenceClose",
+    deactivateEarlier: ["BracketOpen"],
+    isolateDelimiters: true,
+    activate: activatesReference,
+    content: {
+      requireNonWhitespace: true,
+      maxCharacters: 999,
+      forbidTokens: ["BracketOpen", "ImageOpen"],
+    },
+  },
+  {
+    opener: "ImageOpen",
+    closer: "ReferenceTail",
+    open: "ImageReferenceOpen",
+    close: "ImageReferenceClose",
+    isolateDelimiters: true,
+    activate: activatesReference,
+    splitUnmatchedCloser: splitReferenceTail,
+  },
+  {
+    opener: "ImageOpen",
+    closer: "ShortcutReferenceTail",
+    open: "ImageReferenceOpen",
+    close: "ImageReferenceClose",
+    isolateDelimiters: true,
+    activate: activatesReference,
+    content: {
+      requireNonWhitespace: true,
+      maxCharacters: 999,
+      forbidTokens: ["BracketOpen", "ImageOpen"],
+    },
+  },
+];
