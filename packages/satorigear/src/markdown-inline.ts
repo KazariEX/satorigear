@@ -1,4 +1,4 @@
-import { altPattern, anyChar, followedBy, noneOf, oneOf, optPattern, plus, range, repeat, seq, star } from "../../../vendors/monogram/src/api.ts";
+import { altPattern, anyChar, end, followedBy, noneOf, notFollowedBy, oneOf, optPattern, plus, range, repeat, seq, star } from "../../../vendors/monogram/src/api.ts";
 import markdown from "./markdown.ts";
 import type { DelimiterRunConfig } from "../../../vendors/monogram/src/delimiter-parser.ts";
 import type { CstGrammar, RuleDecl, RuleExpr, TokenDecl } from "../../../vendors/monogram/src/types.ts";
@@ -36,6 +36,25 @@ const delimiterRule = (name: string, open: string, close: string): RuleDecl => (
         type: "quantifier",
         kind: "+",
         body: { type: "alt", items: [ruleReference("Inline"), ruleReference("Newline")] },
+      },
+      ruleReference(close),
+    ],
+  },
+});
+const bracketRule = (name: string, open: string, close: string): RuleDecl => ({
+  name,
+  flags: [],
+  body: {
+    type: "seq",
+    items: [
+      ruleReference(open),
+      {
+        type: "quantifier",
+        kind: "*",
+        body: {
+          type: "seq",
+          items: [{ type: "not", body: ruleReference(close) }, ruleReference("Inline")],
+        },
       },
       ruleReference(close),
     ],
@@ -99,6 +118,37 @@ const inlineHtmlPattern = altPattern(
   seq("<!", oneOf(range("A", "Z")), star(anyChar(), { greedy: false }), ">"),
   seq("<![CDATA[", star(anyChar(), { greedy: false }), "]]>"),
 );
+const escapedInlineCharacter = seq("\\", anyChar());
+const linkWhitespace = oneOf(" ", "\t", "\n", "\r");
+const bareDestination = (depth: number): ReturnType<typeof altPattern> => {
+  const ordinary = altPattern(escapedInlineCharacter, noneOf(" ", "\t", "\n", "\r", "(", ")"));
+  return depth === 0
+    ? ordinary
+    : altPattern(ordinary, seq("(", star(bareDestination(depth - 1)), ")"));
+};
+const linkDestination = altPattern(
+  seq("<", star(noneOf("<", ">", "\n", "\r")), ">"),
+  plus(bareDestination(32)),
+);
+const linkTitle = altPattern(
+  seq("\"", star(altPattern(escapedInlineCharacter, noneOf("\"", "\n", "\r"))), "\""),
+  seq("'", star(altPattern(escapedInlineCharacter, noneOf("'", "\n", "\r"))), "'"),
+  seq("(", star(altPattern(escapedInlineCharacter, noneOf(")", "\n", "\r"))), ")"),
+);
+const linkTailPattern = seq(
+  "](",
+  star(linkWhitespace),
+  optPattern(seq(linkDestination, optPattern(seq(plus(linkWhitespace), linkTitle)))),
+  star(linkWhitespace),
+  ")",
+);
+const referenceLabel = star(altPattern(escapedInlineCharacter, noneOf("[", "]", "\n", "\r")));
+const referenceTailPattern = seq("]", optPattern(seq("[", referenceLabel, "]")));
+const physicalLineEnd = altPattern("\r\n", "\r", "\n", end());
+const inlineTextPattern = plus(altPattern(
+  noneOf("\n", "\r", "\\", "`", "*", "_", "[", "]", "<", "!", "&", "~", " "),
+  seq(" ", notFollowedBy(seq(" ", star(" "), physicalLineEnd))),
+));
 
 function candidateReferences(expression: RuleExpr): RuleExpr {
   switch (expression.type) {
@@ -115,6 +165,22 @@ function candidateReferences(expression: RuleExpr): RuleExpr {
   }
 }
 
+function bracketFallbacks(rule: RuleDecl): RuleDecl {
+  if (rule.name !== "Inline" || rule.body.type !== "alt") return rule;
+  return {
+    ...rule,
+    body: {
+      ...rule.body,
+      items: rule.body.items.concat([
+        ruleReference("ImageOpen"),
+        ruleReference("BracketOpen"),
+        ruleReference("LinkTail"),
+        ruleReference("ReferenceTail"),
+      ]),
+    },
+  };
+}
+
 /**
  * Inline-only view of the Markdown grammar. Block tokens are absent, so line-start syntax remains
  * ordinary inline content after the block phase has assigned the region to a paragraph or heading.
@@ -125,10 +191,10 @@ export const markdownInlineGrammar: CstGrammar = {
   tokens: markdown.tokens
     .filter((token) => inlineTokens.has(token.name))
     .flatMap((token) => {
-      if (token.name === "Emphasis" || token.name === "Strong") return [];
-      if (token.name === "ReferenceLink") return { ...token, name: "ReferenceCandidate" };
+      if (["Emphasis", "Strong", "Image", "Link", "ReferenceLink"].includes(token.name)) return [];
       if (token.name === "Autolink") return { ...token, pattern: autolinkPattern };
       if (token.name === "InlineHtml") return { ...token, pattern: inlineHtmlPattern };
+      if (token.name === "Text") return { ...token, pattern: inlineTextPattern };
       if (token.name === "HtmlComment") {
         return {
           ...token,
@@ -150,15 +216,22 @@ export const markdownInlineGrammar: CstGrammar = {
         engineToken("EmphasisClose"),
         engineToken("StrongOpen"),
         engineToken("StrongClose"),
+        engineToken("ImageOpen", "!["),
+        engineToken("BracketOpen", "["),
+        engineToken("LinkTail", linkTailPattern),
+        engineToken("ReferenceTail", referenceTailPattern),
         token,
       ];
     }),
   rules: markdown.rules
     .filter((rule) => inlineRules.has(rule.name))
-    .map((rule) => ({ ...rule, body: candidateReferences(rule.body) }))
+    .map((rule) => bracketFallbacks({ ...rule, body: candidateReferences(rule.body) }))
     .concat([
       delimiterRule("Emphasis", "EmphasisOpen", "EmphasisClose"),
       delimiterRule("Strong", "StrongOpen", "StrongClose"),
+      bracketRule("Image", "ImageOpen", "LinkTail"),
+      bracketRule("Link", "BracketOpen", "LinkTail"),
+      bracketRule("ReferenceCandidate", "BracketOpen", "ReferenceTail"),
     ]),
   newline: {
     token: "Newline",

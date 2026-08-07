@@ -76,7 +76,16 @@ describe("block-first markdown parser", () => {
   it("preserves definitions and lexes references as context-free candidates", () => {
     const tree = markdownPhasedParser.parse("[defined]\n\n[defined]: /url\n\n[missing]\n");
     expect(rules(tree).filter((rule) => rule === "LinkDefinition")).toHaveLength(1);
-    expect(leaves(tree).filter((leaf) => leaf.tokenType === "ReferenceCandidate")).toHaveLength(2);
+    expect(rules(tree).filter((rule) => rule === "ReferenceCandidate")).toHaveLength(2);
     expect(leaves(tree).filter((leaf) => leaf.tokenType === "LinkDefinitionChunk")).toHaveLength(1);
+  });
+
+  it("parses inline link labels as nested inline CST", () => {
+    const tree = markdownPhasedParser.parse("[*label* `code`](/uri \"title\")\n");
+    const treeRules = rules(tree);
+    expect(treeRules).toContain("Link");
+    expect(treeRules).toContain("Emphasis");
+    expect(leaves(tree).some((leaf) => leaf.tokenType === "CodeSpan")).toBe(true);
+    expect(leaves(tree).some((leaf) => leaf.tokenType === "LinkTail")).toBe(true);
   });
 });

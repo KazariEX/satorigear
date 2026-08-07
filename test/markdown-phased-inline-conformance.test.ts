@@ -75,6 +75,8 @@ function phasedEvents(root: CstNode): string[] {
     }
     if (child.rule === "Emphasis") events.push("emph");
     else if (child.rule === "Strong") events.push("strong");
+    else if (child.rule === "Link" || child.rule === "ReferenceCandidate") events.push("link");
+    else if (child.rule === "Image") events.push("image");
     child.children.forEach(visit);
   };
   root.children.forEach(visit);
