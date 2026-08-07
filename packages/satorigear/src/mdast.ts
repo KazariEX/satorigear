@@ -1,4 +1,5 @@
 import { decodeHTMLStrict } from "entities";
+import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/gen-parser.ts";
 import type {
   BlockContent,
   Blockquote,
@@ -22,7 +23,6 @@ import type {
   Strong,
   Text,
 } from "mdast";
-import { type CstChild, type CstLeaf, type CstNode, getText } from "../../../vendors/monogram/src/gen-parser.ts";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
 import { markdownPhasedParser } from "./parser.ts";
 

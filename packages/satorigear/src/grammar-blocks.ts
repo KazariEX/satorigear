@@ -1,6 +1,6 @@
-import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "../../../vendors/monogram/src/api.ts";
-import type { Token } from "../../../vendors/monogram/src/gen-lexer.ts";
-import type { SourceRange } from "../../../vendors/monogram/src/source-view.ts";
+import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "monogram/api.ts";
+import type { Token } from "monogram/gen-lexer.ts";
+import type { SourceRange } from "monogram/source-view.ts";
 
 const ParagraphOpen = token(never());
 const ParagraphClose = token(never());

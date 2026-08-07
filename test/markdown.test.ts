@@ -1,7 +1,7 @@
+import { createLexer } from "monogram/gen-lexer.ts";
+import { createParser, type CstNode } from "monogram/gen-parser.ts";
 import { describe, expect, it } from "vitest";
 import grammar from "../packages/satorigear/src/grammar.ts";
-import { createLexer } from "../vendors/monogram/src/gen-lexer.ts";
-import { createParser, type CstNode } from "../vendors/monogram/src/gen-parser.ts";
 
 const { tokenize } = createLexer(grammar);
 const { parse } = createParser(grammar);

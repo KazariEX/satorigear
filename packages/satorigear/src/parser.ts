@@ -1,6 +1,6 @@
-import { createCompositeParser } from "../../../vendors/monogram/src/composite-parser.ts";
-import { createDelimiterParser, resolveDelimitedTokens } from "../../../vendors/monogram/src/delimiter-parser.ts";
-import { createParser, type CstNode, getText } from "../../../vendors/monogram/src/gen-parser.ts";
+import { createCompositeParser } from "monogram/composite-parser.ts";
+import { createDelimiterParser, resolveDelimitedTokens } from "monogram/delimiter-parser.ts";
+import { createParser, type CstNode, getText } from "monogram/gen-parser.ts";
 import { markdownBlockGrammar, tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
 import {
   markdownBracketPairs,

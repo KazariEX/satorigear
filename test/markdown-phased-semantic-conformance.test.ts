@@ -4,10 +4,10 @@ import { Parser as CommonMarkParser } from "commonmark";
 import { tests } from "commonmark-spec";
 import { decodeHTMLStrict } from "entities";
 import encode from "mdurl/encode.js";
+import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/gen-parser.ts";
 import { afterAll, describe, expect, it } from "vitest";
 import { normalizeMarkdownReferenceLabel } from "../packages/satorigear/src/grammar-inline.ts";
 import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
-import { type CstChild, type CstLeaf, type CstNode, getText } from "../vendors/monogram/src/gen-parser.ts";
 
 interface SpecCase { markdown: string; section: string }
 interface SemanticNode {

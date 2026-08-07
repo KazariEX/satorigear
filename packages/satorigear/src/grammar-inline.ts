@@ -1,8 +1,8 @@
-import { altPattern, anyChar, end, followedBy, noneOf, notFollowedBy, oneOf, optPattern, plus, range, repeat, seq, star } from "../../../vendors/monogram/src/api.ts";
+import { altPattern, anyChar, end, followedBy, noneOf, notFollowedBy, oneOf, optPattern, plus, range, repeat, seq, star } from "monogram/api.ts";
+import type { DelimiterRunConfig, PairedTokenConfig } from "monogram/delimiter-parser.ts";
+import type { Token } from "monogram/gen-lexer.ts";
+import type { CstGrammar, RuleDecl, RuleExpr, TokenDecl } from "monogram/types.ts";
 import markdown from "./grammar.ts";
-import type { DelimiterRunConfig, PairedTokenConfig } from "../../../vendors/monogram/src/delimiter-parser.ts";
-import type { Token } from "../../../vendors/monogram/src/gen-lexer.ts";
-import type { CstGrammar, RuleDecl, RuleExpr, TokenDecl } from "../../../vendors/monogram/src/types.ts";
 
 const inlineTokens = new Set([
   "HtmlComment",

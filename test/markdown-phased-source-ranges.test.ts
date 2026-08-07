@@ -1,8 +1,8 @@
 import { tests } from "commonmark-spec";
 import { describe, expect, it } from "vitest";
+import type { CstLeaf, CstNode } from "monogram/gen-parser.ts";
+import type { SourceRange } from "monogram/source-view.ts";
 import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
-import type { CstLeaf, CstNode } from "../vendors/monogram/src/gen-parser.ts";
-import type { SourceRange } from "../vendors/monogram/src/source-view.ts";
 
 interface SpecCase { markdown: string }
 interface Span { offset: number; end: number; ranges?: readonly SourceRange[] }

@@ -31,8 +31,8 @@ import {
   seq,
   star,
   token,
-} from "../../../vendors/monogram/src/api.ts";
-import type { NewlineConfig } from "../../../vendors/monogram/src/types.ts";
+} from "monogram/api.ts";
+import type { NewlineConfig } from "monogram/types.ts";
 
 const hspace = oneOf(" ", "\t");
 const lineEnd = followedBy(altPattern("\r", "\n", end()));

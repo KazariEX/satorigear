@@ -1,5 +1,3 @@
-import { describe, expect, it } from "vitest";
-import markdown from "../packages/satorigear/src/grammar.ts";
 import {
   alt,
   defineGrammar,
@@ -10,11 +8,13 @@ import {
   rule,
   seq,
   token,
-} from "../vendors/monogram/src/api.ts";
-import { createCompositeParser } from "../vendors/monogram/src/composite-parser.ts";
-import { createParser, type CstChild, type CstLeaf, type CstNode, getText } from "../vendors/monogram/src/gen-parser.ts";
-import { createSourceView } from "../vendors/monogram/src/source-view.ts";
-import type { Token } from "../vendors/monogram/src/gen-lexer.ts";
+} from "monogram/api.ts";
+import { createCompositeParser } from "monogram/composite-parser.ts";
+import { createParser, type CstChild, type CstLeaf, type CstNode, getText } from "monogram/gen-parser.ts";
+import { createSourceView } from "monogram/source-view.ts";
+import { describe, expect, it } from "vitest";
+import type { Token } from "monogram/gen-lexer.ts";
+import markdown from "../packages/satorigear/src/grammar.ts";
 
 function leaves(node: CstNode): CstLeaf[] {
   const result: CstLeaf[] = [];
