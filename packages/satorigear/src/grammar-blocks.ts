@@ -261,7 +261,12 @@ function indentOf(source: string, line: Line, limit = Number.POSITIVE_INFINITY):
 }
 
 function isBlank(source: string, line: Line): boolean {
-  return /^[ \t]*$/.test(source.slice(line.start, line.end));
+  for (let offset = line.start; offset < line.end; offset++) {
+    if (source[offset] !== " " && source[offset] !== "\t") {
+      return false;
+    }
+  }
+  return true;
 }
 
 function named(type: string, text: string, offset: number, ranges?: SourceRange[]): Token {
@@ -588,12 +593,22 @@ function setextAt(source: string, line: Line): "=" | "-" | null {
 }
 
 function isThematicBreak(source: string, line: Line): boolean {
-  const body = lineBody(source, line);
-  if (!body) {
+  const indent = indentOf(source, line, 3);
+  const marker = source[indent.offset];
+  if (marker !== "*" && marker !== "-" && marker !== "_") {
     return false;
   }
-  const compact = body.text.replace(/[ \t]/g, "");
-  return compact.length >= 3 && /^\*+$|^-+$|^_+$/.test(compact);
+  let count = 0;
+  for (let offset = indent.offset; offset < line.end; offset++) {
+    const character = source[offset];
+    if (character === marker) {
+      count++;
+    }
+    else if (character !== " " && character !== "\t") {
+      return false;
+    }
+  }
+  return count >= 3;
 }
 
 function blockQuoteOffset(source: string, line: Line): BlockQuoteMarker | null {
@@ -1023,35 +1038,29 @@ function applyBlockEdits(source: string, edits: readonly BlockTextEdit[]): strin
   return parts.join("");
 }
 
-function definitionRestartBefore(source: string, changedEnd: number): number | null {
-  let lineStart = Math.max(0, changedEnd - 1);
-  while (lineStart > 0 && source[lineStart - 1] !== "\n" && source[lineStart - 1] !== "\r") {
-    lineStart--;
+function definitionRestartBefore(source: string, lines: readonly Line[], changedEnd: number): number | null {
+  let low = 0;
+  let high = lines.length;
+  const offset = Math.max(0, changedEnd - 1);
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (lines[middle].start <= offset) {
+      low = middle + 1;
+    }
+    else {
+      high = middle;
+    }
   }
 
   let candidate: number | null = null;
-  for (;;) {
-    let lineEnd = lineStart;
-    while (lineEnd < source.length && source[lineEnd] !== "\n" && source[lineEnd] !== "\r") {
-      lineEnd++;
-    }
-    const line = { start: lineStart, end: lineEnd, next: lineEnd };
+  for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
+    const line = lines[index];
     if (isBlank(source, line)) {
       break;
     }
-    if (lineBody(source, line)?.text.startsWith("[")) {
-      candidate = lineStart;
-    }
-    if (lineStart === 0) {
-      break;
-    }
-    let previous = lineStart - 1;
-    if (source[previous] === "\n" && previous > 0 && source[previous - 1] === "\r") {
-      previous--;
-    }
-    lineStart = previous;
-    while (lineStart > 0 && source[lineStart - 1] !== "\n" && source[lineStart - 1] !== "\r") {
-      lineStart--;
+    const indent = indentOf(source, line, 3);
+    if (source[indent.offset] === "[") {
+      candidate = line.start;
     }
   }
   return candidate;
@@ -1174,7 +1183,9 @@ class StatefulMarkdownBlockTokenizer {
       affected = Math.max(0, this.#checkpoints.length - 1);
     }
     let restart = this.#checkpoints[affected]?.lineStart > firstEdit.start ? -1 : Math.max(0, affected - 1);
-    const definitionRestart = definitionRestartBefore(nextSource, changedEnd);
+    const initialRestartOffset = this.#checkpoints[restart]?.lineStart ?? 0;
+    const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, lastEdit.end, delta);
+    const definitionRestart = definitionRestartBefore(nextSource, nextLines, changedEnd);
     if (definitionRestart !== null && definitionRestart < firstEdit.start) {
       const candidate = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineStart <= definitionRestart
         && checkpoint.lineEnd > definitionRestart);
@@ -1185,7 +1196,6 @@ class StatefulMarkdownBlockTokenizer {
     const checkpoint = this.#checkpoints[restart];
     const restartOffset = checkpoint?.lineStart ?? 0;
     const oldTokenStart = checkpoint?.tokenStart ?? 0;
-    const nextLines = updatePhysicalLines(this.#lines, nextSource, restartOffset, lastEdit.end, delta);
     const restartLine = nextLines.findIndex((line) => line.start >= restartOffset);
     const scanLines = restartLine < 0 ? [] : nextLines.slice(restartLine);
     const replacement: Token[] = [];
