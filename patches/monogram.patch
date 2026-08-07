@@ -35,12 +35,12 @@ index 99d693f..5dfcc34 100644
        escapePattern: tok.opts.escape,
 diff --git a/src/composite-parser.ts b/src/composite-parser.ts
 new file mode 100644
-index 0000000..06b919d
+index 0000000..cebfb52
 --- /dev/null
 +++ b/src/composite-parser.ts
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,108 @@
 +import type { Token } from './gen-lexer.ts';
-+import type { CstChild, CstLeaf, CstNode } from './cst.ts';
++import type { CstLeaf, CstNode } from './cst.ts';
 +import { createSourceView, type SourceRange, type SourceView } from './source-view.ts';
 +
 +export interface CompositeParserHandle {
@@ -81,13 +81,14 @@ index 0000000..06b919d
 +  } as Pick<T, 'offset' | 'end' | 'ranges'>;
 +}
 +
-+/** Project a CST parsed from a logical SourceView back onto the original source coordinates. */
++/** Project an owned CST from a logical SourceView onto the original source coordinates in place. */
 +export function rebaseCst(node: CstNode, view: SourceView): CstNode {
-+  const children: CstChild[] = node.children.map((child) => {
-+    if ('tokenType' in child) return { ...child, ...rebaseSpan(child, view) };
-+    return rebaseCst(child, view);
-+  });
-+  return { ...node, children, ...rebaseSpan(node, view) };
++  for (const child of node.children) {
++    if ('tokenType' in child) Object.assign(child, rebaseSpan(child, view));
++    else rebaseCst(child, view);
++  }
++  Object.assign(node, rebaseSpan(node, view));
++  return node;
 +}
 +
 +/**
