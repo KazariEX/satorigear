@@ -19,9 +19,7 @@ import type {
   Paragraph,
   PhrasingContent,
   Root,
-  RootContent,
   Strong,
-  Text,
 } from "mdast";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
 import { markdownPhasedParser } from "./parser.ts";
@@ -673,12 +671,3 @@ export function markdownCstToMdast(tree: CstNode, source: string): Root {
 export function markdownToMdast(source: string): Root {
   return markdownCstToMdast(markdownPhasedParser.parse(source), source);
 }
-
-export type {
-  CstChild,
-  CstLeaf,
-  CstNode,
-  Root,
-  RootContent,
-  Text,
-};

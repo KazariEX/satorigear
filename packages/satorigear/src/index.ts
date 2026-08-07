@@ -1,10 +1,3 @@
-export { default as markdown } from "./grammar.ts";
+export { default as grammar } from "./grammar.ts";
 export { markdownCstToMdast, markdownToMdast } from "./mdast.ts";
-export type {
-  CstChild,
-  CstLeaf,
-  CstNode,
-  Root,
-  RootContent,
-  Text,
-} from "./mdast.ts";
+export type { CstChild, CstLeaf, CstNode } from "monogram/gen-parser.ts";
