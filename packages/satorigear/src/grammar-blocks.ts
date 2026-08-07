@@ -1,7 +1,7 @@
 import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "monogram/api.ts";
 import type { Token } from "monogram/gen-lexer.ts";
 import { changedTokenRange, sameShiftedToken, shiftedToken, type TokenChange } from "./token-change.ts";
-import type { SourceRange } from "./source-view.ts";
+import type { SourceLocation, SourceRange } from "./source-view.ts";
 import type { TextEdit } from "./text-edit.ts";
 
 const ParagraphOpen = token(never());
@@ -112,12 +112,6 @@ interface Line {
   next: number;
   lazy?: boolean;
   prefixColumns?: number;
-}
-
-interface SourcePoint {
-  column: number;
-  line: number;
-  offset: number;
 }
 
 interface Indent {
@@ -1117,12 +1111,12 @@ function sameShiftedBlock(
   return true;
 }
 
-function pointIn(
+function locate(
   lines: readonly Line[],
   sourceLength: number,
   endsInLineEnding: boolean,
   offset: number,
-): SourcePoint {
+): SourceLocation {
   if (offset < 0 || offset > sourceLength) {
     throw new RangeError(`Source offset ${offset} is outside the document`);
   }
@@ -1173,11 +1167,11 @@ class MarkdownBlockTokenizerImpl {
     return this.#tokens;
   }
 
-  locator(): (offset: number) => SourcePoint {
+  locator(): (offset: number) => SourceLocation {
     const lines = this.#lines;
     const sourceLength = this.#source.length;
     const trailingLineEnding = endsInLineEnding(this.#source);
-    return (offset) => pointIn(lines, sourceLength, trailingLineEnding, offset);
+    return (offset) => locate(lines, sourceLength, trailingLineEnding, offset);
   }
 
   edit(edits: readonly TextEdit[]): BlockEditResult {

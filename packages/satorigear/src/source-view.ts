@@ -1,5 +1,16 @@
 import type { TextEdit } from "./text-edit.ts";
 
+export interface SourceLocation {
+  column: number;
+  line: number;
+  offset: number;
+}
+
+export interface SourceSpan {
+  end: number;
+  start: number;
+}
+
 export interface SourceRange {
   offset: number;
   end: number;

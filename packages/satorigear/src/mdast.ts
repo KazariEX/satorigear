@@ -22,6 +22,7 @@ import type {
 } from "mdast";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
 import type { SyntaxTreeLeaf, SyntaxTreeNode } from "./emitted-parser.ts";
+import type { SourceLocation, SourceSpan } from "./source-view.ts";
 
 interface Resource {
   url: string;
@@ -32,17 +33,6 @@ interface Reference {
   identifier: string;
   label: string;
   referenceType: "collapsed" | "full" | "shortcut";
-}
-
-interface SourceSpan {
-  end: number;
-  start: number;
-}
-
-interface SourcePoint {
-  column: number;
-  line: number;
-  offset: number;
 }
 
 interface SpanContext {
@@ -85,7 +75,7 @@ interface FragmentValue {
 
 interface MaterializedValue extends FragmentValue {
   children?: MaterializedValue[];
-  position: { end: SourcePoint; start: SourcePoint };
+  position: { end: SourceLocation; start: SourceLocation };
 }
 
 function withSpan<const T extends object>(context: SpanContext, value: T, start: number, end: number): T {
@@ -867,7 +857,7 @@ export function projectBlock(
 function materializeBlock(
   fragment: BlockFragment,
   offset: number,
-  point: (offset: number) => SourcePoint,
+  point: (offset: number) => SourceLocation,
 ): BlockContent | DefinitionContent {
   const clone = (value: FragmentValue): MaterializedValue => {
     const span = fragment.spans.get(value);
@@ -892,7 +882,7 @@ function materializeBlock(
 export function materializeMdast(
   fragments: readonly PlacedBlockFragment[],
   sourceLength: number,
-  locate: (offset: number) => SourcePoint,
+  locate: (offset: number) => SourceLocation,
 ): Root {
   return {
     type: "root",
