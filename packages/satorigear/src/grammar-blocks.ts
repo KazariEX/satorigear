@@ -336,55 +336,56 @@ function logicalLine(source: string, line: Line): string {
   return result + source.slice(offset, line.next);
 }
 
-function lineBody(source: string, line: Line): { offset: number; text: string } | null {
+function lineIndent(source: string, line: Line): Indent | null {
   const indent = indentOf(source, line, 3);
   if (source[indent.offset] === " " || source[indent.offset] === "\t") {
     return null;
   }
-  return { offset: indent.offset, text: source.slice(indent.offset, line.end) };
+  return indent;
 }
 
 function htmlStartAt(source: string, line: Line): HtmlStart | null {
-  const body = lineBody(source, line);
-  if (!body || body.text[0] !== "<") {
+  const indent = lineIndent(source, line);
+  if (!indent || source[indent.offset] !== "<") {
     return null;
   }
-  const lower = body.text.toLowerCase();
+  const body = source.slice(indent.offset, line.end);
+  const lower = body.toLowerCase();
   for (const tag of ["script", "pre", "style", "textarea"]) {
     if (lower.startsWith(`<${tag}`) && (lower.length === tag.length + 1 || /[ \t>]/.test(lower[tag.length + 1]))) {
       return { interruptParagraph: true, terminator: `</${tag}>` };
     }
   }
-  if (body.text.startsWith("<!--")) {
+  if (body.startsWith("<!--")) {
     return { interruptParagraph: true, terminator: "-->" };
   }
-  if (body.text.startsWith("<?")) {
+  if (body.startsWith("<?")) {
     return { interruptParagraph: true, terminator: "?>" };
   }
-  if (body.text.startsWith("<![CDATA[")) {
+  if (body.startsWith("<![CDATA[")) {
     return { interruptParagraph: true, terminator: "]]>" };
   }
-  if (body.text.startsWith("<!") && /[A-Z]/.test(body.text[2] ?? "")) {
+  if (body.startsWith("<!") && /[A-Z]/.test(body[2] ?? "")) {
     return { interruptParagraph: true, terminator: ">" };
   }
 
-  const tag = /^<\/?([a-z][a-z0-9-]*)(?=[ \t\n\r/>]|$)/i.exec(body.text)?.[1].toLowerCase();
+  const tag = /^<\/?([a-z][a-z0-9-]*)(?=[ \t\n\r/>]|$)/i.exec(body)?.[1].toLowerCase();
   if (tag && htmlBlockTags.has(tag)) {
     return { interruptParagraph: true };
   }
-  if (completeHtmlTag.test(body.text)) {
+  if (completeHtmlTag.test(body)) {
     return { interruptParagraph: false };
   }
   return null;
 }
 
 function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: number): number | null {
-  const body = lineBody(source, lines[startIndex]);
-  if (!body?.text.startsWith("[")) {
+  const indent = lineIndent(source, lines[startIndex]);
+  if (!indent || source[indent.offset] !== "[") {
     return null;
   }
   let lineIndex = startIndex;
-  let offset = body.offset + 1;
+  let offset = indent.offset + 1;
   let labelLength = 0;
   let labelHasContent = false;
 
@@ -535,43 +536,48 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
 }
 
 function fenceAt(source: string, line: Line): Fence | null {
-  const body = lineBody(source, line);
-  if (!body || (body.text[0] !== "`" && body.text[0] !== "~")) {
+  const indent = lineIndent(source, line);
+  if (!indent) {
     return null;
   }
-  const marker = body.text[0] as Fence["marker"];
+  const marker = source[indent.offset];
+  if (marker !== "`" && marker !== "~") {
+    return null;
+  }
+  const body = source.slice(indent.offset, line.end);
   let length = 0;
-  while (body.text[length] === marker) {
+  while (body[length] === marker) {
     length++;
   }
-  if (length < 3 || (marker === "`" && body.text.slice(length).includes("`"))) {
+  if (length < 3 || (marker === "`" && body.slice(length).includes("`"))) {
     return null;
   }
   return { marker, length };
 }
 
 function closesFence(source: string, line: Line, fence: Fence): boolean {
-  const body = lineBody(source, line);
-  if (!body || body.text[0] !== fence.marker) {
+  const indent = lineIndent(source, line);
+  if (!indent || source[indent.offset] !== fence.marker) {
     return false;
   }
+  const body = source.slice(indent.offset, line.end);
   let length = 0;
-  while (body.text[length] === fence.marker) {
+  while (body[length] === fence.marker) {
     length++;
   }
-  return length >= fence.length && /^[ \t]*$/.test(body.text.slice(length));
+  return length >= fence.length && /^[ \t]*$/.test(body.slice(length));
 }
 
 function atxAt(source: string, line: Line): { markerOffset: number; marker: string; contentOffset: number; contentEnd: number } | null {
-  const body = lineBody(source, line);
-  if (!body) {
+  const indent = lineIndent(source, line);
+  if (!indent || source[indent.offset] !== "#") {
     return null;
   }
-  const match = /^(#{1,6})(?:[ \t]+|$)/.exec(body.text);
+  const match = /^(#{1,6})(?:[ \t]+|$)/.exec(source.slice(indent.offset, line.end));
   if (!match) {
     return null;
   }
-  const contentOffset = body.offset + match[0].length;
+  const contentOffset = indent.offset + match[0].length;
   let contentEnd = line.end;
   while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
     contentEnd--;
@@ -586,12 +592,18 @@ function atxAt(source: string, line: Line): { markerOffset: number; marker: stri
       contentEnd--;
     }
   }
-  return { markerOffset: body.offset, marker: match[1], contentOffset, contentEnd };
+  return { markerOffset: indent.offset, marker: match[1], contentOffset, contentEnd };
 }
 
 function setextAt(source: string, line: Line): "=" | "-" | null {
-  const body = lineBody(source, line);
-  const match = body && /^(=+|-+)[ \t]*$/.exec(body.text);
+  const indent = lineIndent(source, line);
+  if (!indent) {
+    return null;
+  }
+  const marker = source[indent.offset];
+  const match = marker === "=" || marker === "-"
+    ? /^(=+|-+)[ \t]*$/.exec(source.slice(indent.offset, line.end))
+    : null;
   return match ? match[1][0] as "=" | "-" : null;
 }
 
@@ -615,11 +627,11 @@ function isThematicBreak(source: string, line: Line): boolean {
 }
 
 function blockQuoteOffset(source: string, line: Line): BlockQuoteMarker | null {
-  const body = lineBody(source, line);
-  if (!body || source[body.offset] !== ">") {
+  const indent = lineIndent(source, line);
+  if (!indent || source[indent.offset] !== ">") {
     return null;
   }
-  let offset = body.offset + 1;
+  let offset = indent.offset + 1;
   let prefixColumns = line.prefixColumns ?? 0;
   if (source[offset] === " ") {
     offset++;
@@ -632,37 +644,43 @@ function blockQuoteOffset(source: string, line: Line): BlockQuoteMarker | null {
 }
 
 function listMarkerAt(source: string, line: Line): ListMarker | null {
-  const body = lineBody(source, line);
-  if (!body) {
+  const indent = lineIndent(source, line);
+  if (!indent) {
     return null;
   }
-  const indent = indentOf(source, line, 3);
-  const unordered = /^([-+*])(?=[ \t]|$)/.exec(body.text);
-  if (unordered && !isThematicBreak(source, line)) {
-    const markerEnd = body.offset + unordered[0].length;
+  const marker = source[indent.offset];
+  const markerEnd = indent.offset + 1;
+  if ((marker === "-" || marker === "+" || marker === "*")
+    && (markerEnd === line.end || source[markerEnd] === " " || source[markerEnd] === "\t")
+    && !isThematicBreak(source, line)) {
     const padding = listMarkerPadding(source, line, markerEnd, indent.columns + 1);
     return {
       kind: "unordered",
       indent: indent.columns,
-      offset: body.offset,
+      offset: indent.offset,
       contentOffset: padding.offset,
       contentIndent: indent.columns + 1 + padding.columns,
       contentPrefixColumns: padding.prefixColumns,
-      delimiter: unordered[1],
-      text: unordered[1],
+      delimiter: marker,
+      text: marker,
     };
   }
-  const ordered = /^(\d{1,9})([.)])(?=[ \t]|$)/.exec(body.text);
+  const markerCode = source.charCodeAt(indent.offset);
+  if (!(markerCode >= 48 && markerCode <= 57)) {
+    return null;
+  }
+  const body = source.slice(indent.offset, line.end);
+  const ordered = /^(\d{1,9})([.)])(?=[ \t]|$)/.exec(body);
   if (!ordered) {
     return null;
   }
-  const markerEnd = body.offset + ordered[0].length;
+  const orderedEnd = indent.offset + ordered[0].length;
   const markerWidth = ordered[0].length;
-  const padding = listMarkerPadding(source, line, markerEnd, indent.columns + markerWidth);
+  const padding = listMarkerPadding(source, line, orderedEnd, indent.columns + markerWidth);
   return {
     kind: "ordered",
     indent: indent.columns,
-    offset: body.offset,
+    offset: indent.offset,
     contentOffset: padding.offset,
     contentIndent: indent.columns + markerWidth + padding.columns,
     contentPrefixColumns: padding.prefixColumns,
