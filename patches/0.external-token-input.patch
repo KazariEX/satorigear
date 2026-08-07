@@ -1,0 +1,81 @@
+diff --git a/src/emit-parser.ts b/src/emit-parser.ts
+index 74feb92..1c87274 100644
+--- a/src/emit-parser.ts
++++ b/src/emit-parser.ts
+@@ -2637,6 +2637,39 @@ ${e.soa ? `  tokenize(source);
+   tokN = _n;`}
+ }
+ 
++type ExternalToken = {
++  type: string;
++  text: string;
++  offset: number;
++  newlineBefore: boolean;
++  commentBefore: boolean;
++  multilineFlowBefore: boolean;
++  ranges?: readonly { offset: number; end: number }[];
++};
++
++function tokensInto(source: string, tokens: readonly ExternalToken[]) {
++  docPieces = [source]; docPieceOff = [0]; docLen = source.length; docFlat = source; docCur = 0;
++  srcLenP1 = source.length + 1;
++  negFrom = 0x7fffffff;
++  const n = tokens.length;
++  while (tkCap < n + 1) growTok();
++${e.soa ? '' : '  tkText.length = 0;'}
++  for (let i = 0; i < n; i++) {
++    const token = tokens[i];
++    const type = token.type;
++    const ranges = token.ranges;
++    tkK[i] = type === '' ? K_PUNCT : (TYPE_KIND.get(type) ?? K_NAMED_FALLBACK);
++    tkT[i] = (type === '' ? LIT_PU : LIT_KW).get(token.text) ?? 0;
++    tkOff[i] = ranges?.[0]?.offset ?? token.offset;
++    tkEnd[i] = ranges?.[ranges.length - 1]?.end ?? token.offset + token.text.length;
++    tkFl[i] = (token.newlineBefore ? 1 : 0) | (token.commentBefore ? 2 : 0) | (token.multilineFlowBefore ? 4 : 0);
++    tkDp[i] = 0; tkPd[i] = 0;
++${e.soa ? '' : '    tkText[i] = token.text;'}
++  }
++  tokN = n;
++  docEmptyPops = [];
++}
++
+ function farthest(errPos: number) {
+   if (maxPos <= errPos || maxPos >= tokN) return '';
+   return ' [farthest: offset ' + toff(maxPos) + " near '" + tokTextAt(maxPos).slice(0, 20) + "']";
+@@ -3600,6 +3633,17 @@ function parseCore(source: string, entryRule?: string) {
+   adoptRoot = -1;
+   adoptRunPos = -1;
+   lexInto(source);
++  return parsePrepared(entryRule);
++}
++
++function parseTokensCore(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
++  adoptRoot = -1;
++  adoptRunPos = -1;
++  tokensInto(source, tokens);
++  return parsePrepared(entryRule);
++}
++
++function parsePrepared(entryRule?: string) {
+   if (memoEnd.length !== MEMO_RULES) {
+     memoNode = new Array(MEMO_RULES);
+     memoEnd = new Array(MEMO_RULES);
+@@ -4055,6 +4099,7 @@ export { tokenize };
+ // ── Module-level API: the DEFAULT document (one shared session; tokenize and the
+ // raw tree/tokenAt views read the ACTIVE doc — they are gate/debug surfaces) ──
+ export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }
++export function parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) { activate(docDefault); return parseTokensCore(source, tokens, entryRule); }
+ export function parseEdited(entryRule?: string, edits?: Edit[]) { activate(docDefault); return editCore(entryRule, edits); }
+ // Arena reclamation introspection + budget override — TEST HOOKS (issue #45 C1). __arenaStats
+ // reports the live arena, the compacted-size baseline, and how many edits re-parsed to reclaim;
+diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
+--- a/src/gen-lexer.ts
++++ b/src/gen-lexer.ts
+@@ -16,6 +16,7 @@ export interface Token {
+                             // ENDS a plain scalar, so a folded multi-line scalar must not cross it)
+   multilineFlowBefore: boolean; // the flow collection that closed immediately before this token spanned >1 line
+                             // (indentation grammars: a flow used as an implicit block KEY must be single-line, §7.4.2)
++  ranges?: { offset: number; end: number }[]; // physical ranges when a caller-supplied token spans a logical source view
+ }
+ 
+ // Optional integer-interning config (the emitted parser supplies it): every token is

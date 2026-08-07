@@ -1,0 +1,349 @@
+diff --git a/src/emit-parser.ts b/src/emit-parser.ts
+index 1c87274..880256a 100644
+--- a/src/emit-parser.ts
++++ b/src/emit-parser.ts
+@@ -2647,6 +2647,18 @@ type ExternalToken = {
+   ranges?: readonly { offset: number; end: number }[];
+ };
+ 
++function writeExternalToken(i: number, token: ExternalToken) {
++  const type = token.type;
++  const ranges = token.ranges;
++  tkK[i] = type === '' ? K_PUNCT : (TYPE_KIND.get(type) ?? K_NAMED_FALLBACK);
++  tkT[i] = (type === '' ? LIT_PU : LIT_KW).get(token.text) ?? 0;
++  tkOff[i] = ranges?.[0]?.offset ?? token.offset;
++  tkEnd[i] = ranges?.[ranges.length - 1]?.end ?? token.offset + token.text.length;
++  tkFl[i] = (token.newlineBefore ? 1 : 0) | (token.commentBefore ? 2 : 0) | (token.multilineFlowBefore ? 4 : 0);
++  tkDp[i] = 0; tkPd[i] = 0;
++${e.soa ? '' : '  tkText[i] = token.text;'}
++}
++
+ function tokensInto(source: string, tokens: readonly ExternalToken[]) {
+   docPieces = [source]; docPieceOff = [0]; docLen = source.length; docFlat = source; docCur = 0;
+   srcLenP1 = source.length + 1;
+@@ -2655,16 +2667,7 @@ function tokensInto(source: string, tokens: readonly ExternalToken[]) {
+   while (tkCap < n + 1) growTok();
+ ${e.soa ? '' : '  tkText.length = 0;'}
+   for (let i = 0; i < n; i++) {
+-    const token = tokens[i];
+-    const type = token.type;
+-    const ranges = token.ranges;
+-    tkK[i] = type === '' ? K_PUNCT : (TYPE_KIND.get(type) ?? K_NAMED_FALLBACK);
+-    tkT[i] = (type === '' ? LIT_PU : LIT_KW).get(token.text) ?? 0;
+-    tkOff[i] = ranges?.[0]?.offset ?? token.offset;
+-    tkEnd[i] = ranges?.[ranges.length - 1]?.end ?? token.offset + token.text.length;
+-    tkFl[i] = (token.newlineBefore ? 1 : 0) | (token.commentBefore ? 2 : 0) | (token.multilineFlowBefore ? 4 : 0);
+-    tkDp[i] = 0; tkPd[i] = 0;
+-${e.soa ? '' : '    tkText[i] = token.text;'}
++    writeExternalToken(i, tokens[i]);
+   }
+   tokN = n;
+   docEmptyPops = [];
+@@ -3531,6 +3534,7 @@ let altN = 0;   // old-stream token count while a window lex runs (lexCore's res
+ type Diag = { offset: number; end: number; message: string; related?: { offset: number; end: number; message: string } };
+ type LexDiag = { offset: number; end: number; kind: number; ch: string };
+ type Edit = { start: number; end: number; text: string };
++type TokenChange = { oldStart: number; oldEnd: number; tokens: readonly ExternalToken[] };
+ type Doc = {
+   tkK: typeof tkK; tkT: typeof tkT; tkOff: typeof tkOff; tkEnd: typeof tkEnd; tkFl: typeof tkFl; tkDp: typeof tkDp; tkPd: typeof tkPd;
+   tkCap: number; tokN: number; srcLenP1: number; negFrom: number;
+@@ -3727,8 +3731,34 @@ function apiMisuse(msg: string) {
+   e.apiMisuse = true;
+   return e;
+ }
+-function editCore(entryRule: string | undefined, edits?: Edit[]) {
+-  if (edits === undefined || edits.length === 0) {
++function editTokensCore(entryRule: string | undefined, edits: readonly Edit[], change: TokenChange) {
++  if (docPieces === null) throw apiMisuse('editTokens() before parseTokens(): no document');
++  if (!Number.isInteger(change.oldStart) || !Number.isInteger(change.oldEnd)
++      || change.oldStart < 0 || change.oldStart > change.oldEnd || change.oldEnd > tokN) {
++    throw apiMisuse('editTokens() token range [' + change.oldStart + ', ' + change.oldEnd + ') is outside the token stream');
++  }
++  let nextLen = docLen;
++  for (let i = 0; i < edits.length; i++) {
++    const edit = edits[i];
++    if (!Number.isInteger(edit.start) || !Number.isInteger(edit.end)
++        || edit.start < 0 || edit.start > edit.end || edit.end > nextLen || typeof edit.text !== 'string') {
++      throw apiMisuse('editTokens() change #' + i + ' out of range: [' + edit.start + ', ' + edit.end + ') of ' + nextLen);
++    }
++    nextLen += edit.text.length - (edit.end - edit.start);
++  }
++  for (let i = 0; i < change.tokens.length; i++) {
++    const token = change.tokens[i];
++    const ranges = token.ranges;
++    const start = ranges?.[0]?.offset ?? token.offset;
++    const end = ranges?.[ranges.length - 1]?.end ?? token.offset + token.text.length;
++    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start > end || end > nextLen) {
++      throw apiMisuse('editTokens() replacement token #' + i + ' is outside the edited document');
++    }
++  }
++  return editCore(entryRule, edits, change);
++}
++function editCore(entryRule: string | undefined, edits: readonly Edit[] | undefined, tokenChange: TokenChange | null) {
++  if (edits === undefined || (edits.length === 0 && tokenChange === null)) {
+     throw apiMisuse('edit() requires the changes: [{ start, end, text }] (LSP-style - each edit in the coordinates of the document AFTER the preceding edits in the array)');
+   }
+   // The engine owns the document text: the new source is BUILT from the changes,
+@@ -3769,6 +3799,49 @@ function editCore(entryRule: string | undefined, edits?: Edit[]) {
+   const ceNew = editDmgE < cs ? cs : editDmgE;
+   const ceOld = ceNew - (newLen - oldLen);
+   const charDelta = newLen - oldLen;
++  let p: number, dOldEnd: number, tokenDelta: number;
++  if (tokenChange !== null) {
++    const change = tokenChange;
++    const oldStart = change.oldStart;
++    const oldEnd = change.oldEnd;
++    const inserted = change.tokens.length;
++    const oldTokenCount = tokN;
++    const newTokenCount = oldTokenCount - (oldEnd - oldStart) + inserted;
++    while (tkCap < newTokenCount + 1) growTok();
++
++    // Keep the unchanged suffix EOF-relative. Updating srcLenP1 below then shifts
++    // every retained suffix span by charDelta without walking the suffix.
++    if (negFrom < oldEnd) {
++      for (let i = negFrom; i < oldEnd; i++) {
++        const offset = tkOff[i]; if (offset < 0) tkOff[i] = offset + srcLenP1;
++        const end = tkEnd[i]; if (end < 0) tkEnd[i] = end + srcLenP1;
++      }
++    } else if (negFrom > oldEnd) {
++      const end = negFrom < oldTokenCount ? negFrom : oldTokenCount;
++      for (let i = oldEnd; i < end; i++) {
++        const offset = tkOff[i]; if (offset >= 0) tkOff[i] = offset - srcLenP1;
++        const tokenEnd = tkEnd[i]; if (tokenEnd >= 0) tkEnd[i] = tokenEnd - srcLenP1;
++      }
++    }
++
++    const insertedEnd = oldStart + inserted;
++    if (insertedEnd !== oldEnd) {
++      tkK.copyWithin(insertedEnd, oldEnd, oldTokenCount); tkT.copyWithin(insertedEnd, oldEnd, oldTokenCount);
++      tkOff.copyWithin(insertedEnd, oldEnd, oldTokenCount); tkEnd.copyWithin(insertedEnd, oldEnd, oldTokenCount);
++      tkFl.copyWithin(insertedEnd, oldEnd, oldTokenCount); tkDp.copyWithin(insertedEnd, oldEnd, oldTokenCount); tkPd.copyWithin(insertedEnd, oldEnd, oldTokenCount);
++    }
++${e.soa ? '' : '    tkText.splice(oldStart, oldEnd - oldStart, ...change.tokens.map(token => token.text));'}
++    for (let i = 0; i < inserted; i++) writeExternalToken(oldStart + i, change.tokens[i]);
++
++    p = oldStart;
++    dOldEnd = oldEnd;
++    tokenDelta = inserted - (oldEnd - oldStart);
++    negFrom = insertedEnd;
++    srcLenP1 = newLen + 1;
++    tokN = newTokenCount;
++    docEmptyPops = [];
++    docLex.length = 0;
++  } else {
+ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+   // Restart anchor: the last token B ending at/before the damage whose recorded
+   // depths are zero and whose shape carries no cross-token lexer flag (')' control-
+@@ -3885,13 +3958,13 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+   }
+   // TRUE token prefix p: the window re-derives [B+1 .. p) byte-identically; only past
+   // p is real damage (compared BEFORE the splice clobbers the old slots).
+-  let p = B + 1;
++  p = B + 1;
+   { let i = 0;
+     while (i < W && p < R && altK![i] === tkK[p] && altT![i] === tkT[p] && altOff![i] === tkOff[p]
+         && altEnd![i] === tkEnd[p] && altFl![i] === tkFl[p]) { i++; p++; }
+   }
+-  const dOldEnd = R;
+-  const tokenDelta = (B + 1 + W) - R;
++  dOldEnd = R;
++  tokenDelta = (B + 1 + W) - R;
+   // ── splice: old[0..B] + window[0..W) + old[R..oN), then shift the suffix spans ──
+   const nN = B + 1 + W + (oN - R);
+   while (tkCap < nN + 1) growTok();
+@@ -3924,7 +3997,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+     for (let i = 0; i < docEmptyPops.length; i++) { const v = docEmptyPops[i]; if (v >= R) nep.push(v + tokenDelta); }
+     docEmptyPops = nep;
+   }
+-  const nN2 = nN;` : String.raw`  // (fallback-lexer grammars keep the full-relex + token-diff path)
++` : String.raw`  // (fallback-lexer grammars keep the full-relex + token-diff path)
+   const oK = tkK, oT = tkT, oOff = tkOff, oEnd = tkEnd, oFl = tkFl, oN = tokN;
+   const oText = tkText;
+   if (altK === null || altK.length !== tkCap) {
+@@ -3943,7 +4016,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+   lexInto(flattenDoc());
+   const nN = tokN;
+   const minN = oN < nN ? oN : nN;
+-  let p = 0;
++  p = 0;
+   while (p < minN && oK[p] === tkK[p] && oT[p] === tkT[p] && oFl[p] === tkFl[p]
+       && oOff[p] === tkOff[p] && oEnd[p] === tkEnd[p] && oText[p] === tkText[p]) p++;
+   let s = 0;
+@@ -3953,9 +4026,10 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+       && oOff[i] + charDelta === tkOff[j] && oEnd[i] + charDelta === tkEnd[j] && oText[i] === tkText[j]) s++;
+     else break;
+   }
+-  const dOldEnd = oN - s;
+-  const tokenDelta = nN - oN;
+-  const nN2 = nN;`}
++  dOldEnd = oN - s;
++  tokenDelta = nN - oN;
++`}
++  }
+   // M4: NO memo carry — the memo is intra-parse; reuse flows through old-tree
+   // adoption (parseRuleEntry consults the previous root via adoptSeek), so the whole
+   // O(rules × n) carry/invalidate machinery is gone.
+@@ -4100,7 +4174,7 @@ export { tokenize };
+ // raw tree/tokenAt views read the ACTIVE doc — they are gate/debug surfaces) ──
+ export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }
+ export function parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) { activate(docDefault); return parseTokensCore(source, tokens, entryRule); }
+-export function parseEdited(entryRule?: string, edits?: Edit[]) { activate(docDefault); return editCore(entryRule, edits); }
++export function parseEdited(entryRule?: string, edits?: readonly Edit[]) { activate(docDefault); return editCore(entryRule, edits, null); }
+ // Arena reclamation introspection + budget override — TEST HOOKS (issue #45 C1). __arenaStats
+ // reports the live arena, the compacted-size baseline, and how many edits re-parsed to reclaim;
+ // __setArenaBudget lowers the factor/min so a gate can force compaction deterministically.
+@@ -4118,79 +4192,99 @@ export function createParser() {
+   const d = makeDoc();
+   let gen = 0;
+   let entryUsed: string | undefined;
++  let externalUsed = false;
+   const chk = (cst: Handle | null | undefined) => {
+     if (cst === null || cst === undefined || cst.d !== d) throw new Error('foreign tree handle: it belongs to another parser instance');
+     if (cst.gen !== gen) throw new Error('stale tree handle: parse() re-opened this document - use the handle from the latest parse()');
+   };
+-  const view: Record<string, (a: number, b: number) => any> = {};
++  const view = {} as typeof tree;
+   for (const k of Object.keys(tree)) {
+     const f = (tree as any)[k];
+     view[k] = (a: number, b: number) => { activate(d); return f(a, b); };
+   }
++  const open = (entryRule: string | undefined, external: boolean, load: () => number) => {
++    activate(d);
++    entryUsed = entryRule;
++    externalUsed = external;
++    gen++;   // re-opening resets the arena: old handles die regardless of outcome
++    docDiags.length = 0;
++    docLex.length = 0;
++    docPar.length = 0;
++    let root!: number;
++    try {
++      root = load();
++      lastBars = [];
++    } catch (e) {
++      // total parse: the strict pass rejected — iterate recovery under the bar
++      // discipline (see recoverBars); the iteration cap degrades to free-fire,
++      // and a recovery-blind layer (fallback lexers) degrades to the zero-width
++      // $error root. Never a crash.
++      recovering = true;
++      const bars = [];
++      let done = false;
++      // NO cross-attempt survival here: parseCore resets the arena cursor per
++      // attempt (only parseEdited carries it), so an earlier attempt's rows are
++      // clobbered — a surviving entry would point at overwritten rows.
++      try {
++        for (let attempt = 0; attempt < 32 && !done; attempt++) {
++          try {
++            docLex.length = 0;
++            recoverBars = bars;
++            root = load();
++            done = true;
++            lastBars = bars.slice();
++          } catch (e2) {
++            let b = maxPos;
++            if (bars.length > 0 && b <= bars[bars.length - 1]) b = bars[bars.length - 1] + 1;
++            bars.push(b);
++          }
++        }
++        if (!done) {
++          recoverFree = true;
++          lastBars = null;
++          adoptRoot = -1;   // free-fire decisions are non-local: adoption would desync
++          try {
++            docLex.length = 0;
++            root = load();
++          } catch (e3) {
++            root = totalNet(e3);
++          } finally {
++            recoverFree = false;
++          }
++        }
++      } finally {
++        recovering = false;
++        recoverBars = [];
++        memoRecFloor = 0x7fffffff;
++      }
++      settleDiags();
++    }
++    return { d, gen, root, errors: docDiags };
++  };
+   return {
+     parse(source: string, entryRule?: string) {
++      return open(entryRule, false, () => parseCore(source, entryRule));
++    },
++    parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
++      return open(entryRule, true, () => parseTokensCore(source, tokens, entryRule));
++    },
++    edit(cst: Handle, edits?: readonly Edit[]) {
++      chk(cst);
++      if (externalUsed) throw apiMisuse('edit() cannot update a parseTokens() document - use editTokens()');
+       activate(d);
+-      entryUsed = entryRule;
+-      gen++;   // re-opening resets the arena: old handles die regardless of outcome
+-      docDiags.length = 0;
+-      docLex.length = 0;
+-      docPar.length = 0;
+-      let root!: number;
+       try {
+-        root = parseCore(source, entryRule);
+-        lastBars = [];
++        cst.root = editCore(entryUsed, edits, null);
+       } catch (e) {
+-        // total parse: the strict pass rejected — iterate recovery under the bar
+-        // discipline (see recoverBars); the iteration cap degrades to free-fire,
+-        // and a recovery-blind layer (fallback lexers) degrades to the zero-width
+-        // $error root. Never a crash.
+-        recovering = true;
+-        const bars = [];
+-        let done = false;
+-        // NO cross-attempt survival here: parseCore resets the arena cursor per
+-        // attempt (only parseEdited carries it), so an earlier attempt's rows are
+-        // clobbered — a surviving entry would point at overwritten rows.
+-        try {
+-          for (let attempt = 0; attempt < 32 && !done; attempt++) {
+-            try {
+-              docLex.length = 0;
+-              recoverBars = bars;
+-              root = parseCore(source, entryRule);
+-              done = true;
+-              lastBars = bars.slice();
+-            } catch (e2) {
+-              let b = maxPos;
+-              if (bars.length > 0 && b <= bars[bars.length - 1]) b = bars[bars.length - 1] + 1;
+-              bars.push(b);
+-            }
+-          }
+-          if (!done) {
+-            recoverFree = true;
+-            lastBars = null;
+-            adoptRoot = -1;   // free-fire decisions are non-local: adoption would desync
+-            try {
+-              docLex.length = 0;
+-              root = parseCore(source, entryRule);
+-            } catch (e3) {
+-              root = totalNet(e3);
+-            } finally {
+-              recoverFree = false;
+-            }
+-          }
+-        } finally {
+-          recovering = false;
+-          recoverBars = [];
+-          memoRecFloor = 0x7fffffff;
+-        }
+-        settleDiags();
++        if (e instanceof RangeError || (e && (e as any).apiMisuse)) throw e;
++        cst.root = totalNet(e);
+       }
+-      return { d, gen, root, errors: docDiags };
+     },
+-    edit(cst: Handle, edits?: Edit[]) {
++    editTokens(cst: Handle, edits: readonly Edit[], change: TokenChange) {
+       chk(cst);
++      if (!externalUsed) throw apiMisuse('editTokens() requires a document opened by parseTokens()');
+       activate(d);
+       try {
+-        cst.root = editCore(entryUsed, edits);
++        cst.root = editTokensCore(entryUsed, edits, change);
+       } catch (e) {
+         if (e instanceof RangeError || (e && (e as any).apiMisuse)) throw e;
+         cst.root = totalNet(e);

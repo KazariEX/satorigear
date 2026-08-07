@@ -1,0 +1,84 @@
+diff --git a/src/emit-parser.ts b/src/emit-parser.ts
+index 880256a..499c18c 100644
+--- a/src/emit-parser.ts
++++ b/src/emit-parser.ts
+@@ -2332,6 +2332,10 @@ function emitMixfixLed(e: Emitter, a: ReturnType<typeof analyze>, fnName: string
+ // Emit parseRuleEntry (memo + context handling for pratt/left-rec rules, mirrors
+ // parseRule's pratt/left-rec branch) and the parse() driver.
+ function emitDriver(e: Emitter, a: ReturnType<typeof analyze>, entry: string) {
++  const K_ARR = a.kArr;
++  const T_ARR = a.tArr;
++  const K_BYTES = a.kArr === 'Uint8Array' ? 1 : 2;
++  const T_BYTES = a.tArr === 'Uint8Array' ? 1 : 2;
+   e.emit(String.raw`
+ // parseRule for a pratt/left-rec rule: memo + context + suppress, then the core.
+ // The memo is per-rule arrays indexed by start pos (lazily sized to the token count,
+@@ -3551,21 +3555,45 @@ ${e.soa ? '  parenCachePos: number; parenCacheStack: boolean[];' : ''}
+   altCap: number; altN: number;
+ };
+ type Handle = { d: Doc; gen: number; root: number; errors: Diag[] };
+-function makeDoc(): Doc {
++function makeDoc(tokenCapacity = 4096, rowCapacity = 8192, childCapacity = 16384): Doc {
++  const tokenBuffer = new ArrayBuffer(tokenCapacity * ${K_BYTES + T_BYTES + 12});
++  const docTkK = new ${K_ARR}(tokenBuffer, 0, tokenCapacity);
++  const docTkT = new ${T_ARR}(tokenBuffer, tokenCapacity * ${K_BYTES}, tokenCapacity);
++  const docTkOff = new Int32Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES}, tokenCapacity);
++  const docTkEnd = new Int32Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES + 4}, tokenCapacity);
++  const docTkFl = new Uint8Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES + 8}, tokenCapacity);
++  const docTkDp = new Uint8Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES + 9}, tokenCapacity);
++  const docTkPd = new Uint16Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES + 10}, tokenCapacity);
++  const rowBuffer = new ArrayBuffer(rowCapacity * 37);
++  const docRowRule = new Uint16Array(rowBuffer, 0, rowCapacity);
++  const docRowLen = new Int32Array(rowBuffer, rowCapacity * 2, rowCapacity);
++  const docRowTokLen = new Int32Array(rowBuffer, rowCapacity * 6, rowCapacity);
++  const docRowStart = new Int32Array(rowBuffer, rowCapacity * 10, rowCapacity);
++  const docRowCount = new Int32Array(rowBuffer, rowCapacity * 14, rowCapacity);
++  const docRowExt = new Int32Array(rowBuffer, rowCapacity * 18, rowCapacity);
++  const docRowOK = new Uint8Array(rowBuffer, rowCapacity * 22, rowCapacity);
++  const docRowKC = new Uint8Array(rowBuffer, rowCapacity * 23, rowCapacity);
++  const docRowNF = new Int32Array(rowBuffer, rowCapacity * 24, rowCapacity).fill(0x7fffffff);
++  const docRowRM = new Uint8Array(rowBuffer, rowCapacity * 28, rowCapacity);
++  const docAbsChar = new Int32Array(rowBuffer, rowCapacity * 29, rowCapacity);
++  const docAbsTok = new Int32Array(rowBuffer, rowCapacity * 33, rowCapacity);
++  const childBuffer = new ArrayBuffer(childCapacity * 12);
+   return {
+-    tkK: new (tkK.constructor as any)(4096), tkT: new (tkT.constructor as any)(4096),
+-    tkOff: new Int32Array(4096), tkEnd: new Int32Array(4096), tkFl: new Uint8Array(4096),
+-    tkDp: new Uint8Array(4096), tkPd: new Uint16Array(4096),
+-    tkCap: 4096, tokN: 0, srcLenP1: 1, negFrom: 0x7fffffff,
+-    rowRule: new Uint16Array(8192), rowLen: new Int32Array(8192), rowTokLen: new Int32Array(8192),
+-    rowStart: new Int32Array(8192), rowCount: new Int32Array(8192), rowExt: new Int32Array(8192),
+-    rowOK: new Uint8Array(8192), rowKC: new Uint8Array(8192),
+-    rowNF: new Int32Array(8192).fill(0x7fffffff),
+-    rowRM: new Uint8Array(8192),
+-    absChar: new Int32Array(8192), absTok: new Int32Array(8192),
+-    rowCap: 8192, nodeN: 0,
+-    kids: new Int32Array(16384), kidRel: new Int32Array(16384), kidTokRel: new Int32Array(16384),
+-    kidCap: 16384, kidN: 0,
++    tkK: docTkK, tkT: docTkT,
++    tkOff: docTkOff, tkEnd: docTkEnd, tkFl: docTkFl,
++    tkDp: docTkDp, tkPd: docTkPd,
++    tkCap: tokenCapacity, tokN: 0, srcLenP1: 1, negFrom: 0x7fffffff,
++    rowRule: docRowRule, rowLen: docRowLen, rowTokLen: docRowTokLen,
++    rowStart: docRowStart, rowCount: docRowCount, rowExt: docRowExt,
++    rowOK: docRowOK, rowKC: docRowKC,
++    rowNF: docRowNF,
++    rowRM: docRowRM,
++    absChar: docAbsChar, absTok: docAbsTok,
++    rowCap: rowCapacity, nodeN: 0,
++    kids: new Int32Array(childBuffer, 0, childCapacity),
++    kidRel: new Int32Array(childBuffer, childCapacity * 4, childCapacity),
++    kidTokRel: new Int32Array(childBuffer, childCapacity * 8, childCapacity),
++    kidCap: childCapacity, kidN: 0,
+     memoNode: [], memoEnd: [], memoExt: [], memoGen: [], memoGenCur: 0,
+     docDiags: [], docLex: [], docPar: [],
+     docPieces: null, docPieceOff: null, docLen: 0, docFlat: null, docCur: 0,
+@@ -4189,7 +4217,7 @@ export function visit(entry: number, fns: _VisitFns, charBase?: number, tokBase?
+ // the previous tree; the next edit falls back to a full re-parse internally. Only
+ // parse() re-opening the document invalidates old handles (they throw).
+ export function createParser() {
+-  const d = makeDoc();
++  const d = makeDoc(16, 32, 64);
+   let gen = 0;
+   let entryUsed: string | undefined;
+   let externalUsed = false;
