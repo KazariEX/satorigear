@@ -1,0 +1,4 @@
+[submodule "vendors/monogram"]
+	path = vendors/monogram
+	url = https://github.com/johnsoncodehk/monogram
+	shallow = true

@@ -6,14 +6,21 @@
     "build": "pnpm --filter satorigear... build",
     "dev": "pnpm --filter satorigear... --parallel dev",
     "prepare": "zin link satorigear",
+    "vendor:prepare": "node scripts/vendor.ts",
+    "test:markdown": "node test/markdown.ts",
+    "conformance:markdown": "node test/markdown-conformance.ts",
     "release": "bumpp -r --no-push -c \"release: v%s\"",
     "test": "vitest"
   },
   "devDependencies": {
+    "@types/commonmark": "catalog:",
+    "@types/node": "catalog:",
     "@zinkawaii/eslint-config": "catalog:",
     "@zinkawaii/scripts": "catalog:default",
     "@zinkawaii/tsconfig": "catalog:",
     "bumpp": "catalog:",
+    "commonmark": "catalog:",
+    "commonmark-spec": "catalog:",
     "eslint": "catalog:",
     "tsdown": "catalog:",
     "vitest": "catalog:"

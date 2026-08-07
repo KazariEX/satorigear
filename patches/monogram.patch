@@ -1,0 +1,198 @@
+diff --git a/src/api.ts b/src/api.ts
+index 99d693f..ba1de28 100644
+--- a/src/api.ts
++++ b/src/api.ts
+@@ -57,6 +57,10 @@ interface TokenOptions {
+   blockPattern?: TokenPattern;
+   // Block-context ONLY (indentation grammars): match this token only outside flow — see TokenDecl.blockOnly.
+   blockOnly?: boolean;
++  // Token is eligible only as the first real token on a logical line.
++  lineStart?: boolean;
++  // Scan a complete line-fenced region as one token (e.g. Markdown ``` / ~~~ blocks).
++  fencedBlock?: { markers: string[]; minLength: number; maxIndent?: number };
+ }
+ 
+ export class TokenRef {
+@@ -553,6 +557,12 @@ export function defineGrammar(config: GrammarConfig): CstGrammar & { name: strin
+       pattern: tok.pattern,
+       blockPattern: tok.opts.blockPattern,
+       blockOnly: tok.opts.blockOnly,
++      lineStart: tok.opts.lineStart,
++      fencedBlock: tok.opts.fencedBlock && {
++        markers: [...tok.opts.fencedBlock.markers],
++        minLength: tok.opts.fencedBlock.minLength,
++        maxIndent: tok.opts.fencedBlock.maxIndent,
++      },
+       flags,
+       scope: tok.opts.scope,
+       escapePattern: tok.opts.escape,
+diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
+index a4ed10c..83ded85 100644
+--- a/src/gen-lexer.ts
++++ b/src/gen-lexer.ts
+@@ -1,4 +1,4 @@
+-import type { CstGrammar } from './types.ts';
++import type { CstGrammar, TokenDecl } from './types.ts';
+ import { collectLiterals, isKeywordLiteral } from './grammar-utils.ts';
+ import { tokenBlockPatternFirstCharSet, tokenBlockPatternSource, tokenEscapeValidPatternSource, tokenPatternFirstCharSet, tokenPatternHasStartAnchor, tokenPatternSource } from './token-pattern.ts';
+ 
+@@ -101,6 +101,8 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+       isRegex: t.flags.includes('regex'),
+       isString: !!t.string,
+       blockOnly: !!t.blockOnly,   // matched only outside flow (flowDepth===0) — see TokenDecl.blockOnly
++      lineStart: !!t.lineStart,
++      fencedBlock: t.fencedBlock,
+       // First-char filters for the default and block patterns (computed once). A char the set rejects
+       // can't start this token → the loop skips it. `null` = couldn't prove a filter → always try.
+       first: tokenPatternFirstCharSet(t),
+@@ -249,6 +251,9 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+     indent ? ([indent.indentToken, indent.dedentToken, indent.newlineToken].filter(Boolean) as string[])
+            : newline ? [newline.token] : [],
+   );
++  const indentedTextToken = newline?.indentedText?.token;
++  const indentedTextMinColumns = newline?.indentedText?.minColumns ?? 0;
++  const indentedTextTabWidth = newline?.indentedText?.tabWidth ?? 4;
+   const flowOpenSet = new Set((indent ?? newline)?.flowOpen ?? []);
+   const flowCloseSet = new Set((indent ?? newline)?.flowClose ?? []);
+   // The matchers the per-position scan loop actually tries: the template token is handled by
+@@ -306,6 +311,7 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+   const kVoidNameTok = kOf(markup?.voidNameToken ?? null);
+   const tTagOpen = markup ? (puLitOf.get(markup.tagOpen) ?? 0) : 0;
+   const kNewlineModeTok = kOf(newline?.token ?? null);
++  const kIndentedTextTok = kOf(indentedTextToken ?? null);
+   const kIndentTok = kOf(indent?.indentToken ?? null), kDedentTok = kOf(indent?.dedentToken ?? null), kIndentNewlineTok = kOf(indent?.newlineToken ?? null);
+   const kBlockScalarTok = kOf(indent?.blockScalar?.token ?? null);
+   const kRawBlockTok = kOf(indent?.rawBlock?.token ?? null);
+@@ -533,6 +539,50 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+     // dedents below it. (yaml-test-suite 5WE3 / KK5P — the compact `: -` edge.)
+     let lastExplicitKeyCol = -1;
+     const indentStack: number[] = [0];
++
++    // Scan a declarative line-fenced block. The opener starts at `start` (leading indentation
++    // has already been consumed by the line-sensitive state machine). A closer must use the
++    // same marker, be at least as long as the opener, have at most maxIndent leading spaces,
++    // and contain only trailing horizontal whitespace. If no closer exists, the block owns EOF.
++    function scanFencedBlock(start: number, cfg: NonNullable<TokenDecl['fencedBlock']>): number | null {
++      const lineEndAfter = (from: number): { end: number; next: number } | null => {
++        for (let i = from; i < source.length; i++) {
++          if (source[i] === '\n') return { end: i, next: i + 1 };
++          if (source[i] === '\r') return { end: i, next: i + (source[i + 1] === '\n' ? 2 : 1) };
++        }
++        return null;
++      };
++      const marker = cfg.markers.find(m => m.length === 1 && source[start] === m);
++      if (!marker) return null;
++      let openerEnd = start;
++      while (source[openerEnd] === marker) openerEnd++;
++      const openerLength = openerEnd - start;
++      if (openerLength < cfg.minLength) return null;
++      const firstLine = lineEndAfter(openerEnd);
++      // CommonMark backtick info strings may not contain a backtick. Keeping this validation
++      // marker-driven makes the scanner useful for other fence syntaxes too.
++      const openerLineLimit = firstLine?.end ?? source.length;
++      if (marker === '`' && source.slice(openerEnd, openerLineLimit).includes('`')) return null;
++      if (!firstLine) return source.length;
++
++      let line = firstLine.next;
++      const maxIndent = cfg.maxIndent ?? 0;
++      while (line <= source.length) {
++        let p = line, spaces = 0;
++        while (spaces < maxIndent && source[p] === ' ') { p++; spaces++; }
++        let runEnd = p;
++        while (source[runEnd] === marker) runEnd++;
++        if (runEnd - p >= openerLength) {
++          let tail = runEnd;
++          while (source[tail] === ' ' || source[tail] === '\t') tail++;
++          if (tail >= source.length || source[tail] === '\n' || source[tail] === '\r') return tail;
++        }
++        const boundary = lineEndAfter(line);
++        if (!boundary) break;
++        line = boundary.next;
++      }
++      return source.length;
++    }
+     // §7.4 multi-line flow indentation: when the OUTERMOST flow collection opens as a block VALUE or
+     // ITEM (the `[`/`{` directly follows a `:`/`-` indicator), every CONTENT line of that flow must be
+     // indented strictly MORE than the enclosing block node's column `n` — else the flow is
+@@ -729,6 +779,29 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+         // leading boundary before any content is suppressed via emittedContent) and move on. ──
+         if (!indent) {
+           if (emittedContent) push(mkNamed(newline!.token, '', pos, kNewlineModeTok));
++          // Unlike YAML indentation, an indented-verbatim grammar may count tabs as column
++          // advances. Continue the earlier space scan through the full horizontal prefix.
++          let contentPos = pos;
++          let indentColumns = col;
++          if (indentedTextToken) {
++            while (source[contentPos] === ' ' || source[contentPos] === '\t') {
++              if (source[contentPos] === ' ') indentColumns++;
++              else indentColumns += indentedTextTabWidth - (indentColumns % indentedTextTabWidth);
++              contentPos++;
++            }
++          }
++          // Declarative indented-verbatim line. Emit from the first content byte through EOL;
++          // indentation is structural and intentionally excluded from the token text.
++          if (indentedTextToken && indentColumns >= indentedTextMinColumns) {
++            pos = contentPos;
++            let e = pos;
++            while (e < source.length && source[e] !== '\n' && source[e] !== '\r') e++;
++            push(mkNamed(indentedTextToken, source.slice(pos, e), pos, kIndentedTextTok));
++            pos = e;
++            lineStart = false;
++            continue;
++          }
++          pos = contentPos;
+           lineStart = false;
+           atLineLead = true;
+           continue;
+@@ -1097,6 +1170,17 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+       const cc = source.charCodeAt(pos);
+       for (const tm of scanMatchers) {
+         if (tm.blockOnly && flowDepth > 0) continue;    // line-structural token (YAML directive) — content in flow
++        if (tm.lineStart && !atLineLead) continue;
++        if (tm.fencedBlock) {
++          const end = atLineLead ? scanFencedBlock(pos, tm.fencedBlock) : null;
++          if (end !== null) {
++            push(mkNamed(tm.name, source.slice(pos, end), pos, tm.k));
++            pos = end;
++            matched = true;
++            break;
++          }
++          continue;
++        }
+         if (tm.isRegex) {
+           // prev is a completed value → `/` is division, not a regex literal → skip.
+           if (prevIsValue(tokens[tokens.length - 1])) continue;
+diff --git a/src/types.ts b/src/types.ts
+index bf2817b..910b0a0 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -65,6 +65,17 @@ export interface TokenDecl {
+   // the engine stays agnostic (a grammar declaring none is unaffected). Highlight-only generators
+   // ignore it (a `%`-led directive in flow is vanishingly rare and the flat TM grammar is unchanged).
+   blockOnly?: boolean;
++  // Match only when this is the first real token on a logical line. The newline/indent
++  // state machine supplies the context while the token pattern itself stays declarative.
++  lineStart?: boolean;
++  // A line-start fenced block (Markdown-style backtick/tilde fences). The lexer validates
++  // the closing fence against the opener's marker and run length and emits the complete
++  // region as one token. Delimiters are grammar data; no language name is hardcoded.
++  fencedBlock?: {
++    markers: string[];
++    minLength: number;
++    maxIndent?: number;
++  };
+ }
+ 
+ /**
+@@ -439,6 +450,11 @@ export interface NewlineConfig {
+   flowOpen?: string[];  // punctuation that SUSPENDS newline significance while open (e.g. ['(', '[', '{'])
+   flowClose?: string[]; // matching closers (e.g. [')', ']', '}'])
+   comment?: string;     // line-comment introducer; a comment-only line emits no NEWLINE (e.g. '#')
++  // A line whose indentation reaches this column threshold is emitted whole as `token`. This is
++  // useful for line-oriented grammars with indented verbatim blocks (Markdown's four-space
++  // code blocks). Each physical content line is one token; ordinary newline separators still
++  // delimit adjacent lines. Absent means leading spaces keep their existing skip behaviour.
++  indentedText?: { token: string; minColumns: number; tabWidth?: number };
+ }
+ 
+ export interface PrecOperator {

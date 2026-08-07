@@ -1,6 +1,19 @@
 {
   "extends": "@zinkawaii/tsconfig",
+  "compilerOptions": {
+    "paths": {
+      "monogram/*": [
+        "./vendors/monogram/src/*"
+      ]
+    },
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true
+  },
   "include": [
-    "packages/**/*.ts"
+    "packages/**/*.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts"
   ]
 }
