@@ -1,5 +1,5 @@
 diff --git a/src/emit-parser.ts b/src/emit-parser.ts
-index 1c87274..880256a 100644
+index 1c87274..bdc02a2 100644
 --- a/src/emit-parser.ts
 +++ b/src/emit-parser.ts
 @@ -2647,6 +2647,18 @@ type ExternalToken = {
@@ -39,6 +39,15 @@ index 1c87274..880256a 100644
    }
    tokN = n;
    docEmptyPops = [];
+@@ -2837,7 +2840,7 @@ let recovering = false;
+ //     recovery candidates, ADOPTED ones by walking the rowRM-marked subtrees that
+ //     adoption reused this pass (a recovering pass adopts error regions wholesale,
+ //     so per-pass collection alone would silently drop their diagnostics). docPar
+-//     keeps the formatted result for the paths that do not re-parse (surgery).
++//     holds the formatted result derived from the latest tree.
+ let docDiags: Diag[] = [];
+ let docLex: LexDiag[] = [];
+ let docPar: Diag[] = [];
 @@ -3531,6 +3534,7 @@ let altN = 0;   // old-stream token count while a window lex runs (lexCore's res
  type Diag = { offset: number; end: number; message: string; related?: { offset: number; end: number; message: string } };
  type LexDiag = { offset: number; end: number; kind: number; ch: string };
@@ -47,7 +56,42 @@ index 1c87274..880256a 100644
  type Doc = {
    tkK: typeof tkK; tkT: typeof tkT; tkOff: typeof tkOff; tkEnd: typeof tkEnd; tkFl: typeof tkFl; tkDp: typeof tkDp; tkPd: typeof tkPd;
    tkCap: number; tokN: number; srcLenP1: number; negFrom: number;
-@@ -3727,8 +3731,34 @@ function apiMisuse(msg: string) {
+@@ -3660,34 +3664,6 @@ function parsePrepared(entryRule?: string) {
+   return root;
+ }
+ 
+-// In-place diagnostic shift for a LOCALLY-strict edit (surgery): diags before the
+-// damage stay, diags at/after the old damage end ride the char delta, overlapping
+-// ones drop (their region re-parsed strictly). Splices in place — cst.errors IS
+-// this array.
+-// Parser-diag shift for the LOCALLY-strict paths (surgery / strict success): the
+-// LEXER list is maintained by the window block (which already dropped the re-lexed
+-// range and shifted the suffix — shifting here would double-apply the delta).
+-function shiftDiags(a: number, b: number, delta: number) {
+-  let w = 0;
+-  for (let i = 0; i < docPar.length; i++) {
+-    const g = docPar[i];
+-    if (g.end <= a) { /* kept as is */ }
+-    else if (g.offset >= b) { g.offset += delta; g.end += delta; }
+-    else continue;
+-    // the related anchor (the matched opener) shifts on its own coordinates — it
+-    // can sit on the other side of the damage from its diagnostic
+-    const r = g.related;
+-    if (r !== undefined) {
+-      if (r.end <= a) { /* kept */ }
+-      else if (r.offset >= b) { r.offset += delta; r.end += delta; }
+-      else g.related = undefined;   // its token was edited: stale
+-    }
+-    docPar[w++] = g;
+-  }
+-  docPar.length = w;
+-  rebuildDiagView();
+-}
+-
+ // ── Incremental re-parse ──
+ // No edit protocol: the caller hands the NEW source; the damage window is DERIVED by
+ // diffing the old and new token columns (longest identical prefix; longest suffix
+@@ -3727,8 +3703,34 @@ function apiMisuse(msg: string) {
    e.apiMisuse = true;
    return e;
  }
@@ -84,7 +128,7 @@ index 1c87274..880256a 100644
      throw apiMisuse('edit() requires the changes: [{ start, end, text }] (LSP-style - each edit in the coordinates of the document AFTER the preceding edits in the array)');
    }
    // The engine owns the document text: the new source is BUILT from the changes,
-@@ -3769,6 +3799,49 @@ function editCore(entryRule: string | undefined, edits?: Edit[]) {
+@@ -3769,6 +3771,49 @@ function editCore(entryRule: string | undefined, edits?: Edit[]) {
    const ceNew = editDmgE < cs ? cs : editDmgE;
    const ceOld = ceNew - (newLen - oldLen);
    const charDelta = newLen - oldLen;
@@ -134,7 +178,7 @@ index 1c87274..880256a 100644
  ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    // Restart anchor: the last token B ending at/before the damage whose recorded
    // depths are zero and whose shape carries no cross-token lexer flag (')' control-
-@@ -3885,13 +3958,13 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3885,13 +3930,13 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    }
    // TRUE token prefix p: the window re-derives [B+1 .. p) byte-identically; only past
    // p is real damage (compared BEFORE the splice clobbers the old slots).
@@ -151,7 +195,7 @@ index 1c87274..880256a 100644
    // ── splice: old[0..B] + window[0..W) + old[R..oN), then shift the suffix spans ──
    const nN = B + 1 + W + (oN - R);
    while (tkCap < nN + 1) growTok();
-@@ -3924,7 +3997,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3924,7 +3969,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
      for (let i = 0; i < docEmptyPops.length; i++) { const v = docEmptyPops[i]; if (v >= R) nep.push(v + tokenDelta); }
      docEmptyPops = nep;
    }
@@ -160,7 +204,7 @@ index 1c87274..880256a 100644
    const oK = tkK, oT = tkT, oOff = tkOff, oEnd = tkEnd, oFl = tkFl, oN = tokN;
    const oText = tkText;
    if (altK === null || altK.length !== tkCap) {
-@@ -3943,7 +4016,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3943,7 +3988,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    lexInto(flattenDoc());
    const nN = tokN;
    const minN = oN < nN ? oN : nN;
@@ -169,7 +213,7 @@ index 1c87274..880256a 100644
    while (p < minN && oK[p] === tkK[p] && oT[p] === tkT[p] && oFl[p] === tkFl[p]
        && oOff[p] === tkOff[p] && oEnd[p] === tkEnd[p] && oText[p] === tkText[p]) p++;
    let s = 0;
-@@ -3953,9 +4026,10 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3953,9 +3998,10 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
        && oOff[i] + charDelta === tkOff[j] && oEnd[i] + charDelta === tkEnd[j] && oText[i] === tkText[j]) s++;
      else break;
    }
@@ -183,7 +227,18 @@ index 1c87274..880256a 100644
    // M4: NO memo carry — the memo is intra-parse; reuse flows through old-tree
    // adoption (parseRuleEntry consults the previous root via adoptSeek), so the whole
    // O(rules × n) carry/invalidate machinery is gone.
-@@ -4100,7 +4174,7 @@ export { tokenize };
+@@ -3993,7 +4039,9 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+     if (lastBars !== null) {
+       for (let i = 0; i < lastBars.length; i++) if (lastBars[i] >= dOldEnd) lastBars[i] += tokenDelta;
+     }
+-    shiftDiags(cs, ceOld, charDelta);
++    // Token changes need tree semantics, not a text-damage approximation. Reusing
++    // the same final-tree settlement for every surgery is also exact for text edits.
++    settleDiags();
+     return sroot;
+   }
+   let root!: number;
+@@ -4100,7 +4148,7 @@ export { tokenize };
  // raw tree/tokenAt views read the ACTIVE doc — they are gate/debug surfaces) ──
  export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }
  export function parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) { activate(docDefault); return parseTokensCore(source, tokens, entryRule); }
@@ -192,7 +247,7 @@ index 1c87274..880256a 100644
  // Arena reclamation introspection + budget override — TEST HOOKS (issue #45 C1). __arenaStats
  // reports the live arena, the compacted-size baseline, and how many edits re-parsed to reclaim;
  // __setArenaBudget lowers the factor/min so a gate can force compaction deterministically.
-@@ -4118,79 +4192,99 @@ export function createParser() {
+@@ -4118,79 +4166,99 @@ export function createParser() {
    const d = makeDoc();
    let gen = 0;
    let entryUsed: string | undefined;
