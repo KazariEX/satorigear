@@ -66,27 +66,6 @@ function collectReferenceLabels(root: CstNode, source: string): Set<string> {
   return labels;
 }
 
-function collectTreeReferenceLabels(tree: CstTree, source: string): Set<string> {
-  const labels = new Set<string>();
-  const visit = (node: CstTreeNode): void => {
-    if (tree.ruleName(node) === "LinkDefinition") {
-      const span = tree.span(node);
-      const label = referenceLabelText(source.slice(span.start, span.end));
-      if (label) {
-        labels.add(label);
-      }
-      return;
-    }
-    for (const child of tree.children(node)) {
-      if (child.kind === "node") {
-        visit(child);
-      }
-    }
-  };
-  visit(tree.root);
-  return labels;
-}
-
 function inlineParserFor(referenceLabels: ReadonlySet<string>) {
   return {
     parse: (source: string, entryRule?: string) => {
@@ -133,6 +112,14 @@ interface InlineRegionDescriptor {
   rule: string;
   span: { end: number; start: number };
   view: SourceView;
+}
+
+interface CompositeBlockDescriptor {
+  id: number;
+  node: CstTreeNode;
+  offset: number;
+  regionIds: readonly number[];
+  source: string;
 }
 
 function rangesOf(tree: CstTree, node: CstTreeNode): SourceRange[] {
@@ -226,6 +213,7 @@ function intersects(left: ReadonlySet<string>, right: ReadonlySet<string>): bool
 }
 
 class MarkdownCompositeDocument {
+  #blocks: readonly CompositeBlockDescriptor[] = [];
   #labels = new Set<string>();
   #regions = new Map<number, InlineRegion>();
   #source: string;
@@ -255,46 +243,64 @@ class MarkdownCompositeDocument {
     source: string;
     version: string;
   }[] {
-    return this.#tree.children(this.#tree.root).flatMap((child) => {
-      if (child.kind !== "node" || this.#tree.ruleName(child) !== "Block") {
-        return [];
-      }
-      const span = this.#tree.span(child);
-      return [{
-        id: child.id,
-        materialize: () => {
-          const node = materializeCstNode(this.#tree, this.#source, child);
-          this.#attach(child, node);
-          return node;
-        },
-        offset: child.offset,
-        source: this.#source.slice(span.start, span.end),
-        version: this.#inlineVersion(child),
-      }];
-    });
+    return this.#blocks.map((block) => ({
+      id: block.id,
+      materialize: () => {
+        const node = materializeCstNode(this.#tree, this.#source, block.node);
+        this.#attach(block.node, node);
+        return node;
+      },
+      offset: block.offset,
+      source: block.source,
+      version: block.regionIds.map((id) => `${id}:${this.#regions.get(id)?.revision}`).join("|"),
+    }));
   }
 
   update(tree: CstTree, source: string): void {
-    const labels = collectTreeReferenceLabels(tree, source);
-    const changed = changedLabels(this.#labels, labels);
+    const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
-    const collect = (node: CstTreeNode): void => {
+    const blocks: CompositeBlockDescriptor[] = [];
+    const collect = (node: CstTreeNode, regionIds: number[]): void => {
       const rule = tree.ruleName(node);
+      if (rule === "LinkDefinition") {
+        const span = tree.span(node);
+        const label = referenceLabelText(source.slice(span.start, span.end));
+        if (label) {
+          labels.add(label);
+        }
+        return;
+      }
       if (rule === "Paragraph" || rule === "AtxHeading" || rule === "SetextHeading") {
         const ranges = rangesOf(tree, node);
         if (ranges.length > 0) {
           descriptors.push({ id: node.id, rule, span: tree.span(node), view: createSourceView(source, ranges) });
+          regionIds.push(node.id);
         }
         return;
       }
       for (const child of tree.children(node)) {
         if (child.kind === "node") {
-          collect(child);
+          collect(child, regionIds);
         }
       }
     };
-    collect(tree.root);
+    for (const child of tree.children(tree.root)) {
+      if (child.kind !== "node" || tree.ruleName(child) !== "Block") {
+        continue;
+      }
+      const span = tree.span(child);
+      const regionIds: number[] = [];
+      collect(child, regionIds);
+      blocks.push({
+        id: child.id,
+        node: child,
+        offset: child.offset,
+        regionIds,
+        source: source.slice(span.start, span.end),
+      });
+    }
 
+    const changed = changedLabels(this.#labels, labels);
     const regions = new Map<number, InlineRegion>();
     const stableIds = new Set(descriptors.map((descriptor) => descriptor.id));
     const available = [...this.#regions.values()].filter((region) => !stableIds.has(region.id));
@@ -324,6 +330,7 @@ class MarkdownCompositeDocument {
     }
     this.#tree = tree;
     this.#source = source;
+    this.#blocks = blocks;
     this.#labels = labels;
     this.#regions = regions;
   }
@@ -362,16 +369,6 @@ class MarkdownCompositeDocument {
         this.#attach(arenaChild, child);
       }
     }
-  }
-
-  #inlineVersion(node: CstTreeNode): string {
-    const region = this.#regions.get(node.id);
-    if (region) {
-      return `${node.id}:${region.revision}`;
-    }
-    return this.#tree.children(node).flatMap((child) => (
-      child.kind === "node" ? [this.#inlineVersion(child)] : []
-    )).filter(Boolean).join("|");
   }
 }
 
