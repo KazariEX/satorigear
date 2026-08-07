@@ -213,26 +213,25 @@ function leafOfTypes(
   return result;
 }
 
-function descendantLeaves(value: MarkdownSyntaxNode, context: ProjectionContext): MarkdownSyntaxLeaf[] {
-  return context.syntax.children(value).flatMap((child) => (
-    context.syntax.isLeaf(child) ? [child] : descendantLeaves(child, context)
-  ));
-}
-
-function payloadStart(value: MarkdownSyntaxNode, context: ProjectionContext): number {
-  const offsets = descendantLeaves(value, context)
-    .map((leaf) => context.syntax.span(leaf))
-    .filter((span) => span.end > span.start)
-    .map((span) => span.start);
-  return offsets.length ? Math.min(...offsets) : context.syntax.span(value).end;
-}
-
-function payloadEnd(value: MarkdownSyntaxNode, context: ProjectionContext): number {
-  const offsets = descendantLeaves(value, context)
-    .map((leaf) => context.syntax.span(leaf))
-    .filter((span) => span.end > span.start)
-    .map((span) => span.end);
-  return offsets.length ? Math.max(...offsets) : context.syntax.span(value).start;
+function payloadBounds(value: MarkdownSyntaxNode, context: ProjectionContext): SourceSpan {
+  const fallback = context.syntax.span(value);
+  const result = { start: fallback.end, end: fallback.start };
+  const visit = (node: MarkdownSyntaxNode): void => {
+    for (const child of context.syntax.children(node)) {
+      if (context.syntax.isLeaf(child)) {
+        const span = context.syntax.span(child);
+        if (span.end > span.start) {
+          result.start = Math.min(result.start, span.start);
+          result.end = Math.max(result.end, span.end);
+        }
+      }
+      else {
+        visit(child);
+      }
+    }
+  };
+  visit(value);
+  return result;
 }
 
 function normalizeLines(value: string): string {
@@ -253,19 +252,31 @@ function hasBlankLineBetween(source: string, start: number, end: number, stripBl
 
 function listItemSpread(value: MarkdownSyntaxNode, context: ProjectionContext): boolean {
   const blocks = childNodes(value, "Block", context);
+  if (blocks.length < 2) {
+    return false;
+  }
+  let previous = payloadBounds(blocks[0], context);
   for (let index = 1; index < blocks.length; index++) {
-    if (hasBlankLineBetween(context.source, payloadEnd(blocks[index - 1], context), payloadStart(blocks[index], context), true)) {
+    const current = payloadBounds(blocks[index], context);
+    if (hasBlankLineBetween(context.source, previous.end, current.start, true)) {
       return true;
     }
+    previous = current;
   }
   return false;
 }
 
 function listSpread(items: readonly MarkdownSyntaxNode[], context: ProjectionContext): boolean {
+  if (items.length < 2) {
+    return false;
+  }
+  let previous = payloadBounds(items[0], context);
   for (let index = 1; index < items.length; index++) {
-    if (hasBlankLineBetween(context.source, payloadEnd(items[index - 1], context), payloadStart(items[index], context), false)) {
+    const current = payloadBounds(items[index], context);
+    if (hasBlankLineBetween(context.source, previous.end, current.start, false)) {
       return true;
     }
+    previous = current;
   }
   return false;
 }
