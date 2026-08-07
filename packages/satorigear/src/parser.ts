@@ -19,6 +19,7 @@ import {
   type SourceView,
 } from "./source-view.ts";
 import type {
+  MarkdownInlineSyntax,
   MarkdownSyntax,
   MarkdownSyntaxChild,
   MarkdownSyntaxLeaf,
@@ -149,7 +150,6 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
 
 class MarkdownSyntaxImpl implements MarkdownSyntax {
   #blocks: readonly SyntaxBlockDescriptor[] = [];
-  #inlineTrees = new WeakMap<SyntaxTree, InlineRegion>();
   #regions = new Map<number, InlineRegion>();
   #source: string;
   #tree: SyntaxTree;
@@ -165,7 +165,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   }
 
   update(tree: SyntaxTree, source: string, edits: readonly TextEdit[] = []): void {
-    this.#inlineTrees = new WeakMap();
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
     const stableRegionIds = new Set<number>();
@@ -273,7 +272,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return node.tree.children(node);
   }
 
-  inline(value: MarkdownSyntaxNode): MarkdownSyntaxNode | undefined {
+  inline(value: MarkdownSyntaxNode): MarkdownInlineSyntax | undefined {
     const node = value as SyntaxTreeNode;
     if (node.tree !== this.#tree) {
       return;
@@ -285,30 +284,16 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     const tree = region.document
       ? region.document.tree(region.tokens)
       : inlineParser.parseTree(region.view.text, region.tokens, "InlineLines");
-    this.#inlineTrees.set(tree, region);
-    return tree.root;
+    return { root: tree.root, view: region.view };
   }
 
   isLeaf(value: MarkdownSyntaxChild): value is MarkdownSyntaxLeaf {
     return (value as SyntaxTreeEntry).kind === "leaf";
   }
 
-  sourceGap(value: MarkdownSyntaxChild, start: number, end: number): string {
-    const entry = value as SyntaxTreeEntry;
-    return this.#regionOf(entry)!.view.sourceText(start, end);
-  }
-
   spans(value: MarkdownSyntaxLeaf): readonly SourceSpan[] {
     const leaf = value as SyntaxTreeLeaf;
-    const token = leaf.tree.leafToken(leaf);
-    const region = this.#regionOf(leaf);
-    if (!region) {
-      return tokenSpans(token);
-    }
-    if (!token.ranges?.length) {
-      return region.view.mapSpans(token.offset, token.offset + token.text.length);
-    }
-    return token.ranges.flatMap((range) => region.view.mapSpans(range.offset, range.end));
+    return tokenSpans(leaf.tree.leafToken(leaf));
   }
 
   rule(value: MarkdownSyntaxNode): string {
@@ -318,12 +303,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
 
   span(value: MarkdownSyntaxChild): { end: number; start: number } {
     const entry = value as SyntaxTreeEntry;
-    const span = entry.tree.span(entry);
-    const region = this.#regionOf(entry);
-    if (!region) {
-      return span;
-    }
-    return region.view.mapSpan(span.start, span.end);
+    return entry.tree.span(entry);
   }
 
   text(value: MarkdownSyntaxChild): string {
@@ -332,16 +312,12 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       return entry.tree.leafToken(entry).text;
     }
     const span = entry.tree.span(entry);
-    return (this.#regionOf(entry)?.view.text ?? this.#source).slice(span.start, span.end);
+    return this.#source.slice(span.start, span.end);
   }
 
   tokenType(value: MarkdownSyntaxLeaf): string {
     const leaf = value as SyntaxTreeLeaf;
     return leaf.tree.leafTokenType(leaf);
-  }
-
-  #regionOf(value: SyntaxTreeEntry): InlineRegion | undefined {
-    return this.#inlineTrees.get(value.tree);
   }
 }
 
