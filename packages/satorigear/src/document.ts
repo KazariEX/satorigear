@@ -11,7 +11,7 @@ import type { EmittedParserDocument } from "./emitted-parser.ts";
 import type { TextEdit } from "./text-edit.ts";
 
 export interface EditResult {
-  changedRange: {
+  changedSpan: {
     end: number;
     start: number;
   };
@@ -40,7 +40,7 @@ function validateEdits(source: string, edits: readonly TextEdit[]): void {
   }
 }
 
-function changedRangeOf(edits: readonly TextEdit[]): EditResult["changedRange"] {
+function changedSpanOf(edits: readonly TextEdit[]): EditResult["changedSpan"] {
   if (edits.length === 0) {
     return { start: 0, end: 0 };
   }
@@ -82,13 +82,13 @@ class DocumentImpl implements Document {
   edit(edits: readonly TextEdit[]): EditResult {
     validateEdits(this.source, edits);
     if (edits.length === 0) {
-      return { changedRange: { start: 0, end: 0 } };
+      return { changedSpan: { start: 0, end: 0 } };
     }
-    const changedRange = changedRangeOf(edits);
+    const changedSpan = changedSpanOf(edits);
     const update = this.#tokenizer.edit(edits);
     this.#blocks.edit(sequentialEdits(edits), update.change);
     this.#syntax.update(this.#blocks.tree(this.#tokenizer.tokens), this.source, edits);
-    return { changedRange };
+    return { changedSpan };
   }
 
   #projectBlocks(): PlacedBlockFragment[] {

@@ -15,7 +15,7 @@ describe("markdown document", () => {
     ]);
 
     expect(document.source).toBe("1 two 3\n");
-    expect(update.changedRange).toEqual({ start: 0, end: 7 });
+    expect(update.changedSpan).toEqual({ start: 0, end: 7 });
     expect(document.snapshot()).toEqual(parse(document.source));
   });
 
@@ -36,7 +36,7 @@ describe("markdown document", () => {
 
   it("accepts an empty edit batch as a no-op", () => {
     const document = createDocument("text\n");
-    expect(document.edit([])).toEqual({ changedRange: { start: 0, end: 0 } });
+    expect(document.edit([])).toEqual({ changedSpan: { start: 0, end: 0 } });
     expect(document.source).toBe("text\n");
   });
 
