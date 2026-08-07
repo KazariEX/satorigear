@@ -93,6 +93,8 @@ interface IndexedDelimiterConfig {
 
 const whitespace = /\s/u;
 const punctuation = /[\p{P}\p{S}]/u;
+const canOpenFlag = 1;
+const canCloseFlag = 2;
 
 function characterBefore(source: string, offset: number): string {
   if (offset <= 0) {
@@ -112,7 +114,7 @@ function characterAfter(source: string, offset: number): string {
   return offset < source.length ? String.fromCodePoint(source.codePointAt(offset)!) : "\n";
 }
 
-function flanking(source: string, token: Token, config: DelimiterRunConfig): Pick<Run, "canOpen" | "canClose"> {
+function flanking(source: string, token: Token, config: DelimiterRunConfig): number {
   const before = characterBefore(source, token.offset);
   const after = characterAfter(source, token.offset + token.text.length);
   const beforeWhitespace = whitespace.test(before);
@@ -122,12 +124,11 @@ function flanking(source: string, token: Token, config: DelimiterRunConfig): Pic
   const left = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
   const right = !beforeWhitespace && (!beforePunctuation || afterWhitespace || afterPunctuation);
   if (config.intraword !== false) {
-    return { canOpen: left, canClose: right };
+    return (left ? canOpenFlag : 0) | (right ? canCloseFlag : 0);
   }
-  return {
-    canOpen: left && (!right || beforePunctuation),
-    canClose: right && (!left || afterPunctuation),
-  };
+  const canOpen = left && (!right || beforePunctuation);
+  const canClose = right && (!left || afterPunctuation);
+  return (canOpen ? canOpenFlag : 0) | (canClose ? canCloseFlag : 0);
 }
 
 function canPair(opener: Run, closer: Run): boolean {
@@ -474,6 +475,7 @@ function resolveDelimiterRunsWithIndex(
     }
     const { config } = indexed;
     const length = token.text.length / config.marker.length;
+    const flags = flanking(source, token, config);
     runs.push({
       tokenIndex,
       token,
@@ -485,7 +487,8 @@ function resolveDelimiterRunsWithIndex(
       scope: -1,
       previous: -1,
       next: -1,
-      ...flanking(source, token, config),
+      canOpen: Boolean(flags & canOpenFlag),
+      canClose: Boolean(flags & canCloseFlag),
     });
   });
   if (runs.length === 0) {
