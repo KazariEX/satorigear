@@ -6,8 +6,8 @@ export interface EmittedArena {
   childCount: (id: number) => number;
   childRelAt: (id: number, index: number) => number;
   childTokRelAt: (id: number, index: number) => number;
-  leafKindOf: (entry: number) => number;
   leafToken: (entry: number, tokenBase: number) => number;
+  leafTokenType: (entry: number, tokenBase: number) => string;
   lenOf: (id: number) => number;
   ruleNameOf: (id: number) => string;
 }
@@ -42,33 +42,16 @@ export interface EmittedParserDocument {
   tree: (tokens: readonly Token[]) => SyntaxTree;
 }
 
-export interface SyntaxTreeNode {
-  entries?: readonly SyntaxTreeEntry[];
+export interface SyntaxTreeRoot {
   id: number;
-  kind: "node";
   offset: number;
   tokenBase: number;
-  tree: SyntaxTree;
 }
-
-export interface SyntaxTreeLeaf {
-  entry: number;
-  kind: "leaf";
-  token: number;
-  tree: SyntaxTree;
-}
-
-export type SyntaxTreeEntry = SyntaxTreeLeaf | SyntaxTreeNode;
 
 export interface SyntaxTree {
   readonly arena: EmittedArena;
-  readonly root: SyntaxTreeNode;
+  readonly root: SyntaxTreeRoot;
 
-  children: (node: SyntaxTreeNode) => readonly SyntaxTreeEntry[];
-  leafToken: (leaf: SyntaxTreeLeaf) => Token;
-  leafTokenType: (leaf: SyntaxTreeLeaf) => string;
-  ruleName: (node: SyntaxTreeNode) => string;
-  span: (entry: SyntaxTreeEntry) => { end: number; start: number };
   tokenAt: (index: number) => Token;
 }
 
@@ -86,7 +69,7 @@ function createEmittedParserDocument<Handle extends EmittedParserHandle>(
 ): EmittedParserDocument {
   const parser = runtime.createParser();
   const handle = parser.parseTokens(source, tokens, entryRule);
-  const tree = (currentTokens: readonly Token[]): SyntaxTree => createSyntaxTree(handle.root, currentTokens, parser.tree);
+  const tree = (currentTokens: readonly Token[]): SyntaxTree => createArenaView(handle.root, currentTokens, parser.tree);
   return {
     get rootId() {
       return handle.root;
@@ -96,18 +79,7 @@ function createEmittedParserDocument<Handle extends EmittedParserHandle>(
   };
 }
 
-function leafTokenType(entry: number, token: Token, tree: EmittedArena): string {
-  const kind = tree.leafKindOf(entry);
-  if (kind === 1) {
-    return "$keyword";
-  }
-  if (kind === 2) {
-    return "$operator";
-  }
-  return token.type || "$punct";
-}
-
-function createSyntaxTree(
+function createArenaView(
   rootId: number,
   tokens: readonly Token[],
   tree: EmittedArena,
@@ -120,58 +92,16 @@ function createSyntaxTree(
     return token;
   };
   const tokenOffset = (token: Token): number => token.ranges?.[0]?.offset ?? token.offset;
-  const tokenEnd = (token: Token): number => token.ranges?.at(-1)?.end ?? token.offset + token.text.length;
   const root = {
-    kind: "node",
     id: rootId,
     offset: tokens[0] ? tokenOffset(tokens[0]) : 0,
     tokenBase: 0,
-  } as SyntaxTreeNode;
-  const result: SyntaxTree = {
+  };
+  return {
     arena: tree,
     root,
-    children: (node) => {
-      if (node.entries) {
-        return node.entries;
-      }
-      const entries = new Array<SyntaxTreeEntry>(tree.childCount(node.id));
-      for (let index = 0; index < entries.length; index++) {
-        const entry = tree.childAt(node.id, index);
-        if (entry < 0) {
-          entries[index] = {
-            kind: "leaf",
-            entry,
-            token: tree.leafToken(entry, node.tokenBase),
-            tree: result,
-          };
-        }
-        else {
-          entries[index] = {
-            kind: "node",
-            id: entry,
-            offset: node.offset + tree.childRelAt(node.id, index),
-            tokenBase: node.tokenBase + tree.childTokRelAt(node.id, index),
-            tree: result,
-          };
-        }
-      }
-      node.entries = entries;
-      return entries;
-    },
-    leafToken: (leaf) => tokenAt(leaf.token),
-    leafTokenType: (leaf) => leafTokenType(leaf.entry, tokenAt(leaf.token), tree),
-    ruleName: (node) => tree.ruleNameOf(node.id),
-    span: (entry) => {
-      if (entry.kind === "node") {
-        return { start: entry.offset, end: entry.offset + tree.lenOf(entry.id) };
-      }
-      const token = tokenAt(entry.token);
-      return { start: tokenOffset(token), end: tokenEnd(token) };
-    },
     tokenAt,
   };
-  root.tree = result;
-  return result;
 }
 
 export function createEmittedParser<Handle extends EmittedParserHandle>(
@@ -180,7 +110,7 @@ export function createEmittedParser<Handle extends EmittedParserHandle>(
 ): EmittedParser {
   const parseTree = (source: string, tokens: readonly Token[], entryRule?: string): SyntaxTree => {
     const root = runtime.parseTokens(source, tokens, entryRule);
-    return createSyntaxTree(root, tokens, runtime.tree);
+    return createArenaView(root, tokens, runtime.tree);
   };
   return {
     createDocument: (source, tokens, entryRule) => createEmittedParserDocument(runtime, source, tokens, entryRule),

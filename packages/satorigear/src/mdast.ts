@@ -22,7 +22,7 @@ import type {
 } from "mdast";
 import type { Token } from "monogram/gen-lexer.ts";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
-import type { SyntaxTree, SyntaxTreeLeaf, SyntaxTreeNode } from "./emitted-parser.ts";
+import type { EmittedArena, SyntaxTree } from "./emitted-parser.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 
 interface Resource {
@@ -43,30 +43,24 @@ interface BlockProjectionContext {
 }
 
 interface InlineProjectionContext {
+  arena: EmittedArena;
   source: string;
-  syntax: MarkdownSyntax;
+  tokenAt: (index: number) => Token;
   view: SourceView;
 }
 
-export type MarkdownSyntaxNode = SyntaxTreeNode;
-export type MarkdownSyntaxLeaf = SyntaxTreeLeaf;
-export type MarkdownSyntaxChild = MarkdownSyntaxLeaf | MarkdownSyntaxNode;
-
 export interface MarkdownInlineSyntax {
-  root: MarkdownSyntaxNode;
+  arena: EmittedArena;
+  rootId: number;
+  rootOffset: number;
+  rootTokenBase: number;
+  tokenAt: (index: number) => Token;
   view: SourceView;
 }
 
 export interface MarkdownSyntax {
   blockTree: () => SyntaxTree;
-  children: (node: MarkdownSyntaxNode) => readonly MarkdownSyntaxChild[];
   inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
-  isLeaf: (child: MarkdownSyntaxChild) => child is MarkdownSyntaxLeaf;
-  rule: (node: MarkdownSyntaxNode) => string;
-  // Spans remain in the coordinate space of their owning syntax tree.
-  span: (value: MarkdownSyntaxChild) => SourceSpan;
-  text: (leaf: MarkdownSyntaxLeaf) => string;
-  tokenType: (leaf: MarkdownSyntaxLeaf) => string;
 }
 
 export interface BlockFragment {
@@ -192,35 +186,44 @@ function identifier(value: string): string {
 }
 
 function directLeaf(
-  value: MarkdownSyntaxNode,
+  nodeId: number,
+  tokenBase: number,
   tokenType: string,
   context: InlineProjectionContext,
-): MarkdownSyntaxLeaf | undefined {
-  return context.syntax.children(value).find((child): child is MarkdownSyntaxLeaf => (
-    context.syntax.isLeaf(child) && context.syntax.tokenType(child) === tokenType
-  ));
+): Token | undefined {
+  const { arena } = context;
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const entry = arena.childAt(nodeId, index);
+    if (entry < 0 && arena.leafTokenType(entry, tokenBase) === tokenType) {
+      return context.tokenAt(arena.leafToken(entry, tokenBase));
+    }
+  }
 }
 
-function leaf(value: MarkdownSyntaxNode, tokenType: string, context: InlineProjectionContext): MarkdownSyntaxLeaf {
-  const result = directLeaf(value, tokenType, context);
+function leaf(nodeId: number, tokenBase: number, tokenType: string, context: InlineProjectionContext): Token {
+  const result = directLeaf(nodeId, tokenBase, tokenType, context);
   if (!result) {
-    throw new Error(`Expected ${context.syntax.rule(value)} syntax to contain ${tokenType}`);
+    throw new Error(`Expected ${context.arena.ruleNameOf(nodeId)} syntax to contain ${tokenType}`);
   }
   return result;
 }
 
 function leafOfTypes(
-  value: MarkdownSyntaxNode,
+  nodeId: number,
+  tokenBase: number,
   tokenTypes: readonly string[],
   context: InlineProjectionContext,
-): MarkdownSyntaxLeaf {
-  const result = context.syntax.children(value).find((child): child is MarkdownSyntaxLeaf => (
-    context.syntax.isLeaf(child) && tokenTypes.includes(context.syntax.tokenType(child))
-  ));
-  if (!result) {
-    throw new Error(`Expected ${context.syntax.rule(value)} syntax to contain one of: ${tokenTypes.join(", ")}`);
+): Token {
+  const { arena } = context;
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const entry = arena.childAt(nodeId, index);
+    if (entry < 0 && tokenTypes.includes(arena.leafTokenType(entry, tokenBase))) {
+      return context.tokenAt(arena.leafToken(entry, tokenBase));
+    }
   }
-  return result;
+  throw new Error(`Expected ${context.arena.ruleNameOf(nodeId)} syntax to contain one of: ${tokenTypes.join(", ")}`);
 }
 
 function directBlockToken(
@@ -449,12 +452,15 @@ function firstPhrasing(value: PhrasingContent[] | PhrasingContent): PhrasingCont
 }
 
 function inlineLeaf(
-  value: MarkdownSyntaxLeaf,
+  entry: number,
+  tokenBase: number,
+  token: Token,
   sourceSpan: SourceSpan,
   context: InlineProjectionContext,
 ): PhrasingContent | undefined {
-  const text = context.syntax.text(value);
-  switch (context.syntax.tokenType(value)) {
+  const text = token.text;
+  const tokenType = context.arena.leafTokenType(entry, tokenBase);
+  switch (tokenType) {
     case "Text":
     case "Delimiter":
     case "Escape":
@@ -494,19 +500,20 @@ function inlineLeaf(
         children: [withSpan({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1)],
       } satisfies Link, sourceSpan.start, sourceSpan.end);
     }
-    default: throw new Error(`Unexpected inline token: ${context.syntax.tokenType(value)}`);
+    default: throw new Error(`Unexpected inline token: ${tokenType}`);
   }
 }
 
 function contentBounds(
-  value: MarkdownSyntaxNode,
+  nodeId: number,
+  tokenBase: number,
   openTypes: readonly string[],
   closeTypes: readonly string[],
   context: InlineProjectionContext,
 ): [number, number] {
   return [
-    context.syntax.span(leafOfTypes(value, openTypes, context)).end,
-    context.syntax.span(leafOfTypes(value, closeTypes, context)).start,
+    tokenEnd(leafOfTypes(nodeId, tokenBase, openTypes, context)),
+    tokenStart(leafOfTypes(nodeId, tokenBase, closeTypes, context)),
   ];
 }
 
@@ -546,36 +553,44 @@ function appendInlineValue(
 }
 
 function inlineSequence(
-  value: MarkdownSyntaxNode,
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
   context: InlineProjectionContext,
   start?: number,
   end?: number,
 ): PhrasingContent[] {
   const result: PhrasingContent[] = [];
   let cursor = start;
-  for (const child of context.syntax.children(value)) {
-    const syntaxSpan = context.syntax.span(child);
-    const sourceSpan = context.view.mapSpan(syntaxSpan.start, syntaxSpan.end);
-    const projected = context.syntax.isLeaf(child)
-      ? inlineLeaf(child, sourceSpan, context)
-      : inlineNode(child, syntaxSpan, sourceSpan, context);
+  const { arena } = context;
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const entry = arena.childAt(nodeId, index);
+    const token = entry < 0 ? context.tokenAt(arena.leafToken(entry, tokenBase)) : void 0;
+    const childOffset = token ? tokenStart(token) : offset + arena.childRelAt(nodeId, index);
+    const childEnd = token ? tokenEnd(token) : childOffset + arena.lenOf(entry);
+    const childTokenBase = token ? tokenBase : tokenBase + arena.childTokRelAt(nodeId, index);
+    const sourceSpan = context.view.mapSpan(childOffset, childEnd);
+    const projected = token
+      ? inlineLeaf(entry, tokenBase, token, sourceSpan, context)
+      : inlineNode(entry, childOffset, childEnd, childTokenBase, sourceSpan, context);
     if (!projected) {
       continue;
     }
     const first = firstPhrasing(projected);
     // Newline projection owns the whitespace between logical lines.
-    if (cursor !== void 0 && syntaxSpan.start > cursor
+    if (cursor !== void 0 && childOffset > cursor
       && !(first?.type === "text" && first.value.startsWith("\n"))) {
-      const gapSpan = context.view.mapSpan(cursor, syntaxSpan.start);
+      const gapSpan = context.view.mapSpan(cursor, childOffset);
       appendText(
         result,
-        semanticText(context.view.text.slice(cursor, syntaxSpan.start).replace(/[\r\n]/g, "")),
+        semanticText(context.view.text.slice(cursor, childOffset).replace(/[\r\n]/g, "")),
         gapSpan.start,
         gapSpan.end,
       );
     }
     appendInlineValue(context, result, projected, sourceSpan.start);
-    cursor = syntaxSpan.end;
+    cursor = childEnd;
   }
   if (cursor !== void 0 && end !== void 0 && end > cursor) {
     const gapSpan = context.view.mapSpan(cursor, end);
@@ -590,14 +605,16 @@ function inlineSequence(
 }
 
 function reference(
-  value: MarkdownSyntaxNode,
-  syntaxSpan: SourceSpan,
+  nodeId: number,
+  tokenBase: number,
+  syntaxStart: number,
+  syntaxEnd: number,
   context: InlineProjectionContext,
   image: boolean,
 ): Reference {
-  const close = leaf(value, image ? "ImageReferenceClose" : "ReferenceClose", context);
-  const closeText = context.syntax.text(close);
-  const text = context.view.text.slice(syntaxSpan.start, syntaxSpan.end);
+  const close = leaf(nodeId, tokenBase, image ? "ImageReferenceClose" : "ReferenceClose", context);
+  const closeText = close.text;
+  const text = context.view.text.slice(syntaxStart, syntaxEnd);
   const content = text.slice(image ? 2 : 1, text.length - closeText.length);
   const full = closeText.startsWith("][") && closeText !== "][]";
   const labelSource = full ? closeText.slice(2, -1) : content;
@@ -627,27 +644,36 @@ function phrasingText(children: readonly PhrasingContent[]): string {
   return result;
 }
 
-function inlineLines(value: MarkdownSyntaxNode, context: InlineProjectionContext): PhrasingContent[] {
-  return inlineSequence(value, context);
+function inlineLines(
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: InlineProjectionContext,
+): PhrasingContent[] {
+  return inlineSequence(nodeId, offset, tokenBase, context);
 }
 
 function emphasis(
-  value: MarkdownSyntaxNode,
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
   sourceSpan: SourceSpan,
   context: InlineProjectionContext,
   kind: "emphasis" | "strong",
 ): Emphasis | Strong {
   const marker = kind === "strong" ? "Strong" : "Emphasis";
-  const [start, end] = contentBounds(value, [`${marker}Open`], [`${marker}Close`], context);
-  const children = inlineSequence(value, context, start, end);
+  const [start, end] = contentBounds(nodeId, tokenBase, [`${marker}Open`], [`${marker}Close`], context);
+  const children = inlineSequence(nodeId, offset, tokenBase, context, start, end);
   return kind === "strong"
     ? withSpan({ type: "strong", children } satisfies Strong, sourceSpan.start, sourceSpan.end)
     : withSpan({ type: "emphasis", children } satisfies Emphasis, sourceSpan.start, sourceSpan.end);
 }
 
 function linkOrImage(
-  value: MarkdownSyntaxNode,
-  syntaxSpan: SourceSpan,
+  nodeId: number,
+  offset: number,
+  endOffset: number,
+  tokenBase: number,
   sourceSpan: SourceSpan,
   context: InlineProjectionContext,
   media: "image" | "link",
@@ -657,44 +683,46 @@ function linkOrImage(
   const referenceNode = resourceKind === "reference";
   const prefix = image ? "Image" : "";
   const resourcePrefix = referenceNode ? "Reference" : "Link";
-  const [start, end] = contentBounds(value, [`${prefix}${resourcePrefix}Open`], [`${prefix}${resourcePrefix}Close`], context);
-  const children = inlineSequence(value, context, start, end);
+  const [start, end] = contentBounds(nodeId, tokenBase, [`${prefix}${resourcePrefix}Open`], [`${prefix}${resourcePrefix}Close`], context);
+  const children = inlineSequence(nodeId, offset, tokenBase, context, start, end);
   if (referenceNode) {
-    const association = reference(value, syntaxSpan, context, image);
+    const association = reference(nodeId, tokenBase, offset, endOffset, context, image);
     return image
       ? withSpan({ type: "imageReference", alt: phrasingText(children), ...association } satisfies ImageReference, sourceSpan.start, sourceSpan.end)
       : withSpan({ type: "linkReference", children, ...association } satisfies LinkReference, sourceSpan.start, sourceSpan.end);
   }
-  const resource = destinationTitle(context.syntax.text(leaf(value, `${prefix}LinkClose`, context)).slice(2, -1));
+  const resource = destinationTitle(leaf(nodeId, tokenBase, `${prefix}LinkClose`, context).text.slice(2, -1));
   return image
     ? withSpan({ type: "image", alt: phrasingText(children), ...resource } satisfies Image, sourceSpan.start, sourceSpan.end)
     : withSpan({ type: "link", children, ...resource } satisfies Link, sourceSpan.start, sourceSpan.end);
 }
 
 function inlineNode(
-  value: MarkdownSyntaxNode,
-  syntaxSpan: SourceSpan,
+  nodeId: number,
+  offset: number,
+  endOffset: number,
+  tokenBase: number,
   sourceSpan: SourceSpan,
   context: InlineProjectionContext,
 ): PhrasingContent[] | PhrasingContent {
-  switch (context.syntax.rule(value)) {
-    case "InlineLines": return inlineLines(value, context);
+  switch (context.arena.ruleNameOf(nodeId)) {
+    case "InlineLines": return inlineLines(nodeId, offset, tokenBase, context);
     case "InlineLine":
     case "Inline":
     case "LinkContent":
     case "BracketFallback":
-      return inlineSequence(value, context);
+      return inlineSequence(nodeId, offset, tokenBase, context);
     case "Emphasis":
-    case "LinkEmphasis": return emphasis(value, sourceSpan, context, "emphasis");
+    case "LinkEmphasis": return emphasis(nodeId, offset, tokenBase, sourceSpan, context, "emphasis");
     case "Strong":
-    case "LinkStrong": return emphasis(value, sourceSpan, context, "strong");
+    case "LinkStrong": return emphasis(nodeId, offset, tokenBase, sourceSpan, context, "strong");
     case "Image":
-    case "LinkImage": return linkOrImage(value, syntaxSpan, sourceSpan, context, "image", "direct");
+    case "LinkImage": return linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "image", "direct");
     case "ReferenceImage":
-    case "LinkReferenceImage": return linkOrImage(value, syntaxSpan, sourceSpan, context, "image", "reference");
-    case "Link": return linkOrImage(value, syntaxSpan, sourceSpan, context, "link", "direct");
-    case "ReferenceLink": return linkOrImage(value, syntaxSpan, sourceSpan, context, "link", "reference");
-    default: throw new Error(`Unexpected inline syntax rule: ${context.syntax.rule(value)}`);
+    case "LinkReferenceImage": return linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "image", "reference");
+    case "Link": return linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "link", "direct");
+    case "ReferenceLink": return linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "link", "reference");
+    default: throw new Error(`Unexpected inline syntax rule: ${context.arena.ruleNameOf(nodeId)}`);
   }
 }
 
@@ -707,9 +735,10 @@ function inlineChildren(nodeId: number, context: BlockProjectionContext): Phrasi
     }
     throw new Error(`Expected ${rule} syntax to contain InlineLines`);
   }
-  const result = inlineLines(inline.root, {
+  const result = inlineLines(inline.rootId, inline.rootOffset, inline.rootTokenBase, {
+    arena: inline.arena,
     source: context.source,
-    syntax: context.syntax,
+    tokenAt: inline.tokenAt,
     view: inline.view,
   });
   const last = result.at(-1);

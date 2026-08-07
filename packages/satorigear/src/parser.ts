@@ -4,9 +4,6 @@ import {
   type EmittedArena,
   type EmittedParserDocument,
   type SyntaxTree,
-  type SyntaxTreeEntry,
-  type SyntaxTreeLeaf,
-  type SyntaxTreeNode,
 } from "./emitted-parser.ts";
 import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
@@ -22,9 +19,6 @@ import {
 import type {
   MarkdownInlineSyntax,
   MarkdownSyntax,
-  MarkdownSyntaxChild,
-  MarkdownSyntaxLeaf,
-  MarkdownSyntaxNode,
 } from "./mdast.ts";
 import type { TextEdit } from "./text-edit.ts";
 
@@ -290,11 +284,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     this.#regions = regions;
   }
 
-  children(value: MarkdownSyntaxNode): readonly MarkdownSyntaxChild[] {
-    const node = value as SyntaxTreeNode;
-    return node.tree.children(node);
-  }
-
   blockTree(): SyntaxTree {
     return this.#tree;
   }
@@ -307,31 +296,14 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     const tree = region.document
       ? region.document.tree(region.tokens)
       : inlineParser.parseTree(region.view.text, region.tokens, "InlineLines");
-    return { root: tree.root, view: region.view };
-  }
-
-  isLeaf(value: MarkdownSyntaxChild): value is MarkdownSyntaxLeaf {
-    return (value as SyntaxTreeEntry).kind === "leaf";
-  }
-
-  rule(value: MarkdownSyntaxNode): string {
-    const node = value as SyntaxTreeNode;
-    return node.tree.ruleName(node);
-  }
-
-  span(value: MarkdownSyntaxChild): { end: number; start: number } {
-    const entry = value as SyntaxTreeEntry;
-    return entry.tree.span(entry);
-  }
-
-  text(value: MarkdownSyntaxLeaf): string {
-    const leaf = value as SyntaxTreeLeaf;
-    return leaf.tree.leafToken(leaf).text;
-  }
-
-  tokenType(value: MarkdownSyntaxLeaf): string {
-    const leaf = value as SyntaxTreeLeaf;
-    return leaf.tree.leafTokenType(leaf);
+    return {
+      arena: tree.arena,
+      rootId: tree.root.id,
+      rootOffset: tree.root.offset,
+      rootTokenBase: tree.root.tokenBase,
+      tokenAt: tree.tokenAt,
+      view: region.view,
+    };
   }
 }
 
