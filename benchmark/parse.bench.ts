@@ -4,7 +4,7 @@ import { bench, do_not_optimize, run, summary } from "mitata";
 import { remark } from "remark";
 import { parse as parseSatorigear } from "satorigear";
 import { markdownToMdast as parseSatteri } from "satteri";
-import { force } from "./force.ts";
+import { force } from "./utils.ts";
 
 const representative = `# Parser benchmark
 
@@ -51,25 +51,23 @@ for (const input of inputs) {
   summary(() => {
     const suffix = `${input.name}, ${Buffer.byteLength(input.source)} bytes`;
 
-    bench(`satorigear, snapshot (${suffix})`, () => {
-      do_not_optimize(parseSatorigear(input.source));
-    });
-    bench(`satorigear, fully read (${suffix})`, () => {
-      const tree = parseSatorigear(input.source);
-      force(tree);
-      do_not_optimize(tree);
-    });
-    bench(`remark, fully read (${suffix})`, () => {
-      do_not_optimize(parseRemark(input.source));
-    });
-    bench(`satteri, snapshot (${suffix})`, () => {
-      do_not_optimize(parseSatteri(input.source, satteriOptions));
-    });
-    bench(`satteri, fully read (${suffix})`, () => {
-      const tree = parseSatteri(input.source, satteriOptions);
-      force(tree);
-      do_not_optimize(tree);
-    });
+    for (
+      const [name, parse] of [
+        ["satorigear", parseSatorigear.bind(void 0, input.source)],
+        ["remark", parseRemark.bind(void 0, input.source)],
+        ["satteri", parseSatteri.bind(void 0, input.source, satteriOptions)],
+      ] as const
+    ) {
+      bench(`${name}, snapshot (${suffix})`, () => {
+        const tree = parse();
+        do_not_optimize(tree);
+      });
+      bench(`${name}, fully read (${suffix})`, () => {
+        const tree = parse();
+        force(tree);
+        do_not_optimize(tree);
+      });
+    }
   });
 }
 

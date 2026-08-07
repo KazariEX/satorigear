@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { bench, do_not_optimize, run, summary } from "mitata";
 import { createDocument, parse, type TextEdit } from "satorigear";
-import { force } from "./force.ts";
+import { force } from "./utils.ts";
 
 const body = Array.from({ length: 200 }, (_, index) => [
   `## Section ${index}`,
