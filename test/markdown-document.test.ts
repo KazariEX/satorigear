@@ -82,4 +82,16 @@ describe("markdown document", () => {
     expect(after[2]).not.toBe(before[2]);
     expect(after[4]).toBe(before[4]);
   });
+
+  it("updates positions when edits join and split CRLF", () => {
+    const joined = createMarkdownDocument("one\rrest\n\nlast\n");
+    joined.edit([{ start: 4, end: 4, text: "\n" }]);
+    expect(joined.toMdast()).toEqual(markdownToMdast(joined.source));
+
+    const split = createMarkdownDocument("one\r\n\r\ntwo\rthree\n\nfour\n");
+    split.edit([{ start: 3, end: 5, text: "\r" }]);
+    expect(split.toMdast()).toEqual(markdownToMdast(split.source));
+    split.edit([{ start: 0, end: 0, text: "\n" }]);
+    expect(split.toMdast()).toEqual(markdownToMdast(split.source));
+  });
 });

@@ -110,7 +110,7 @@ export class StatefulMarkdownDocument implements MarkdownDocument {
       return { fragment, offset: block.offset };
     });
     this.#fragments = fragments;
-    return markdownFragmentsToMdast(blocks, this.source);
+    return markdownFragmentsToMdast(blocks, this.source, (offset) => this.#tokenizer.point(offset));
   }
 }
 

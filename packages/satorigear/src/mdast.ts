@@ -39,13 +39,14 @@ interface SourceSpan {
   start: number;
 }
 
-interface SourcePoint {
+export interface SourcePoint {
   column: number;
   line: number;
   offset: number;
 }
 
 interface ProjectionContext {
+  point?: (offset: number) => SourcePoint;
   source: string;
   spans: Map<object, SourceSpan>;
 }
@@ -147,6 +148,17 @@ function indentedCodeEnd(value: CstNode, source: string): number {
 
 function attachPositions(context: ProjectionContext, root: Root): Root {
   const { source } = context;
+  const point = context.point ?? createPoint(source);
+  const visit = (value: PositionedValue): void => {
+    const span = spanOf(context, value);
+    value.position = { start: point(span.start), end: point(span.end) };
+    value.children?.forEach(visit);
+  };
+  visit(root as PositionedValue);
+  return root;
+}
+
+function createPoint(source: string): (offset: number) => SourcePoint {
   const starts = [0];
   for (let offset = 0; offset < source.length; offset++) {
     if (source[offset] === "\n") {
@@ -156,7 +168,7 @@ function attachPositions(context: ProjectionContext, root: Root): Root {
       starts.push(offset + 1);
     }
   }
-  const point = (offset: number): SourcePoint => {
+  return (offset) => {
     let low = 0;
     let high = starts.length;
     while (low + 1 < high) {
@@ -170,13 +182,6 @@ function attachPositions(context: ProjectionContext, root: Root): Root {
     }
     return { line: low + 1, column: offset - starts[low] + 1, offset };
   };
-  const visit = (value: PositionedValue): void => {
-    const span = spanOf(context, value);
-    value.position = { start: point(span.start), end: point(span.end) };
-    value.children?.forEach(visit);
-  };
-  visit(root as PositionedValue);
-  return root;
 }
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
@@ -837,8 +842,9 @@ function materializeFragment(
 export function markdownFragmentsToMdast(
   fragments: readonly { fragment: MdastBlockFragment; offset: number }[],
   source: string,
+  point?: (offset: number) => SourcePoint,
 ): Root {
-  const context = { source, spans: new Map<object, SourceSpan>() };
+  const context = { source, spans: new Map<object, SourceSpan>(), ...(point ? { point } : {}) };
   const root = withSpan(context, {
     type: "root",
     children: fragments.map(({ fragment, offset }) => materializeFragment(fragment, offset, context)),

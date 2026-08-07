@@ -1095,6 +1095,30 @@ class StatefulMarkdownBlockTokenizer {
     return this.#tokens;
   }
 
+  point(offset: number): { column: number; line: number; offset: number } {
+    if (offset < 0 || offset > this.#source.length) {
+      throw new RangeError(`Source offset ${offset} is outside the document`);
+    }
+    if (this.#lines.length === 0) {
+      return { line: 1, column: 1, offset };
+    }
+    if (offset === this.#source.length && /[\r\n]$/.test(this.#source)) {
+      return { line: this.#lines.length + 1, column: 1, offset };
+    }
+    let low = 0;
+    let high = this.#lines.length;
+    while (low + 1 < high) {
+      const middle = (low + high) >>> 1;
+      if (this.#lines[middle].start <= offset) {
+        low = middle;
+      }
+      else {
+        high = middle;
+      }
+    }
+    return { line: low + 1, column: offset - this.#lines[low].start + 1, offset };
+  }
+
   edit(edits: readonly BlockTextEdit[]): MarkdownBlockUpdate {
     if (edits.length === 0) {
       return { change: { oldStart: 0, oldEnd: 0, tokens: [] }, scannedRange: { start: 0, end: 0 } };
