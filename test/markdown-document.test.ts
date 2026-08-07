@@ -74,6 +74,40 @@ describe("markdown document", () => {
     expect(after.children[2].position?.start.offset).toBeGreaterThan(before.children[1].position?.start.offset ?? 0);
   });
 
+  it("isolates snapshots from user mutations", () => {
+    const source = "# heading *text*\n\nbody\n";
+    const document = createDocument(source);
+    const first = document.snapshot();
+    const heading = first.children[0];
+    if (heading?.type !== "heading") {
+      throw new Error("Expected a heading");
+    }
+    const emphasis = heading.children[1];
+    if (emphasis?.type !== "emphasis") {
+      throw new Error("Expected emphasis in the heading");
+    }
+    const text = emphasis.children[0];
+    if (text?.type !== "text") {
+      throw new Error("Expected text in the emphasis");
+    }
+    if (!heading.position) {
+      throw new Error("Expected the heading position");
+    }
+
+    heading.depth = 6;
+    text.value = "changed";
+    heading.children.splice(0, 1);
+    heading.position.start.offset = 99;
+
+    expect(heading.depth).toBe(6);
+    expect(text.value).toBe("changed");
+    expect(heading.children).toEqual([emphasis]);
+    expect(heading.position.start.offset).toBe(99);
+
+    const second = document.snapshot();
+    expect(second).toEqual(parse(source));
+  });
+
   it("updates positions when edits join and split CRLF", () => {
     const joined = createDocument("one\rrest\n\nlast\n");
     joined.edit([{ start: 4, end: 4, text: "\n" }]);
