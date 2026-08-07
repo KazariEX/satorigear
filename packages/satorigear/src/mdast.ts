@@ -477,6 +477,14 @@ function contentBounds(
   ];
 }
 
+function trailingWhitespaceStart(value: string): number {
+  let offset = value.length;
+  while (offset > 0 && (value[offset - 1] === " " || value[offset - 1] === "\t")) {
+    offset--;
+  }
+  return offset;
+}
+
 function appendInlineValue(
   context: ProjectionContext,
   target: PhrasingContent[],
@@ -493,7 +501,7 @@ function appendInlineValue(
     }
     spanOf(context, first).start = lineEndingStart(context.source, nextLineOffset);
     if (previous?.type === "text") {
-      previous.value = previous.value.replace(/[ \t]+$/, "");
+      previous.value = previous.value.slice(0, trailingWhitespaceStart(previous.value));
     }
   }
   if (Array.isArray(value)) {
@@ -644,9 +652,9 @@ function inlineChildren(value: MarkdownSyntaxNode, context: ProjectionContext): 
   const result = inlineLines(inline, context);
   const last = result.at(-1);
   if (last?.type === "text") {
-    const trimmed = last.value.replace(/[ \t]+$/, "");
-    const removed = last.value.length - trimmed.length;
-    last.value = trimmed;
+    const end = trailingWhitespaceStart(last.value);
+    const removed = last.value.length - end;
+    last.value = last.value.slice(0, end);
     spanOf(context, last).end -= removed;
     if (!last.value) {
       result.pop();
