@@ -16,8 +16,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown -w",
+    "build": "tsdown --config-loader unrun",
+    "dev": "tsdown --config-loader unrun -w",
     "prepack": "pnpm run build",
     "test": "vitest"
   },
