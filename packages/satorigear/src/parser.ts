@@ -1,14 +1,14 @@
 import { createCompositeParser } from "../../../vendors/monogram/src/composite-parser.ts";
 import { createDelimiterParser, resolveDelimitedTokens } from "../../../vendors/monogram/src/delimiter-parser.ts";
 import { createParser, type CstNode, getText } from "../../../vendors/monogram/src/gen-parser.ts";
-import { markdownBlockGrammar, tokenizeMarkdownBlocks } from "./markdown-blocks.ts";
+import { markdownBlockGrammar, tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
 import {
   markdownBracketPairs,
   markdownDelimiterRuns,
   markdownInlineGrammar,
   normalizeMarkdownReferenceLabel,
   reassociateMarkdownReferenceTails,
-} from "./markdown-inline.ts";
+} from "./grammar-inline.ts";
 
 const blockParser = createParser(markdownBlockGrammar);
 const inlineParser = createDelimiterParser(markdownInlineGrammar, markdownDelimiterRuns);

@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { Parser as CommonMarkParser } from "commonmark";
 import { tests } from "commonmark-spec";
 import { afterAll, describe, expect, it } from "vitest";
-import grammar from "../packages/satorigear/src/markdown.ts";
+import grammar from "../packages/satorigear/src/grammar.ts";
 import { createParser, type CstChild, type CstNode, getText } from "../vendors/monogram/src/gen-parser.ts";
 
 interface SpecCase { markdown: string; section: string; number: number }

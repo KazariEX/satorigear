@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownPhasedParser } from "../packages/satorigear/src/markdown-parser.ts";
+import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
 import { type CstChild, type CstLeaf, type CstNode, getText } from "../vendors/monogram/src/gen-parser.ts";
 
 function rules(node: CstNode): string[] {

@@ -20,5 +20,11 @@
     "dev": "tsdown -w",
     "prepack": "pnpm run build",
     "test": "vitest"
+  },
+  "dependencies": {
+    "@types/mdast": "catalog:"
+  },
+  "inlinedDependencies": {
+    "entities": "3.0.1"
   }
 }

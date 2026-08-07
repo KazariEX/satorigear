@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import grammar from "../packages/satorigear/src/markdown.ts";
+import grammar from "../packages/satorigear/src/grammar.ts";
 import { createLexer } from "../vendors/monogram/src/gen-lexer.ts";
 import { createParser, type CstNode } from "../vendors/monogram/src/gen-parser.ts";
 

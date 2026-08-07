@@ -1,5 +1,5 @@
 import { altPattern, anyChar, end, followedBy, noneOf, notFollowedBy, oneOf, optPattern, plus, range, repeat, seq, star } from "../../../vendors/monogram/src/api.ts";
-import markdown from "./markdown.ts";
+import markdown from "./grammar.ts";
 import type { DelimiterRunConfig, PairedTokenConfig } from "../../../vendors/monogram/src/delimiter-parser.ts";
 import type { Token } from "../../../vendors/monogram/src/gen-lexer.ts";
 import type { CstGrammar, RuleDecl, RuleExpr, TokenDecl } from "../../../vendors/monogram/src/types.ts";

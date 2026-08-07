@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import markdown from "../packages/satorigear/src/markdown.ts";
+import markdown from "../packages/satorigear/src/grammar.ts";
 import {
   alt,
   defineGrammar,

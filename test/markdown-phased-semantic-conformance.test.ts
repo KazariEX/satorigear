@@ -5,8 +5,8 @@ import { tests } from "commonmark-spec";
 import { decodeHTMLStrict } from "entities";
 import encode from "mdurl/encode.js";
 import { afterAll, describe, expect, it } from "vitest";
-import { normalizeMarkdownReferenceLabel } from "../packages/satorigear/src/markdown-inline.ts";
-import { markdownPhasedParser } from "../packages/satorigear/src/markdown-parser.ts";
+import { normalizeMarkdownReferenceLabel } from "../packages/satorigear/src/grammar-inline.ts";
+import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
 import { type CstChild, type CstLeaf, type CstNode, getText } from "../vendors/monogram/src/gen-parser.ts";
 
 interface SpecCase { markdown: string; section: string }
@@ -49,7 +49,12 @@ function append(target: SemanticNode[], value: SemanticNode): void {
     previous.literal = previous.literal!.replace(/[ \t]+$/, "");
     if (!previous.literal) target.pop();
   }
-  if (value.type === "text" && previous?.type === "text") previous.literal += value.literal;
+  if (value.type === "text" && previous?.type === "text") {
+    if (typeof previous.literal !== "string" || typeof value.literal !== "string") {
+      throw new TypeError("text semantic node is missing its literal");
+    }
+    previous.literal += value.literal;
+  }
   else target.push(value);
 }
 

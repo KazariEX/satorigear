@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownBracketPairs, markdownDelimiterRuns, markdownInlineGrammar } from "../packages/satorigear/src/markdown-inline.ts";
+import { markdownBracketPairs, markdownDelimiterRuns, markdownInlineGrammar } from "../packages/satorigear/src/grammar-inline.ts";
 import { createDelimiterParser, resolveDelimitedTokens, resolveDelimiterRuns } from "../vendors/monogram/src/delimiter-parser.ts";
 import { createLexer } from "../vendors/monogram/src/gen-lexer.ts";
 

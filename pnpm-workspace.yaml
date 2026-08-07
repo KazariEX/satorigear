@@ -8,6 +8,7 @@ packages:
 
 catalog:
   "@types/commonmark": ^0.27.10
+  "@types/mdast": 4.0.4
   "@types/node": ^26.1.2
   "@zinkawaii/eslint-config": ^0.5.2
   "@zinkawaii/scripts": ^0.0.5
@@ -17,6 +18,7 @@ catalog:
   commonmark-spec: 0.31.2
   entities: 3.0.1
   eslint: ^10.8.0
+  mdast-util-from-markdown: 2.0.3
   mdurl: 1.0.1
   tsdown: ^0.22.14
   vitest: ^4.1.10
