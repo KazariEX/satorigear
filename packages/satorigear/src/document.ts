@@ -72,7 +72,7 @@ class DocumentImpl implements Document {
   constructor(source: string) {
     this.#tokenizer = createMarkdownBlockTokenizer(source);
     this.#blocks = blockParser.createDocument(source, this.#tokenizer.tokens);
-    this.#syntax = createMarkdownSyntax(this.#blocks.tree(this.#tokenizer.tokens), source);
+    this.#syntax = createMarkdownSyntax(this.#blocks.view(this.#tokenizer.tokens), source);
   }
 
   get source(): string {
@@ -87,7 +87,7 @@ class DocumentImpl implements Document {
     const changedSpan = changedSpanOf(edits);
     const update = this.#tokenizer.edit(edits);
     this.#blocks.edit(sequentialEdits(edits), update.change);
-    this.#syntax.update(this.#blocks.tree(this.#tokenizer.tokens), this.source, edits);
+    this.#syntax.update(this.#blocks.view(this.#tokenizer.tokens), this.source, edits);
     return { changedSpan };
   }
 

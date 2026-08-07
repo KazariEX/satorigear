@@ -39,25 +39,25 @@ export interface EmittedParserDocument {
     edits: readonly TextEdit[],
     change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
   ) => void;
-  tree: (tokens: readonly Token[]) => SyntaxTree;
+  view: (tokens: readonly Token[]) => SyntaxArenaView;
 }
 
-export interface SyntaxTreeRoot {
+export interface SyntaxArenaRoot {
   id: number;
   offset: number;
   tokenBase: number;
 }
 
-export interface SyntaxTree {
+export interface SyntaxArenaView {
   readonly arena: EmittedArena;
-  readonly root: SyntaxTreeRoot;
+  readonly root: SyntaxArenaRoot;
 
   tokenAt: (index: number) => Token;
 }
 
 export interface EmittedParser {
   createDocument: (source: string, tokens: readonly Token[], entryRule?: string) => EmittedParserDocument;
-  parseTree: (source: string, tokens: readonly Token[], entryRule?: string) => SyntaxTree;
+  parseView: (source: string, tokens: readonly Token[], entryRule?: string) => SyntaxArenaView;
   tokenize: (source: string) => Token[];
 }
 
@@ -69,21 +69,21 @@ function createEmittedParserDocument<Handle extends EmittedParserHandle>(
 ): EmittedParserDocument {
   const parser = runtime.createParser();
   const handle = parser.parseTokens(source, tokens, entryRule);
-  const tree = (currentTokens: readonly Token[]): SyntaxTree => createArenaView(handle.root, currentTokens, parser.tree);
+  const view = (currentTokens: readonly Token[]): SyntaxArenaView => createArenaView(handle.root, currentTokens, parser.tree);
   return {
     get rootId() {
       return handle.root;
     },
     edit: (edits, change) => parser.editTokens(handle, edits, change),
-    tree,
+    view,
   };
 }
 
 function createArenaView(
   rootId: number,
   tokens: readonly Token[],
-  tree: EmittedArena,
-): SyntaxTree {
+  arena: EmittedArena,
+): SyntaxArenaView {
   const tokenAt = (index: number): Token => {
     const token = tokens[index];
     if (!token) {
@@ -98,7 +98,7 @@ function createArenaView(
     tokenBase: 0,
   };
   return {
-    arena: tree,
+    arena,
     root,
     tokenAt,
   };
@@ -108,13 +108,13 @@ export function createEmittedParser<Handle extends EmittedParserHandle>(
   runtime: EmittedParserModule<Handle>,
   tokenize: (source: string) => Token[],
 ): EmittedParser {
-  const parseTree = (source: string, tokens: readonly Token[], entryRule?: string): SyntaxTree => {
+  const parseView = (source: string, tokens: readonly Token[], entryRule?: string): SyntaxArenaView => {
     const root = runtime.parseTokens(source, tokens, entryRule);
     return createArenaView(root, tokens, runtime.tree);
   };
   return {
     createDocument: (source, tokens, entryRule) => createEmittedParserDocument(runtime, source, tokens, entryRule),
-    parseTree,
+    parseView,
     tokenize,
   };
 }

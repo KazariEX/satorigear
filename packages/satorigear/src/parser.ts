@@ -3,7 +3,7 @@ import {
   createEmittedParser,
   type EmittedArena,
   type EmittedParserDocument,
-  type SyntaxTree,
+  type SyntaxArenaView,
 } from "./emitted-parser.ts";
 import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
@@ -98,7 +98,7 @@ function appendTokenSpans(spans: SourceSpan[], token: Token): void {
 }
 
 function inlineSpansOf(
-  tree: SyntaxTree,
+  view: SyntaxArenaView,
   arena: EmittedArena,
   nodeId: number,
   tokenBase: number,
@@ -108,7 +108,7 @@ function inlineSpansOf(
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0) {
-      const token = tree.tokenAt(arena.leafToken(entry, tokenBase));
+      const token = view.tokenAt(arena.leafToken(entry, tokenBase));
       if (token.type === "InlineChunk") {
         appendTokenSpans(spans, token);
       }
@@ -150,19 +150,19 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
 class MarkdownSyntaxImpl implements MarkdownSyntax {
   #blocks: readonly SyntaxBlockDescriptor[] = [];
   #regions = new Map<number, InlineRegion>();
-  #tree: SyntaxTree;
+  #view: SyntaxArenaView;
 
-  constructor(tree: SyntaxTree, source: string) {
-    this.#tree = tree;
-    this.update(tree, source);
+  constructor(view: SyntaxArenaView, source: string) {
+    this.#view = view;
+    this.update(view, source);
   }
 
   blocks(): readonly SyntaxBlockDescriptor[] {
     return this.#blocks;
   }
 
-  update(tree: SyntaxTree, source: string, edits: readonly TextEdit[] = []): void {
-    const arena = tree.arena;
+  update(view: SyntaxArenaView, source: string, edits: readonly TextEdit[] = []): void {
+    const arena = view.arena;
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
     const stableRegionIds = new Set<number>();
@@ -182,7 +182,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         return;
       }
       if (rule === "Paragraph" || rule === "AtxHeading" || rule === "SetextHeading") {
-        const spans = inlineSpansOf(tree, arena, nodeId, tokenBase);
+        const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
         if (spans.length > 0) {
           descriptors.push({
             id: nodeId,
@@ -208,7 +208,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         }
       }
     };
-    const root = tree.root;
+    const root = view.root;
     const rootChildCount = arena.childCount(root.id);
     for (let index = 0; index < rootChildCount; index++) {
       const childId = arena.childAt(root.id, index);
@@ -279,13 +279,13 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         version: unchanged ? previous.version : (previous?.version ?? -1) + 1,
       };
     });
-    this.#tree = tree;
+    this.#view = view;
     this.#blocks = nextBlocks;
     this.#regions = regions;
   }
 
-  blockTree(): SyntaxTree {
-    return this.#tree;
+  blockView(): SyntaxArenaView {
+    return this.#view;
   }
 
   inlineForBlock(nodeId: number): MarkdownInlineSyntax | undefined {
@@ -293,20 +293,20 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     if (!region) {
       return;
     }
-    const tree = region.document
-      ? region.document.tree(region.tokens)
-      : inlineParser.parseTree(region.view.text, region.tokens, "InlineLines");
+    const view = region.document
+      ? region.document.view(region.tokens)
+      : inlineParser.parseView(region.view.text, region.tokens, "InlineLines");
     return {
-      arena: tree.arena,
-      rootId: tree.root.id,
-      rootOffset: tree.root.offset,
-      rootTokenBase: tree.root.tokenBase,
-      tokenAt: tree.tokenAt,
+      arena: view.arena,
+      rootId: view.root.id,
+      rootOffset: view.root.offset,
+      rootTokenBase: view.root.tokenBase,
+      tokenAt: view.tokenAt,
       view: region.view,
     };
   }
 }
 
-export function createMarkdownSyntax(tree: SyntaxTree, source: string): MarkdownSyntaxImpl {
-  return new MarkdownSyntaxImpl(tree, source);
+export function createMarkdownSyntax(view: SyntaxArenaView, source: string): MarkdownSyntaxImpl {
+  return new MarkdownSyntaxImpl(view, source);
 }
