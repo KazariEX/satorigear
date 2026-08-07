@@ -377,28 +377,28 @@ function unlinkRun(runs: Run[], runIndex: number): void {
 }
 
 function addReplacement(
-  replacements: Map<number, Replacement[]>,
+  replacements: Replacement[][],
   tokenIndex: number,
   replacement: Replacement,
 ): void {
-  const tokenReplacements = replacements.get(tokenIndex);
+  const tokenReplacements = replacements[tokenIndex];
   if (tokenReplacements) {
     tokenReplacements.push(replacement);
   }
   else {
-    replacements.set(tokenIndex, [replacement]);
+    replacements[tokenIndex] = [replacement];
   }
 }
 
 function matchDelimiterRuns(
   runs: Run[],
   first: number,
-  replacements: Map<number, Replacement[]>,
+  replacements: Replacement[][],
 ): void {
   // Failed searches establish a lower bound for equivalent closers, preventing
   // pathological unmatched runs from repeatedly scanning the same opener prefix.
   // The bound remains a run identity because that run may later be unlinked.
-  const openersBottom = new Map<number, number>();
+  const openersBottom: number[] = [];
   let current = first;
 
   while (current >= 0) {
@@ -410,7 +410,7 @@ function matchDelimiterRuns(
     }
 
     const bottomSlot = closer.configIndex * 6 + (closer.canOpen ? 3 : 0) + closer.length % 3;
-    const bottom = openersBottom.get(bottomSlot) ?? -1;
+    const bottom = openersBottom[bottomSlot] ?? -1;
     let openerIndex = closer.previous;
     while (openerIndex >= 0 && openerIndex !== bottom) {
       const opener = runs[openerIndex];
@@ -421,7 +421,7 @@ function matchDelimiterRuns(
     }
 
     if (openerIndex < 0 || openerIndex === bottom) {
-      openersBottom.set(bottomSlot, closer.previous);
+      openersBottom[bottomSlot] = closer.previous;
       if (!closer.canOpen) {
         unlinkRun(runs, current);
       }
@@ -487,23 +487,27 @@ function resolveDelimiterRunsWithIndex(
   }
 
   assignDelimiterScopes(runs, isolations);
-  const scopes = new Map<number, { first: number; last: number }>();
+  const scopeFirst: number[] = [];
+  const scopeLast: number[] = [];
   for (let runIndex = 0; runIndex < runs.length; runIndex++) {
     const run = runs[runIndex];
-    const scope = scopes.get(run.scope);
-    if (scope) {
-      run.previous = scope.last;
-      runs[scope.last].next = runIndex;
-      scope.last = runIndex;
+    const scope = run.scope + 1;
+    const previous = scopeLast[scope];
+    if (previous !== void 0) {
+      run.previous = previous;
+      runs[previous].next = runIndex;
     }
     else {
-      scopes.set(run.scope, { first: runIndex, last: runIndex });
+      scopeFirst[scope] = runIndex;
     }
+    scopeLast[scope] = runIndex;
   }
 
-  const replacements = new Map<number, Replacement[]>();
-  for (const scope of scopes.values()) {
-    matchDelimiterRuns(runs, scope.first, replacements);
+  const replacements: Replacement[][] = [];
+  for (const first of scopeFirst) {
+    if (first !== void 0) {
+      matchDelimiterRuns(runs, first, replacements);
+    }
   }
 
   const result: Token[] = [];
@@ -514,7 +518,7 @@ function resolveDelimiterRunsWithIndex(
       return;
     }
     const { config } = indexed;
-    const matched = (replacements.get(tokenIndex) ?? []).sort((a, b) => a.offset - b.offset);
+    const matched = (replacements[tokenIndex] ?? []).sort((a, b) => a.offset - b.offset);
     const fragments: Replacement[] = [];
     let offset = token.offset;
     for (const replacement of matched) {
