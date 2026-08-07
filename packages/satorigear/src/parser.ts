@@ -90,20 +90,31 @@ interface SyntaxBlockDescriptor {
 
 type CollectedBlock = Omit<SyntaxBlockDescriptor, "regionRevisions" | "syntax" | "version">;
 
+function appendTokenSpans(spans: SourceSpan[], token: Token): void {
+  if (token.ranges?.length) {
+    for (const range of token.ranges) {
+      spans.push({ start: range.offset, end: range.end });
+    }
+  }
+  else {
+    spans.push({ start: token.offset, end: token.offset + token.text.length });
+  }
+}
+
 function tokenSpans(token: Token): SourceSpan[] {
-  return token.ranges?.length
-    ? token.ranges.map((range) => ({ start: range.offset, end: range.end }))
-    : [{ start: token.offset, end: token.offset + token.text.length }];
+  const spans: SourceSpan[] = [];
+  appendTokenSpans(spans, token);
+  return spans;
 }
 
 function spansOf(tree: SyntaxTree, node: SyntaxTreeNode): SourceSpan[] {
-  return tree.children(node).flatMap((child) => {
-    if (child.kind === "node" || tree.leafTokenType(child) !== "InlineChunk") {
-      return [];
+  const spans: SourceSpan[] = [];
+  for (const child of tree.children(node)) {
+    if (child.kind === "leaf" && tree.leafTokenType(child) === "InlineChunk") {
+      appendTokenSpans(spans, tree.leafToken(child));
     }
-    const token = tree.leafToken(child);
-    return tokenSpans(token);
-  });
+  }
+  return spans;
 }
 
 function createInlineRegion(descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>): InlineRegion {
@@ -157,6 +168,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     this.#inlineTrees = new WeakMap();
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
+    const stableRegionIds = new Set<number>();
     const blocks: CollectedBlock[] = [];
     const collect = (node: SyntaxTreeNode, regionIds: number[]): void => {
       const rule = tree.ruleName(node);
@@ -172,6 +184,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         const spans = spansOf(tree, node);
         if (spans.length > 0) {
           descriptors.push({ id: node.id, rule, span: tree.span(node), view: createSourceView(source, spans) });
+          stableRegionIds.add(node.id);
           regionIds.push(node.id);
         }
         return;
@@ -199,8 +212,12 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     }
 
     const regions = new Map<number, InlineRegion>();
-    const stableIds = new Set(descriptors.map((descriptor) => descriptor.id));
-    const available = [...this.#regions.values()].filter((region) => !stableIds.has(region.id));
+    const available: InlineRegion[] = [];
+    for (const region of this.#regions.values()) {
+      if (!stableRegionIds.has(region.id)) {
+        available.push(region);
+      }
+    }
     for (const descriptor of descriptors) {
       let previous = this.#regions.get(descriptor.id);
       if (!previous) {
