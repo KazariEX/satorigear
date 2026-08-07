@@ -1,6 +1,6 @@
 import { altPattern, anyChar, end, followedBy, noneOf, notFollowedBy, oneOf, optPattern, plus, range, repeat, seq, star } from "../../../vendors/monogram/src/api.ts";
 import markdown from "./markdown.ts";
-import type { DelimiterRunConfig } from "../../../vendors/monogram/src/delimiter-parser.ts";
+import type { DelimiterRunConfig, PairedTokenConfig } from "../../../vendors/monogram/src/delimiter-parser.ts";
 import type { CstGrammar, RuleDecl, RuleExpr, TokenDecl } from "../../../vendors/monogram/src/types.ts";
 
 const inlineTokens = new Set([
@@ -25,7 +25,7 @@ const inlineTokens = new Set([
 const inlineRules = new Set(["Inline", "InlineLine", "InlineLines"]);
 const engineToken = (name: string, pattern: TokenDecl["pattern"] = { type: "never" }): TokenDecl => ({ name, pattern, flags: [] });
 const ruleReference = (name: string): RuleExpr => ({ type: "ref", name });
-const delimiterRule = (name: string, open: string, close: string): RuleDecl => ({
+const delimiterRule = (name: string, open: string, close: string, content = "Inline"): RuleDecl => ({
   name,
   flags: [],
   body: {
@@ -35,13 +35,13 @@ const delimiterRule = (name: string, open: string, close: string): RuleDecl => (
       {
         type: "quantifier",
         kind: "+",
-        body: { type: "alt", items: [ruleReference("Inline"), ruleReference("Newline")] },
+        body: { type: "alt", items: [ruleReference(content), ruleReference("Newline")] },
       },
       ruleReference(close),
     ],
   },
 });
-const bracketRule = (name: string, open: string, close: string): RuleDecl => ({
+const bracketRule = (name: string, open: string, close: string, content = "Inline"): RuleDecl => ({
   name,
   flags: [],
   body: {
@@ -53,7 +53,7 @@ const bracketRule = (name: string, open: string, close: string): RuleDecl => ({
         kind: "*",
         body: {
           type: "seq",
-          items: [{ type: "not", body: ruleReference(close) }, ruleReference("Inline")],
+          items: [{ type: "not", body: ruleReference(close) }, ruleReference(content)],
         },
       },
       ruleReference(close),
@@ -171,15 +171,48 @@ function bracketFallbacks(rule: RuleDecl): RuleDecl {
     ...rule,
     body: {
       ...rule.body,
-      items: rule.body.items.concat([
-        ruleReference("ImageOpen"),
-        ruleReference("BracketOpen"),
-        ruleReference("LinkTail"),
-        ruleReference("ReferenceTail"),
-      ]),
+      items: rule.body.items.concat(ruleReference("BracketFallback")),
     },
   };
 }
+
+function linkContentReferences(expression: RuleExpr): RuleExpr {
+  if (expression.type === "alt") {
+    return {
+      ...expression,
+      items: expression.items
+        .filter((item) => item.type !== "ref" || (item.name !== "Link" && item.name !== "Autolink"))
+        .map(linkContentReferences),
+    };
+  }
+  if (expression.type === "ref") {
+    const variants: Record<string, string> = {
+      Emphasis: "LinkEmphasis",
+      Strong: "LinkStrong",
+      Image: "LinkImage",
+      ReferenceCandidate: "LinkReferenceCandidate",
+    };
+    return variants[expression.name] ? { ...expression, name: variants[expression.name] } : expression;
+  }
+  if (expression.type === "seq") return { ...expression, items: expression.items.map(linkContentReferences) };
+  if (expression.type === "quantifier" || expression.type === "not") {
+    return { ...expression, body: linkContentReferences(expression.body) };
+  }
+  if (expression.type === "group") {
+    return {
+      ...expression,
+      body: linkContentReferences(expression.body),
+      ...(expression.tsRelaxed ? { tsRelaxed: linkContentReferences(expression.tsRelaxed) } : {}),
+    };
+  }
+  if (expression.type === "sep") return { ...expression, element: linkContentReferences(expression.element) };
+  return expression;
+}
+
+const baseInlineRules = markdown.rules
+  .filter((rule) => inlineRules.has(rule.name))
+  .map((rule) => bracketFallbacks({ ...rule, body: candidateReferences(rule.body) }));
+const linkContentBody = linkContentReferences(baseInlineRules.find((rule) => rule.name === "Inline")!.body);
 
 /**
  * Inline-only view of the Markdown grammar. Block tokens are absent, so line-start syntax remains
@@ -220,19 +253,46 @@ export const markdownInlineGrammar: CstGrammar = {
         engineToken("BracketOpen", "["),
         engineToken("LinkTail", linkTailPattern),
         engineToken("ReferenceTail", referenceTailPattern),
+        engineToken("LinkOpen"),
+        engineToken("LinkClose"),
+        engineToken("ImageLinkOpen"),
+        engineToken("ImageLinkClose"),
+        engineToken("ReferenceOpen"),
+        engineToken("ReferenceClose"),
         token,
       ];
     }),
-  rules: markdown.rules
-    .filter((rule) => inlineRules.has(rule.name))
-    .map((rule) => bracketFallbacks({ ...rule, body: candidateReferences(rule.body) }))
-    .concat([
-      delimiterRule("Emphasis", "EmphasisOpen", "EmphasisClose"),
-      delimiterRule("Strong", "StrongOpen", "StrongClose"),
-      bracketRule("Image", "ImageOpen", "LinkTail"),
-      bracketRule("Link", "BracketOpen", "LinkTail"),
-      bracketRule("ReferenceCandidate", "BracketOpen", "ReferenceTail"),
-    ]),
+  rules: baseInlineRules.concat([
+    delimiterRule("Emphasis", "EmphasisOpen", "EmphasisClose"),
+    delimiterRule("Strong", "StrongOpen", "StrongClose"),
+    delimiterRule("LinkEmphasis", "EmphasisOpen", "EmphasisClose", "LinkContent"),
+    delimiterRule("LinkStrong", "StrongOpen", "StrongClose", "LinkContent"),
+    bracketRule("Image", "ImageLinkOpen", "ImageLinkClose"),
+    bracketRule("Link", "LinkOpen", "LinkClose", "LinkContent"),
+    bracketRule("ReferenceCandidate", "ReferenceOpen", "ReferenceClose"),
+    bracketRule("LinkImage", "ImageLinkOpen", "ImageLinkClose", "LinkContent"),
+    bracketRule("LinkReferenceCandidate", "ReferenceOpen", "ReferenceClose", "LinkContent"),
+    { name: "LinkContent", flags: [], body: linkContentBody },
+    {
+      name: "BracketFallback",
+      flags: [],
+      body: {
+        type: "alt",
+        items: [
+          "ImageOpen",
+          "BracketOpen",
+          "LinkTail",
+          "ReferenceTail",
+          "LinkOpen",
+          "LinkClose",
+          "ImageLinkOpen",
+          "ImageLinkClose",
+          "ReferenceOpen",
+          "ReferenceClose",
+        ].map(ruleReference),
+      },
+    },
+  ]),
   newline: {
     token: "Newline",
     hardBreak: { token: "HardBreak", minSpaces: 2 },
@@ -256,5 +316,28 @@ export const markdownDelimiterRuns: DelimiterRunConfig[] = [
     double: { open: "StrongOpen", close: "StrongClose" },
     intraword: false,
     ruleOfThree: true,
+  },
+];
+
+export const markdownBracketPairs: PairedTokenConfig[] = [
+  {
+    opener: "BracketOpen",
+    closer: "LinkTail",
+    open: "LinkOpen",
+    close: "LinkClose",
+    deactivateEarlier: ["BracketOpen"],
+    isolateDelimiters: true,
+  },
+  {
+    opener: "ImageOpen",
+    closer: "LinkTail",
+    open: "ImageLinkOpen",
+    close: "ImageLinkClose",
+  },
+  {
+    opener: "BracketOpen",
+    closer: "ReferenceTail",
+    open: "ReferenceOpen",
+    close: "ReferenceClose",
   },
 ];

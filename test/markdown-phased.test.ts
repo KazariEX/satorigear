@@ -8,6 +8,12 @@ function rules(node: CstNode): string[] {
   return result;
 }
 
+function nodes(node: CstNode, rule: string): CstNode[] {
+  const result = node.rule === rule ? [node] : [];
+  for (const child of node.children) if (!("tokenType" in child)) result.push(...nodes(child, rule));
+  return result;
+}
+
 function leaves(node: CstNode): CstLeaf[] {
   const result: CstLeaf[] = [];
   const visit = (child: CstChild): void => {
@@ -84,8 +90,22 @@ describe("block-first markdown parser", () => {
     const tree = markdownPhasedParser.parse("[*label* `code`](/uri \"title\")\n");
     const treeRules = rules(tree);
     expect(treeRules).toContain("Link");
-    expect(treeRules).toContain("Emphasis");
+    expect(treeRules).toContain("LinkEmphasis");
     expect(leaves(tree).some((leaf) => leaf.tokenType === "CodeSpan")).toBe(true);
-    expect(leaves(tree).some((leaf) => leaf.tokenType === "LinkTail")).toBe(true);
+    expect(leaves(tree).some((leaf) => leaf.tokenType === "LinkClose")).toBe(true);
+  });
+
+  it("does not activate a concrete link inside another concrete link", () => {
+    const source = "[outer [inner](/inner)](/outer)\n";
+    const tree = markdownPhasedParser.parse(source);
+    const treeRules = rules(tree);
+    expect(treeRules.filter((rule) => rule === "Link")).toHaveLength(1);
+    expect(nodes(tree, "Link").map((node) => getText(node, source))).toEqual(["[inner](/inner)"]);
+  });
+
+  it("preserves reference candidates inside concrete link labels", () => {
+    const treeRules = rules(markdownPhasedParser.parse("[outer [candidate]](/outer)\n"));
+    expect(treeRules.filter((rule) => rule === "Link")).toHaveLength(1);
+    expect(treeRules.filter((rule) => rule === "LinkReferenceCandidate")).toHaveLength(1);
   });
 });

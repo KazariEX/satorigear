@@ -142,10 +142,10 @@ index 0000000..9a0b21b
 +}
 diff --git a/src/delimiter-parser.ts b/src/delimiter-parser.ts
 new file mode 100644
-index 0000000..589514d
+index 0000000..85de59b
 --- /dev/null
 +++ b/src/delimiter-parser.ts
-@@ -0,0 +1,158 @@
+@@ -0,0 +1,248 @@
 +import type { CstGrammar } from './types.ts';
 +import { createLexer, type Token } from './gen-lexer.ts';
 +import { createParser } from './gen-parser.ts';
@@ -160,6 +160,26 @@ index 0000000..589514d
 +  ruleOfThree?: boolean;
 +}
 +
++export interface PairedTokenConfig {
++  opener: string;
++  closer: string;
++  open: string;
++  close: string;
++  deactivateEarlier?: readonly string[];
++  isolateDelimiters?: boolean;
++}
++
++export interface TokenIsolationRange {
++  start: number;
++  end: number;
++  id: number;
++}
++
++export interface PairedTokenResolution {
++  tokens: Token[];
++  delimiterIsolations: TokenIsolationRange[];
++}
++
 +interface Run {
 +  tokenIndex: number;
 +  token: Token;
@@ -169,6 +189,7 @@ index 0000000..589514d
 +  canOpen: boolean;
 +  canClose: boolean;
 +  active: boolean;
++  scope: string;
 +}
 +
 +interface Replacement {
@@ -211,10 +232,59 @@ index 0000000..589514d
 +}
 +
 +function canPair(opener: Run, closer: Run): boolean {
++  if (opener.scope !== closer.scope) return false;
 +  if (!opener.canOpen || !closer.canClose) return false;
 +  if (!closer.config.ruleOfThree || (!opener.canClose && !closer.canOpen)) return true;
 +  const sum = opener.remaining + closer.remaining;
 +  return sum % 3 !== 0 || (opener.remaining % 3 === 0 && closer.remaining % 3 === 0);
++}
++
++/** Resolve nearest-opener token pairs and expose configured delimiter-isolation regions. */
++export function resolvePairedTokens(
++  tokens: readonly Token[],
++  configs: readonly PairedTokenConfig[],
++): PairedTokenResolution {
++  const openerTypes = new Set(configs.map(config => config.opener));
++  const configByPair = new Map(configs.map(config => [`${config.opener}\0${config.closer}`, config]));
++  const stack: { tokenIndex: number; type: string }[] = [];
++  const replacements = new Map<number, string>();
++  const delimiterIsolations: TokenIsolationRange[] = [];
++
++  tokens.forEach((token, tokenIndex) => {
++    if (openerTypes.has(token.type)) stack.push({ tokenIndex, type: token.type });
++
++    let openerIndex = stack.length - 1;
++    while (openerIndex >= 0 && !configByPair.has(`${stack[openerIndex].type}\0${token.type}`)) openerIndex--;
++    if (openerIndex < 0) return;
++
++    const opener = stack[openerIndex];
++    const config = configByPair.get(`${opener.type}\0${token.type}`)!;
++    replacements.set(opener.tokenIndex, config.open);
++    replacements.set(tokenIndex, config.close);
++    stack.splice(openerIndex, 1);
++
++    if (config.deactivateEarlier?.length) {
++      const deactivated = new Set(config.deactivateEarlier);
++      for (let index = openerIndex - 1; index >= 0; index--) {
++        if (deactivated.has(stack[index].type)) stack.splice(index, 1);
++      }
++    }
++
++    if (config.isolateDelimiters) {
++      delimiterIsolations.push({
++        start: tokens[opener.tokenIndex].offset + tokens[opener.tokenIndex].text.length,
++        end: token.offset,
++        id: delimiterIsolations.length,
++      });
++    }
++  });
++
++  return {
++    tokens: tokens.map((token, tokenIndex) => replacements.has(tokenIndex)
++      ? { ...token, type: replacements.get(tokenIndex)!, k: 0, t: 0 }
++      : token),
++    delimiterIsolations,
++  };
 +}
 +
 +function replacementToken(base: Token, replacement: Replacement, first: boolean): Token {
@@ -236,6 +306,7 @@ index 0000000..589514d
 +  source: string,
 +  tokens: readonly Token[],
 +  configs: readonly DelimiterRunConfig[],
++  isolations: readonly TokenIsolationRange[] = [],
 +): Token[] {
 +  const configByToken = new Map(configs.map(config => [config.token, config]));
 +  const runs: Run[] = [];
@@ -243,7 +314,11 @@ index 0000000..589514d
 +    const config = configByToken.get(token.type);
 +    if (!config) return;
 +    const length = token.text.length / config.marker.length;
-+    runs.push({ tokenIndex, token, config, length, remaining: length, active: true, ...flanking(source, token, config) });
++    const scope = isolations
++      .filter(isolation => token.offset >= isolation.start && token.offset < isolation.end)
++      .map(isolation => isolation.id)
++      .join(',');
++    runs.push({ tokenIndex, token, config, length, remaining: length, active: true, scope, ...flanking(source, token, config) });
 +  });
 +
 +  const replacements = new Map<number, Replacement[]>();
@@ -293,14 +368,29 @@ index 0000000..589514d
 +  });
 +}
 +
++/** Apply paired-token activation followed by delimiter-run resolution to one lexer stream. */
++export function resolveDelimitedTokens(
++  source: string,
++  tokens: readonly Token[],
++  delimiterConfigs: readonly DelimiterRunConfig[],
++  pairConfigs: readonly PairedTokenConfig[] = [],
++): Token[] {
++  const paired = resolvePairedTokens(tokens, pairConfigs);
++  return resolveDelimiterRuns(source, paired.tokens, delimiterConfigs, paired.delimiterIsolations);
++}
++
 +/** Create a parser whose lexer token stream is transformed by the generic delimiter resolver. */
-+export function createDelimiterParser(grammar: CstGrammar, configs: readonly DelimiterRunConfig[]) {
++export function createDelimiterParser(
++  grammar: CstGrammar,
++  configs: readonly DelimiterRunConfig[],
++  pairConfigs: readonly PairedTokenConfig[] = [],
++) {
 +  const parser = createParser(grammar);
 +  const lexer = createLexer(grammar);
 +  return {
 +    ...parser,
 +    parse(source: string, entryRule?: string) {
-+      return parser.parseTokens(source, resolveDelimiterRuns(source, lexer.tokenize(source), configs), entryRule);
++      return parser.parseTokens(source, resolveDelimitedTokens(source, lexer.tokenize(source), configs, pairConfigs), entryRule);
 +    },
 +  };
 +}

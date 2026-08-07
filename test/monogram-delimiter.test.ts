@@ -1,12 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { markdownDelimiterRuns, markdownInlineGrammar } from "../packages/satorigear/src/markdown-inline.ts";
-import { createDelimiterParser, resolveDelimiterRuns } from "../vendors/monogram/src/delimiter-parser.ts";
+import { markdownBracketPairs, markdownDelimiterRuns, markdownInlineGrammar } from "../packages/satorigear/src/markdown-inline.ts";
+import { createDelimiterParser, resolveDelimitedTokens, resolveDelimiterRuns } from "../vendors/monogram/src/delimiter-parser.ts";
 import { createLexer } from "../vendors/monogram/src/gen-lexer.ts";
 
 const lexer = createLexer(markdownInlineGrammar);
 
 function tokenTypes(source: string): string[] {
   return resolveDelimiterRuns(source, lexer.tokenize(source), markdownDelimiterRuns).map((token) => token.type);
+}
+
+function pairedTokenTypes(source: string): string[] {
+  return resolveDelimitedTokens(source, lexer.tokenize(source), markdownDelimiterRuns, markdownBracketPairs)
+    .map((token) => token.type);
+}
+
+function selectedTokenTypes(source: string, selected: readonly string[]): string[] {
+  const included = new Set(selected);
+  return pairedTokenTypes(source).filter((type) => included.has(type));
 }
 
 describe("generic delimiter-run resolver", () => {
@@ -40,5 +50,18 @@ describe("generic delimiter-run resolver", () => {
       "Text",
       "EmphasisClose",
     ]);
+  });
+
+  it("activates the nearest compatible structural opener", () => {
+    const structural = ["BracketOpen", "LinkOpen", "LinkClose", "LinkTail"];
+    expect(selectedTokenTypes("[outer [inner](/inner)](/outer)", structural)).toEqual(structural);
+  });
+
+  it("isolates delimiter runs inside an activated pair", () => {
+    const structural = ["Delimiter", "EmphasisOpen", "EmphasisClose", "LinkOpen", "LinkClose"];
+    expect(selectedTokenTypes("*[bar*](/url)", structural))
+      .toEqual(["Delimiter", "LinkOpen", "Delimiter", "LinkClose"]);
+    expect(selectedTokenTypes("*[bar](/url)*", structural))
+      .toEqual(["EmphasisOpen", "LinkOpen", "LinkClose", "EmphasisClose"]);
   });
 });
