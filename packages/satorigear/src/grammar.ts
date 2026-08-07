@@ -1,9 +1,7 @@
 // Markdown — a line-oriented CommonMark grammar on Monogram's shared core.
 //
-// Markdown differs from token-stream languages in two important ways: several markers are
-// meaningful only as the first token of a logical line, and fenced code owns an opaque run of
-// physical lines. Both behaviours are declared as lexer hints (`lineStart` / `fencedBlock`);
-// the grammar below remains ordinary tokens + recursive-descent rules.
+// Block parsing is executed by the dedicated structural tokenizer. This grammar remains the
+// declarative source for the inline grammar and for grammar inspection.
 //
 // This grammar intentionally models the context-free, editor-facing CommonMark surface. It
 // recognises the principal block forms and the most useful inline forms, while leaving delimiter
@@ -44,15 +42,12 @@ const punctuation = oneOf("!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+"
 const Newline = token(never(), {});
 const IndentedCode = token(never(), { scope: "markup.raw.block" });
 
-// A representative declarative pattern remains available for grammar inspection. The executable
-// lexer uses fencedBlock to enforce same-marker / at-least-opener-length closing fences.
+// A representative declarative pattern remains available for grammar inspection.
 const FenceBlock = token(altPattern(
   seq("```", star(anyChar(), { greedy: false }), altPattern("```", end())),
   seq("~~~", star(anyChar(), { greedy: false }), altPattern("~~~", end())),
 ), {
   scope: "markup.fenced_code.block",
-  lineStart: true,
-  fencedBlock: { markers: ["`", "~"], minLength: 3, maxIndent: 3 },
 });
 
 // Block markers. Declaration order resolves the overlapping `*`/`-` families: a complete
@@ -61,39 +56,35 @@ const FenceBlock = token(altPattern(
 const ThematicBreak = token(altPattern(
   seq("*", repeat(seq(star(hspace), "*"), 2), star(hspace), lineEnd),
   seq("_", repeat(seq(star(hspace), "_"), 2), star(hspace), lineEnd),
-), { scope: "meta.separator", lineStart: true });
+), { scope: "meta.separator" });
 const DashThematicBreak = token(
   seq("-", repeat(seq(star(hspace), "-"), 2), star(hspace), lineEnd),
-  { scope: "meta.separator", lineStart: true },
+  { scope: "meta.separator" },
 );
 
 const SetextUnderline = token(altPattern(
   seq(plus("="), star(hspace), lineEnd),
   seq(plus("-"), star(hspace), lineEnd),
-), { scope: "markup.heading.setext", lineStart: true });
+), { scope: "markup.heading.setext" });
 
 const AtxHeadingMarker = token(
   seq(repeat("#", 1, 6), followedBy(altPattern(hspace, "\r", "\n", end()))),
-  { scope: "punctuation.definition.heading", lineStart: true },
+  { scope: "punctuation.definition.heading" },
 );
 const BlockQuoteMarker = token(seq(">", optPattern(hspace)), {
   scope: "punctuation.definition.blockquote",
-  lineStart: true,
 });
 // A lone `-` is context-sensitive: by itself it is an empty list item, but after paragraph
 // content it is a level-2 setext underline. A distinct whole-line token lets the parser decide
 // without allowing the `- ` prefix of a non-empty list item to steal the preceding paragraph.
 const EmptyDashMarker = token(seq("-", star(hspace), lineEnd), {
   scope: "punctuation.definition.list",
-  lineStart: true,
 });
 const UnorderedListMarker = token(seq(oneOf("-", "+", "*"), followedBy(altPattern(hspace, "\r", "\n", end()))), {
   scope: "punctuation.definition.list",
-  lineStart: true,
 });
 const OrderedListMarker = token(seq(repeat(digit, 1, 9), oneOf(".", ")"), followedBy(altPattern(hspace, "\r", "\n", end()))), {
   scope: "punctuation.definition.list",
-  lineStart: true,
 });
 
 // A link reference definition owns its physical line. It precedes ordinary `[`-led inline links.
@@ -104,7 +95,7 @@ const LinkDefinition = token(seq(
   ":",
   star(hspace),
   plus(noneOf("\n", "\r")),
-), { scope: "meta.link.reference.def", lineStart: true });
+), { scope: "meta.link.reference.def" });
 
 // Inline leaves. Whole-construct tokens keep the parser grammar compact while preserving useful
 // CST roles (code span, link, image, emphasis, HTML, entity, text).
@@ -241,7 +232,6 @@ const Document = rule(() => [[opt(Block), many(Newline, opt(Block))]]);
 const newline: NewlineConfig = {
   token: "Newline",
   hardBreak: { token: "HardBreak", minSpaces: 2 },
-  indentedText: { token: "IndentedCode", minColumns: 4, tabWidth: 4 },
 };
 
 export default defineGrammar({

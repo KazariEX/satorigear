@@ -4,7 +4,6 @@ import { minify } from "rolldown/utils";
 import { defineConfig } from "tsdown";
 import { markdownBlockGrammar } from "./src/grammar-blocks.ts";
 import { markdownInlineGrammar } from "./src/grammar-inline.ts";
-import grammar from "./src/grammar.ts";
 
 export default defineConfig({
   exports: true,
@@ -19,7 +18,6 @@ export default defineConfig({
         const parsers = [
           ["blocks.ts", markdownBlockGrammar],
           ["inline.ts", markdownInlineGrammar],
-          ["markdown.ts", grammar],
         ] as const;
 
         await mkdir(generated, { recursive: true });
