@@ -35,12 +35,8 @@ interface Reference {
   referenceType: "collapsed" | "full" | "shortcut";
 }
 
-interface SpanContext {
+interface ProjectionContext {
   source: string;
-  spans: Map<object, SourceSpan>;
-}
-
-interface ProjectionContext extends SpanContext {
   syntax: MarkdownSyntax;
 }
 
@@ -61,7 +57,7 @@ export interface MarkdownSyntax {
 
 export interface BlockFragment {
   node: BlockContent | DefinitionContent;
-  spans: Map<object, SourceSpan>;
+  origin: number;
 }
 
 export interface PlacedBlockFragment {
@@ -70,30 +66,27 @@ export interface PlacedBlockFragment {
 }
 
 interface FragmentValue {
+  [key: string]: unknown;
   children?: FragmentValue[];
+  endOffset: number;
+  startOffset: number;
 }
 
-interface MaterializedValue extends FragmentValue {
+interface MaterializedValue {
   children?: MaterializedValue[];
   position: { end: SourceLocation; start: SourceLocation };
 }
 
-function withSpan<const T extends object>(context: SpanContext, value: T, start: number, end: number): T {
-  context.spans.set(value, { start, end });
+function withSpan<const T extends object>(value: T, start: number, end: number): T {
+  const fragment = value as T & FragmentValue;
+  fragment.startOffset = start;
+  fragment.endOffset = end;
   return value;
 }
 
-function spanOf(context: SpanContext, value: object): SourceSpan {
-  const span = context.spans.get(value);
-  if (!span) {
-    throw new Error("mdast node is missing its syntax source span");
-  }
-  return span;
-}
-
-function extendSpan(context: SpanContext, value: object, end: number): void {
-  const span = spanOf(context, value);
-  span.end = Math.max(span.end, end);
+function extendSpan(value: object, end: number): void {
+  const fragment = value as FragmentValue;
+  fragment.endOffset = Math.max(fragment.endOffset, end);
 }
 
 function blockEnd(value: MarkdownSyntaxNode, context: ProjectionContext): number {
@@ -127,17 +120,17 @@ function lineEndingStart(source: string, offset: number): number {
   return source[start - 1] === "\n" && source[start - 2] === "\r" ? start - 2 : start - 1;
 }
 
-function firstChildStart(context: SpanContext, value: { children: readonly object[] }): number {
+function firstChildStart(value: { children: readonly object[] }): number {
   const first = value.children[0];
   if (!first) {
     throw new Error("mdast container unexpectedly has no children");
   }
-  return spanOf(context, first).start;
+  return (first as FragmentValue).startOffset;
 }
 
-function lastChildEnd(context: SpanContext, value: { children: readonly object[] }, emptyEnd: number): number {
+function lastChildEnd(value: { children: readonly object[] }, emptyEnd: number): number {
   const last = value.children.at(-1);
-  return last ? spanOf(context, last).end : emptyEnd;
+  return last ? (last as FragmentValue).endOffset : emptyEnd;
 }
 
 function firstNonspace(source: string, start: number, end: number): number {
@@ -354,7 +347,7 @@ function definition(value: MarkdownSyntaxNode, context: ProjectionContext): Defi
     }
   }
   const labelSource = text.slice(open + 1, close);
-  return withSpan(context, {
+  return withSpan({
     type: "definition",
     identifier: identifier(labelSource),
     label: semanticText(labelSource),
@@ -381,17 +374,17 @@ function appendText(context: ProjectionContext, target: PhrasingContent[], value
   const previous = target.at(-1);
   if (previous?.type === "text") {
     previous.value += value;
-    extendSpan(context, previous, end);
+    extendSpan(previous, end);
   }
   else {
-    target.push(withSpan(context, { type: "text", value }, start, end));
+    target.push(withSpan({ type: "text", value }, start, end));
   }
 }
 
 function appendPhrasing(context: ProjectionContext, target: PhrasingContent[], value: PhrasingContent): void {
   if (value.type === "text") {
-    const span = spanOf(context, value);
-    appendText(context, target, value.value, span.start, span.end);
+    const fragment = value as PhrasingContent & FragmentValue;
+    appendText(context, target, value.value, fragment.startOffset, fragment.endOffset);
   }
   else {
     target.push(value);
@@ -413,12 +406,12 @@ function inlineLeaf(value: MarkdownSyntaxLeaf, context: ProjectionContext): Phra
     case "ReferenceTail":
     case "ShortcutReferenceTail":
     case "ReferenceSeparatorClose":
-      return withSpan(context, { type: "text", value: semanticText(text) }, span.start, span.end);
-    case "CodeSpan": return withSpan(context, { type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode, span.start, span.end);
+      return withSpan({ type: "text", value: semanticText(text) }, span.start, span.end);
+    case "CodeSpan": return withSpan({ type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode, span.start, span.end);
     case "InlineHtml":
-    case "HtmlComment": return withSpan(context, { type: "html", value: text } satisfies Html, span.start, span.end);
-    case "HardBreak": return withSpan(context, { type: "break" }, span.start, span.end);
-    case "Newline": return withSpan(context, { type: "text", value: "\n" }, span.start, span.end);
+    case "HtmlComment": return withSpan({ type: "html", value: text } satisfies Html, span.start, span.end);
+    case "HardBreak": return withSpan({ type: "break" }, span.start, span.end);
+    case "Newline": return withSpan({ type: "text", value: "\n" }, span.start, span.end);
     case "EmphasisOpen":
     case "EmphasisClose":
     case "StrongOpen":
@@ -434,11 +427,11 @@ function inlineLeaf(value: MarkdownSyntaxLeaf, context: ProjectionContext): Phra
       return;
     case "Autolink": {
       const label = text.slice(1, -1);
-      return withSpan(context, {
+      return withSpan({
         type: "link",
         url: label.includes(":") ? label : `mailto:${label}`,
         title: null,
-        children: [withSpan(context, { type: "text", value: label }, span.start + 1, span.end - 1)],
+        children: [withSpan({ type: "text", value: label }, span.start + 1, span.end - 1)],
       } satisfies Link, span.start, span.end);
     }
     default: throw new Error(`Unexpected inline token: ${context.syntax.tokenType(value)}`);
@@ -476,10 +469,10 @@ function appendInlineValue(
     // Markdown syntax newlines point past stripped container prefixes, while mdast spans include the physical line ending.
     const previous = target.at(-1);
     if (!Array.isArray(value) && previous?.type === "break") {
-      extendSpan(context, previous, lineStart(context.source, nextLineOffset));
+      extendSpan(previous, lineStart(context.source, nextLineOffset));
       return;
     }
-    spanOf(context, first).start = lineEndingStart(context.source, nextLineOffset);
+    (first as PhrasingContent & FragmentValue).startOffset = lineEndingStart(context.source, nextLineOffset);
     if (previous?.type === "text") {
       previous.value = previous.value.slice(0, trailingWhitespaceStart(previous.value));
     }
@@ -570,8 +563,8 @@ function emphasis(value: MarkdownSyntaxNode, context: ProjectionContext, kind: "
   const children = inlineSequence(context.syntax.children(value), context, start, end);
   const span = context.syntax.span(value);
   return kind === "strong"
-    ? withSpan(context, { type: "strong", children } satisfies Strong, span.start, span.end)
-    : withSpan(context, { type: "emphasis", children } satisfies Emphasis, span.start, span.end);
+    ? withSpan({ type: "strong", children } satisfies Strong, span.start, span.end)
+    : withSpan({ type: "emphasis", children } satisfies Emphasis, span.start, span.end);
 }
 
 function linkOrImage(
@@ -590,13 +583,13 @@ function linkOrImage(
   if (referenceNode) {
     const association = reference(value, context, image);
     return image
-      ? withSpan(context, { type: "imageReference", alt: phrasingText(children), ...association } satisfies ImageReference, span.start, span.end)
-      : withSpan(context, { type: "linkReference", children, ...association } satisfies LinkReference, span.start, span.end);
+      ? withSpan({ type: "imageReference", alt: phrasingText(children), ...association } satisfies ImageReference, span.start, span.end)
+      : withSpan({ type: "linkReference", children, ...association } satisfies LinkReference, span.start, span.end);
   }
   const resource = destinationTitle(context.syntax.text(leaf(value, `${prefix}LinkClose`, context)).slice(2, -1));
   return image
-    ? withSpan(context, { type: "image", alt: phrasingText(children), ...resource } satisfies Image, span.start, span.end)
-    : withSpan(context, { type: "link", children, ...resource } satisfies Link, span.start, span.end);
+    ? withSpan({ type: "image", alt: phrasingText(children), ...resource } satisfies Image, span.start, span.end)
+    : withSpan({ type: "link", children, ...resource } satisfies Link, span.start, span.end);
 }
 
 function inlineNode(value: MarkdownSyntaxNode, context: ProjectionContext): PhrasingContent[] | PhrasingContent {
@@ -635,7 +628,7 @@ function inlineChildren(value: MarkdownSyntaxNode, context: ProjectionContext): 
     const end = trailingWhitespaceStart(last.value);
     const removed = last.value.length - end;
     last.value = last.value.slice(0, end);
-    spanOf(context, last).end -= removed;
+    (last as PhrasingContent & FragmentValue).endOffset -= removed;
     if (!last.value) {
       result.pop();
     }
@@ -761,7 +754,7 @@ function listItem(value: MarkdownSyntaxNode, context: ProjectionContext): ListIt
     checked: null,
     children: childNodes(value, "Block", context).map((child) => blockContent(child, context)),
   } satisfies ListItem;
-  return withSpan(context, result, markerSpan.start, lastChildEnd(context, result, blockEnd(value, context)));
+  return withSpan(result, markerSpan.start, lastChildEnd(result, blockEnd(value, context)));
 }
 
 function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): BlockContent | DefinitionContent {
@@ -776,7 +769,7 @@ function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): Block
       } satisfies Blockquote;
       const marker = context.syntax.span(leaf(value, "BlockQuoteOpen", context));
       const start = firstNonspace(source, marker.start, lineEnd(source, span.start));
-      return withSpan(context, result, start, blockEnd(value, context));
+      return withSpan(result, start, blockEnd(value, context));
     }
     case "UnorderedList":
     case "OrderedList": {
@@ -792,11 +785,11 @@ function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): Block
         spread: listSpread(items, context),
         children: items.map((item) => listItem(item, context)),
       } satisfies List;
-      return withSpan(context, result, markerSpan.start, lastChildEnd(context, result, markerSpan.end));
+      return withSpan(result, markerSpan.start, lastChildEnd(result, markerSpan.end));
     }
     case "AtxHeading": {
       const marker = context.syntax.span(leaf(value, "AtxHeadingOpen", context));
-      return withSpan(context, {
+      return withSpan({
         type: "heading",
         depth: marker.end - marker.start as Heading["depth"],
         children: inlineChildren(value, context),
@@ -813,18 +806,16 @@ function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): Block
         children: inlineChildren(value, context),
       } satisfies Heading;
       return withSpan(
-        context,
         result,
-        firstChildStart(context, result),
+        firstChildStart(result),
         context.syntax.span(leaf(value, "HeadingClose", context)).start,
       );
     }
     case "Paragraph": {
       const result = { type: "paragraph", children: inlineChildren(value, context) } satisfies Paragraph;
-      return withSpan(context, result, firstChildStart(context, result), blockEnd(value, context));
+      return withSpan(result, firstChildStart(result), blockEnd(value, context));
     }
     case "ThematicBreak": return withSpan(
-      context,
       { type: "thematicBreak" },
       firstNonspace(source, span.start, span.end),
       blockEnd(value, context),
@@ -833,17 +824,16 @@ function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): Block
       const fence = fencedCode(context.syntax.text(leaf(value, "FencedCodeBlock", context)));
       // An unclosed fence owns the final newline only when it reaches the document's EOF.
       const end = fence.closed || span.end < source.length ? blockEnd(value, context) : span.end;
-      return withSpan(context, fence.node, firstNonspace(source, span.start, lineEnd(source, span.start)), end);
+      return withSpan(fence.node, firstNonspace(source, span.start, lineEnd(source, span.start)), end);
     }
     case "IndentedCodeBlock": return withSpan(
-      context,
       indentedCode(context.syntax.text(leaf(value, "IndentedCodeBlockToken", context))),
       span.start,
       indentedCodeEnd(value, context),
     );
     case "HtmlBlock": {
       const html = htmlBlockValue(context.syntax.text(leaf(value, "HtmlBlockToken", context)));
-      return withSpan(context, { type: "html", value: html } satisfies Html, span.start, html.endsWith("\n") ? span.end : blockEnd(value, context));
+      return withSpan({ type: "html", value: html } satisfies Html, span.start, html.endsWith("\n") ? span.end : blockEnd(value, context));
     }
     case "LinkDefinition": return definition(value, context);
     default: throw new Error(`Unexpected block syntax rule: ${rule}`);
@@ -855,14 +845,9 @@ export function projectBlock(
   source: string,
   syntax: MarkdownSyntax,
 ): BlockFragment {
-  const context = { source, syntax, spans: new Map<object, SourceSpan>() };
+  const context = { source, syntax };
   const node = blockContent(tree, context);
-  const offset = syntax.span(tree).start;
-  for (const span of context.spans.values()) {
-    span.start -= offset;
-    span.end -= offset;
-  }
-  return { node, spans: context.spans };
+  return { node, origin: syntax.span(tree).start };
 }
 
 function materializeBlock(
@@ -870,27 +855,27 @@ function materializeBlock(
   offset: number,
   point: (offset: number) => SourceLocation,
 ): BlockContent | DefinitionContent {
+  const shift = offset - fragment.origin;
   const clone = (value: FragmentValue): MaterializedValue => {
-    const span = fragment.spans.get(value);
-    if (!span) {
-      throw new Error("mdast fragment node is missing its relative source span");
+    const result = {} as MaterializedValue & Record<string, unknown>;
+    for (const key in value) {
+      if (key !== "startOffset" && key !== "endOffset" && key !== "children") {
+        result[key] = value[key];
+      }
     }
-    const result = {
-      ...value,
-      position: {
-        start: point(offset + span.start),
-        end: point(offset + span.end),
-      },
-    } as MaterializedValue;
     if (value.children) {
       result.children = value.children.map(clone);
     }
+    result.position = {
+      start: point(shift + value.startOffset),
+      end: point(shift + value.endOffset),
+    };
     return result;
   };
-  return clone(fragment.node as FragmentValue) as BlockContent | DefinitionContent;
+  return clone(fragment.node as unknown as FragmentValue) as unknown as BlockContent | DefinitionContent;
 }
 
-export function materializeMdast(
+export function materialize(
   fragments: readonly PlacedBlockFragment[],
   sourceLength: number,
   locate: (offset: number) => SourceLocation,

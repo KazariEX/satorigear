@@ -2,7 +2,7 @@ import type { Root } from "mdast";
 import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
 import {
   type BlockFragment,
-  materializeMdast,
+  materialize,
   type PlacedBlockFragment,
   projectBlock,
 } from "./mdast.ts";
@@ -106,7 +106,7 @@ class DocumentImpl implements Document {
   }
 
   snapshot(): Root {
-    return materializeMdast(this.#projectBlocks(), this.source.length, this.#tokenizer.locator());
+    return materialize(this.#projectBlocks(), this.source.length, this.#tokenizer.locator());
   }
 }
 
