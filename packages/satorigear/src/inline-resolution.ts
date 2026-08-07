@@ -322,12 +322,18 @@ function applyPairReplacements(
   return result;
 }
 
-function replacementToken(base: Token, replacement: Replacement, first: boolean): Token {
+function tokenFragment(
+  base: Token,
+  offset: number,
+  end: number,
+  type: string,
+): Token {
+  const first = offset === base.offset;
   return {
     ...base,
-    type: replacement.type,
-    text: base.text.slice(replacement.offset - base.offset, replacement.end - base.offset),
-    offset: replacement.offset,
+    type,
+    text: base.text.slice(offset - base.offset, end - base.offset),
+    offset,
     k: 0,
     t: 0,
     newlineBefore: first && base.newlineBefore,
@@ -511,31 +517,39 @@ function resolveDelimiterRunsWithIndex(
   }
 
   const result: Token[] = [];
-  tokens.forEach((token, tokenIndex) => {
+  for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
+    const token = tokens[tokenIndex];
     const indexed = configByToken.get(token.type);
     if (!indexed) {
       result.push(token);
-      return;
+      continue;
     }
     const { config } = indexed;
-    const matched = (replacements[tokenIndex] ?? []).sort((a, b) => a.offset - b.offset);
-    const fragments: Replacement[] = [];
+    const matched = replacements[tokenIndex];
+    if (matched && matched.length > 1) {
+      matched.sort((a, b) => a.offset - b.offset);
+    }
     let offset = token.offset;
-    for (const replacement of matched) {
-      if (replacement.offset > offset) {
-        fragments.push({ offset, end: replacement.offset, type: config.fallbackToken });
+    if (matched) {
+      for (const replacement of matched) {
+        if (replacement.offset > offset) {
+          result.push(tokenFragment(
+            token,
+            offset,
+            replacement.offset,
+            config.fallbackToken,
+          ));
+          offset = replacement.offset;
+        }
+        result.push(tokenFragment(token, replacement.offset, replacement.end, replacement.type));
+        offset = replacement.end;
       }
-      fragments.push(replacement);
-      offset = replacement.end;
     }
     const end = token.offset + token.text.length;
     if (offset < end) {
-      fragments.push({ offset, end, type: config.fallbackToken });
+      result.push(tokenFragment(token, offset, end, config.fallbackToken));
     }
-    for (let index = 0; index < fragments.length; index++) {
-      result.push(replacementToken(token, fragments[index], index === 0));
-    }
-  });
+  }
   return result;
 }
 
