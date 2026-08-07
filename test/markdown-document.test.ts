@@ -39,4 +39,18 @@ describe("markdown document", () => {
     expect(document.edit([])).toEqual({ changedRange: { start: 0, end: 0 } });
     expect(document.source).toBe("text\n");
   });
+
+  it("recomputes reference availability across the document", () => {
+    const document = createMarkdownDocument("[label]\n");
+    expect(document.toMdast().children[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", value: "[label]" }],
+    });
+
+    document.edit([{ start: document.source.length, end: document.source.length, text: "\n[label]: /url\n" }]);
+    expect(document.toMdast().children[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "linkReference", identifier: "label" }],
+    });
+  });
 });

@@ -39,7 +39,33 @@ export interface CstParserDocument {
     edits: readonly { end: number; start: number; text: string }[],
     change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
   ) => void;
+  tree: (tokens: readonly Token[]) => CstTree;
   toCst: (source: string, tokens: readonly Token[]) => CstNode;
+}
+
+export interface CstTreeNode {
+  id: number;
+  kind: "node";
+  offset: number;
+  tokenBase: number;
+}
+
+export interface CstTreeLeaf {
+  entry: number;
+  kind: "leaf";
+  token: number;
+}
+
+export type CstTreeEntry = CstTreeLeaf | CstTreeNode;
+
+export interface CstTree {
+  readonly root: CstTreeNode;
+
+  children: (node: CstTreeNode) => readonly CstTreeEntry[];
+  leafToken: (leaf: CstTreeLeaf) => Token;
+  leafTokenType: (leaf: CstTreeLeaf) => string;
+  ruleName: (node: CstTreeNode) => string;
+  span: (entry: CstTreeEntry) => { end: number; start: number };
 }
 
 export interface CstParser {
@@ -57,15 +83,14 @@ function createCstDocument<Handle extends EmittedParserHandle>(
 ): CstParserDocument {
   const parser = runtime.createParser();
   const handle = parser.parseTokens(source, tokens, entryRule);
+  const tree = (currentTokens: readonly Token[]): CstTree => createCstTree(handle.root, currentTokens, parser.tree);
   return {
     get rootId() {
       return handle.root;
     },
     edit: (edits, change) => parser.editTokens(handle, edits, change),
-    toCst: (currentSource, currentTokens) => {
-      const offset = currentTokens[0]?.ranges?.[0]?.offset ?? currentTokens[0]?.offset ?? 0;
-      return materializeNode(handle.root, offset, 0, currentSource, currentTokens, parser.tree);
-    },
+    tree,
+    toCst: (currentSource, currentTokens) => materializeCst(tree(currentTokens), currentSource),
   };
 }
 
@@ -80,13 +105,14 @@ function leafTokenType(entry: number, token: Token, tree: ArenaTree): string {
   return token.type || "$punct";
 }
 
-function materializeLeaf(entry: number, token: Token, source: string, tree: ArenaTree): CstLeaf {
+function materializeLeaf(leaf: CstTreeLeaf, source: string, tree: CstTree): CstLeaf {
+  const token = tree.leafToken(leaf);
   const ranges = token.ranges?.map((range) => ({ ...range }));
   const offset = ranges?.[0]?.offset ?? token.offset;
   const end = ranges?.at(-1)?.end ?? token.offset + token.text.length;
   const physical = ranges?.map((range) => source.slice(range.offset, range.end)).join("");
   return {
-    tokenType: leafTokenType(entry, token, tree),
+    tokenType: tree.leafTokenType(leaf),
     offset,
     end,
     ...(ranges?.length ? { ranges } : {}),
@@ -94,38 +120,70 @@ function materializeLeaf(entry: number, token: Token, source: string, tree: Aren
   };
 }
 
-function materializeNode(
-  id: number,
-  offset: number,
-  tokenBase: number,
-  source: string,
+function createCstTree(
+  rootId: number,
   tokens: readonly Token[],
   tree: ArenaTree,
-): CstNode {
-  const children = Array.from({ length: tree.childCount(id) }, (_, index) => {
-    const entry = tree.childAt(id, index);
-    if (entry < 0) {
-      const token = tokens[tree.leafToken(entry, tokenBase)];
-      if (!token) {
-        throw new Error("emitted parser returned a leaf outside its token stream");
-      }
-      return materializeLeaf(entry, token, source, tree);
+): CstTree {
+  const tokenAt = (index: number): Token => {
+    const token = tokens[index];
+    if (!token) {
+      throw new Error("emitted parser returned a leaf outside its token stream");
     }
-    return materializeNode(
-      entry,
-      offset + tree.childRelAt(id, index),
-      tokenBase + tree.childTokRelAt(id, index),
-      source,
-      tokens,
-      tree,
-    );
-  });
-  return {
-    rule: tree.ruleNameOf(id),
-    children,
-    offset,
-    end: offset + tree.lenOf(id),
+    return token;
   };
+  const tokenOffset = (token: Token): number => token.ranges?.[0]?.offset ?? token.offset;
+  const tokenEnd = (token: Token): number => token.ranges?.at(-1)?.end ?? token.offset + token.text.length;
+  const root = {
+    kind: "node",
+    id: rootId,
+    offset: tokens[0] ? tokenOffset(tokens[0]) : 0,
+    tokenBase: 0,
+  } satisfies CstTreeNode;
+  return {
+    root,
+    children: (node) => Array.from({ length: tree.childCount(node.id) }, (_, index) => {
+      const entry = tree.childAt(node.id, index);
+      if (entry < 0) {
+        return {
+          kind: "leaf",
+          entry,
+          token: tree.leafToken(entry, node.tokenBase),
+        } satisfies CstTreeLeaf;
+      }
+      return {
+        kind: "node",
+        id: entry,
+        offset: node.offset + tree.childRelAt(node.id, index),
+        tokenBase: node.tokenBase + tree.childTokRelAt(node.id, index),
+      } satisfies CstTreeNode;
+    }),
+    leafToken: (leaf) => tokenAt(leaf.token),
+    leafTokenType: (leaf) => leafTokenType(leaf.entry, tokenAt(leaf.token), tree),
+    ruleName: (node) => tree.ruleNameOf(node.id),
+    span: (entry) => {
+      if (entry.kind === "node") {
+        return { start: entry.offset, end: entry.offset + tree.lenOf(entry.id) };
+      }
+      const token = tokenAt(entry.token);
+      return { start: tokenOffset(token), end: tokenEnd(token) };
+    },
+  };
+}
+
+export function materializeCst(tree: CstTree, source: string): CstNode {
+  const visit = (node: CstTreeNode): CstNode => {
+    const span = tree.span(node);
+    return {
+      rule: tree.ruleName(node),
+      children: tree.children(node).map((child) => (
+        child.kind === "node" ? visit(child) : materializeLeaf(child, source, tree)
+      )),
+      offset: span.start,
+      end: span.end,
+    };
+  };
+  return visit(tree.root);
 }
 
 export function createCstParser<Handle extends EmittedParserHandle>(
@@ -134,8 +192,7 @@ export function createCstParser<Handle extends EmittedParserHandle>(
 ): CstParser {
   const parseTokens = (source: string, tokens: readonly Token[], entryRule?: string): CstNode => {
     const root = runtime.parseTokens(source, tokens, entryRule);
-    const offset = tokens[0]?.ranges?.[0]?.offset ?? tokens[0]?.offset ?? 0;
-    return materializeNode(root, offset, 0, source, tokens, runtime.tree);
+    return materializeCst(createCstTree(root, tokens, runtime.tree), source);
   };
   return {
     createDocument: (source, tokens, entryRule) => createCstDocument(runtime, source, tokens, entryRule),

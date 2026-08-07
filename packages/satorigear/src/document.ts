@@ -2,7 +2,7 @@ import type { Root } from "mdast";
 import type { CstNode } from "monogram/cst.ts";
 import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
 import { markdownCstToMdast } from "./mdast.ts";
-import { markdownBlockParser, markdownPhasedParser } from "./parser.ts";
+import { createMarkdownCompositeDocument, markdownBlockParser } from "./parser.ts";
 import type { CstParserDocument } from "./emitted-parser.ts";
 
 export interface TextEdit {
@@ -66,13 +66,14 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 
 class StatefulMarkdownDocument implements MarkdownDocument {
   #blocks: CstParserDocument;
+  #composite: ReturnType<typeof createMarkdownCompositeDocument>;
   #tokenizer: ReturnType<typeof createMarkdownBlockTokenizer>;
-  #tree: CstNode;
+  #tree: CstNode | null = null;
 
   constructor(source: string) {
     this.#tokenizer = createMarkdownBlockTokenizer(source);
     this.#blocks = markdownBlockParser.createDocument(source, this.#tokenizer.tokens);
-    this.#tree = markdownPhasedParser.compose(this.#blocks.toCst(source, this.#tokenizer.tokens), source);
+    this.#composite = createMarkdownCompositeDocument(this.#blocks.tree(this.#tokenizer.tokens), source);
   }
 
   get source(): string {
@@ -87,14 +88,13 @@ class StatefulMarkdownDocument implements MarkdownDocument {
     const changedRange = changedRangeOf(edits);
     const update = this.#tokenizer.edit(edits);
     this.#blocks.edit(sequentialEdits(edits), update.change);
-    this.#tree = markdownPhasedParser.compose(
-      this.#blocks.toCst(this.source, this.#tokenizer.tokens),
-      this.source,
-    );
+    this.#composite.update(this.#blocks.tree(this.#tokenizer.tokens), this.source);
+    this.#tree = null;
     return { changedRange };
   }
 
   toMdast(): Root {
+    this.#tree ??= this.#composite.toCst();
     return markdownCstToMdast(this.#tree, this.source);
   }
 }
