@@ -3,6 +3,12 @@ export interface SourceRange {
   end: number;
 }
 
+export interface SourceEdit {
+  end: number;
+  start: number;
+  text: string;
+}
+
 export interface SourceViewSegment extends SourceRange {
   viewOffset: number;
   viewEnd: number;
@@ -13,6 +19,51 @@ export interface SourceView {
   segments: readonly SourceViewSegment[];
   mapPoint: (offset: number) => number;
   mapRange: (offset: number, end: number) => SourceRange[];
+}
+
+/** Project document edits into a view whose physical segments remain structurally stable. */
+export function projectSourceEdits(
+  previous: SourceView,
+  next: SourceView,
+  edits: readonly SourceEdit[],
+): SourceEdit[] | null {
+  if (previous.segments.length !== next.segments.length) {
+    return null;
+  }
+
+  const projected: SourceEdit[] = [];
+  let editIndex = 0;
+  let documentDelta = 0;
+  let viewDelta = 0;
+  for (let segmentIndex = 0; segmentIndex < previous.segments.length; segmentIndex++) {
+    const oldSegment = previous.segments[segmentIndex];
+    const newSegment = next.segments[segmentIndex];
+    if (newSegment.offset !== oldSegment.offset + documentDelta
+      || newSegment.viewOffset !== oldSegment.viewOffset + viewDelta) {
+      return null;
+    }
+
+    while (editIndex < edits.length && edits[editIndex].start < oldSegment.end) {
+      const edit = edits[editIndex++];
+      if (edit.start <= oldSegment.offset || edit.end >= oldSegment.end) {
+        return null;
+      }
+      projected.push({
+        start: oldSegment.viewOffset + edit.start - oldSegment.offset + viewDelta,
+        end: oldSegment.viewOffset + edit.end - oldSegment.offset + viewDelta,
+        text: edit.text,
+      });
+      const delta = edit.text.length - (edit.end - edit.start);
+      documentDelta += delta;
+      viewDelta += delta;
+    }
+
+    if (newSegment.end !== oldSegment.end + documentDelta
+      || newSegment.viewEnd !== oldSegment.viewEnd + viewDelta) {
+      return null;
+    }
+  }
+  return editIndex === edits.length ? projected : null;
 }
 
 /** Build logical text from physical source ranges while preserving original coordinates. */

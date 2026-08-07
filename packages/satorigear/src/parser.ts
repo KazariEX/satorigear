@@ -11,7 +11,13 @@ import * as inlineRuntime from "./generated/inline.ts";
 import { tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
 import { InlineTokenDocument } from "./inline-tokenizer.ts";
-import { createSourceView, type SourceRange, type SourceView } from "./source-view.ts";
+import {
+  createSourceView,
+  projectSourceEdits,
+  type SourceEdit,
+  type SourceRange,
+  type SourceView,
+} from "./source-view.ts";
 import type {
   MarkdownSyntax,
   MarkdownSyntaxChild,
@@ -101,9 +107,13 @@ function updateInlineRegion(
   region: InlineRegion,
   descriptor: InlineRegionDescriptor,
   labels: ReadonlySet<string>,
+  edits: readonly SourceEdit[] | null,
 ): InlineRegion {
   const document = region.document;
-  const changed = region.update(descriptor.view.text, labels, document?.edit);
+  const sourceEdits = edits && region.view.text !== descriptor.view.text
+    ? projectSourceEdits(region.view, descriptor.view, edits)
+    : null;
+  const changed = region.update(descriptor.view.text, labels, document?.edit, sourceEdits);
   region.describe(descriptor);
   if (!changed) {
     return region;
@@ -136,7 +146,7 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
     return this.#blocks;
   }
 
-  update(tree: SyntaxTree, source: string): void {
+  update(tree: SyntaxTree, source: string, edits: readonly SourceEdit[] = []): void {
     this.#inlineTrees = new WeakMap();
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
@@ -204,7 +214,7 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
         }
       }
       const region = previous
-        ? updateInlineRegion(previous, descriptor, labels)
+        ? updateInlineRegion(previous, descriptor, labels, edits)
         : createInlineRegion(descriptor, labels);
       regions.set(descriptor.id, region);
     }

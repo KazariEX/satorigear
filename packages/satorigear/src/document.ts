@@ -91,7 +91,7 @@ class StatefulMarkdownDocument implements MarkdownDocument {
     const changedRange = changedRangeOf(edits);
     const update = this.#tokenizer.edit(edits);
     this.#blocks.edit(sequentialEdits(edits), update.change);
-    this.#composite.update(this.#blocks.tree(this.#tokenizer.tokens), this.source);
+    this.#composite.update(this.#blocks.tree(this.#tokenizer.tokens), this.source, edits);
     return { changedRange };
   }
 
