@@ -48,6 +48,7 @@ function textEdit(previous: string, next: string): readonly TextEdit[] {
 export class InlineTokenDocument {
   #candidates?: ReadonlySet<string>;
   #labels?: ReadonlySet<string>;
+  #rawTokens?: readonly Token[];
   #source?: string;
   #tokens?: readonly Token[];
 
@@ -63,12 +64,16 @@ export class InlineTokenDocument {
 
     const previousSource = this.#source ?? "";
     const previousTokens = this.#tokens ?? emptyTokens;
+    const edits = this.#rawTokens || apply ? textEdit(previousSource, source) : [];
     const candidates = new Set<string>();
-    const rawTokens = reassociateMarkdownReferenceTails(source, inlineRuntime.tokenize(source), labels);
-    const tokens = resolver.resolve(source, rawTokens, { labels, candidates });
+    const rawTokens = edits.length === 0 && this.#rawTokens
+      ? this.#rawTokens
+      : inlineRuntime.tokenize(source);
+    const associatedTokens = reassociateMarkdownReferenceTails(source, rawTokens, labels);
+    const tokens = resolver.resolve(source, associatedTokens, { labels, candidates });
     if (apply) {
       apply(
-        textEdit(previousSource, source),
+        edits,
         changedTokenRange(previousTokens, tokens, source.length - previousSource.length),
       );
     }
@@ -76,6 +81,7 @@ export class InlineTokenDocument {
     this.#source = source;
     this.#labels = labels;
     this.#candidates = candidates;
+    this.#rawTokens = rawTokens;
     this.#tokens = tokens;
     return true;
   }
