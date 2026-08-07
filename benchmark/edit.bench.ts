@@ -28,6 +28,8 @@ function editBetween(source: string, next: string): TextEdit {
 
 const paragraphOffset = base.indexOf("Paragraph 100") + "Paragraph ".length;
 const fenceSource = `${body}\n\`\`\`\ncode\n\`\`\`\ntrailing\n`;
+const longInlineSource = `${"plain text ".repeat(1_000)}tail\n`;
+const longInlineOffset = longInlineSource.length - "tail\n".length;
 const scenarios = [
   {
     name: "single paragraph character",
@@ -38,6 +40,11 @@ const scenarios = [
   { name: "fence closer to EOF", first: fenceSource, second: fenceSource.replace("```\ntrailing", "``x\ntrailing") },
   { name: "definition availability", first: body, second: `${body}\n[target]: /url\n` },
   { name: "list indentation", first: base, second: base.replace("- item 100.2", "    - item 100.2") },
+  {
+    name: "long inline tail",
+    first: longInlineSource,
+    second: `${longInlineSource.slice(0, longInlineOffset)}sail\n`,
+  },
 ];
 
 summary(() => {
