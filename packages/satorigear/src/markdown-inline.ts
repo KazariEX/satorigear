@@ -142,8 +142,19 @@ const linkTailPattern = seq(
   star(linkWhitespace),
   ")",
 );
-const referenceLabel = star(altPattern(escapedInlineCharacter, noneOf("[", "]", "\n", "\r")));
-const referenceTailPattern = seq("]", optPattern(seq("[", referenceLabel, "]")));
+const referenceLabelCharacter = altPattern(escapedInlineCharacter, noneOf("[", "]"));
+const referenceLabelNonWhitespace = altPattern(
+  escapedInlineCharacter,
+  noneOf("[", "]", " ", "\t", "\n", "\r"),
+);
+const referenceLabel = altPattern(
+  "",
+  seq(
+    followedBy(seq(repeat(oneOf(" ", "\t", "\n", "\r"), 0, 998), referenceLabelNonWhitespace)),
+    repeat(referenceLabelCharacter, 1, 999),
+  ),
+);
+const referenceTailPattern = seq("]", "[", referenceLabel, "]");
 const physicalLineEnd = altPattern("\r\n", "\r", "\n", end());
 const inlineTextPattern = plus(altPattern(
   noneOf("\n", "\r", "\\", "`", "*", "_", "[", "]", "<", "!", "&", "~", " "),
@@ -257,6 +268,7 @@ export const markdownInlineGrammar: CstGrammar = {
         engineToken("BracketOpen", "["),
         engineToken("LinkTail", linkTailPattern),
         engineToken("ReferenceTail", referenceTailPattern),
+        engineToken("ShortcutReferenceTail", "]"),
         engineToken("LinkOpen"),
         engineToken("LinkClose"),
         engineToken("ImageLinkOpen"),
@@ -291,6 +303,7 @@ export const markdownInlineGrammar: CstGrammar = {
           "BracketOpen",
           "LinkTail",
           "ReferenceTail",
+          "ShortcutReferenceTail",
           "LinkOpen",
           "LinkClose",
           "ImageLinkOpen",
@@ -349,11 +362,37 @@ export const markdownBracketPairs: PairedTokenConfig[] = [
     closer: "ReferenceTail",
     open: "ReferenceOpen",
     close: "ReferenceClose",
+    isolateDelimiters: true,
+  },
+  {
+    opener: "BracketOpen",
+    closer: "ShortcutReferenceTail",
+    open: "ReferenceOpen",
+    close: "ReferenceClose",
+    isolateDelimiters: true,
+    content: {
+      requireNonWhitespace: true,
+      maxCharacters: 999,
+      forbidTokens: ["BracketOpen", "ImageOpen"],
+    },
   },
   {
     opener: "ImageOpen",
     closer: "ReferenceTail",
     open: "ImageReferenceOpen",
     close: "ImageReferenceClose",
+    isolateDelimiters: true,
+  },
+  {
+    opener: "ImageOpen",
+    closer: "ShortcutReferenceTail",
+    open: "ImageReferenceOpen",
+    close: "ImageReferenceClose",
+    isolateDelimiters: true,
+    content: {
+      requireNonWhitespace: true,
+      maxCharacters: 999,
+      forbidTokens: ["BracketOpen", "ImageOpen"],
+    },
   },
 ];

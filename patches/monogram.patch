@@ -142,10 +142,10 @@ index 0000000..9a0b21b
 +}
 diff --git a/src/delimiter-parser.ts b/src/delimiter-parser.ts
 new file mode 100644
-index 0000000..85de59b
+index 0000000..026f303
 --- /dev/null
 +++ b/src/delimiter-parser.ts
-@@ -0,0 +1,248 @@
+@@ -0,0 +1,262 @@
 +import type { CstGrammar } from './types.ts';
 +import { createLexer, type Token } from './gen-lexer.ts';
 +import { createParser } from './gen-parser.ts';
@@ -167,6 +167,11 @@ index 0000000..85de59b
 +  close: string;
 +  deactivateEarlier?: readonly string[];
 +  isolateDelimiters?: boolean;
++  content?: {
++    requireNonWhitespace?: boolean;
++    maxCharacters?: number;
++    forbidTokens?: readonly string[];
++  };
 +}
 +
 +export interface TokenIsolationRange {
@@ -241,6 +246,7 @@ index 0000000..85de59b
 +
 +/** Resolve nearest-opener token pairs and expose configured delimiter-isolation regions. */
 +export function resolvePairedTokens(
++  source: string,
 +  tokens: readonly Token[],
 +  configs: readonly PairedTokenConfig[],
 +): PairedTokenResolution {
@@ -259,9 +265,17 @@ index 0000000..85de59b
 +
 +    const opener = stack[openerIndex];
 +    const config = configByPair.get(`${opener.type}\0${token.type}`)!;
++    stack.splice(openerIndex, 1);
++    const content = source.slice(tokens[opener.tokenIndex].offset + tokens[opener.tokenIndex].text.length, token.offset);
++    const contentConfig = config.content;
++    if (contentConfig?.requireNonWhitespace && !/\S/u.test(content)) return;
++    if (contentConfig?.maxCharacters !== undefined && [...content].length > contentConfig.maxCharacters) return;
++    if (contentConfig?.forbidTokens?.length) {
++      const forbidden = new Set(contentConfig.forbidTokens);
++      if (tokens.slice(opener.tokenIndex + 1, tokenIndex).some(inner => forbidden.has(inner.type))) return;
++    }
 +    replacements.set(opener.tokenIndex, config.open);
 +    replacements.set(tokenIndex, config.close);
-+    stack.splice(openerIndex, 1);
 +
 +    if (config.deactivateEarlier?.length) {
 +      const deactivated = new Set(config.deactivateEarlier);
@@ -375,7 +389,7 @@ index 0000000..85de59b
 +  delimiterConfigs: readonly DelimiterRunConfig[],
 +  pairConfigs: readonly PairedTokenConfig[] = [],
 +): Token[] {
-+  const paired = resolvePairedTokens(tokens, pairConfigs);
++  const paired = resolvePairedTokens(source, tokens, pairConfigs);
 +  return resolveDelimiterRuns(source, paired.tokens, delimiterConfigs, paired.delimiterIsolations);
 +}
 +

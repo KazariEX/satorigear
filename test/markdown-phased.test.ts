@@ -114,4 +114,29 @@ describe("block-first markdown parser", () => {
     expect(treeRules.filter((rule) => rule === "ImageReferenceCandidate")).toHaveLength(1);
     expect(treeRules.filter((rule) => rule === "Emphasis")).toHaveLength(1);
   });
+
+  it("does not let emphasis consume a reference candidate boundary", () => {
+    const treeRules = rules(markdownPhasedParser.parse("*[candidate*][ref]\n"));
+    expect(treeRules.filter((rule) => rule === "ReferenceCandidate")).toHaveLength(1);
+    expect(treeRules.filter((rule) => rule === "Emphasis")).toHaveLength(0);
+  });
+
+  it("rejects invalid shortcut reference labels before CST activation", () => {
+    expect(rules(markdownPhasedParser.parse("[]\n"))).not.toContain("ReferenceCandidate");
+    const nested = rules(markdownPhasedParser.parse("![[foo]]\n"));
+    expect(nested).not.toContain("ImageReferenceCandidate");
+    expect(nested.filter((rule) => rule === "ReferenceCandidate")).toHaveLength(1);
+  });
+
+  it("validates explicit reference labels without consulting definitions", () => {
+    const invalidSource = "[text][   ]\n";
+    expect(nodes(markdownPhasedParser.parse(invalidSource), "ReferenceCandidate").map((node) => getText(node, invalidSource)))
+      .toEqual(["[text]"]);
+    const collapsedSource = "[text][]\n";
+    expect(nodes(markdownPhasedParser.parse(collapsedSource), "ReferenceCandidate").map((node) => getText(node, collapsedSource)))
+      .toEqual(["[text][]"]);
+    const multilineSource = "[text][multi\nline]\n";
+    expect(nodes(markdownPhasedParser.parse(multilineSource), "ReferenceCandidate").map((node) => getText(node, multilineSource)))
+      .toEqual(["[text][multi\nline]"]);
+  });
 });

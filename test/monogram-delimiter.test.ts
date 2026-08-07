@@ -64,4 +64,16 @@ describe("generic delimiter-run resolver", () => {
     expect(selectedTokenTypes("*[bar](/url)*", structural))
       .toEqual(["EmphasisOpen", "LinkOpen", "LinkClose", "EmphasisClose"]);
   });
+
+  it("preserves candidate pairs across surrounding delimiter runs", () => {
+    const structural = ["Delimiter", "EmphasisOpen", "EmphasisClose", "ReferenceOpen", "ReferenceClose"];
+    expect(selectedTokenTypes("*[candidate*][ref]", structural))
+      .toEqual(["Delimiter", "ReferenceOpen", "Delimiter", "ReferenceClose"]);
+  });
+
+  it("rejects paired-token contents that violate declarative constraints", () => {
+    expect(pairedTokenTypes("[]")).toEqual(["BracketOpen", "ShortcutReferenceTail"]);
+    expect(pairedTokenTypes("[[nested]]").filter((type) => type === "ReferenceOpen")).toHaveLength(1);
+    expect(pairedTokenTypes(`[${"a".repeat(1000)}]`)).not.toContain("ReferenceOpen");
+  });
 });
