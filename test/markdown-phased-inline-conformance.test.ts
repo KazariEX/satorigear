@@ -76,7 +76,9 @@ function phasedEvents(root: CstNode): string[] {
     if (child.rule === "Emphasis" || child.rule === "LinkEmphasis") events.push("emph");
     else if (child.rule === "Strong" || child.rule === "LinkStrong") events.push("strong");
     else if (child.rule === "Link" || child.rule === "ReferenceCandidate") events.push("link");
-    else if (child.rule === "Image" || child.rule === "LinkImage") events.push("image");
+    else if (["Image", "LinkImage", "ImageReferenceCandidate", "LinkImageReferenceCandidate"].includes(child.rule)) {
+      events.push("image");
+    }
     else if (child.rule === "BracketFallback") events.push("text");
     child.children.forEach(visit);
   };

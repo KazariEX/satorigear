@@ -171,7 +171,10 @@ function bracketFallbacks(rule: RuleDecl): RuleDecl {
     ...rule,
     body: {
       ...rule.body,
-      items: rule.body.items.concat(ruleReference("BracketFallback")),
+      items: rule.body.items.concat([
+        ruleReference("ImageReferenceCandidate"),
+        ruleReference("BracketFallback"),
+      ]),
     },
   };
 }
@@ -190,6 +193,7 @@ function linkContentReferences(expression: RuleExpr): RuleExpr {
       Emphasis: "LinkEmphasis",
       Strong: "LinkStrong",
       Image: "LinkImage",
+      ImageReferenceCandidate: "LinkImageReferenceCandidate",
       ReferenceCandidate: "LinkReferenceCandidate",
     };
     return variants[expression.name] ? { ...expression, name: variants[expression.name] } : expression;
@@ -259,6 +263,8 @@ export const markdownInlineGrammar: CstGrammar = {
         engineToken("ImageLinkClose"),
         engineToken("ReferenceOpen"),
         engineToken("ReferenceClose"),
+        engineToken("ImageReferenceOpen"),
+        engineToken("ImageReferenceClose"),
         token,
       ];
     }),
@@ -270,7 +276,9 @@ export const markdownInlineGrammar: CstGrammar = {
     bracketRule("Image", "ImageLinkOpen", "ImageLinkClose"),
     bracketRule("Link", "LinkOpen", "LinkClose", "LinkContent"),
     bracketRule("ReferenceCandidate", "ReferenceOpen", "ReferenceClose"),
+    bracketRule("ImageReferenceCandidate", "ImageReferenceOpen", "ImageReferenceClose"),
     bracketRule("LinkImage", "ImageLinkOpen", "ImageLinkClose", "LinkContent"),
+    bracketRule("LinkImageReferenceCandidate", "ImageReferenceOpen", "ImageReferenceClose", "LinkContent"),
     bracketRule("LinkReferenceCandidate", "ReferenceOpen", "ReferenceClose", "LinkContent"),
     { name: "LinkContent", flags: [], body: linkContentBody },
     {
@@ -289,6 +297,8 @@ export const markdownInlineGrammar: CstGrammar = {
           "ImageLinkClose",
           "ReferenceOpen",
           "ReferenceClose",
+          "ImageReferenceOpen",
+          "ImageReferenceClose",
         ].map(ruleReference),
       },
     },
@@ -339,5 +349,11 @@ export const markdownBracketPairs: PairedTokenConfig[] = [
     closer: "ReferenceTail",
     open: "ReferenceOpen",
     close: "ReferenceClose",
+  },
+  {
+    opener: "ImageOpen",
+    closer: "ReferenceTail",
+    open: "ImageReferenceOpen",
+    close: "ImageReferenceClose",
   },
 ];

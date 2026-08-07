@@ -108,4 +108,10 @@ describe("block-first markdown parser", () => {
     expect(treeRules.filter((rule) => rule === "Link")).toHaveLength(1);
     expect(treeRules.filter((rule) => rule === "LinkReferenceCandidate")).toHaveLength(1);
   });
+
+  it("preserves image references as context-free candidates", () => {
+    const treeRules = rules(markdownPhasedParser.parse("![*label*][target]\n"));
+    expect(treeRules.filter((rule) => rule === "ImageReferenceCandidate")).toHaveLength(1);
+    expect(treeRules.filter((rule) => rule === "Emphasis")).toHaveLength(1);
+  });
 });
