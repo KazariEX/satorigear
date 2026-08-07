@@ -1,8 +1,10 @@
 import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "monogram/api.ts";
 import type { Token } from "monogram/gen-lexer.ts";
 import { changedTokenRange, sameShiftedToken, shiftedToken, type TokenChange } from "./token-change.ts";
-import type { SourceLocation, SourceRange } from "./source-view.ts";
+import type { SourceLocation } from "./source-view.ts";
 import type { TextEdit } from "./text-edit.ts";
+
+type TokenRange = NonNullable<Token["ranges"]>[number];
 
 const ParagraphOpen = token(never());
 const ParagraphClose = token(never());
@@ -270,7 +272,7 @@ function isBlank(source: string, line: Line): boolean {
   return true;
 }
 
-function named(type: string, text: string, offset: number, ranges?: SourceRange[]): Token {
+function named(type: string, text: string, offset: number, ranges?: TokenRange[]): Token {
   return {
     type,
     text,

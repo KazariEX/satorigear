@@ -48,7 +48,7 @@ export interface MarkdownSyntax {
   children: (node: MarkdownSyntaxNode) => readonly MarkdownSyntaxChild[];
   inline: (node: MarkdownSyntaxNode) => MarkdownSyntaxNode | undefined;
   isLeaf: (child: MarkdownSyntaxChild) => child is MarkdownSyntaxLeaf;
-  ranges: (leaf: MarkdownSyntaxLeaf) => readonly { end: number; offset: number }[] | undefined;
+  spans: (leaf: MarkdownSyntaxLeaf) => readonly SourceSpan[] | undefined;
   rule: (node: MarkdownSyntaxNode) => string;
   span: (value: MarkdownSyntaxChild) => SourceSpan;
   text: (value: MarkdownSyntaxChild) => string;
@@ -143,13 +143,13 @@ function firstNonspace(source: string, start: number, end: number): number {
 function indentedCodeEnd(value: MarkdownSyntaxNode, context: ProjectionContext): number {
   const token = leaf(value, "IndentedCodeBlockToken", context);
   const tokenSpan = context.syntax.span(token);
-  const ranges = context.syntax.ranges(token) ?? [{ offset: tokenSpan.start, end: tokenSpan.end }];
+  const spans = context.syntax.spans(token) ?? [tokenSpan];
   // Blank indented lines belong to the block; the bare separator newline after them does not.
-  for (let index = ranges.length - 1; index >= 0; index--) {
-    const range = ranges[index];
-    if (/[^\r\n]/.test(context.source.slice(range.offset, range.end))) {
-      let end = range.end;
-      while (end > range.offset && /[\r\n]/.test(context.source[end - 1])) {
+  for (let index = spans.length - 1; index >= 0; index--) {
+    const span = spans[index];
+    if (/[^\r\n]/.test(context.source.slice(span.start, span.end))) {
+      let end = span.end;
+      while (end > span.start && /[\r\n]/.test(context.source[end - 1])) {
         end--;
       }
       return end;

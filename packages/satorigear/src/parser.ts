@@ -1,3 +1,4 @@
+import type { Token } from "monogram/gen-lexer.ts";
 import {
   createEmittedParser,
   type EmittedParserDocument,
@@ -14,7 +15,7 @@ import { InlineTokenState } from "./inline-tokenizer.ts";
 import {
   createSourceView,
   projectSourceEdits,
-  type SourceRange,
+  type SourceSpan,
   type SourceView,
 } from "./source-view.ts";
 import type {
@@ -89,13 +90,19 @@ interface SyntaxBlockDescriptor {
 
 type CollectedBlock = Omit<SyntaxBlockDescriptor, "regionRevisions" | "syntax" | "version">;
 
-function rangesOf(tree: SyntaxTree, node: SyntaxTreeNode): SourceRange[] {
+function tokenSpans(token: Token): SourceSpan[] {
+  return token.ranges?.length
+    ? token.ranges.map((range) => ({ start: range.offset, end: range.end }))
+    : [{ start: token.offset, end: token.offset + token.text.length }];
+}
+
+function spansOf(tree: SyntaxTree, node: SyntaxTreeNode): SourceSpan[] {
   return tree.children(node).flatMap((child) => {
     if (child.kind === "node" || tree.leafTokenType(child) !== "InlineChunk") {
       return [];
     }
     const token = tree.leafToken(child);
-    return token.ranges?.length ? [...token.ranges] : [{ offset: token.offset, end: token.offset + token.text.length }];
+    return tokenSpans(token);
   });
 }
 
@@ -162,9 +169,9 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         return;
       }
       if (rule === "Paragraph" || rule === "AtxHeading" || rule === "SetextHeading") {
-        const ranges = rangesOf(tree, node);
-        if (ranges.length > 0) {
-          descriptors.push({ id: node.id, rule, span: tree.span(node), view: createSourceView(source, ranges) });
+        const spans = spansOf(tree, node);
+        if (spans.length > 0) {
+          descriptors.push({ id: node.id, rule, span: tree.span(node), view: createSourceView(source, spans) });
           regionIds.push(node.id);
         }
         return;
@@ -269,12 +276,17 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return (value as SyntaxTreeEntry).kind === "leaf";
   }
 
-  ranges(value: MarkdownSyntaxLeaf): readonly SourceRange[] {
+  spans(value: MarkdownSyntaxLeaf): readonly SourceSpan[] {
     const leaf = value as SyntaxTreeLeaf;
     const token = leaf.tree.leafToken(leaf);
-    const ranges = token.ranges ?? [{ offset: token.offset, end: token.offset + token.text.length }];
     const region = this.#regionOf(leaf);
-    return region ? ranges.flatMap((range) => region.view.mapRange(range.offset, range.end)) : ranges;
+    if (!region) {
+      return tokenSpans(token);
+    }
+    if (!token.ranges?.length) {
+      return region.view.mapSpans(token.offset, token.offset + token.text.length);
+    }
+    return token.ranges.flatMap((range) => region.view.mapSpans(range.offset, range.end));
   }
 
   rule(value: MarkdownSyntaxNode): string {
@@ -289,8 +301,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     if (!region) {
       return span;
     }
-    const mapped = region.view.mapSpan(span.start, span.end);
-    return { start: mapped.offset, end: mapped.end };
+    return region.view.mapSpan(span.start, span.end);
   }
 
   text(value: MarkdownSyntaxChild): string {

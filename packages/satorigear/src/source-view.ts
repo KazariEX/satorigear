@@ -11,13 +11,8 @@ export interface SourceSpan {
   start: number;
 }
 
-export interface SourceRange {
-  offset: number;
-  end: number;
-}
-
-export interface SourceViewSegment extends SourceRange {
-  viewOffset: number;
+export interface SourceViewSegment extends SourceSpan {
+  viewStart: number;
   viewEnd: number;
 }
 
@@ -25,8 +20,8 @@ export interface SourceView {
   text: string;
   segments: readonly SourceViewSegment[];
   mapPoint: (offset: number) => number;
-  mapRange: (offset: number, end: number) => SourceRange[];
-  mapSpan: (offset: number, end: number) => SourceRange;
+  mapSpan: (start: number, end: number) => SourceSpan;
+  mapSpans: (start: number, end: number) => SourceSpan[];
 }
 
 /** Project document edits into a view whose physical segments remain structurally stable. */
@@ -46,19 +41,19 @@ export function projectSourceEdits(
   for (let segmentIndex = 0; segmentIndex < previous.segments.length; segmentIndex++) {
     const oldSegment = previous.segments[segmentIndex];
     const newSegment = next.segments[segmentIndex];
-    if (newSegment.offset !== oldSegment.offset + documentDelta
-      || newSegment.viewOffset !== oldSegment.viewOffset + viewDelta) {
+    if (newSegment.start !== oldSegment.start + documentDelta
+      || newSegment.viewStart !== oldSegment.viewStart + viewDelta) {
       return null;
     }
 
     while (editIndex < edits.length && edits[editIndex].start < oldSegment.end) {
       const edit = edits[editIndex++];
-      if (edit.start <= oldSegment.offset || edit.end >= oldSegment.end) {
+      if (edit.start <= oldSegment.start || edit.end >= oldSegment.end) {
         return null;
       }
       projected.push({
-        start: oldSegment.viewOffset + edit.start - oldSegment.offset + viewDelta,
-        end: oldSegment.viewOffset + edit.end - oldSegment.offset + viewDelta,
+        start: oldSegment.viewStart + edit.start - oldSegment.start + viewDelta,
+        end: oldSegment.viewStart + edit.end - oldSegment.start + viewDelta,
         text: edit.text,
       });
       const delta = edit.text.length - (edit.end - edit.start);
@@ -74,30 +69,30 @@ export function projectSourceEdits(
   return editIndex === edits.length ? projected : null;
 }
 
-/** Build logical text from physical source ranges while preserving original coordinates. */
-export function createSourceView(source: string, ranges: readonly SourceRange[]): SourceView {
+/** Build logical text from physical source spans while preserving original coordinates. */
+export function createSourceView(source: string, spans: readonly SourceSpan[]): SourceView {
   const segments: SourceViewSegment[] = [];
   const parts: string[] = [];
   let viewOffset = 0;
   let previousEnd = 0;
 
-  for (const range of ranges) {
-    if (!Number.isInteger(range.offset) || !Number.isInteger(range.end)
-      || range.offset < 0 || range.end < range.offset || range.end > source.length) {
-      throw new Error(`Invalid source range [${range.offset}, ${range.end}) for source length ${source.length}`);
+  for (const span of spans) {
+    if (!Number.isInteger(span.start) || !Number.isInteger(span.end)
+      || span.start < 0 || span.end < span.start || span.end > source.length) {
+      throw new Error(`Invalid source span [${span.start}, ${span.end}) for source length ${source.length}`);
     }
-    if (segments.length > 0 && range.offset < previousEnd) {
-      throw new Error(`Source ranges must be ordered and non-overlapping: ${range.offset} < ${previousEnd}`);
+    if (segments.length > 0 && span.start < previousEnd) {
+      throw new Error(`Source spans must be ordered and non-overlapping: ${span.start} < ${previousEnd}`);
     }
-    if (range.offset === range.end) {
+    if (span.start === span.end) {
       continue;
     }
 
-    const viewEnd = viewOffset + range.end - range.offset;
-    parts.push(source.slice(range.offset, range.end));
-    segments.push({ offset: range.offset, end: range.end, viewOffset, viewEnd });
+    const viewEnd = viewOffset + span.end - span.start;
+    parts.push(source.slice(span.start, span.end));
+    segments.push({ start: span.start, end: span.end, viewStart: viewOffset, viewEnd });
     viewOffset = viewEnd;
-    previousEnd = range.end;
+    previousEnd = span.end;
   }
 
   const text = parts.join("");
@@ -128,36 +123,36 @@ export function createSourceView(source: string, ranges: readonly SourceRange[])
       return segments[segments.length - 1].end;
     }
     const segment = segments[containingSegment(offset)];
-    return segment.offset + offset - segment.viewOffset;
+    return segment.start + offset - segment.viewStart;
   }
 
-  function validateRange(offset: number, end: number): void {
-    if (!Number.isInteger(offset) || !Number.isInteger(end)
-      || offset < 0 || end < offset || end > text.length) {
-      throw new Error(`Invalid source-view range [${offset}, ${end}) for length ${text.length}`);
+  function validateSpan(start: number, end: number): void {
+    if (!Number.isInteger(start) || !Number.isInteger(end)
+      || start < 0 || end < start || end > text.length) {
+      throw new Error(`Invalid source-view span [${start}, ${end}) for length ${text.length}`);
     }
   }
 
-  function mapRange(offset: number, end: number): SourceRange[] {
-    validateRange(offset, end);
-    if (offset === end) {
+  function mapSpans(start: number, end: number): SourceSpan[] {
+    validateSpan(start, end);
+    if (start === end) {
       return [];
     }
 
-    const mapped: SourceRange[] = [];
-    for (let index = containingSegment(offset); index < segments.length; index++) {
+    const mapped: SourceSpan[] = [];
+    for (let index = containingSegment(start); index < segments.length; index++) {
       const segment = segments[index];
-      if (segment.viewOffset >= end) {
+      if (segment.viewStart >= end) {
         break;
       }
-      const viewStart = Math.max(offset, segment.viewOffset);
+      const viewStart = Math.max(start, segment.viewStart);
       const viewEnd = Math.min(end, segment.viewEnd);
       const next = {
-        offset: segment.offset + viewStart - segment.viewOffset,
-        end: segment.offset + viewEnd - segment.viewOffset,
+        start: segment.start + viewStart - segment.viewStart,
+        end: segment.start + viewEnd - segment.viewStart,
       };
       const previous = mapped[mapped.length - 1];
-      if (previous?.end === next.offset) {
+      if (previous?.end === next.start) {
         previous.end = next.end;
       }
       else {
@@ -167,22 +162,22 @@ export function createSourceView(source: string, ranges: readonly SourceRange[])
     return mapped;
   }
 
-  function mapSpan(offset: number, end: number): SourceRange {
-    validateRange(offset, end);
+  function mapSpan(start: number, end: number): SourceSpan {
+    validateSpan(start, end);
     if (segments.length === 0) {
-      return { offset: 0, end: 0 };
+      return { start: 0, end: 0 };
     }
-    if (offset === end) {
-      const point = mapPoint(offset);
-      return { offset: point, end: point };
+    if (start === end) {
+      const point = mapPoint(start);
+      return { start: point, end: point };
     }
-    const first = segments[containingSegment(offset)];
+    const first = segments[containingSegment(start)];
     const last = segments[containingSegment(end - 1)];
     return {
-      offset: first.offset + offset - first.viewOffset,
-      end: last.offset + end - last.viewOffset,
+      start: first.start + start - first.viewStart,
+      end: last.start + end - last.viewStart,
     };
   }
 
-  return { text, segments, mapPoint, mapRange, mapSpan };
+  return { text, segments, mapPoint, mapSpan, mapSpans };
 }
