@@ -13,6 +13,12 @@ function setup(source: string) {
   return { blocks, composite, tokenizer };
 }
 
+function editState(state: ReturnType<typeof setup>, edit: { end: number; start: number; text: string }): void {
+  const update = state.tokenizer.edit([edit]);
+  state.blocks.edit([edit], update.change);
+  state.composite.update(state.blocks.tree(state.tokenizer.tokens), state.tokenizer.source);
+}
+
 describe("incremental inline regions", () => {
   it("retains every paragraph parser handle for an internal edit", () => {
     const source = "first *one*\n\nsecond **two**\n\nthird [three](/url)\n";
@@ -20,9 +26,7 @@ describe("incremental inline regions", () => {
     const previous = state.composite.inlineDocuments();
     const start = source.indexOf("two");
     const edit = { start, end: start + 3, text: "changed" };
-    const update = state.tokenizer.edit([edit]);
-    state.blocks.edit([edit], update.change);
-    state.composite.update(state.blocks.tree(state.tokenizer.tokens), state.tokenizer.source);
+    editState(state, edit);
 
     const next = state.composite.inlineDocuments();
     expect(next).toEqual(previous);
@@ -35,14 +39,48 @@ describe("incremental inline regions", () => {
     const previous = state.composite.inlineDocuments();
     const start = source.indexOf("second");
     const edit = { start, end: start + 6, text: "updated" };
-    const update = state.tokenizer.edit([edit]);
-    state.blocks.edit([edit], update.change);
-    state.composite.update(state.blocks.tree(state.tokenizer.tokens), state.tokenizer.source);
+    editState(state, edit);
 
     const next = state.composite.inlineDocuments();
     expect(next[0]).toBe(previous[0]);
     expect(next[1]).toBe(previous[1]);
     expect(next[2]).toBe(previous[2]);
+    expect(state.composite.toCst()).toEqual(markdownPhasedParser.parse(state.tokenizer.source));
+  });
+
+  it("invalidates only regions that name a changed reference", () => {
+    const state = setup("[foo]\n\n[bar]\n\nplain\n");
+    expect(state.composite.inlineRevisions()).toEqual([0, 0, 0]);
+
+    editState(state, {
+      start: state.tokenizer.source.length,
+      end: state.tokenizer.source.length,
+      text: "\n[foo]: /url\n",
+    });
+    expect(state.composite.inlineRevisions()).toEqual([1, 0, 0]);
+
+    const url = state.tokenizer.source.indexOf("/url");
+    editState(state, { start: url, end: url + 4, text: "/next" });
+    expect(state.composite.inlineRevisions()).toEqual([1, 0, 0]);
+
+    editState(state, {
+      start: state.tokenizer.source.length,
+      end: state.tokenizer.source.length,
+      text: "[bar]: /bar\n",
+    });
+    expect(state.composite.inlineRevisions()).toEqual([1, 1, 0]);
+    expect(state.composite.toCst()).toEqual(markdownPhasedParser.parse(state.tokenizer.source));
+  });
+
+  it("keeps a reference region when a duplicate definition takes over", () => {
+    const source = "[foo]\n\n[foo]: /first\n[foo]: /second\n";
+    const state = setup(source);
+    const start = source.indexOf("[foo]: /first");
+    const end = source.indexOf("\n", start) + 1;
+
+    editState(state, { start, end, text: "" });
+
+    expect(state.composite.inlineRevisions()).toEqual([0]);
     expect(state.composite.toCst()).toEqual(markdownPhasedParser.parse(state.tokenizer.source));
   });
 });

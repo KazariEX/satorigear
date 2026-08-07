@@ -45,10 +45,6 @@ function referenceLabelText(text: string): string | null {
   return null;
 }
 
-function sameLabels(previous: ReadonlySet<string>, next: ReadonlySet<string>): boolean {
-  return previous.size === next.size && [...previous].every((label) => next.has(label));
-}
-
 function collectReferenceLabels(root: CstNode, source: string): Set<string> {
   const labels = new Set<string>();
   const visit = (node: CstNode): void => {
@@ -93,15 +89,16 @@ function collectTreeReferenceLabels(tree: CstTree, source: string): Set<string> 
 function inlineParserFor(referenceLabels: ReadonlySet<string>) {
   return {
     parse: (source: string, entryRule?: string) => {
-      return inlineParser.parseTokens(source, inlineTokens(source, referenceLabels), entryRule);
+      return inlineParser.parseTokens(source, tokenizeInline(source, referenceLabels).tokens, entryRule);
     },
   };
 }
 
-function inlineTokens(source: string, referenceLabels: ReadonlySet<string>): Token[] {
-  const pairs = markdownBracketPairs(referenceLabels);
+function tokenizeInline(source: string, referenceLabels: ReadonlySet<string>): { candidates: Set<string>; tokens: Token[] } {
+  const candidates = new Set<string>();
+  const pairs = markdownBracketPairs(referenceLabels, candidates);
   const tokens = reassociateMarkdownReferenceTails(source, inlineParser.tokenize(source), referenceLabels);
-  return resolveDelimitedTokens(source, tokens, markdownDelimiterRuns, pairs);
+  return { candidates, tokens: resolveDelimitedTokens(source, tokens, markdownDelimiterRuns, pairs) };
 }
 
 /**
@@ -120,8 +117,10 @@ export const markdownPhasedParser = createCompositeParser({
 });
 
 interface InlineRegion {
+  candidates: ReadonlySet<string>;
   document: CstParserDocument;
   id: number;
+  revision: number;
   rule: string;
   span: { end: number; start: number };
   tokens: readonly Token[];
@@ -166,11 +165,13 @@ function textEdit(previous: string, next: string): readonly { end: number; start
 }
 
 function createInlineRegion(descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>): InlineRegion {
-  const tokens = inlineTokens(descriptor.view.text, labels);
+  const inline = tokenizeInline(descriptor.view.text, labels);
   return {
     ...descriptor,
-    tokens,
-    document: inlineParser.createDocument(descriptor.view.text, tokens, "InlineLines"),
+    candidates: inline.candidates,
+    revision: 0,
+    tokens: inline.tokens,
+    document: inlineParser.createDocument(descriptor.view.text, inline.tokens, "InlineLines"),
   };
 }
 
@@ -178,18 +179,43 @@ function updateInlineRegion(
   region: InlineRegion,
   descriptor: InlineRegionDescriptor,
   labels: ReadonlySet<string>,
-  labelsChanged: boolean,
+  referencesChanged: boolean,
 ): InlineRegion {
-  if (!labelsChanged && region.view.text === descriptor.view.text) {
+  if (!referencesChanged && region.view.text === descriptor.view.text) {
     return { ...region, ...descriptor };
   }
   const edits = textEdit(region.view.text, descriptor.view.text);
-  const tokens = inlineTokens(descriptor.view.text, labels);
-  const change = changedTokenRange(region.tokens, tokens, descriptor.view.text.length - region.view.text.length);
+  const inline = tokenizeInline(descriptor.view.text, labels);
+  const change = changedTokenRange(region.tokens, inline.tokens, descriptor.view.text.length - region.view.text.length);
   if (edits.length > 0 || change.oldStart !== change.oldEnd || change.tokens.length > 0) {
     region.document.edit(edits, change);
   }
-  return { ...region, ...descriptor, tokens };
+  return {
+    ...region,
+    ...descriptor,
+    candidates: inline.candidates,
+    revision: region.revision + 1,
+    tokens: inline.tokens,
+  };
+}
+
+function changedLabels(previous: ReadonlySet<string>, next: ReadonlySet<string>): Set<string> {
+  const changed = new Set<string>();
+  for (const label of previous) {
+    if (!next.has(label)) {
+      changed.add(label);
+    }
+  }
+  for (const label of next) {
+    if (!previous.has(label)) {
+      changed.add(label);
+    }
+  }
+  return changed;
+}
+
+function intersects(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return [...left].some((value) => right.has(value));
 }
 
 class MarkdownCompositeDocument {
@@ -208,9 +234,13 @@ class MarkdownCompositeDocument {
     return [...this.#regions.values()].map((region) => region.document);
   }
 
+  inlineRevisions(): readonly number[] {
+    return [...this.#regions.values()].map((region) => region.revision);
+  }
+
   update(tree: CstTree, source: string): void {
     const labels = collectTreeReferenceLabels(tree, source);
-    const labelsChanged = !sameLabels(this.#labels, labels);
+    const changed = changedLabels(this.#labels, labels);
     const descriptors: InlineRegionDescriptor[] = [];
     const collect = (node: CstTreeNode): void => {
       const rule = tree.ruleName(node);
@@ -252,7 +282,7 @@ class MarkdownCompositeDocument {
         }
       }
       const region = previous
-        ? updateInlineRegion(previous, descriptor, labels, labelsChanged)
+        ? updateInlineRegion(previous, descriptor, labels, intersects(previous.candidates, changed))
         : createInlineRegion(descriptor, labels);
       regions.set(descriptor.id, region);
     }

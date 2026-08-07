@@ -421,10 +421,15 @@ export function reassociateMarkdownReferenceTails(
   return result;
 }
 
-export function markdownBracketPairs(referenceLabels: ReadonlySet<string>): PairedTokenConfig[] {
+export function markdownBracketPairs(
+  referenceLabels: ReadonlySet<string>,
+  candidateLabels?: Set<string>,
+): PairedTokenConfig[] {
   const activatesReference = ({ closer, content }: { closer: { text: string }; content: string }): boolean => {
     const explicit = closer.text.startsWith("][") ? closer.text.slice(2, -1) : "";
-    return referenceLabels.has(normalizeMarkdownReferenceLabel(explicit || content));
+    const label = normalizeMarkdownReferenceLabel(explicit || content);
+    candidateLabels?.add(label);
+    return referenceLabels.has(label);
   };
   return [
     {
