@@ -1,7 +1,7 @@
 import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "monogram/api.ts";
 import type { Token } from "monogram/gen-lexer.ts";
-import type { SourceRange } from "monogram/source-view.ts";
 import { changedTokenRange, sameShiftedToken, shiftedToken, type TokenChange } from "./token-change.ts";
+import type { SourceRange } from "./source-view.ts";
 
 const ParagraphOpen = token(never());
 const ParagraphClose = token(never());

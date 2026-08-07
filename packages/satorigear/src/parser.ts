@@ -1,5 +1,4 @@
 import { createDelimitedTokenResolver } from "monogram/delimiter-parser.ts";
-import { createSourceView, type SourceRange, type SourceView } from "monogram/source-view.ts";
 import type { Token } from "monogram/gen-lexer.ts";
 import {
   createEmittedParser,
@@ -18,6 +17,7 @@ import {
   normalizeMarkdownReferenceLabel,
   reassociateMarkdownReferenceTails,
 } from "./grammar-inline.ts";
+import { createSourceView, type SourceRange, type SourceView } from "./source-view.ts";
 import { changedTokenRange } from "./token-change.ts";
 import type {
   MarkdownSyntax,
