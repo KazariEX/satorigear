@@ -181,6 +181,9 @@ function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockProjec
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
 
 function semanticText(value: string): string {
+  if (!value.includes("\\") && !value.includes("&")) {
+    return value;
+  }
   return value.replace(semanticCharacter, (match, escaped) => escaped ?? decodeHTMLStrict(match));
 }
 
