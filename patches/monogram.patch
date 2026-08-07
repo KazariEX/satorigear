@@ -33,6 +33,113 @@ index 99d693f..5dfcc34 100644
        flags,
        scope: tok.opts.scope,
        escapePattern: tok.opts.escape,
+diff --git a/src/composite-parser.ts b/src/composite-parser.ts
+new file mode 100644
+index 0000000..9a0b21b
+--- /dev/null
++++ b/src/composite-parser.ts
+@@ -0,0 +1,101 @@
++import type { Token } from './gen-lexer.ts';
++import type { CstChild, CstLeaf, CstNode } from './gen-parser.ts';
++import { createSourceView, type SourceRange, type SourceView } from './source-view.ts';
++
++export interface CompositeParserHandle {
++  parse(source: string, entryRule?: string): CstNode;
++  parseTokens(source: string, tokens: readonly Token[], entryRule?: string): CstNode;
++}
++
++export interface CompositeRegion {
++  within: readonly string[];
++  contentToken: string;
++  inner: Pick<CompositeParserHandle, 'parse'>;
++  entryRule?: string;
++}
++
++export interface CompositeParserOptions {
++  outer: CompositeParserHandle;
++  outerTokens?: (source: string) => readonly Token[];
++  outerEntryRule?: string;
++  regions: readonly CompositeRegion[];
++}
++
++function rangesOf(child: CstLeaf): SourceRange[] {
++  return child.ranges?.length ? [...child.ranges] : [{ offset: child.offset, end: child.end }];
++}
++
++function rebaseSpan<T extends { offset: number; end: number; ranges?: SourceRange[] }>(
++  span: T,
++  view: SourceView,
++): Pick<T, 'offset' | 'end' | 'ranges'> {
++  const ranges = view.mapRange(span.offset, span.end);
++  const point = ranges.length ? ranges[0].offset : view.mapPoint(span.offset);
++  const end = ranges.length ? ranges[ranges.length - 1].end : point;
++  return {
++    offset: point,
++    end,
++    ...(ranges.length > 1 ? { ranges } : {}),
++  } as Pick<T, 'offset' | 'end' | 'ranges'>;
++}
++
++/** Project a CST parsed from a logical SourceView back onto the original source coordinates. */
++export function rebaseCst(node: CstNode, view: SourceView): CstNode {
++  const children: CstChild[] = node.children.map((child) => {
++    if ('tokenType' in child) return { ...child, ...rebaseSpan(child, view) };
++    return rebaseCst(child, view);
++  });
++  return { ...node, children, ...rebaseSpan(node, view) };
++}
++
++/**
++ * Compose an outer structural grammar with one or more inner grammars. Region content is declared
++ * by token type; the runner builds a SourceView, parses it with the inner Monogram parser, rebases
++ * the resulting CST, and replaces the content leaves with that CST root.
++ */
++export function createCompositeParser(options: CompositeParserOptions) {
++  const regionByRule = new Map<string, CompositeRegion>();
++  for (const region of options.regions) {
++    for (const rule of region.within) {
++      if (regionByRule.has(rule)) throw new Error(`Multiple composite regions declared for rule '${rule}'`);
++      regionByRule.set(rule, region);
++    }
++  }
++
++  function parseOuter(source: string, entryRule?: string): CstNode {
++    return options.outerTokens
++      ? options.outer.parseTokens(source, options.outerTokens(source), entryRule ?? options.outerEntryRule)
++      : options.outer.parse(source, entryRule ?? options.outerEntryRule);
++  }
++
++  function parse(source: string, entryRule?: string): CstNode {
++    const root = parseOuter(source, entryRule);
++
++    const compose = (node: CstNode): void => {
++      const region = regionByRule.get(node.rule);
++      if (region) {
++        const content = node.children.filter(
++          (child): child is CstLeaf => 'tokenType' in child && child.tokenType === region.contentToken,
++        );
++        if (content.length > 0) {
++          const view = createSourceView(source, content.flatMap(rangesOf));
++          const inner = rebaseCst(region.inner.parse(view.text, region.entryRule), view);
++          let inserted = false;
++          node.children = node.children.flatMap((child) => {
++            if (!('tokenType' in child) || child.tokenType !== region.contentToken) return [child];
++            if (inserted) return [];
++            inserted = true;
++            return [inner];
++          });
++        }
++        return;
++      }
++      for (const child of node.children) if (!('tokenType' in child)) compose(child);
++    };
++
++    compose(root);
++    return root;
++  }
++
++  return { parse, parseOuter };
++}
 diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
 index a4ed10c..e689092 100644
 --- a/src/gen-lexer.ts
@@ -228,6 +335,160 @@ index a4ed10c..e689092 100644
          if (tm.isRegex) {
            // prev is a completed value → `/` is division, not a regex literal → skip.
            if (prevIsValue(tokens[tokens.length - 1])) continue;
+diff --git a/src/gen-parser.ts b/src/gen-parser.ts
+index 8f68656..a406456 100644
+--- a/src/gen-parser.ts
++++ b/src/gen-parser.ts
+@@ -2,6 +2,7 @@ import type { CstGrammar, RuleExpr, RuleDecl } from './types.ts';
+ import { isKeywordLiteral } from './grammar-utils.ts';
+ import { analyzeGrammar, findEntryRule } from './grammar-analysis.ts';
+ import { createLexer, type Token } from './gen-lexer.ts';
++import type { SourceRange } from './source-view.ts';
+ import { withAwaitYield } from './await-yield-fork.ts';
+ 
+ // ── CST output ──
+@@ -11,12 +12,14 @@ export interface CstNode {
+   children: CstChild[];
+   offset: number;
+   end: number;
++  ranges?: SourceRange[];
+ }
+ 
+ export interface CstLeaf {
+   tokenType: string;
+   offset: number;
+   end: number;
++  ranges?: SourceRange[];
+ }
+ 
+ export type CstChild = CstNode | CstLeaf;
+@@ -26,8 +29,10 @@ export type CstChild = CstNode | CstLeaf;
+ // ── Parser ──
+ 
+ // The CST is span-only: a node's text is derived from the source it was parsed from.
+-export function getText(node: { offset: number; end: number }, source: string): string {
+-  return source.slice(node.offset, node.end);
++export function getText(node: { offset: number; end: number; ranges?: readonly SourceRange[] }, source: string): string {
++  return node.ranges?.length
++    ? node.ranges.map(range => source.slice(range.offset, range.end)).join('')
++    : source.slice(node.offset, node.end);
+ }
+ 
+ export function createParser(grammar: CstGrammar) {
+@@ -353,7 +358,14 @@ export function createParser(grammar: CstGrammar) {
+ 
+   const profCounts = new Map<string, number>();
+   function parse(source: string, entryRule?: string): CstNode {
+-    const tokens = tokenize(source);
++    return parseTokens(source, tokenize(source), entryRule);
++  }
++
++  // Parse an existing token stream with the same grammar engine. The parser keeps a private array
++  // because matchLiteral may split a multi-`>` punctuation token during backtracking. Callers retain
++  // ownership of their token stream, and every invocation gets an independent packrat memo table.
++  function parseTokens(source: string, inputTokens: readonly Token[], entryRule?: string): CstNode {
++    const tokens = [...inputTokens];
+     let pos = 0;
+     let maxPos = 0;   // farthest token index ever ADVANCED past (diagnostic; updated at the pos++ sites, mirroring the emitted engine so reject messages stay engine-identical)
+     // Cap-propagation flag (capExpr), mirrors the emitted engine: set true when a parsePratt
+@@ -1186,7 +1198,7 @@ export function createParser(grammar: CstGrammar) {
+     cst.offset = next.offset; cst.end = next.end;
+     cst.errors = next.errors;
+   };
+-  return { parse, parseTotal, edit, tokenize, profCounts };
++  return { parse, parseTokens, parseTotal, edit, tokenize, profCounts };
+ }
+ 
+ // ── Helpers ──
+diff --git a/src/source-view.ts b/src/source-view.ts
+new file mode 100644
+index 0000000..15c8341
+--- /dev/null
++++ b/src/source-view.ts
+@@ -0,0 +1,83 @@
++export interface SourceRange {
++  offset: number;
++  end: number;
++}
++
++export interface SourceViewSegment extends SourceRange {
++  viewOffset: number;
++  viewEnd: number;
++}
++
++export interface SourceView {
++  text: string;
++  segments: readonly SourceViewSegment[];
++  mapPoint(offset: number): number;
++  mapRange(offset: number, end: number): SourceRange[];
++}
++
++/**
++ * Build a logical source string from ordered, non-overlapping ranges of the original source.
++ * Consumers parse `text` normally and use the mapping helpers to project CST spans back to the
++ * original document. This is useful when a host grammar removes container prefixes before parsing
++ * an embedded region while still requiring editor-correct source locations.
++ */
++export function createSourceView(source: string, ranges: readonly SourceRange[]): SourceView {
++  const segments: SourceViewSegment[] = [];
++  const parts: string[] = [];
++  let viewOffset = 0;
++  let previousEnd = 0;
++
++  for (const range of ranges) {
++    if (!Number.isInteger(range.offset) || !Number.isInteger(range.end)
++      || range.offset < 0 || range.end < range.offset || range.end > source.length) {
++      throw new Error(`Invalid source range [${range.offset}, ${range.end}) for source length ${source.length}`);
++    }
++    if (segments.length > 0 && range.offset < previousEnd) {
++      throw new Error(`Source ranges must be ordered and non-overlapping: ${range.offset} < ${previousEnd}`);
++    }
++    if (range.offset === range.end) continue;
++    const text = source.slice(range.offset, range.end);
++    parts.push(text);
++    segments.push({ ...range, viewOffset, viewEnd: viewOffset + text.length });
++    viewOffset += text.length;
++    previousEnd = range.end;
++  }
++
++  const text = parts.join('');
++
++  function mapPoint(offset: number): number {
++    if (!Number.isInteger(offset) || offset < 0 || offset > text.length) {
++      throw new Error(`Invalid source-view offset ${offset} for length ${text.length}`);
++    }
++    if (segments.length === 0) return 0;
++    if (offset === text.length) return segments[segments.length - 1].end;
++    for (const segment of segments) {
++      if (offset < segment.viewEnd) return segment.offset + offset - segment.viewOffset;
++    }
++    return segments[segments.length - 1].end;
++  }
++
++  function mapRange(offset: number, end: number): SourceRange[] {
++    if (!Number.isInteger(offset) || !Number.isInteger(end)
++      || offset < 0 || end < offset || end > text.length) {
++      throw new Error(`Invalid source-view range [${offset}, ${end}) for length ${text.length}`);
++    }
++    if (offset === end) return [];
++    const mapped: SourceRange[] = [];
++    for (const segment of segments) {
++      const viewStart = Math.max(offset, segment.viewOffset);
++      const viewEnd = Math.min(end, segment.viewEnd);
++      if (viewStart >= viewEnd) continue;
++      const next = {
++        offset: segment.offset + viewStart - segment.viewOffset,
++        end: segment.offset + viewEnd - segment.viewOffset,
++      };
++      const previous = mapped[mapped.length - 1];
++      if (previous?.end === next.offset) previous.end = next.end;
++      else mapped.push(next);
++    }
++    return mapped;
++  }
++
++  return { text, segments, mapPoint, mapRange };
++}
 diff --git a/src/types.ts b/src/types.ts
 index bf2817b..661b470 100644
 --- a/src/types.ts
