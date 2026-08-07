@@ -4,7 +4,7 @@ import { Parser as CommonMarkParser } from "commonmark";
 import { tests } from "commonmark-spec";
 import { afterAll, describe, expect, it } from "vitest";
 import type { CstChild, CstNode } from "monogram/cst.ts";
-import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
+import { markdownPhasedParser } from "./support/markdown-phased-parser.ts";
 
 interface SpecCase { markdown: string; section: string }
 interface Baseline { version: string; total: number; accepted: number; inlineProjectionExact: number }

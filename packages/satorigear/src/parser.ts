@@ -1,8 +1,8 @@
-import { createCompositeParser, rebaseCst } from "monogram/composite-parser.ts";
-import { type CstChild, type CstNode, getText } from "monogram/cst.ts";
+import { rebaseCst } from "monogram/composite-parser.ts";
 import { createDelimitedTokenResolver } from "monogram/delimiter-parser.ts";
-import { createLexer, type Token } from "monogram/gen-lexer.ts";
 import { createSourceView, type SourceRange, type SourceView } from "monogram/source-view.ts";
+import type { CstChild, CstNode } from "monogram/cst.ts";
+import type { Token } from "monogram/gen-lexer.ts";
 import {
   createCstParser,
   type CstParserDocument,
@@ -17,19 +17,14 @@ import { tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
 import {
   markdownBracketPairs,
   markdownDelimiterRuns,
-  markdownInlineGrammar,
   normalizeMarkdownReferenceLabel,
   reassociateMarkdownReferenceTails,
 } from "./grammar-inline.ts";
 import { changedTokenRange } from "./token-change.ts";
 
 export const markdownBlockParser = createCstParser(blockRuntime, tokenizeMarkdownBlocks);
-const inlineParser = createCstParser(inlineRuntime, createLexer(markdownInlineGrammar).tokenize);
+const inlineParser = createCstParser(inlineRuntime, inlineRuntime.tokenize);
 const inlineResolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
-
-function referenceLabel(definition: CstNode, source: string): string | null {
-  return referenceLabelText(getText(definition, source));
-}
 
 function referenceLabelText(text: string): string | null {
   const open = text.indexOf("[");
@@ -47,34 +42,6 @@ function referenceLabelText(text: string): string | null {
   return null;
 }
 
-function collectReferenceLabels(root: CstNode, source: string): Set<string> {
-  const labels = new Set<string>();
-  const visit = (node: CstNode): void => {
-    if (node.rule === "LinkDefinition") {
-      const label = referenceLabel(node, source);
-      if (label) {
-        labels.add(label);
-      }
-      return;
-    }
-    for (const child of node.children) {
-      if (!("tokenType" in child)) {
-        visit(child);
-      }
-    }
-  };
-  visit(root);
-  return labels;
-}
-
-function inlineParserFor(referenceLabels: ReadonlySet<string>) {
-  return {
-    parse: (source: string, entryRule?: string) => {
-      return inlineParser.parseTokens(source, tokenizeInline(source, referenceLabels).tokens, entryRule);
-    },
-  };
-}
-
 function tokenizeInline(source: string, referenceLabels: ReadonlySet<string>): { candidates: Set<string>; tokens: Token[] } {
   const candidates = new Set<string>();
   const tokens = reassociateMarkdownReferenceTails(source, inlineParser.tokenize(source), referenceLabels);
@@ -83,21 +50,6 @@ function tokenizeInline(source: string, referenceLabels: ReadonlySet<string>): {
     tokens: inlineResolver.resolve(source, tokens, { labels: referenceLabels, candidates }),
   };
 }
-
-/**
- * Block-first Markdown parser under development. It runs beside the legacy single-pass grammar
- * until its CommonMark block baseline is high enough to become the package default.
- */
-export const markdownPhasedParser = createCompositeParser({
-  outer: markdownBlockParser,
-  prepare: collectReferenceLabels,
-  regions: [{
-    within: ["Paragraph", "AtxHeading", "SetextHeading"],
-    contentToken: "InlineChunk",
-    inner: inlineParserFor,
-    entryRule: "InlineLines",
-  }],
-});
 
 interface InlineRegion {
   candidates: ReadonlySet<string>;

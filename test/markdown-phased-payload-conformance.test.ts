@@ -7,7 +7,7 @@ import encode from "mdurl/encode.js";
 import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/cst.ts";
 import { afterAll, describe, expect, it } from "vitest";
 import { normalizeMarkdownReferenceLabel } from "../packages/satorigear/src/grammar-inline.ts";
-import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
+import { markdownPhasedParser } from "./support/markdown-phased-parser.ts";
 
 interface SpecCase { markdown: string; section: string }
 interface Payload { type: "code" | "html_inline" | "image" | "link"; literal?: string; destination?: string; title?: string }

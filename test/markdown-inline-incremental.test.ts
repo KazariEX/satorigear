@@ -3,8 +3,8 @@ import { createMarkdownBlockTokenizer } from "../packages/satorigear/src/grammar
 import {
   createMarkdownCompositeDocument,
   markdownBlockParser,
-  markdownPhasedParser,
 } from "../packages/satorigear/src/parser.ts";
+import { markdownPhasedParser } from "./support/markdown-phased-parser.ts";
 
 function setup(source: string) {
   const tokenizer = createMarkdownBlockTokenizer(source);
