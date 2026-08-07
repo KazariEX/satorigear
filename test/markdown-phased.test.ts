@@ -50,4 +50,23 @@ describe("block-first markdown parser", () => {
       expect(treeRules).toContain(rule);
     }
   });
+
+  it("preserves nested list ownership when a tab is only partly consumed", () => {
+    const treeRules = rules(markdownPhasedParser.parse(" - foo\n   - bar\n\t - baz\n"));
+    expect(treeRules.filter((rule) => rule === "UnorderedList")).toHaveLength(3);
+    expect(treeRules.filter((rule) => rule === "UnorderedListItem")).toHaveLength(3);
+  });
+
+  it("propagates lazy continuation through nested containers", () => {
+    const treeRules = rules(markdownPhasedParser.parse("> 1. > Blockquote\ncontinued here.\n"));
+    expect(treeRules.filter((rule) => rule === "BlockQuote")).toHaveLength(2);
+    expect(treeRules.filter((rule) => rule === "OrderedList")).toHaveLength(1);
+    expect(treeRules.filter((rule) => rule === "Paragraph")).toHaveLength(1);
+  });
+
+  it("removes valid multiline definitions but retains invalid bracketed labels", () => {
+    const source = "[Foo bar]:\n<my url>\n'title'\n\n[Foo bar]\n\n[ref[]: /uri\n";
+    const treeRules = rules(markdownPhasedParser.parse(source));
+    expect(treeRules.filter((rule) => rule === "Paragraph")).toHaveLength(2);
+  });
 });

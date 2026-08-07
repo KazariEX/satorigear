@@ -98,6 +98,8 @@ interface Line {
   start: number;
   end: number;
   next: number;
+  lazy?: boolean;
+  prefixColumns?: number;
 }
 
 interface Indent {
@@ -112,8 +114,11 @@ interface Fence {
 
 interface ListMarker {
   kind: "ordered" | "unordered";
+  indent: number;
   offset: number;
   contentOffset: number;
+  contentIndent: number;
+  delimiter: string;
   text: string;
   startNumber?: number;
 }
@@ -187,6 +192,12 @@ const htmlBlockTags = new Set([
   "track",
   "ul",
 ]);
+const htmlTagName = "[a-z][a-z0-9-]*";
+const htmlAttributeName = "[a-z_:][\\w.:-]*";
+const htmlUnquotedValue = `[^\\s"'=<>\`]+`;
+const htmlAttributeValue = `(?:${htmlUnquotedValue}|'[^']*'|"[^"]*")`;
+const htmlAttribute = `\\s+${htmlAttributeName}(?:\\s*=\\s*${htmlAttributeValue})?`;
+const completeHtmlTag = new RegExp(`^(?:<${htmlTagName}(?:${htmlAttribute})*\\s*/?>|</${htmlTagName}\\s*>)[ \\t]*$`, "i");
 
 function linesOf(source: string): Line[] {
   const lines: Line[] = [];
@@ -205,7 +216,7 @@ function linesOf(source: string): Line[] {
 
 function indentOf(source: string, line: Line, limit = Number.POSITIVE_INFINITY): Indent {
   let offset = line.start;
-  let columns = 0;
+  let columns = line.prefixColumns ?? 0;
   while (offset < line.end && columns < limit) {
     if (source[offset] === " ") {
       offset++;
@@ -265,31 +276,120 @@ function htmlStartAt(source: string, line: Line): HtmlStart | null {
   if (body.text.startsWith("<![CDATA[")) return { interruptParagraph: true, terminator: "]]>" };
   if (body.text.startsWith("<!") && /[A-Z]/.test(body.text[2] ?? "")) return { interruptParagraph: true, terminator: ">" };
 
-  const tag = /^<\/?([a-z][a-z0-9-]*)/i.exec(body.text)?.[1].toLowerCase();
+  const tag = /^<\/?([a-z][a-z0-9-]*)(?=[ \t\n\r/>]|$)/i.exec(body.text)?.[1].toLowerCase();
   if (tag && htmlBlockTags.has(tag)) return { interruptParagraph: true };
-  if (/^<\/?[a-z][^>]*>[ \t]*$/i.test(body.text)) return { interruptParagraph: false };
+  if (completeHtmlTag.test(body.text)) return { interruptParagraph: false };
   return null;
 }
 
-function isLinkDefinition(source: string, line: Line): boolean {
-  const body = lineBody(source, line)?.text;
-  if (!body?.startsWith("[")) return false;
-  const separator = body.indexOf("]:", 1);
-  if (separator < 2 || separator > 1000) return false;
-  let rest = body.slice(separator + 2).trim();
-  if (!rest) return false;
-  if (rest[0] === "<") {
-    const close = rest.indexOf(">", 1);
-    if (close < 0) return false;
-    rest = rest.slice(close + 1).trim();
+function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: number): number | null {
+  const body = lineBody(source, lines[startIndex]);
+  if (!body?.text.startsWith("[")) return null;
+  let lineIndex = startIndex;
+  let offset = body.offset + 1;
+  let labelLength = 0;
+  let labelNewlines = 0;
+  let labelHasContent = false;
+
+  for (;;) {
+    const line = lines[lineIndex];
+    if (!line || offset >= line.end) {
+      if (!line || ++labelNewlines > 1 || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) return null;
+      lineIndex++;
+      offset = lines[lineIndex].start;
+      continue;
+    }
+    if (source[offset] === "\\" && offset + 1 < line.end) {
+      labelHasContent = true;
+      labelLength += 2;
+      offset += 2;
+      continue;
+    }
+    if (source[offset] === "[") return null;
+    if (source[offset] === "]" && source[offset + 1] === ":") break;
+    if (!/[ \t]/.test(source[offset])) labelHasContent = true;
+    if (++labelLength > 999) return null;
+    offset++;
+  }
+  if (!labelHasContent) return null;
+  offset += 2;
+
+  const skipSpaces = (): void => {
+    while (offset < lines[lineIndex].end && (source[offset] === " " || source[offset] === "\t")) offset++;
+  };
+  skipSpaces();
+  if (offset === lines[lineIndex].end) {
+    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) return null;
+    lineIndex++;
+    offset = lines[lineIndex].start;
+    skipSpaces();
+  }
+
+  if (source[offset] === "<") {
+    offset++;
+    while (offset < lines[lineIndex].end && source[offset] !== ">") {
+      if (source[offset] === "<") return null;
+      if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) offset += 2;
+      else offset++;
+    }
+    if (source[offset] !== ">") return null;
+    offset++;
   }
   else {
-    const whitespace = rest.search(/[ \t]/);
-    rest = whitespace < 0 ? "" : rest.slice(whitespace).trim();
+    let depth = 0;
+    const destinationStart = offset;
+    while (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
+      if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
+        offset += 2;
+        continue;
+      }
+      if (source[offset] === "(") {
+        if (++depth > 32) return null;
+      }
+      else if (source[offset] === ")" && --depth < 0) return null;
+      offset++;
+    }
+    if (offset === destinationStart || depth !== 0) return null;
   }
-  if (!rest) return true;
-  const pairs: Record<string, string> = { "\"": "\"", "'": "'", "(": ")" };
-  return rest.at(-1) === pairs[rest[0]];
+
+  const destinationLine = lineIndex;
+  if (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") return null;
+  skipSpaces();
+  let titleOnNextLine = false;
+  if (offset === lines[lineIndex].end && lineIndex + 1 < lines.length && !isBlank(source, lines[lineIndex + 1])) {
+    lineIndex++;
+    offset = lines[lineIndex].start;
+    skipSpaces();
+    titleOnNextLine = true;
+  }
+
+  const closer = source[offset] === "(" ? ")" : source[offset] === "\"" || source[offset] === "'" ? source[offset] : null;
+  if (!closer) return destinationLine + 1;
+  offset++;
+  let closed = false;
+  while (lineIndex < lines.length) {
+    const line = lines[lineIndex];
+    while (offset < line.end) {
+      if (source[offset] === "\\" && offset + 1 < line.end) {
+        offset += 2;
+        continue;
+      }
+      if (source[offset] === closer) {
+        offset++;
+        closed = true;
+        break;
+      }
+      offset++;
+    }
+    if (closed) break;
+    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) break;
+    lineIndex++;
+    offset = lines[lineIndex].start;
+  }
+  if (!closed) return titleOnNextLine ? destinationLine + 1 : null;
+  skipSpaces();
+  if (offset !== lines[lineIndex].end) return titleOnNextLine ? destinationLine + 1 : null;
+  return lineIndex + 1;
 }
 
 function fenceAt(source: string, line: Line): Fence | null {
@@ -351,28 +451,115 @@ function blockQuoteOffset(source: string, line: Line): number | null {
 function listMarkerAt(source: string, line: Line): ListMarker | null {
   const body = lineBody(source, line);
   if (!body) return null;
-  const unordered = /^([-+*])(?:[ \t]+|$)/.exec(body.text);
+  const indent = indentOf(source, line, 3);
+  const unordered = /^([-+*])(?=[ \t]|$)/.exec(body.text);
   if (unordered && !isThematicBreak(source, line)) {
+    const markerEnd = body.offset + unordered[0].length;
+    const padding = listMarkerPadding(source, line, markerEnd, indent.columns + 1);
     return {
       kind: "unordered",
+      indent: indent.columns,
       offset: body.offset,
-      contentOffset: body.offset + unordered[0].length,
+      contentOffset: padding.offset,
+      contentIndent: indent.columns + 1 + padding.columns,
+      delimiter: unordered[1],
       text: unordered[1],
     };
   }
-  const ordered = /^(\d{1,9})([.)])(?:[ \t]+|$)/.exec(body.text);
+  const ordered = /^(\d{1,9})([.)])(?=[ \t]|$)/.exec(body.text);
   if (!ordered) return null;
+  const markerEnd = body.offset + ordered[0].length;
+  const markerWidth = ordered[0].length;
+  const padding = listMarkerPadding(source, line, markerEnd, indent.columns + markerWidth);
   return {
     kind: "ordered",
+    indent: indent.columns,
     offset: body.offset,
-    contentOffset: body.offset + ordered[0].length,
+    contentOffset: padding.offset,
+    contentIndent: indent.columns + markerWidth + padding.columns,
+    delimiter: ordered[2],
     text: ordered[1] + ordered[2],
     startNumber: Number(ordered[1]),
   };
 }
 
+function listMarkerPadding(source: string, line: Line, markerEnd: number, markerColumn: number): { offset: number; columns: number } {
+  if (markerEnd === line.end) return { offset: markerEnd, columns: 1 };
+  let offset = markerEnd;
+  let column = markerColumn;
+  while (offset < line.end && (source[offset] === " " || source[offset] === "\t")) {
+    column += source[offset] === "\t" ? 4 - (column % 4) : 1;
+    offset++;
+  }
+  const whitespaceColumns = column - markerColumn;
+  if (offset < line.end && whitespaceColumns <= 4) return { offset, columns: whitespaceColumns };
+  return { offset: markerEnd + 1, columns: 1 };
+}
+
+function sameList(a: ListMarker, b: ListMarker): boolean {
+  return a.kind === b.kind && a.delimiter === b.delimiter;
+}
+
+function contentAfterColumns(source: string, line: Line, columns: number): { offset: number; prefixColumns: number } {
+  let offset = line.start;
+  let consumed = line.prefixColumns ?? 0;
+  if (consumed >= columns) return { offset, prefixColumns: consumed - columns };
+  while (offset < line.end && consumed < columns) {
+    if (source[offset] === " ") {
+      consumed++;
+      offset++;
+      continue;
+    }
+    if (source[offset] === "\t") {
+      consumed += 4 - (consumed % 4);
+      offset++;
+      continue;
+    }
+    break;
+  }
+  return { offset, prefixColumns: Math.max(0, consumed - columns) };
+}
+
 function paragraphContentStart(source: string, line: Line): number {
   return indentOf(source, line, 3).offset;
+}
+
+function interruptsParagraphAt(source: string, line: Line): boolean {
+  const listMarker = listMarkerAt(source, line);
+  return !!atxAt(source, line)
+    || !!fenceAt(source, line)
+    || blockQuoteOffset(source, line) !== null
+    || isThematicBreak(source, line)
+    || !!htmlStartAt(source, line)?.interruptParagraph
+    || (hasListContent(source, line, listMarker)
+      && (listMarker?.kind === "unordered" || (listMarker?.kind === "ordered" && listMarker.startNumber === 1)));
+}
+
+function hasListContent(source: string, line: Line, marker: ListMarker | null): boolean {
+  return !!marker && /\S/.test(source.slice(marker.contentOffset, line.end));
+}
+
+function startsParagraphAt(source: string, line: Line): boolean {
+  return !isBlank(source, line)
+    && !interruptsParagraphAt(source, line)
+    && indentOf(source, line).columns < 4;
+}
+
+function endsWithParagraphLeaf(source: string, line: Line): boolean {
+  let contentLine = line;
+  for (;;) {
+    const quoteOffset = blockQuoteOffset(source, contentLine);
+    if (quoteOffset !== null) {
+      contentLine = { ...contentLine, start: quoteOffset };
+      continue;
+    }
+    const marker = listMarkerAt(source, contentLine);
+    if (marker) {
+      contentLine = { ...contentLine, start: marker.contentOffset };
+      continue;
+    }
+    return startsParagraphAt(source, contentLine);
+  }
 }
 
 function emitInlineChunks(source: string, lines: readonly Line[], out: Token[]): void {
@@ -405,6 +592,12 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       continue;
     }
 
+    if (line.lazy) {
+      paragraph.push(line);
+      index++;
+      continue;
+    }
+
     const setext = setextAt(source, line);
     if (paragraph.length > 0 && setext) {
       out.push(structural(setext === "=" ? "SetextHeading1Open" : "SetextHeading2Open", paragraph[0].start));
@@ -421,9 +614,7 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
     const listMarker = listMarkerAt(source, line);
     const htmlStart = htmlStartAt(source, line);
     const thematic = isThematicBreak(source, line);
-    const interruptsParagraph = !!atx || !!fence || quoteOffset !== null || thematic
-      || htmlStart?.interruptParagraph
-      || listMarker?.kind === "unordered" || (listMarker?.kind === "ordered" && listMarker.startNumber === 1);
+    const interruptsParagraph = interruptsParagraphAt(source, line);
     if (paragraph.length > 0 && !interruptsParagraph) {
       paragraph.push(line);
       index++;
@@ -431,8 +622,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
     }
     if (paragraph.length > 0) flushParagraph();
 
-    if (isLinkDefinition(source, line)) {
-      index++;
+    const definitionEnd = linkDefinitionEnd(source, lines, index);
+    if (definitionEnd !== null) {
+      index = definitionEnd;
       continue;
     }
 
@@ -481,10 +673,19 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
     if (quoteOffset !== null) {
       const quoteLines: Line[] = [];
       const start = line.start;
+      let lazyParagraph = false;
       while (index < lines.length) {
         const contentOffset = blockQuoteOffset(source, lines[index]);
-        if (contentOffset === null) break;
-        quoteLines.push({ ...lines[index], start: contentOffset });
+        if (contentOffset !== null) {
+          const contentLine = { ...lines[index], start: contentOffset, prefixColumns: 0 };
+          quoteLines.push(contentLine);
+          lazyParagraph = endsWithParagraphLeaf(source, contentLine);
+          index++;
+          continue;
+        }
+        if (!lazyParagraph || isBlank(source, lines[index])
+          || (!lines[index].lazy && interruptsParagraphAt(source, lines[index]))) break;
+        quoteLines.push({ ...lines[index], lazy: true });
         index++;
       }
       out.push(structural("BlockQuoteOpen", start, ">"));
@@ -502,15 +703,47 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       out.push(structural(listOpen, listMarker.offset, listMarker.text));
       while (index < lines.length) {
         const marker = listMarkerAt(source, lines[index]);
-        if (!marker || marker.kind !== kind) break;
+        if (!marker || !sameList(marker, listMarker)) break;
         out.push(structural(itemOpen, marker.offset, marker.text));
-        if (marker.contentOffset < lines[index].end) {
-          resolveLines(source, [{ ...lines[index], start: marker.contentOffset }], out);
-        }
-        out.push(structural(itemClose, lines[index].end));
+        const itemLines: Line[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: 0 }];
+        let hasContent = !isBlank(source, itemLines[0]);
+        let lazyParagraph = endsWithParagraphLeaf(source, itemLines[0]);
         index++;
+        while (index < lines.length) {
+          const candidate = listMarkerAt(source, lines[index]);
+          if (candidate && candidate.indent < marker.contentIndent) break;
+          if (isBlank(source, lines[index])) {
+            if (!hasContent) {
+              index++;
+              break;
+            }
+            itemLines.push(lines[index]);
+            lazyParagraph = false;
+            index++;
+            continue;
+          }
+          const indent = indentOf(source, lines[index]);
+          if (indent.columns >= marker.contentIndent) {
+            const content = contentAfterColumns(source, lines[index], marker.contentIndent);
+            const contentLine = {
+              ...lines[index],
+              start: content.offset,
+              prefixColumns: content.prefixColumns,
+            };
+            itemLines.push(contentLine);
+            hasContent = true;
+            lazyParagraph = endsWithParagraphLeaf(source, contentLine);
+            index++;
+            continue;
+          }
+          if (!lazyParagraph || interruptsParagraphAt(source, lines[index])) break;
+          itemLines.push({ ...lines[index], lazy: true });
+          index++;
+        }
+        resolveLines(source, itemLines, out);
+        out.push(structural(itemClose, itemLines.at(-1)?.end ?? marker.offset));
       }
-      out.push(structural(listClose, lines[index - 1].end));
+      out.push(structural(listClose, lines[Math.max(0, index - 1)].end));
       continue;
     }
 
