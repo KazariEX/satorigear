@@ -115,7 +115,10 @@ const CodeSpan = token(altPattern(
   seq("```", plus(noneOf("\n", "\r"), { greedy: false }), "```"),
   seq("``", plus(noneOf("\n", "\r"), { greedy: false }), "``"),
   seq("`", plus(noneOf("`", "\n", "\r")), "`"),
-), { scope: "markup.raw.inline" });
+), {
+  scope: "markup.raw.inline",
+  delimitedSpan: { markers: ["`"], minLength: 1 },
+});
 
 const labelBody = star(altPattern(seq("\\", anyChar()), noneOf("]", "\n", "\r")));
 const destination = altPattern(

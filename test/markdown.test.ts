@@ -73,6 +73,9 @@ describe("markdown lexer", () => {
   check("an empty bullet remains a list item", rules(parse("-")).includes("UnorderedListItem"));
   check("an empty ordered marker remains a list item", rules(parse("1.")).includes("OrderedListItem"));
   check("same-line backticks are inline code, not a fence", types("```inline```")[0] === "CodeSpan");
+  check("a code span closes with an exactly matching delimiter run", types("` `` `").filter((t) => t === "CodeSpan").length === 1);
+  check("a code span supports arbitrary delimiter lengths", types("```` foo `` bar ````")[0] === "CodeSpan");
+  check("a shorter delimiter run cannot close a code span", !types("```foo``").includes("CodeSpan"));
   check("two trailing spaces form a hard line break", types("foo  \nbar").includes("HardBreak"));
   check("a trailing backslash forms a hard line break", types("foo\\\nbar").includes("HardBreak"));
   check("one trailing space remains text", !types("foo \nbar").includes("HardBreak"));
@@ -113,4 +116,5 @@ describe("markdown parser", () => {
   check("forms a setext heading from a single-dash underline", rules(parse("Heading\n-")).includes("SetextHeading"));
   check("forms one paragraph from adjacent inline lines", rules(parse("first\nsecond")).filter((r) => r === "Paragraph").length === 1);
   check("forms one heading from multi-line setext content", rules(parse("first\nsecond\n===")).filter((r) => r === "SetextHeading").length === 1);
+  check("does not let a code span cross a new list item", rules(parse("- `one\n- two`")).filter((r) => r === "UnorderedListItem").length === 2);
 });
