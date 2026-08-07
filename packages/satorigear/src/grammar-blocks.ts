@@ -758,224 +758,471 @@ function emitParagraph(source: string, lines: readonly Line[], out: Token[]): vo
   out.push(structural("ParagraphClose", lines[lines.length - 1].end));
 }
 
-function resolveLines(source: string, lines: readonly Line[], out: Token[]): void {
-  let paragraph: Line[] = [];
-  const flushParagraph = (): void => {
-    emitParagraph(source, paragraph, out);
-    paragraph = [];
-  };
-
-  for (let index = 0; index < lines.length;) {
+function resolveParagraph(source: string, lines: readonly Line[], start: number, out: Token[]): number {
+  const paragraph: Line[] = [];
+  let index = start;
+  while (index < lines.length) {
     const line = lines[index];
     if (isBlank(source, line)) {
-      flushParagraph();
-      index++;
-      continue;
+      break;
     }
-
     if (line.lazy) {
       paragraph.push(line);
       index++;
       continue;
     }
-
     const setext = setextAt(source, line);
     if (paragraph.length > 0 && setext) {
       out.push(structural(setext === "=" ? "SetextHeading1Open" : "SetextHeading2Open", paragraph[0].start));
       emitInlineChunks(source, paragraph, out);
       out.push(structural("HeadingClose", line.end));
-      paragraph = [];
+      return index + 1;
+    }
+    if (paragraph.length > 0 && interruptsParagraphAt(source, line)) {
+      break;
+    }
+    paragraph.push(line);
+    index++;
+  }
+  emitParagraph(source, paragraph, out);
+  return index;
+}
+
+function resolveBlock(source: string, lines: readonly Line[], start: number, out: Token[]): number {
+  const line = lines[start];
+  const definitionEnd = linkDefinitionEnd(source, lines, start);
+  if (definitionEnd !== null) {
+    out.push(structural("LinkDefinitionOpen", line.start));
+    for (let definitionLine = start; definitionLine < definitionEnd; definitionLine++) {
+      const current = lines[definitionLine];
+      const end = definitionLine + 1 < definitionEnd ? current.next : current.end;
+      out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+    }
+    out.push(structural("LinkDefinitionClose", lines[definitionEnd - 1].end));
+    return definitionEnd;
+  }
+
+  const atx = atxAt(source, line);
+  if (atx) {
+    out.push(structural("AtxHeadingOpen", atx.markerOffset, atx.marker));
+    if (atx.contentEnd > atx.contentOffset) {
+      out.push(named("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
+    }
+    out.push(structural("HeadingClose", line.end));
+    return start + 1;
+  }
+
+  const fence = fenceAt(source, line);
+  if (fence) {
+    let end = start + 1;
+    while (end < lines.length && !closesFence(source, lines[end], fence)) {
+      end++;
+    }
+    if (end < lines.length) {
+      end++;
+    }
+    out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
+    return end;
+  }
+
+  if (isThematicBreak(source, line)) {
+    out.push(named("ThematicBreakToken", source.slice(line.start, line.end), line.start));
+    return start + 1;
+  }
+
+  const htmlStart = htmlStartAt(source, line);
+  if (htmlStart) {
+    let end = start + 1;
+    if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
+      while (end < lines.length
+        && !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)) {
+        end++;
+      }
+      if (end < lines.length) {
+        end++;
+      }
+    }
+    else if (!htmlStart.terminator) {
+      while (end < lines.length && !isBlank(source, lines[end])) {
+        end++;
+      }
+    }
+    out.push(logicalToken("HtmlBlockToken", source, lines, start, end));
+    return end;
+  }
+
+  const quote = blockQuoteOffset(source, line);
+  if (quote !== null) {
+    const quoteLines: Line[] = [];
+    let index = start;
+    let lazyParagraph = false;
+    while (index < lines.length) {
+      const content = blockQuoteOffset(source, lines[index]);
+      if (content !== null) {
+        const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
+        quoteLines.push(contentLine);
+        lazyParagraph = endsWithParagraphLeaf(source, contentLine);
+        index++;
+        continue;
+      }
+      if (!lazyParagraph || isBlank(source, lines[index])
+        || (!lines[index].lazy && interruptsParagraphAt(source, lines[index]))) {
+        break;
+      }
+      quoteLines.push({ ...lines[index], lazy: true });
       index++;
-      continue;
     }
+    out.push(structural("BlockQuoteOpen", line.start, ">"));
+    resolveLines(source, quoteLines, out);
+    out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
+    return index;
+  }
 
-    const atx = atxAt(source, line);
-    const fence = fenceAt(source, line);
-    const quote = blockQuoteOffset(source, line);
-    const listMarker = listMarkerAt(source, line);
-    const htmlStart = htmlStartAt(source, line);
-    const thematic = isThematicBreak(source, line);
-    const interruptsParagraph = interruptsParagraphAt(source, line);
-    if (paragraph.length > 0 && !interruptsParagraph) {
-      paragraph.push(line);
+  const listMarker = listMarkerAt(source, line);
+  if (listMarker) {
+    const kind = listMarker.kind;
+    const listOpen = kind === "ordered" ? "OrderedListOpen" : "UnorderedListOpen";
+    const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
+    const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
+    const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
+    out.push(structural(listOpen, listMarker.offset, listMarker.text));
+    let index = start;
+    let listEnd = listMarker.offset + listMarker.text.length;
+    while (index < lines.length) {
+      const marker = listMarkerAt(source, lines[index]);
+      if (!marker || !sameList(marker, listMarker)) {
+        break;
+      }
+      out.push(structural(itemOpen, marker.offset, marker.text));
+      const itemLines: Line[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns }];
+      let hasContent = !isBlank(source, itemLines[0]);
+      let lazyParagraph = endsWithParagraphLeaf(source, itemLines[0]);
       index++;
-      continue;
-    }
-    if (paragraph.length > 0) {
-      flushParagraph();
-    }
-
-    const definitionEnd = linkDefinitionEnd(source, lines, index);
-    if (definitionEnd !== null) {
-      out.push(structural("LinkDefinitionOpen", line.start));
-      for (let definitionLine = index; definitionLine < definitionEnd; definitionLine++) {
-        const current = lines[definitionLine];
-        const end = definitionLine + 1 < definitionEnd ? current.next : current.end;
-        out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
-      }
-      out.push(structural("LinkDefinitionClose", lines[definitionEnd - 1].end));
-      index = definitionEnd;
-      continue;
-    }
-
-    if (atx) {
-      out.push(structural("AtxHeadingOpen", atx.markerOffset, atx.marker));
-      if (atx.contentEnd > atx.contentOffset) {
-        out.push(named("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
-      }
-      out.push(structural("HeadingClose", line.end));
-      index++;
-      continue;
-    }
-
-    if (fence) {
-      let endIndex = index + 1;
-      while (endIndex < lines.length && !closesFence(source, lines[endIndex], fence)) {
-        endIndex++;
-      }
-      if (endIndex < lines.length) {
-        endIndex++;
-      }
-      out.push(logicalToken("FencedCodeBlock", source, lines, index, endIndex));
-      index = endIndex;
-      continue;
-    }
-
-    if (thematic) {
-      out.push(named("ThematicBreakToken", source.slice(line.start, line.end), line.start));
-      index++;
-      continue;
-    }
-
-    if (htmlStart) {
-      let endIndex = index + 1;
-      if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
-        while (endIndex < lines.length
-          && !source.slice(lines[endIndex].start, lines[endIndex].end).toLowerCase().includes(htmlStart.terminator)) {
-          endIndex++;
-        }
-        if (endIndex < lines.length) {
-          endIndex++;
-        }
-      }
-      else if (!htmlStart.terminator) {
-        while (endIndex < lines.length && !isBlank(source, lines[endIndex])) {
-          endIndex++;
-        }
-      }
-      out.push(logicalToken("HtmlBlockToken", source, lines, index, endIndex));
-      index = endIndex;
-      continue;
-    }
-
-    if (quote !== null) {
-      const quoteLines: Line[] = [];
-      const start = line.start;
-      let lazyParagraph = false;
       while (index < lines.length) {
-        const content = blockQuoteOffset(source, lines[index]);
-        if (content !== null) {
-          const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
-          quoteLines.push(contentLine);
+        const candidate = listMarkerAt(source, lines[index]);
+        if (candidate && candidate.indent < marker.contentIndent) {
+          break;
+        }
+        if (isBlank(source, lines[index])) {
+          if (!hasContent) {
+            index++;
+            break;
+          }
+          itemLines.push(lines[index]);
+          lazyParagraph = false;
+          index++;
+          continue;
+        }
+        const indent = indentOf(source, lines[index]);
+        if (indent.columns >= marker.contentIndent) {
+          const content = contentAfterColumns(source, lines[index], marker.contentIndent);
+          const contentLine = {
+            ...lines[index],
+            start: content.offset,
+            prefixColumns: content.prefixColumns,
+          };
+          itemLines.push(contentLine);
+          hasContent = true;
           lazyParagraph = endsWithParagraphLeaf(source, contentLine);
           index++;
           continue;
         }
-        if (!lazyParagraph || isBlank(source, lines[index])
-          || (!lines[index].lazy && interruptsParagraphAt(source, lines[index]))) {
+        if (!lazyParagraph || interruptsParagraphAt(source, lines[index])) {
           break;
         }
-        quoteLines.push({ ...lines[index], lazy: true });
+        itemLines.push({ ...lines[index], lazy: true });
         index++;
       }
-      out.push(structural("BlockQuoteOpen", start, ">"));
-      resolveLines(source, quoteLines, out);
-      out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? start));
-      continue;
+      resolveLines(source, itemLines, out);
+      listEnd = itemLines.at(-1)?.next ?? marker.offset;
+      out.push(structural(itemClose, listEnd));
     }
-
-    if (listMarker) {
-      const kind = listMarker.kind;
-      const listOpen = kind === "ordered" ? "OrderedListOpen" : "UnorderedListOpen";
-      const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
-      const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
-      const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
-      out.push(structural(listOpen, listMarker.offset, listMarker.text));
-      let listEnd = listMarker.offset + listMarker.text.length;
-      while (index < lines.length) {
-        const marker = listMarkerAt(source, lines[index]);
-        if (!marker || !sameList(marker, listMarker)) {
-          break;
-        }
-        out.push(structural(itemOpen, marker.offset, marker.text));
-        const itemLines: Line[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns }];
-        let hasContent = !isBlank(source, itemLines[0]);
-        let lazyParagraph = endsWithParagraphLeaf(source, itemLines[0]);
-        index++;
-        while (index < lines.length) {
-          const candidate = listMarkerAt(source, lines[index]);
-          if (candidate && candidate.indent < marker.contentIndent) {
-            break;
-          }
-          if (isBlank(source, lines[index])) {
-            if (!hasContent) {
-              index++;
-              break;
-            }
-            itemLines.push(lines[index]);
-            lazyParagraph = false;
-            index++;
-            continue;
-          }
-          const indent = indentOf(source, lines[index]);
-          if (indent.columns >= marker.contentIndent) {
-            const content = contentAfterColumns(source, lines[index], marker.contentIndent);
-            const contentLine = {
-              ...lines[index],
-              start: content.offset,
-              prefixColumns: content.prefixColumns,
-            };
-            itemLines.push(contentLine);
-            hasContent = true;
-            lazyParagraph = endsWithParagraphLeaf(source, contentLine);
-            index++;
-            continue;
-          }
-          if (!lazyParagraph || interruptsParagraphAt(source, lines[index])) {
-            break;
-          }
-          itemLines.push({ ...lines[index], lazy: true });
-          index++;
-        }
-        resolveLines(source, itemLines, out);
-        listEnd = itemLines.at(-1)?.next ?? marker.offset;
-        out.push(structural(itemClose, listEnd));
-      }
-      out.push(structural(listClose, listEnd));
-      continue;
-    }
-
-    const indent = indentOf(source, line);
-    if (indent.columns >= 4) {
-      let endIndex = index + 1;
-      while (endIndex < lines.length && (isBlank(source, lines[endIndex]) || indentOf(source, lines[endIndex]).columns >= 4)) {
-        endIndex++;
-      }
-      out.push(logicalToken("IndentedCodeBlockToken", source, lines, index, endIndex));
-      index = endIndex;
-      continue;
-    }
-
-    paragraph.push(line);
-    index++;
+    out.push(structural(listClose, listEnd));
+    return index;
   }
 
-  flushParagraph();
+  if (indentOf(source, line).columns >= 4) {
+    let end = start + 1;
+    while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
+      end++;
+    }
+    out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
+    return end;
+  }
+
+  return resolveParagraph(source, lines, start, out);
+}
+
+type BlockVisitor = (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => boolean;
+
+interface BlockCheckpoint {
+  lineEnd: number;
+  lineStart: number;
+  tokenEnd: number;
+  tokenStart: number;
+}
+
+export interface BlockTextEdit {
+  end: number;
+  start: number;
+  text: string;
+}
+
+export interface MarkdownBlockTokenChange {
+  oldEnd: number;
+  oldStart: number;
+  tokens: readonly Token[];
+}
+
+export interface MarkdownBlockUpdate {
+  change: MarkdownBlockTokenChange;
+  scannedRange: {
+    end: number;
+    start: number;
+  };
+}
+
+function resolveLines(source: string, lines: readonly Line[], out: Token[], visit?: BlockVisitor): void {
+  for (let index = 0; index < lines.length;) {
+    if (isBlank(source, lines[index])) {
+      index++;
+      continue;
+    }
+    const lineStart = index;
+    const tokenStart = out.length;
+    index = resolveBlock(source, lines, index, out);
+    if (visit?.(lineStart, index, tokenStart, out.length)) {
+      return;
+    }
+  }
+}
+
+function scanBlocks(source: string): { checkpoints: BlockCheckpoint[]; lines: Line[]; tokens: Token[] } {
+  const lines = linesOf(source);
+  const tokens: Token[] = [];
+  const checkpoints: BlockCheckpoint[] = [];
+  resolveLines(source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+    checkpoints.push({
+      lineStart: lines[lineStart].start,
+      lineEnd: lines[lineEnd - 1].next,
+      tokenStart,
+      tokenEnd,
+    });
+    return false;
+  });
+  return { checkpoints, lines, tokens };
+}
+
+function applyBlockEdits(source: string, edits: readonly BlockTextEdit[]): string {
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const [index, edit] of edits.entries()) {
+    if (!Number.isInteger(edit.start) || !Number.isInteger(edit.end)
+      || edit.start < cursor || edit.start > edit.end || edit.end > source.length) {
+      throw new RangeError(`Invalid block edit #${index}: [${edit.start}, ${edit.end})`);
+    }
+    parts.push(source.slice(cursor, edit.start), edit.text);
+    cursor = edit.end;
+  }
+  parts.push(source.slice(cursor));
+  return parts.join("");
+}
+
+function shiftedLine(line: Line, delta: number): Line {
+  return { start: line.start + delta, end: line.end + delta, next: line.next + delta };
+}
+
+function shiftedLines(source: string, offset: number): Line[] {
+  return linesOf(source).map((line) => shiftedLine(line, offset));
+}
+
+function updatePhysicalLines(
+  previous: readonly Line[],
+  nextSource: string,
+  restartOffset: number,
+  oldDamageEnd: number,
+  delta: number,
+): Line[] {
+  let suffix = previous.findIndex((line) => line.start > oldDamageEnd);
+  if (suffix >= 0) {
+    suffix = Math.min(previous.length, suffix + 1);
+  }
+  else {
+    suffix = previous.length;
+  }
+  const oldSuffixOffset = previous[suffix]?.start ?? nextSource.length - delta;
+  const newSuffixOffset = oldSuffixOffset + delta;
+  const prefix = previous.filter((line) => line.start < restartOffset);
+  const changed = shiftedLines(nextSource.slice(restartOffset, newSuffixOffset), restartOffset);
+  const unchanged = previous.slice(suffix).map((line) => shiftedLine(line, delta));
+  return [...prefix, ...changed, ...unchanged];
+}
+
+function shiftedToken(token: Token, delta: number): Token {
+  return {
+    ...token,
+    offset: token.offset + delta,
+    ...(token.ranges ? {
+      ranges: token.ranges.map((range) => ({ offset: range.offset + delta, end: range.end + delta })),
+    } : {}),
+  };
+}
+
+function sameShiftedToken(previous: Token, next: Token, delta: number): boolean {
+  if (previous.type !== next.type || previous.text !== next.text
+    || previous.newlineBefore !== next.newlineBefore
+    || previous.commentBefore !== next.commentBefore
+    || previous.multilineFlowBefore !== next.multilineFlowBefore) {
+    return false;
+  }
+  const previousRanges = previous.ranges ?? [{ offset: previous.offset, end: previous.offset + previous.text.length }];
+  const nextRanges = next.ranges ?? [{ offset: next.offset, end: next.offset + next.text.length }];
+  return previousRanges.length === nextRanges.length && previousRanges.every((range, index) => (
+    range.offset + delta === nextRanges[index].offset && range.end + delta === nextRanges[index].end
+  ));
+}
+
+function sameShiftedBlock(
+  previous: readonly Token[],
+  checkpoint: BlockCheckpoint,
+  next: readonly Token[],
+  tokenStart: number,
+  tokenEnd: number,
+  delta: number,
+): boolean {
+  const length = checkpoint.tokenEnd - checkpoint.tokenStart;
+  if (length !== tokenEnd - tokenStart) {
+    return false;
+  }
+  for (let index = 0; index < length; index++) {
+    if (!sameShiftedToken(previous[checkpoint.tokenStart + index], next[tokenStart + index], delta)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function changedTokenRange(previous: readonly Token[], next: readonly Token[], delta: number): MarkdownBlockTokenChange {
+  const common = Math.min(previous.length, next.length);
+  let start = 0;
+  while (start < common && sameShiftedToken(previous[start], next[start], 0)) {
+    start++;
+  }
+  let suffix = 0;
+  while (suffix < common - start
+    && sameShiftedToken(previous[previous.length - 1 - suffix], next[next.length - 1 - suffix], delta)) {
+    suffix++;
+  }
+  return {
+    oldStart: start,
+    oldEnd: previous.length - suffix,
+    tokens: next.slice(start, next.length - suffix),
+  };
+}
+
+class StatefulMarkdownBlockTokenizer {
+  #checkpoints: BlockCheckpoint[];
+  #lines: Line[];
+  #source: string;
+  #tokens: Token[];
+
+  constructor(source: string) {
+    const initial = scanBlocks(source);
+    this.#source = source;
+    this.#lines = initial.lines;
+    this.#tokens = initial.tokens;
+    this.#checkpoints = initial.checkpoints;
+  }
+
+  get source(): string {
+    return this.#source;
+  }
+
+  get tokens(): readonly Token[] {
+    return this.#tokens;
+  }
+
+  edit(edits: readonly BlockTextEdit[]): MarkdownBlockUpdate {
+    if (edits.length === 0) {
+      return { change: { oldStart: 0, oldEnd: 0, tokens: [] }, scannedRange: { start: 0, end: 0 } };
+    }
+    const previousSource = this.#source;
+    const nextSource = applyBlockEdits(previousSource, edits);
+    const firstEdit = edits[0];
+    const lastEdit = edits.at(-1)!;
+    const delta = nextSource.length - previousSource.length;
+    let changedEnd = firstEdit.start;
+    let precedingDelta = 0;
+    for (const edit of edits) {
+      changedEnd = edit.start + precedingDelta + edit.text.length;
+      precedingDelta += edit.text.length - (edit.end - edit.start);
+    }
+
+    let affected = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineEnd >= firstEdit.start);
+    if (affected < 0) {
+      affected = Math.max(0, this.#checkpoints.length - 1);
+    }
+    const restart = this.#checkpoints[affected]?.lineStart > firstEdit.start ? -1 : Math.max(0, affected - 1);
+    const checkpoint = this.#checkpoints[restart];
+    const restartOffset = checkpoint?.lineStart ?? 0;
+    const oldTokenStart = checkpoint?.tokenStart ?? 0;
+    const nextLines = updatePhysicalLines(this.#lines, nextSource, restartOffset, lastEdit.end, delta);
+    const restartLine = nextLines.findIndex((line) => line.start >= restartOffset);
+    const scanLines = restartLine < 0 ? [] : nextLines.slice(restartLine);
+    const replacement: Token[] = [];
+    const scanned: BlockCheckpoint[] = [];
+    let converged = -1;
+    let scannedEnd = nextSource.length;
+    resolveLines(nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+      const blockStart = scanLines[lineStart].start;
+      const blockEnd = scanLines[lineEnd - 1].next;
+      if (blockEnd >= changedEnd) {
+        const candidate = this.#checkpoints.findIndex((old) => old.lineStart + delta === blockStart
+          && old.lineEnd + delta === blockEnd
+          && old.lineStart >= lastEdit.end);
+        if (candidate >= 0 && sameShiftedBlock(this.#tokens, this.#checkpoints[candidate], replacement, tokenStart, tokenEnd, delta)) {
+          replacement.length = tokenStart;
+          converged = candidate;
+          scannedEnd = blockEnd;
+          return true;
+        }
+      }
+      scanned.push({ lineStart: blockStart, lineEnd: blockEnd, tokenStart, tokenEnd });
+      return false;
+    });
+
+    const oldTokenEnd = converged < 0 ? this.#tokens.length : this.#checkpoints[converged].tokenStart;
+    const tokenDelta = replacement.length - (oldTokenEnd - oldTokenStart);
+    const previousTokens = this.#tokens;
+    const suffix = previousTokens.slice(oldTokenEnd).map((token) => shiftedToken(token, delta));
+    this.#tokens = [...previousTokens.slice(0, oldTokenStart), ...replacement, ...suffix];
+    const prefixCheckpoints = this.#checkpoints.slice(0, Math.max(0, restart));
+    const scannedCheckpoints = scanned.map((value) => ({
+      ...value,
+      tokenStart: oldTokenStart + value.tokenStart,
+      tokenEnd: oldTokenStart + value.tokenEnd,
+    }));
+    const suffixCheckpoints = converged < 0 ? [] : this.#checkpoints.slice(converged).map((value) => ({
+      lineStart: value.lineStart + delta,
+      lineEnd: value.lineEnd + delta,
+      tokenStart: value.tokenStart + tokenDelta,
+      tokenEnd: value.tokenEnd + tokenDelta,
+    }));
+    this.#source = nextSource;
+    this.#lines = nextLines;
+    this.#checkpoints = [...prefixCheckpoints, ...scannedCheckpoints, ...suffixCheckpoints];
+    return {
+      change: changedTokenRange(previousTokens, this.#tokens, delta),
+      scannedRange: { start: restartOffset, end: scannedEnd },
+    };
+  }
+}
+
+export function createMarkdownBlockTokenizer(source: string): StatefulMarkdownBlockTokenizer {
+  return new StatefulMarkdownBlockTokenizer(source);
 }
 
 /** Produce the balanced structural token stream consumed by markdownBlockGrammar. */
 export function tokenizeMarkdownBlocks(source: string): Token[] {
-  const tokens: Token[] = [];
-  resolveLines(source, linesOf(source), tokens);
-  return tokens;
+  return [...createMarkdownBlockTokenizer(source).tokens];
 }

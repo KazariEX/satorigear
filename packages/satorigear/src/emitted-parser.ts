@@ -12,15 +12,61 @@ interface ArenaTree {
   ruleNameOf: (id: number) => string;
 }
 
-interface EmittedParserModule {
+interface EmittedParserModule<Handle extends EmittedParserHandle> {
+  createParser: () => EmittedParserInstance<Handle>;
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => number;
   tree: ArenaTree;
 }
 
+interface EmittedParserHandle {
+  root: number;
+}
+
+interface EmittedParserInstance<Handle extends EmittedParserHandle> {
+  editTokens: (
+    handle: Handle,
+    edits: readonly { end: number; start: number; text: string }[],
+    change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
+  ) => void;
+  parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => Handle;
+  tree: ArenaTree;
+}
+
+export interface CstParserDocument {
+  readonly rootId: number;
+
+  edit: (
+    edits: readonly { end: number; start: number; text: string }[],
+    change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
+  ) => void;
+  toCst: (source: string, tokens: readonly Token[]) => CstNode;
+}
+
 export interface CstParser {
+  createDocument: (source: string, tokens: readonly Token[], entryRule?: string) => CstParserDocument;
   parse: (source: string, entryRule?: string) => CstNode;
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => CstNode;
   tokenize: (source: string) => Token[];
+}
+
+function createCstDocument<Handle extends EmittedParserHandle>(
+  runtime: EmittedParserModule<Handle>,
+  source: string,
+  tokens: readonly Token[],
+  entryRule?: string,
+): CstParserDocument {
+  const parser = runtime.createParser();
+  const handle = parser.parseTokens(source, tokens, entryRule);
+  return {
+    get rootId() {
+      return handle.root;
+    },
+    edit: (edits, change) => parser.editTokens(handle, edits, change),
+    toCst: (currentSource, currentTokens) => {
+      const offset = currentTokens[0]?.ranges?.[0]?.offset ?? currentTokens[0]?.offset ?? 0;
+      return materializeNode(handle.root, offset, 0, currentSource, currentTokens, parser.tree);
+    },
+  };
 }
 
 function leafTokenType(entry: number, token: Token, tree: ArenaTree): string {
@@ -82,8 +128,8 @@ function materializeNode(
   };
 }
 
-export function createCstParser(
-  runtime: EmittedParserModule,
+export function createCstParser<Handle extends EmittedParserHandle>(
+  runtime: EmittedParserModule<Handle>,
   tokenize: (source: string) => Token[],
 ): CstParser {
   const parseTokens = (source: string, tokens: readonly Token[], entryRule?: string): CstNode => {
@@ -92,6 +138,7 @@ export function createCstParser(
     return materializeNode(root, offset, 0, source, tokens, runtime.tree);
   };
   return {
+    createDocument: (source, tokens, entryRule) => createCstDocument(runtime, source, tokens, entryRule),
     parse: (source, entryRule) => parseTokens(source, tokenize(source), entryRule),
     parseTokens,
     tokenize,

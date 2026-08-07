@@ -67,10 +67,10 @@ function changedTokens(previous: readonly Token[], next: readonly Token[], shift
 
 function arenaSnapshot(parser: BlockParser, handle: BlockHandle, tokens: readonly Token[]): unknown {
   const visit = (id: number, offset: number, tokenBase: number): unknown => ({
-    rule: parser.tree.ruleNameOf(id, 0),
+    rule: parser.tree.ruleNameOf(id),
     offset,
-    end: offset + parser.tree.lenOf(id, 0),
-    children: Array.from({ length: parser.tree.childCount(id, 0) }, (_, index) => {
+    end: offset + parser.tree.lenOf(id),
+    children: Array.from({ length: parser.tree.childCount(id) }, (_, index) => {
       const entry = parser.tree.childAt(id, index);
       if (entry < 0) {
         const tokenIndex = parser.tree.leafToken(entry, tokenBase);
@@ -95,10 +95,10 @@ function arenaSnapshot(parser: BlockParser, handle: BlockHandle, tokens: readonl
 function ruleIds(parser: BlockParser, handle: BlockHandle, rule: string): number[] {
   const result: number[] = [];
   const visit = (id: number): void => {
-    if (parser.tree.ruleNameOf(id, 0) === rule) {
+    if (parser.tree.ruleNameOf(id) === rule) {
       result.push(id);
     }
-    for (let index = 0; index < parser.tree.childCount(id, 0); index++) {
+    for (let index = 0; index < parser.tree.childCount(id); index++) {
       const entry = parser.tree.childAt(id, index);
       if (entry >= 0) {
         visit(entry);

@@ -1,7 +1,9 @@
 import type { Root } from "mdast";
 import type { CstNode } from "monogram/cst.ts";
+import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
 import { markdownCstToMdast } from "./mdast.ts";
-import { markdownPhasedParser } from "./parser.ts";
+import { markdownBlockParser, markdownPhasedParser } from "./parser.ts";
+import type { CstParserDocument } from "./emitted-parser.ts";
 
 export interface TextEdit {
   end: number;
@@ -39,53 +41,61 @@ function validateEdits(source: string, edits: readonly TextEdit[]): void {
   }
 }
 
-function applyEdits(source: string, edits: readonly TextEdit[]): { changedRange: MarkdownUpdate["changedRange"]; source: string } {
+function changedRangeOf(edits: readonly TextEdit[]): MarkdownUpdate["changedRange"] {
   if (edits.length === 0) {
-    return { source, changedRange: { start: 0, end: 0 } };
+    return { start: 0, end: 0 };
   }
 
-  const parts: string[] = [];
-  let cursor = 0;
   let delta = 0;
   let changedEnd = edits[0].start;
   for (const edit of edits) {
-    parts.push(source.slice(cursor, edit.start), edit.text);
-    cursor = edit.end;
     changedEnd = edit.start + delta + edit.text.length;
     delta += edit.text.length - (edit.end - edit.start);
   }
-  parts.push(source.slice(cursor));
-  return {
-    source: parts.join(""),
-    changedRange: { start: edits[0].start, end: changedEnd },
-  };
+  return { start: edits[0].start, end: changedEnd };
+}
+
+function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
+  let delta = 0;
+  return edits.map((edit) => {
+    const result = { start: edit.start + delta, end: edit.end + delta, text: edit.text };
+    delta += edit.text.length - (edit.end - edit.start);
+    return result;
+  });
 }
 
 class StatefulMarkdownDocument implements MarkdownDocument {
-  #source: string;
+  #blocks: CstParserDocument;
+  #tokenizer: ReturnType<typeof createMarkdownBlockTokenizer>;
   #tree: CstNode;
 
   constructor(source: string) {
-    this.#source = source;
-    this.#tree = markdownPhasedParser.parse(source);
+    this.#tokenizer = createMarkdownBlockTokenizer(source);
+    this.#blocks = markdownBlockParser.createDocument(source, this.#tokenizer.tokens);
+    this.#tree = markdownPhasedParser.compose(this.#blocks.toCst(source, this.#tokenizer.tokens), source);
   }
 
   get source(): string {
-    return this.#source;
+    return this.#tokenizer.source;
   }
 
   edit(edits: readonly TextEdit[]): MarkdownUpdate {
-    validateEdits(this.#source, edits);
-    const update = applyEdits(this.#source, edits);
-    if (update.source !== this.#source) {
-      this.#source = update.source;
-      this.#tree = markdownPhasedParser.parse(update.source);
+    validateEdits(this.source, edits);
+    if (edits.length === 0) {
+      return { changedRange: { start: 0, end: 0 } };
     }
-    return { changedRange: update.changedRange };
+    const changedRange = changedRangeOf(edits);
+    const update = this.#tokenizer.edit(edits);
+    this.#blocks.edit(sequentialEdits(edits), update.change);
+    this.#tree = markdownPhasedParser.compose(
+      this.#blocks.toCst(this.source, this.#tokenizer.tokens),
+      this.source,
+    );
+    return { changedRange };
   }
 
   toMdast(): Root {
-    return markdownCstToMdast(this.#tree, this.#source);
+    return markdownCstToMdast(this.#tree, this.source);
   }
 }
 

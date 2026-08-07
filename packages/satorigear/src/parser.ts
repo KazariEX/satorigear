@@ -14,7 +14,7 @@ import {
   reassociateMarkdownReferenceTails,
 } from "./grammar-inline.ts";
 
-const blockParser = createCstParser(blockRuntime, tokenizeMarkdownBlocks);
+export const markdownBlockParser = createCstParser(blockRuntime, tokenizeMarkdownBlocks);
 const inlineParser = createCstParser(inlineRuntime, createLexer(markdownInlineGrammar).tokenize);
 
 function referenceLabel(definition: CstNode, source: string): string | null {
@@ -59,7 +59,7 @@ function collectReferenceLabels(root: CstNode, source: string): Set<string> {
  * until its CommonMark block baseline is high enough to become the package default.
  */
 export const markdownPhasedParser = createCompositeParser({
-  outer: blockParser,
+  outer: markdownBlockParser,
   prepare: collectReferenceLabels,
   regions: [{
     within: ["Paragraph", "AtxHeading", "SetextHeading"],
