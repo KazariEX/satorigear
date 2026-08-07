@@ -47,7 +47,12 @@ interface SourcePoint {
 
 interface ProjectionContext {
   source: string;
-  spans: WeakMap<object, SourceSpan>;
+  spans: Map<object, SourceSpan>;
+}
+
+export interface MdastBlockFragment {
+  node: BlockContent | DefinitionContent;
+  spans: Map<object, SourceSpan>;
 }
 
 interface PositionedValue {
@@ -799,15 +804,55 @@ function blockNode(value: CstNode, context: ProjectionContext): BlockContent | D
   }
 }
 
+export function markdownBlockToMdastFragment(tree: CstNode, source: string): MdastBlockFragment {
+  const context = { source, spans: new Map<object, SourceSpan>() };
+  const node = blockContent(tree, context);
+  for (const span of context.spans.values()) {
+    span.start -= tree.offset;
+    span.end -= tree.offset;
+  }
+  return { node, spans: context.spans };
+}
+
+function materializeFragment(
+  fragment: MdastBlockFragment,
+  offset: number,
+  context: ProjectionContext,
+): BlockContent | DefinitionContent {
+  const clone = (value: PositionedValue): PositionedValue => {
+    const result = {
+      ...value,
+      ...(value.children ? { children: value.children.map(clone) } : {}),
+    };
+    const span = fragment.spans.get(value);
+    if (!span) {
+      throw new Error("mdast fragment node is missing its relative source span");
+    }
+    context.spans.set(result, { start: offset + span.start, end: offset + span.end });
+    return result;
+  };
+  return clone(fragment.node as PositionedValue) as BlockContent | DefinitionContent;
+}
+
+export function markdownFragmentsToMdast(
+  fragments: readonly { fragment: MdastBlockFragment; offset: number }[],
+  source: string,
+): Root {
+  const context = { source, spans: new Map<object, SourceSpan>() };
+  const root = withSpan(context, {
+    type: "root",
+    children: fragments.map(({ fragment, offset }) => materializeFragment(fragment, offset, context)),
+  } satisfies Root, 0, source.length);
+  return attachPositions(context, root);
+}
+
 /** Convert a block-first Markdown CST into an mdast root without invoking a renderer. */
 export function markdownCstToMdast(tree: CstNode, source: string): Root {
   if (tree.rule !== "Document") {
     throw new Error(`Expected Markdown Document CST, received '${tree.rule}'`);
   }
-  const context = { source, spans: new WeakMap<object, SourceSpan>() };
-  const root = withSpan(context, {
-    type: "root",
-    children: childNodes(tree, "Block").map((child) => blockContent(child, context)),
-  } satisfies Root, 0, source.length);
-  return attachPositions(context, root);
+  return markdownFragmentsToMdast(childNodes(tree, "Block").map((child) => ({
+    fragment: markdownBlockToMdastFragment(child, source),
+    offset: child.offset,
+  })), source);
 }

@@ -1,7 +1,10 @@
 import type { Root } from "mdast";
-import type { CstNode } from "monogram/cst.ts";
 import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
-import { markdownCstToMdast } from "./mdast.ts";
+import {
+  markdownBlockToMdastFragment,
+  markdownFragmentsToMdast,
+  type MdastBlockFragment,
+} from "./mdast.ts";
 import { createMarkdownCompositeDocument, markdownBlockParser } from "./parser.ts";
 import type { CstParserDocument } from "./emitted-parser.ts";
 
@@ -64,11 +67,11 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
   });
 }
 
-class StatefulMarkdownDocument implements MarkdownDocument {
+export class StatefulMarkdownDocument implements MarkdownDocument {
   #blocks: CstParserDocument;
   #composite: ReturnType<typeof createMarkdownCompositeDocument>;
+  #fragments = new Map<number, { fragment: MdastBlockFragment; source: string; version: string }>();
   #tokenizer: ReturnType<typeof createMarkdownBlockTokenizer>;
-  #tree: CstNode | null = null;
 
   constructor(source: string) {
     this.#tokenizer = createMarkdownBlockTokenizer(source);
@@ -80,6 +83,10 @@ class StatefulMarkdownDocument implements MarkdownDocument {
     return this.#tokenizer.source;
   }
 
+  fragmentObjects(): readonly MdastBlockFragment[] {
+    return [...this.#fragments.values()].map((value) => value.fragment);
+  }
+
   edit(edits: readonly TextEdit[]): MarkdownUpdate {
     validateEdits(this.source, edits);
     if (edits.length === 0) {
@@ -89,13 +96,21 @@ class StatefulMarkdownDocument implements MarkdownDocument {
     const update = this.#tokenizer.edit(edits);
     this.#blocks.edit(sequentialEdits(edits), update.change);
     this.#composite.update(this.#blocks.tree(this.#tokenizer.tokens), this.source);
-    this.#tree = null;
     return { changedRange };
   }
 
   toMdast(): Root {
-    this.#tree ??= this.#composite.toCst();
-    return markdownCstToMdast(this.#tree, this.source);
+    const fragments = new Map<number, { fragment: MdastBlockFragment; source: string; version: string }>();
+    const blocks = this.#composite.blocks().map((block) => {
+      const previous = this.#fragments.get(block.id);
+      const fragment = previous?.source === block.source && previous.version === block.version
+        ? previous.fragment
+        : markdownBlockToMdastFragment(block.node, this.source);
+      fragments.set(block.id, { fragment, source: block.source, version: block.version });
+      return { fragment, offset: block.offset };
+    });
+    this.#fragments = fragments;
+    return markdownFragmentsToMdast(blocks, this.source);
   }
 }
 

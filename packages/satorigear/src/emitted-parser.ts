@@ -171,7 +171,7 @@ function createCstTree(
   };
 }
 
-export function materializeCst(tree: CstTree, source: string): CstNode {
+export function materializeCstNode(tree: CstTree, source: string, root: CstTreeNode): CstNode {
   const visit = (node: CstTreeNode): CstNode => {
     const span = tree.span(node);
     return {
@@ -183,7 +183,11 @@ export function materializeCst(tree: CstTree, source: string): CstNode {
       end: span.end,
     };
   };
-  return visit(tree.root);
+  return visit(root);
+}
+
+export function materializeCst(tree: CstTree, source: string): CstNode {
+  return materializeCstNode(tree, source, tree.root);
 }
 
 export function createCstParser<Handle extends EmittedParserHandle>(

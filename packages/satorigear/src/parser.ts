@@ -9,6 +9,7 @@ import {
   type CstTree,
   type CstTreeNode,
   materializeCst,
+  materializeCstNode,
 } from "./emitted-parser.ts";
 import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
@@ -238,6 +239,24 @@ class MarkdownCompositeDocument {
     return [...this.#regions.values()].map((region) => region.revision);
   }
 
+  blocks(): readonly { id: number; node: CstNode; offset: number; source: string; version: string }[] {
+    return this.#tree.children(this.#tree.root).flatMap((child) => {
+      if (child.kind !== "node" || this.#tree.ruleName(child) !== "Block") {
+        return [];
+      }
+      const span = this.#tree.span(child);
+      const node = materializeCstNode(this.#tree, this.#source, child);
+      this.#attach(child, node);
+      return [{
+        id: child.id,
+        node,
+        offset: child.offset,
+        source: this.#source.slice(span.start, span.end),
+        version: this.#inlineVersion(child),
+      }];
+    });
+  }
+
   update(tree: CstTree, source: string): void {
     const labels = collectTreeReferenceLabels(tree, source);
     const changed = changedLabels(this.#labels, labels);
@@ -294,34 +313,45 @@ class MarkdownCompositeDocument {
 
   toCst(): CstNode {
     const root = materializeCst(this.#tree, this.#source);
-    const attach = (arenaNode: CstTreeNode, node: CstNode): void => {
-      const region = this.#regions.get(arenaNode.id);
-      if (region) {
-        const inner = rebaseCst(region.document.toCst(region.view.text, region.tokens), region.view);
-        let inserted = false;
-        node.children = node.children.flatMap((child) => {
-          if (!("tokenType" in child) || child.tokenType !== "InlineChunk") {
-            return [child];
-          }
-          if (inserted) {
-            return [];
-          }
-          inserted = true;
-          return [inner];
-        });
-        return;
-      }
-      const arenaChildren = this.#tree.children(arenaNode);
-      for (let index = 0; index < arenaChildren.length; index++) {
-        const arenaChild = arenaChildren[index];
-        const child = node.children[index];
-        if (arenaChild.kind === "node" && child && !("tokenType" in child)) {
-          attach(arenaChild, child);
-        }
-      }
-    };
-    attach(this.#tree.root, root);
+    this.#attach(this.#tree.root, root);
     return root;
+  }
+
+  #attach(arenaNode: CstTreeNode, node: CstNode): void {
+    const region = this.#regions.get(arenaNode.id);
+    if (region) {
+      const inner = rebaseCst(region.document.toCst(region.view.text, region.tokens), region.view);
+      let inserted = false;
+      node.children = node.children.flatMap((child) => {
+        if (!("tokenType" in child) || child.tokenType !== "InlineChunk") {
+          return [child];
+        }
+        if (inserted) {
+          return [];
+        }
+        inserted = true;
+        return [inner];
+      });
+      return;
+    }
+    const arenaChildren = this.#tree.children(arenaNode);
+    for (let index = 0; index < arenaChildren.length; index++) {
+      const arenaChild = arenaChildren[index];
+      const child = node.children[index];
+      if (arenaChild.kind === "node" && child && !("tokenType" in child)) {
+        this.#attach(arenaChild, child);
+      }
+    }
+  }
+
+  #inlineVersion(node: CstTreeNode): string {
+    const region = this.#regions.get(node.id);
+    if (region) {
+      return `${node.id}:${region.revision}`;
+    }
+    return this.#tree.children(node).flatMap((child) => (
+      child.kind === "node" ? [this.#inlineVersion(child)] : []
+    )).filter(Boolean).join("|");
   }
 }
 
