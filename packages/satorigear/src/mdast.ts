@@ -117,9 +117,13 @@ function tokenEnd(token: Token): number {
 }
 
 function lineStart(source: string, offset: number): number {
-  const lineFeed = source.lastIndexOf("\n", Math.max(0, offset - 1));
-  const carriageReturn = source.lastIndexOf("\r", Math.max(0, offset - 1));
-  return Math.max(lineFeed, carriageReturn) + 1;
+  while (offset > 0) {
+    const character = source.charCodeAt(--offset);
+    if (character === 10 || character === 13) {
+      return offset + 1;
+    }
+  }
+  return 0;
 }
 
 function lineEnd(source: string, offset: number): number {

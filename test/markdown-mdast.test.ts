@@ -144,6 +144,29 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it.each([
+    { name: "LF", ending: "\n", breakEnd: 7 },
+    { name: "CR", ending: "\r", breakEnd: 7 },
+    { name: "CRLF", ending: "\r\n", breakEnd: 9 },
+  ])("maps $name line boundaries at the document edges", ({ ending, breakEnd }) => {
+    const source = `${ending}> a  ${ending}> b${ending}`;
+    const tree = parse(source);
+    const quote = tree.children[0];
+    if (quote?.type !== "blockquote") {
+      throw new Error("Expected a block quote");
+    }
+    const paragraph = quote.children[0];
+    if (paragraph?.type !== "paragraph") {
+      throw new Error("Expected a paragraph");
+    }
+
+    expect(tree.position).toMatchObject({ start: { offset: 0 }, end: { offset: source.length } });
+    expect(paragraph.children[1]).toMatchObject({
+      type: "break",
+      position: { end: { line: 3, column: 1, offset: breakEnd } },
+    });
+  });
+
   it("uses original delimiter run lengths for the rule of three", () => {
     const tree = parse("*****b___(__\n___**_.****(__*****\n");
     expect(tree.children).toMatchObject([{

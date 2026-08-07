@@ -66,6 +66,11 @@ function mapSpan(this: SourceView, start: number, end: number): SourceSpan {
   if (this.segments.length === 0) {
     return { start: 0, end: 0 };
   }
+  if (this.segments.length === 1) {
+    const segment = this.segments[0];
+    const sourceStart = segment.start + start - segment.viewStart;
+    return { start: sourceStart, end: sourceStart + end - start };
+  }
   if (start === end) {
     const point = this.mapPoint(start);
     return { start: point, end: point };
