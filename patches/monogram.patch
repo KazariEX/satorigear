@@ -24,7 +24,7 @@ index 99d693f..e3ac7ad 100644
        scope: tok.opts.scope,
        escapePattern: tok.opts.escape,
 diff --git a/src/emit-parser.ts b/src/emit-parser.ts
-index 74feb92..4b65fc3 100644
+index 74feb92..499c18c 100644
 --- a/src/emit-parser.ts
 +++ b/src/emit-parser.ts
 @@ -2332,6 +2332,10 @@ function emitMixfixLed(e: Emitter, a: ReturnType<typeof analyze>, fnName: string
@@ -167,13 +167,12 @@ index 74feb92..4b65fc3 100644
    if (memoEnd.length !== MEMO_RULES) {
      memoNode = new Array(MEMO_RULES);
      memoEnd = new Array(MEMO_RULES);
-@@ -3683,8 +3759,40 @@ function apiMisuse(msg: string) {
+@@ -3683,8 +3759,34 @@ function apiMisuse(msg: string) {
    e.apiMisuse = true;
    return e;
  }
 -function editCore(entryRule: string | undefined, edits?: Edit[]) {
 -  if (edits === undefined || edits.length === 0) {
-+let externalTokenChange: TokenChange | null = null;
 +function editTokensCore(entryRule: string | undefined, edits: readonly Edit[], change: TokenChange) {
 +  if (docPieces === null) throw apiMisuse('editTokens() before parseTokens(): no document');
 +  if (!Number.isInteger(change.oldStart) || !Number.isInteger(change.oldEnd)
@@ -198,25 +197,20 @@ index 74feb92..4b65fc3 100644
 +      throw apiMisuse('editTokens() replacement token #' + i + ' is outside the edited document');
 +    }
 +  }
-+  externalTokenChange = change;
-+  try {
-+    return editCore(entryRule, edits);
-+  } finally {
-+    externalTokenChange = null;
-+  }
++  return editCore(entryRule, edits, change);
 +}
-+function editCore(entryRule: string | undefined, edits?: readonly Edit[]) {
-+  if (edits === undefined || (edits.length === 0 && externalTokenChange === null)) {
++function editCore(entryRule: string | undefined, edits: readonly Edit[] | undefined, tokenChange: TokenChange | null) {
++  if (edits === undefined || (edits.length === 0 && tokenChange === null)) {
      throw apiMisuse('edit() requires the changes: [{ start, end, text }] (LSP-style - each edit in the coordinates of the document AFTER the preceding edits in the array)');
    }
    // The engine owns the document text: the new source is BUILT from the changes,
-@@ -3725,6 +3833,49 @@ function editCore(entryRule: string | undefined, edits?: Edit[]) {
+@@ -3725,6 +3827,49 @@ function editCore(entryRule: string | undefined, edits?: Edit[]) {
    const ceNew = editDmgE < cs ? cs : editDmgE;
    const ceOld = ceNew - (newLen - oldLen);
    const charDelta = newLen - oldLen;
 +  let p: number, dOldEnd: number, tokenDelta: number;
-+  if (externalTokenChange !== null) {
-+    const change = externalTokenChange;
++  if (tokenChange !== null) {
++    const change = tokenChange;
 +    const oldStart = change.oldStart;
 +    const oldEnd = change.oldEnd;
 +    const inserted = change.tokens.length;
@@ -260,7 +254,7 @@ index 74feb92..4b65fc3 100644
  ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    // Restart anchor: the last token B ending at/before the damage whose recorded
    // depths are zero and whose shape carries no cross-token lexer flag (')' control-
-@@ -3841,13 +3992,13 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3841,13 +3986,13 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    }
    // TRUE token prefix p: the window re-derives [B+1 .. p) byte-identically; only past
    // p is real damage (compared BEFORE the splice clobbers the old slots).
@@ -277,7 +271,7 @@ index 74feb92..4b65fc3 100644
    // ── splice: old[0..B] + window[0..W) + old[R..oN), then shift the suffix spans ──
    const nN = B + 1 + W + (oN - R);
    while (tkCap < nN + 1) growTok();
-@@ -3880,7 +4031,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3880,7 +4025,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
      for (let i = 0; i < docEmptyPops.length; i++) { const v = docEmptyPops[i]; if (v >= R) nep.push(v + tokenDelta); }
      docEmptyPops = nep;
    }
@@ -286,7 +280,7 @@ index 74feb92..4b65fc3 100644
    const oK = tkK, oT = tkT, oOff = tkOff, oEnd = tkEnd, oFl = tkFl, oN = tokN;
    const oText = tkText;
    if (altK === null || altK.length !== tkCap) {
-@@ -3899,7 +4050,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3899,7 +4044,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    lexInto(flattenDoc());
    const nN = tokN;
    const minN = oN < nN ? oN : nN;
@@ -295,7 +289,7 @@ index 74feb92..4b65fc3 100644
    while (p < minN && oK[p] === tkK[p] && oT[p] === tkT[p] && oFl[p] === tkFl[p]
        && oOff[p] === tkOff[p] && oEnd[p] === tkEnd[p] && oText[p] === tkText[p]) p++;
    let s = 0;
-@@ -3909,9 +4060,10 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3909,9 +4054,10 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
        && oOff[i] + charDelta === tkOff[j] && oEnd[i] + charDelta === tkEnd[j] && oText[i] === tkText[j]) s++;
      else break;
    }
@@ -309,17 +303,17 @@ index 74feb92..4b65fc3 100644
    // M4: NO memo carry — the memo is intra-parse; reuse flows through old-tree
    // adoption (parseRuleEntry consults the previous root via adoptSeek), so the whole
    // O(rules × n) carry/invalidate machinery is gone.
-@@ -4055,7 +4207,8 @@ export { tokenize };
+@@ -4055,7 +4201,8 @@ export { tokenize };
  // ── Module-level API: the DEFAULT document (one shared session; tokenize and the
  // raw tree/tokenAt views read the ACTIVE doc — they are gate/debug surfaces) ──
  export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }
 -export function parseEdited(entryRule?: string, edits?: Edit[]) { activate(docDefault); return editCore(entryRule, edits); }
 +export function parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) { activate(docDefault); return parseTokensCore(source, tokens, entryRule); }
-+export function parseEdited(entryRule?: string, edits?: readonly Edit[]) { activate(docDefault); return editCore(entryRule, edits); }
++export function parseEdited(entryRule?: string, edits?: readonly Edit[]) { activate(docDefault); return editCore(entryRule, edits, null); }
  // Arena reclamation introspection + budget override — TEST HOOKS (issue #45 C1). __arenaStats
  // reports the live arena, the compacted-size baseline, and how many edits re-parsed to reclaim;
  // __setArenaBudget lowers the factor/min so a gate can force compaction deterministically.
-@@ -4070,79 +4223,88 @@ export function visit(entry: number, fns: _VisitFns, charBase?: number, tokBase?
+@@ -4070,82 +4217,102 @@ export function visit(entry: number, fns: _VisitFns, charBase?: number, tokBase?
  // the previous tree; the next edit falls back to a full re-parse internally. Only
  // parse() re-opening the document invalidates old handles (they throw).
  export function createParser() {
@@ -338,15 +332,6 @@ index 74feb92..4b65fc3 100644
      const f = (tree as any)[k];
      view[k] = (a: number, b: number) => { activate(d); return f(a, b); };
    }
--  return {
--    parse(source: string, entryRule?: string) {
--      activate(d);
--      entryUsed = entryRule;
--      gen++;   // re-opening resets the arena: old handles die regardless of outcome
--      docDiags.length = 0;
--      docLex.length = 0;
--      docPar.length = 0;
--      let root!: number;
 +  const open = (entryRule: string | undefined, external: boolean, load: () => number) => {
 +    activate(d);
 +    entryUsed = entryRule;
@@ -370,10 +355,64 @@ index 74feb92..4b65fc3 100644
 +      // NO cross-attempt survival here: parseCore resets the arena cursor per
 +      // attempt (only parseEdited carries it), so an earlier attempt's rows are
 +      // clobbered — a surviving entry would point at overwritten rows.
++      try {
++        for (let attempt = 0; attempt < 32 && !done; attempt++) {
++          try {
++            docLex.length = 0;
++            recoverBars = bars;
++            root = load();
++            done = true;
++            lastBars = bars.slice();
++          } catch (e2) {
++            let b = maxPos;
++            if (bars.length > 0 && b <= bars[bars.length - 1]) b = bars[bars.length - 1] + 1;
++            bars.push(b);
++          }
++        }
++        if (!done) {
++          recoverFree = true;
++          lastBars = null;
++          adoptRoot = -1;   // free-fire decisions are non-local: adoption would desync
++          try {
++            docLex.length = 0;
++            root = load();
++          } catch (e3) {
++            root = totalNet(e3);
++          } finally {
++            recoverFree = false;
++          }
++        }
++      } finally {
++        recovering = false;
++        recoverBars = [];
++        memoRecFloor = 0x7fffffff;
++      }
++      settleDiags();
++    }
++    return { d, gen, root, errors: docDiags };
++  };
+   return {
+     parse(source: string, entryRule?: string) {
++      return open(entryRule, false, () => parseCore(source, entryRule));
++    },
++    parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
++      return open(entryRule, true, () => parseTokensCore(source, tokens, entryRule));
++    },
++    edit(cst: Handle, edits?: readonly Edit[]) {
++      chk(cst);
++      if (externalUsed) throw apiMisuse('edit() cannot update a parseTokens() document - use editTokens()');
+       activate(d);
+-      entryUsed = entryRule;
+-      gen++;   // re-opening resets the arena: old handles die regardless of outcome
+-      docDiags.length = 0;
+-      docLex.length = 0;
+-      docPar.length = 0;
+-      let root!: number;
        try {
 -        root = parseCore(source, entryRule);
 -        lastBars = [];
--      } catch (e) {
++        cst.root = editCore(entryUsed, edits, null);
+       } catch (e) {
 -        // total parse: the strict pass rejected — iterate recovery under the bar
 -        // discipline (see recoverBars); the iteration cap degrades to free-fire,
 -        // and a recovery-blind layer (fallback lexers) degrades to the zero-width
@@ -397,18 +436,7 @@ index 74feb92..4b65fc3 100644
 -              if (bars.length > 0 && b <= bars[bars.length - 1]) b = bars[bars.length - 1] + 1;
 -              bars.push(b);
 -            }
-+        for (let attempt = 0; attempt < 32 && !done; attempt++) {
-+          try {
-+            docLex.length = 0;
-+            recoverBars = bars;
-+            root = load();
-+            done = true;
-+            lastBars = bars.slice();
-+          } catch (e2) {
-+            let b = maxPos;
-+            if (bars.length > 0 && b <= bars[bars.length - 1]) b = bars[bars.length - 1] + 1;
-+            bars.push(b);
-           }
+-          }
 -          if (!done) {
 -            recoverFree = true;
 -            lastBars = null;
@@ -421,67 +449,29 @@ index 74feb92..4b65fc3 100644
 -            } finally {
 -              recoverFree = false;
 -            }
-+        }
-+        if (!done) {
-+          recoverFree = true;
-+          lastBars = null;
-+          adoptRoot = -1;   // free-fire decisions are non-local: adoption would desync
-+          try {
-+            docLex.length = 0;
-+            root = load();
-+          } catch (e3) {
-+            root = totalNet(e3);
-+          } finally {
-+            recoverFree = false;
-           }
+-          }
 -        } finally {
 -          recovering = false;
 -          recoverBars = [];
 -          memoRecFloor = 0x7fffffff;
-         }
+-        }
 -        settleDiags();
-+      } finally {
-+        recovering = false;
-+        recoverBars = [];
-+        memoRecFloor = 0x7fffffff;
-       }
--      return { d, gen, root, errors: docDiags };
-+      settleDiags();
-+    }
-+    return { d, gen, root, errors: docDiags };
-+  };
-+  return {
-+    parse(source: string, entryRule?: string) {
-+      return open(entryRule, false, () => parseCore(source, entryRule));
-+    },
-+    parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
-+      return open(entryRule, true, () => parseTokensCore(source, tokens, entryRule));
-     },
--    edit(cst: Handle, edits?: Edit[]) {
-+    edit(cst: Handle, edits?: readonly Edit[]) {
-       chk(cst);
-+      if (externalUsed) throw apiMisuse('edit() cannot update a parseTokens() document - use editTokens()');
-       activate(d);
-       try {
-         cst.root = editCore(entryUsed, edits);
-@@ -4151,6 +4313,17 @@ export function createParser() {
-         cst.root = totalNet(e);
-       }
-     },
-+    editTokens(cst: Handle, edits: readonly Edit[], change: TokenChange) {
-+      chk(cst);
-+      if (!externalUsed) throw apiMisuse('editTokens() requires a document opened by parseTokens()');
-+      activate(d);
-+      try {
-+        cst.root = editTokensCore(entryUsed, edits, change);
-+      } catch (e) {
 +        if (e instanceof RangeError || (e && (e as any).apiMisuse)) throw e;
 +        cst.root = totalNet(e);
-+      }
-+    },
-     visit(cst: Handle, fns: _VisitFns) { chk(cst); activate(d); return visitCore(cst.root, fns); },
-     tree: view,
-   };
+       }
+-      return { d, gen, root, errors: docDiags };
+     },
+-    edit(cst: Handle, edits?: Edit[]) {
++    editTokens(cst: Handle, edits: readonly Edit[], change: TokenChange) {
+       chk(cst);
++      if (!externalUsed) throw apiMisuse('editTokens() requires a document opened by parseTokens()');
+       activate(d);
+       try {
+-        cst.root = editCore(entryUsed, edits);
++        cst.root = editTokensCore(entryUsed, edits, change);
+       } catch (e) {
+         if (e instanceof RangeError || (e && (e as any).apiMisuse)) throw e;
+         cst.root = totalNet(e);
 diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
 index a4ed10c..d39825e 100644
 --- a/src/gen-lexer.ts
