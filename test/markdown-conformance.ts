@@ -180,8 +180,8 @@ function monoSem(node: CstNode): Sem | null {
       const lines = nodesNamed(node, "BlockQuoteLine");
       const content: Sem[] = [];
       lines.forEach((line, i) => {
- if (i) content.push(sem("softbreak")); content.push(...inlineChildren(line));
-});
+        if (i) content.push(sem("softbreak")); content.push(...inlineChildren(line));
+      });
       return sem("block_quote", [sem("paragraph", content)]);
     }
     case "UnorderedList": case "OrderedList": {
@@ -224,9 +224,9 @@ for (const test of cases) {
 
   let actual: Sem | null = null;
   try {
- actual = monoSem(parse(source));
-}
- catch { /* recorded as a parse failure below */ }
+    actual = monoSem(parse(source));
+  }
+  catch { /* recorded as a parse failure below */ }
   if (!actual) {
     if (failures.length < 20) failures.push({ number: test.number, section: test.section, kind: "parse", markdown: source });
     continue;
@@ -236,14 +236,14 @@ for (const test of cases) {
   const inline = JSON.stringify(inlineEvents(actual)) === JSON.stringify(inlineEvents(expected));
   const full = JSON.stringify(actual) === JSON.stringify(expected);
   if (block) {
- counts.blockExact++; section.blockExact++;
-}
+    counts.blockExact++; section.blockExact++;
+  }
   if (inline) {
- counts.inlineExact++; section.inlineExact++;
-}
+    counts.inlineExact++; section.inlineExact++;
+  }
   if (full) {
- counts.fullExact++; section.fullExact++;
-}
+    counts.fullExact++; section.fullExact++;
+  }
   if (!full && failures.length < 20) failures.push({ number: test.number, section: test.section, kind: block ? "inline" : "block", markdown: source });
 }
 

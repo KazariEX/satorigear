@@ -25,9 +25,9 @@ if (git(["-C", vendor, "apply", "--check", patch], true)) {
   git(["-C", vendor, "apply", patch]);
   console.log("Applied patches/monogram.patch");
 }
- else if (git(["-C", vendor, "apply", "--reverse", "--check", patch], true)) {
+else if (git(["-C", vendor, "apply", "--reverse", "--check", patch], true)) {
   console.log("patches/monogram.patch is already applied");
 }
- else {
+else {
   throw new Error("monogram patch does not apply cleanly and is not already applied");
 }

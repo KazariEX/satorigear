@@ -49,17 +49,17 @@ const smaller = 1 < 2;
 const ts = types(representative);
 for (const expected of [
   "AtxHeadingMarker",
-"Emphasis",
-"Strong",
-"Link",
-"CodeSpan",
-"BlockQuoteMarker",
+  "Emphasis",
+  "Strong",
+  "Link",
+  "CodeSpan",
+  "BlockQuoteMarker",
   "UnorderedListMarker",
-"OrderedListMarker",
-"DashThematicBreak",
-"SetextUnderline",
+  "OrderedListMarker",
+  "DashThematicBreak",
+  "SetextUnderline",
   "FenceBlock",
-"IndentedCode",
+  "IndentedCode",
 ]) check(`lexes ${expected}`, ts.includes(expected));
 
 check("fenced body is opaque", ts.filter((t) => t === "AtxHeadingMarker").length === 1);
@@ -88,15 +88,15 @@ const rs = rules(tree);
 check("parser returns Document", tree.rule === "Document");
 for (const expected of [
   "AtxHeading",
-"Paragraph",
-"BlockQuote",
-"UnorderedListItem",
-"OrderedListItem",
+  "Paragraph",
+  "BlockQuote",
+  "UnorderedListItem",
+  "OrderedListItem",
   "UnorderedList",
-"OrderedList",
-"SetextHeading",
-"FencedCode",
-"IndentedCodeBlock",
+  "OrderedList",
+  "SetextHeading",
+  "FencedCode",
+  "IndentedCodeBlock",
 ]) check(`parser builds ${expected}`, rs.includes(expected));
 
 // Markdown is intentionally error-tolerant: unmatched delimiters are literal punctuation.

@@ -2,8 +2,6 @@ minimumReleaseAge: 0
 shamefullyHoist: true
 shellEmulator: true
 trustPolicy: no-downgrade
-trustPolicyExclude:
-  - semver@6.3.1
 
 packages:
   - packages/*
@@ -11,16 +9,12 @@ packages:
 catalog:
   "@types/commonmark": ^0.27.10
   "@types/node": ^26.1.2
-  "@zinkawaii/eslint-config": ^0.4.3
-  "@zinkawaii/scripts": ^0.0.3
+  "@zinkawaii/eslint-config": ^0.5.2
+  "@zinkawaii/scripts": ^0.0.5
   "@zinkawaii/tsconfig": ^0.1.0
-  bumpp: ^11.1.0
+  bumpp: ^12.2.0
   commonmark: 0.31.2
   commonmark-spec: 0.31.2
-  eslint: ^10.5.0
-  tsdown: ^0.22.2
-  vitest: ^4.1.8
-
-allowBuilds:
-  "@parcel/watcher": true
-  esbuild: true
+  eslint: ^10.8.0
+  tsdown: ^0.22.14
+  vitest: ^4.1.10
