@@ -27,7 +27,7 @@ index 99d693f..ba1de28 100644
        scope: tok.opts.scope,
        escapePattern: tok.opts.escape,
 diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
-index a4ed10c..83ded85 100644
+index a4ed10c..9411895 100644
 --- a/src/gen-lexer.ts
 +++ b/src/gen-lexer.ts
 @@ -1,4 +1,4 @@
@@ -45,25 +45,28 @@ index a4ed10c..83ded85 100644
        // First-char filters for the default and block patterns (computed once). A char the set rejects
        // can't start this token → the loop skips it. `null` = couldn't prove a filter → always try.
        first: tokenPatternFirstCharSet(t),
-@@ -249,6 +251,9 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -249,6 +251,11 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
      indent ? ([indent.indentToken, indent.dedentToken, indent.newlineToken].filter(Boolean) as string[])
             : newline ? [newline.token] : [],
    );
 +  const indentedTextToken = newline?.indentedText?.token;
 +  const indentedTextMinColumns = newline?.indentedText?.minColumns ?? 0;
 +  const indentedTextTabWidth = newline?.indentedText?.tabWidth ?? 4;
++  const hardBreakToken = newline?.hardBreak?.token;
++  const hardBreakMinSpaces = newline?.hardBreak?.minSpaces ?? 0;
    const flowOpenSet = new Set((indent ?? newline)?.flowOpen ?? []);
    const flowCloseSet = new Set((indent ?? newline)?.flowClose ?? []);
    // The matchers the per-position scan loop actually tries: the template token is handled by
-@@ -306,6 +311,7 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -306,6 +313,8 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
    const kVoidNameTok = kOf(markup?.voidNameToken ?? null);
    const tTagOpen = markup ? (puLitOf.get(markup.tagOpen) ?? 0) : 0;
    const kNewlineModeTok = kOf(newline?.token ?? null);
 +  const kIndentedTextTok = kOf(indentedTextToken ?? null);
++  const kHardBreakTok = kOf(hardBreakToken ?? null);
    const kIndentTok = kOf(indent?.indentToken ?? null), kDedentTok = kOf(indent?.dedentToken ?? null), kIndentNewlineTok = kOf(indent?.newlineToken ?? null);
    const kBlockScalarTok = kOf(indent?.blockScalar?.token ?? null);
    const kRawBlockTok = kOf(indent?.rawBlock?.token ?? null);
-@@ -533,6 +539,50 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -533,6 +542,50 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
      // dedents below it. (yaml-test-suite 5WE3 / KK5P — the compact `: -` edge.)
      let lastExplicitKeyCol = -1;
      const indentStack: number[] = [0];
@@ -114,7 +117,7 @@ index a4ed10c..83ded85 100644
      // §7.4 multi-line flow indentation: when the OUTERMOST flow collection opens as a block VALUE or
      // ITEM (the `[`/`{` directly follows a `:`/`-` indicator), every CONTENT line of that flow must be
      // indented strictly MORE than the enclosing block node's column `n` — else the flow is
-@@ -729,6 +779,29 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -729,6 +782,29 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
          // leading boundary before any content is suppressed via emittedContent) and move on. ──
          if (!indent) {
            if (emittedContent) push(mkNamed(newline!.token, '', pos, kNewlineModeTok));
@@ -144,7 +147,26 @@ index a4ed10c..83ded85 100644
            lineStart = false;
            atLineLead = true;
            continue;
-@@ -1097,6 +1170,17 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -791,6 +867,18 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+       if (lineSensitive) {
+         const c = source[pos];
+         if (c === ' ' || c === '\t') {
++          // Newline-only grammars may give semantic meaning to a sufficiently long run of spaces
++          // immediately before a physical line ending. Preserve that run as one named token
++          // instead of dropping it through the ordinary inline-whitespace path.
++          if (!indent && c === ' ' && hardBreakToken) {
++            let e = pos;
++            while (source[e] === ' ') e++;
++            if (e - pos >= hardBreakMinSpaces && (source[e] === '\n' || source[e] === '\r')) {
++              push(mkNamed(hardBreakToken, source.slice(pos, e), pos, kHardBreakTok));
++              pos = e;
++              continue;
++            }
++          }
+           // A TAB between a block indicator (`-`/`?`/map-`:`) and a NESTED block-structural node it
+           // introduces is a §6.1 indentation error: the separation after the indicator counts as
+           // the nested node's indentation (`-\t- x`, `?\tkey:`, `- \t-`, `:\tkey:`, `key:\t- a`). A
+@@ -1097,6 +1185,17 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
        const cc = source.charCodeAt(pos);
        for (const tm of scanMatchers) {
          if (tm.blockOnly && flowDepth > 0) continue;    // line-structural token (YAML directive) — content in flow
@@ -163,7 +185,7 @@ index a4ed10c..83ded85 100644
            // prev is a completed value → `/` is division, not a regex literal → skip.
            if (prevIsValue(tokens[tokens.length - 1])) continue;
 diff --git a/src/types.ts b/src/types.ts
-index bf2817b..910b0a0 100644
+index bf2817b..bfc53a0 100644
 --- a/src/types.ts
 +++ b/src/types.ts
 @@ -65,6 +65,17 @@ export interface TokenDecl {
@@ -184,10 +206,13 @@ index bf2817b..910b0a0 100644
  }
  
  /**
-@@ -439,6 +450,11 @@ export interface NewlineConfig {
+@@ -439,6 +450,14 @@ export interface NewlineConfig {
    flowOpen?: string[];  // punctuation that SUSPENDS newline significance while open (e.g. ['(', '[', '{'])
    flowClose?: string[]; // matching closers (e.g. [')', ']', '}'])
    comment?: string;     // line-comment introducer; a comment-only line emits no NEWLINE (e.g. '#')
++  // Preserve a trailing run of spaces as `token` when it reaches the configured threshold and is
++  // followed by a physical newline. Absent means inline whitespace keeps its skip behaviour.
++  hardBreak?: { token: string; minSpaces: number };
 +  // A line whose indentation reaches this column threshold is emitted whole as `token`. This is
 +  // useful for line-oriented grammars with indented verbatim blocks (Markdown's four-space
 +  // code blocks). Each physical content line is one token; ordinary newline separators still

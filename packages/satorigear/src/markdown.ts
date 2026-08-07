@@ -20,6 +20,7 @@ import {
   many1,
   never,
   noneOf,
+  notFollowedBy,
   oneOf,
   opt,
   optPattern,
@@ -35,6 +36,7 @@ import type { NewlineConfig } from "../../../vendors/monogram/src/types.ts";
 
 const hspace = oneOf(" ", "\t");
 const lineEnd = followedBy(altPattern("\r", "\n", end()));
+const physicalLineEnd = followedBy(altPattern("\r", "\n"));
 const digit = range("0", "9");
 const punctuation = oneOf("!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "\\", "]", "^", "_", "`", "{", "|", "}", "~");
 
@@ -144,6 +146,10 @@ const Entity = token(seq("&", altPattern(
   seq("#", optPattern(oneOf("x", "X")), plus(oneOf(digit, range("A", "F"), range("a", "f")))),
   plus(oneOf(range("A", "Z"), range("a", "z"), digit)),
 ), ";"), { scope: "constant.character.entity" });
+const HardBreak = token(altPattern(
+  seq("\\", physicalLineEnd),
+  seq("  ", star(" "), physicalLineEnd),
+), { scope: "punctuation.definition.hard-break" });
 const Escape = token(seq("\\", punctuation), { scope: "constant.character.escape" });
 
 const Strong = token(altPattern(
@@ -160,7 +166,13 @@ const Emphasis = token(altPattern(
 
 // Ordinary text consumes spaces in the middle of a run. The shared newline mode discards only
 // insignificant leading/trailing horizontal separation before another inline token.
-const Text = token(plus(noneOf("\n", "\r", "\\", "`", "*", "_", "[", "<", "!", "&", "~")), {
+const textCharacter = altPattern(
+  noneOf("\n", "\r", "\\", "`", "*", "_", "[", "<", "!", "&", "~", " "),
+  // Leave a run of at least two spaces before a physical newline for HardBreak. A single
+  // trailing space and all interior spaces remain ordinary text.
+  seq(" ", notFollowedBy(seq(" ", star(" "), physicalLineEnd))),
+);
+const Text = token(plus(textCharacter), {
   scope: "meta.paragraph",
 });
 const Delimiter = token(oneOf("\\", "`", "*", "_", "[", "]", "<", ">", "!", "&", "~"), {
@@ -176,6 +188,7 @@ const Inline = rule(() => [
   Autolink,
   InlineHtml,
   Entity,
+  HardBreak,
   Escape,
   Strong,
   Strikethrough,
@@ -223,6 +236,7 @@ const Document = rule(() => [[opt(Block), many(Newline, opt(Block))]]);
 
 const newline: NewlineConfig = {
   token: "Newline",
+  hardBreak: { token: "HardBreak", minSpaces: 2 },
   indentedText: { token: "IndentedCode", minColumns: 4, tabWidth: 4 },
 };
 
@@ -249,6 +263,7 @@ export default defineGrammar({
     Autolink,
     InlineHtml,
     Entity,
+    HardBreak,
     Escape,
     Strong,
     Strikethrough,

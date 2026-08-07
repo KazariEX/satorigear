@@ -111,14 +111,23 @@ function inlineFromLeaf(leaf: Extract<CstChild, { tokenType: string }>): Sem | n
     case "Link": case "ReferenceLink": case "Autolink": return sem("link", [textChild()]);
     case "Image": return sem("image", [textChild()]);
     case "InlineHtml": case "HtmlComment": return sem("html_inline");
+    case "HardBreak": return sem("linebreak");
     case "Text": case "Delimiter": case "Escape": case "Entity": case "Strikethrough":
     case "SetextUnderline": return textChild();
     default: return null;
   }
 }
 
-function inlineChildren(node: CstNode): Sem[] {
-  return normalizeChildren(leaves(node).map(inlineFromLeaf).filter((x): x is Sem => x !== null));
+function inlineChildren(node: CstNode, preserveTrailingBreak = false): Sem[] {
+  const inlineLeaves = leaves(node);
+  return normalizeChildren(inlineLeaves.map((leaf, index) => {
+    if (leaf.tokenType === "HardBreak" && index === inlineLeaves.length - 1 && !preserveTrailingBreak) {
+      // A break marker only becomes a linebreak when inline content continues on the next physical
+      // line. A final backslash is literal text; final spaces disappear from the semantic stream.
+      return getText(leaf, currentSource) === "\\" ? sem("text") : null;
+    }
+    return inlineFromLeaf(leaf);
+  }).filter((x): x is Sem => x !== null));
 }
 
 // InlineLines is left-recursive in the CST, so its physical line boundaries are represented by
@@ -136,8 +145,8 @@ function inlineLinesChildren(node: CstNode): Sem[] {
   collect(node);
   const children: Sem[] = [];
   lines.forEach((line, index) => {
-    if (index) children.push(sem("softbreak"));
-    children.push(...inlineChildren(line));
+    if (index && children.at(-1)?.type !== "linebreak") children.push(sem("softbreak"));
+    children.push(...inlineChildren(line, index < lines.length - 1));
   });
   return normalizeChildren(children);
 }
@@ -180,7 +189,8 @@ function monoSem(node: CstNode): Sem | null {
       const lines = nodesNamed(node, "BlockQuoteLine");
       const content: Sem[] = [];
       lines.forEach((line, i) => {
-        if (i) content.push(sem("softbreak")); content.push(...inlineChildren(line));
+        if (i && content.at(-1)?.type !== "linebreak") content.push(sem("softbreak"));
+        content.push(...inlineChildren(line, i < lines.length - 1));
       });
       return sem("block_quote", [sem("paragraph", content)]);
     }

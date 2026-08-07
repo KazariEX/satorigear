@@ -73,6 +73,11 @@ check("ordinary star marker remains a list item", types("* item")[0] === "Unorde
 check("an empty bullet remains a list item", rules(parse("-")).includes("UnorderedListItem"));
 check("an empty ordered marker remains a list item", rules(parse("1.")).includes("OrderedListItem"));
 check("same-line backticks are inline code, not a fence", types("```inline```")[0] === "CodeSpan");
+check("two trailing spaces form a hard line break", types("foo  \nbar").includes("HardBreak"));
+check("a trailing backslash forms a hard line break", types("foo\\\nbar").includes("HardBreak"));
+check("one trailing space remains text", !types("foo \nbar").includes("HardBreak"));
+check("trailing spaces at EOF do not form a hard line break", !types("foo  ").includes("HardBreak"));
+check("a trailing backslash at EOF remains literal", !types("foo\\").includes("HardBreak"));
 
 const longFence = tokenize("````js\nbody\n```\n# swallowed");
 check("a shorter closing fence does not close the block", longFence.length === 1 && longFence[0].type === "FenceBlock");
