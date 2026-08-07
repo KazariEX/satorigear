@@ -43,6 +43,7 @@ export interface EmittedParserDocument {
 }
 
 export interface SyntaxTreeNode {
+  entries?: readonly SyntaxTreeEntry[];
   id: number;
   kind: "node";
   offset: number;
@@ -126,24 +127,34 @@ function createSyntaxTree(
   } as SyntaxTreeNode;
   const result: SyntaxTree = {
     root,
-    children: (node) => Array.from({ length: tree.childCount(node.id) }, (_, index) => {
-      const entry = tree.childAt(node.id, index);
-      if (entry < 0) {
-        return {
-          kind: "leaf",
-          entry,
-          token: tree.leafToken(entry, node.tokenBase),
-          tree: result,
-        } satisfies SyntaxTreeLeaf;
+    children: (node) => {
+      if (node.entries) {
+        return node.entries;
       }
-      return {
-        kind: "node",
-        id: entry,
-        offset: node.offset + tree.childRelAt(node.id, index),
-        tokenBase: node.tokenBase + tree.childTokRelAt(node.id, index),
-        tree: result,
-      } satisfies SyntaxTreeNode;
-    }),
+      const entries = new Array<SyntaxTreeEntry>(tree.childCount(node.id));
+      for (let index = 0; index < entries.length; index++) {
+        const entry = tree.childAt(node.id, index);
+        if (entry < 0) {
+          entries[index] = {
+            kind: "leaf",
+            entry,
+            token: tree.leafToken(entry, node.tokenBase),
+            tree: result,
+          };
+        }
+        else {
+          entries[index] = {
+            kind: "node",
+            id: entry,
+            offset: node.offset + tree.childRelAt(node.id, index),
+            tokenBase: node.tokenBase + tree.childTokRelAt(node.id, index),
+            tree: result,
+          };
+        }
+      }
+      node.entries = entries;
+      return entries;
+    },
     leafToken: (leaf) => tokenAt(leaf.token),
     leafTokenType: (leaf) => leafTokenType(leaf.entry, tokenAt(leaf.token), tree),
     ruleName: (node) => tree.ruleNameOf(node.id),
