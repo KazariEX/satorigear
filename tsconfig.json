@@ -12,6 +12,7 @@
     "allowImportingTsExtensions": true
   },
   "include": [
+    "benchmark/**/*.ts",
     "packages/**/*.ts",
     "scripts/**/*.ts",
     "test/**/*.ts"
