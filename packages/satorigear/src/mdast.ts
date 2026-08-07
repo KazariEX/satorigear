@@ -69,7 +69,7 @@ export interface MarkdownSyntax {
   tokenType: (leaf: MarkdownSyntaxLeaf) => string;
 }
 
-export interface MdastBlockFragment {
+export interface BlockFragment {
   node: BlockContent | DefinitionContent;
   spans: Map<object, SourceSpan>;
 }
@@ -493,7 +493,7 @@ function appendInlineValue(
 ): void {
   const first = Array.isArray(value) ? value[0] : value;
   if (first?.type === "text" && first.value.startsWith("\n")) {
-    // Composite syntax newlines point past stripped container prefixes, while mdast spans include the physical line ending.
+    // Markdown syntax newlines point past stripped container prefixes, while mdast spans include the physical line ending.
     const previous = target.at(-1);
     if (!Array.isArray(value) && previous?.type === "break") {
       extendSpan(context, previous, lineStart(context.source, nextLineOffset));
@@ -870,11 +870,11 @@ function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): Block
   }
 }
 
-export function markdownSyntaxBlockToMdastFragment(
+export function projectBlock(
   tree: MarkdownSyntaxNode,
   source: string,
   syntax: MarkdownSyntax,
-): MdastBlockFragment {
+): BlockFragment {
   const context = { source, syntax, spans: new Map<object, SourceSpan>() };
   const node = blockContent(tree, context);
   const offset = syntax.span(tree).start;
@@ -886,7 +886,7 @@ export function markdownSyntaxBlockToMdastFragment(
 }
 
 function materializeFragment(
-  fragment: MdastBlockFragment,
+  fragment: BlockFragment,
   offset: number,
   point: (offset: number) => SourcePoint,
 ): BlockContent | DefinitionContent {
@@ -910,8 +910,8 @@ function materializeFragment(
   return clone(fragment.node as FragmentValue) as BlockContent | DefinitionContent;
 }
 
-export function markdownFragmentsToMdast(
-  fragments: readonly { fragment: MdastBlockFragment; offset: number }[],
+export function materializeMdast(
+  fragments: readonly { fragment: BlockFragment; offset: number }[],
   source: string,
   point?: (offset: number) => SourcePoint,
 ): Root {

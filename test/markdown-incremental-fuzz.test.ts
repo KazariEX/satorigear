@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { tests } from "commonmark-spec";
 import { describe, expect, it } from "vitest";
-import { createMarkdownDocument, markdownToMdast, type TextEdit } from "../packages/satorigear/src/index.ts";
+import { createDocument, parse, type TextEdit } from "../packages/satorigear/src/index.ts";
 
 function random(seed: number): () => number {
   let value = seed >>> 0;
@@ -42,14 +42,14 @@ describe("incremental differential fuzz", () => {
   it("matches fresh parsing after edits across the CommonMark corpus", { timeout: 30_000 }, () => {
     for (const [caseIndex, test] of tests.entries()) {
       let source = test.markdown.replace(/→/g, "\t");
-      const document = createMarkdownDocument(source);
+      const document = createDocument(source);
       const choose = random(caseIndex + 1);
       for (let step = 0; step < 8; step++) {
         const edits = nextEdits(source, choose, step);
         source = applyEdits(source, edits);
         document.edit(edits);
-        const incremental = document.toMdast();
-        const fresh = markdownToMdast(source);
+        const incremental = document.snapshot();
+        const fresh = parse(source);
         if (!isDeepStrictEqual(incremental, fresh)) {
           throw new Error(`Incremental mismatch after CommonMark example ${caseIndex + 1}, step ${step + 1}`);
         }

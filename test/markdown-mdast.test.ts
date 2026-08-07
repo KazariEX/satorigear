@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { markdownToMdast } from "../packages/satorigear/src/index.ts";
+import { parse } from "../packages/satorigear/src/index.ts";
 
 describe("markdown mdast conversion", () => {
   it("preserves mdast definitions and references", () => {
-    expect(markdownToMdast("[label][id]\n\n[id]: /url \"title\"\n")).toMatchObject({
+    expect(parse("[label][id]\n\n[id]: /url \"title\"\n")).toMatchObject({
       type: "root",
       children: [
         {
@@ -28,7 +28,7 @@ describe("markdown mdast conversion", () => {
   });
 
   it("decodes only valid CommonMark character references", () => {
-    const links = markdownToMdast([
+    const links = parse([
       "[valid](&ouml; \"&#35;\")",
       "",
       "[escaped](\\&amp; \"\\&copy;\")",
@@ -42,12 +42,12 @@ describe("markdown mdast conversion", () => {
       { children: [{ type: "link", url: "&#87654321;", title: "&#xabcdef0;" }] },
     ]);
 
-    expect(markdownToMdast("``` &copy;\nx\n```\n").children[0]).toMatchObject({ lang: "©" });
-    expect(markdownToMdast("``` &#87654321;\nx\n```\n").children[0]).toMatchObject({ lang: "&#87654321;" });
+    expect(parse("``` &copy;\nx\n```\n").children[0]).toMatchObject({ lang: "©" });
+    expect(parse("``` &#87654321;\nx\n```\n").children[0]).toMatchObject({ lang: "&#87654321;" });
   });
 
   it("maps source offsets to mdast positions", () => {
-    const tree = markdownToMdast("  foo  \nbar\n");
+    const tree = parse("  foo  \nbar\n");
     expect(tree.position).toEqual({
       start: { line: 1, column: 1, offset: 0 },
       end: { line: 3, column: 1, offset: 12 },
@@ -59,7 +59,7 @@ describe("markdown mdast conversion", () => {
   });
 
   it("uses original delimiter run lengths for the rule of three", () => {
-    const tree = markdownToMdast("*****b___(__\n___**_.****(__*****\n");
+    const tree = parse("*****b___(__\n___**_.****(__*****\n");
     expect(tree.children).toMatchObject([{
       type: "paragraph",
       children: [

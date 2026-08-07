@@ -1,2 +1,3 @@
-export { createMarkdownDocument, markdownToMdast } from "./document.ts";
-export type { MarkdownDocument, MarkdownUpdate, TextEdit } from "./document.ts";
+export { createDocument, parse } from "./document.ts";
+export type { Document, EditResult } from "./document.ts";
+export type { TextEdit } from "./text-edit.ts";

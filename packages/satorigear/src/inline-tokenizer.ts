@@ -7,14 +7,14 @@ import {
 } from "./grammar-inline.ts";
 import { createDelimitedTokenResolver } from "./inline-resolution.ts";
 import { changedTokenRange, type TokenChange } from "./token-change.ts";
-import type { SourceEdit } from "./source-view.ts";
+import type { TextEdit } from "./text-edit.ts";
 
-type ApplyTokenChange = (edits: readonly SourceEdit[], change: TokenChange) => void;
+type ApplyTokenChange = (edits: readonly TextEdit[], change: TokenChange) => void;
 
 const resolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
 const emptyTokens: readonly Token[] = [];
 
-function textEdit(previous: string, next: string): readonly SourceEdit[] {
+function textEdit(previous: string, next: string): readonly TextEdit[] {
   if (previous.length === 0) {
     return next.length === 0 ? [] : [{ start: 0, end: 0, text: next }];
   }
@@ -40,7 +40,7 @@ function textEdit(previous: string, next: string): readonly SourceEdit[] {
   }];
 }
 
-export class InlineTokenDocument {
+export class InlineTokenState {
   #candidates?: ReadonlySet<string>;
   #labels?: ReadonlySet<string>;
   #rawTokens?: readonly Token[];
@@ -55,7 +55,7 @@ export class InlineTokenDocument {
     source: string,
     labels: ReadonlySet<string>,
     apply?: ApplyTokenChange,
-    sourceEdits: readonly SourceEdit[] | null = null,
+    sourceEdits: readonly TextEdit[] | null = null,
   ): boolean {
     if (source === this.#source && !this.#referencesChanged(labels)) {
       this.#labels = labels;

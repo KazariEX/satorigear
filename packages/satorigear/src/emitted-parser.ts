@@ -1,4 +1,5 @@
 import type { Token } from "monogram/gen-lexer.ts";
+import type { TextEdit } from "./text-edit.ts";
 
 interface ArenaTree {
   childAt: (id: number, index: number) => number;
@@ -24,18 +25,18 @@ export interface EmittedParserHandle {
 interface EmittedParserInstance<Handle extends EmittedParserHandle> {
   editTokens: (
     handle: Handle,
-    edits: readonly { end: number; start: number; text: string }[],
+    edits: readonly TextEdit[],
     change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
   ) => void;
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => Handle;
   tree: ArenaTree;
 }
 
-export interface EmittedDocument {
+export interface EmittedParserDocument {
   readonly rootId: number;
 
   edit: (
-    edits: readonly { end: number; start: number; text: string }[],
+    edits: readonly TextEdit[],
     change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
   ) => void;
   tree: (tokens: readonly Token[]) => SyntaxTree;
@@ -69,17 +70,17 @@ export interface SyntaxTree {
 }
 
 export interface EmittedParser {
-  createDocument: (source: string, tokens: readonly Token[], entryRule?: string) => EmittedDocument;
+  createDocument: (source: string, tokens: readonly Token[], entryRule?: string) => EmittedParserDocument;
   parseTree: (source: string, tokens: readonly Token[], entryRule?: string) => SyntaxTree;
   tokenize: (source: string) => Token[];
 }
 
-function createEmittedDocument<Handle extends EmittedParserHandle>(
+function createEmittedParserDocument<Handle extends EmittedParserHandle>(
   runtime: EmittedParserModule<Handle>,
   source: string,
   tokens: readonly Token[],
   entryRule?: string,
-): EmittedDocument {
+): EmittedParserDocument {
   const parser = runtime.createParser();
   const handle = parser.parseTokens(source, tokens, entryRule);
   const tree = (currentTokens: readonly Token[]): SyntaxTree => createSyntaxTree(handle.root, currentTokens, parser.tree);
@@ -167,7 +168,7 @@ export function createEmittedParser<Handle extends EmittedParserHandle>(
     return createSyntaxTree(root, tokens, runtime.tree);
   };
   return {
-    createDocument: (source, tokens, entryRule) => createEmittedDocument(runtime, source, tokens, entryRule),
+    createDocument: (source, tokens, entryRule) => createEmittedParserDocument(runtime, source, tokens, entryRule),
     parseTree,
     tokenize,
   };

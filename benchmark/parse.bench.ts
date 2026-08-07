@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { tests } from "commonmark-spec";
 import { bench, do_not_optimize, run, summary } from "mitata";
 import { remark } from "remark";
-import { markdownToMdast as parseSatorigear } from "satorigear";
+import { parse as parseSatorigear } from "satorigear";
 import { markdownToMdast as parseSatteri } from "satteri";
 
 const representative = `# Parser benchmark

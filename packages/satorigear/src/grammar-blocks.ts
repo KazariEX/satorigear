@@ -2,6 +2,7 @@ import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } fro
 import type { Token } from "monogram/gen-lexer.ts";
 import { changedTokenRange, sameShiftedToken, shiftedToken, type TokenChange } from "./token-change.ts";
 import type { SourceRange } from "./source-view.ts";
+import type { TextEdit } from "./text-edit.ts";
 
 const ParagraphOpen = token(never());
 const ParagraphClose = token(never());
@@ -978,13 +979,7 @@ interface BlockCheckpoint {
   tokenStart: number;
 }
 
-export interface BlockTextEdit {
-  end: number;
-  start: number;
-  text: string;
-}
-
-export interface MarkdownBlockUpdate {
+export interface BlockEditResult {
   change: TokenChange;
   scannedRange: {
     end: number;
@@ -1023,7 +1018,7 @@ function scanBlocks(source: string): { checkpoints: BlockCheckpoint[]; lines: Li
   return { checkpoints, lines, tokens };
 }
 
-function applyBlockEdits(source: string, edits: readonly BlockTextEdit[]): string {
+function applyBlockEdits(source: string, edits: readonly TextEdit[]): string {
   const parts: string[] = [];
   let cursor = 0;
   for (const [index, edit] of edits.entries()) {
@@ -1116,7 +1111,7 @@ function sameShiftedBlock(
   return true;
 }
 
-class StatefulMarkdownBlockTokenizer {
+class MarkdownBlockTokenizerImpl {
   #checkpoints: BlockCheckpoint[];
   #lines: Line[];
   #source: string;
@@ -1162,7 +1157,7 @@ class StatefulMarkdownBlockTokenizer {
     return { line: low + 1, column: offset - this.#lines[low].start + 1, offset };
   }
 
-  edit(edits: readonly BlockTextEdit[]): MarkdownBlockUpdate {
+  edit(edits: readonly TextEdit[]): BlockEditResult {
     if (edits.length === 0) {
       return { change: { oldStart: 0, oldEnd: 0, tokens: [] }, scannedRange: { start: 0, end: 0 } };
     }
@@ -1247,8 +1242,8 @@ class StatefulMarkdownBlockTokenizer {
   }
 }
 
-export function createMarkdownBlockTokenizer(source: string): StatefulMarkdownBlockTokenizer {
-  return new StatefulMarkdownBlockTokenizer(source);
+export function createMarkdownBlockTokenizer(source: string): MarkdownBlockTokenizerImpl {
+  return new MarkdownBlockTokenizerImpl(source);
 }
 
 /** Produce the balanced structural token stream consumed by markdownBlockGrammar. */

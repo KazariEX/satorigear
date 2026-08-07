@@ -1,6 +1,6 @@
 import {
   createEmittedParser,
-  type EmittedDocument,
+  type EmittedParserDocument,
   type SyntaxTree,
   type SyntaxTreeEntry,
   type SyntaxTreeLeaf,
@@ -10,11 +10,10 @@ import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
 import { tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
-import { InlineTokenDocument } from "./inline-tokenizer.ts";
+import { InlineTokenState } from "./inline-tokenizer.ts";
 import {
   createSourceView,
   projectSourceEdits,
-  type SourceEdit,
   type SourceRange,
   type SourceView,
 } from "./source-view.ts";
@@ -24,8 +23,9 @@ import type {
   MarkdownSyntaxLeaf,
   MarkdownSyntaxNode,
 } from "./mdast.ts";
+import type { TextEdit } from "./text-edit.ts";
 
-export const markdownBlockParser = createEmittedParser(blockRuntime, tokenizeMarkdownBlocks);
+export const blockParser = createEmittedParser(blockRuntime, tokenizeMarkdownBlocks);
 const inlineParser = createEmittedParser(inlineRuntime, inlineRuntime.tokenize);
 
 function referenceLabelText(text: string): string | null {
@@ -51,8 +51,8 @@ interface InlineRegionDescriptor {
   view: SourceView;
 }
 
-class InlineRegion extends InlineTokenDocument {
-  document?: EmittedDocument;
+class InlineRegion extends InlineTokenState {
+  document?: EmittedParserDocument;
   id: number;
   revision = 0;
   rule: string;
@@ -76,7 +76,7 @@ class InlineRegion extends InlineTokenDocument {
   }
 }
 
-interface CompositeBlockDescriptor {
+interface SyntaxBlockDescriptor {
   id: number;
   node: SyntaxTreeNode;
   offset: number;
@@ -87,7 +87,7 @@ interface CompositeBlockDescriptor {
   version: number;
 }
 
-type CollectedBlock = Omit<CompositeBlockDescriptor, "regionRevisions" | "syntax" | "version">;
+type CollectedBlock = Omit<SyntaxBlockDescriptor, "regionRevisions" | "syntax" | "version">;
 
 function rangesOf(tree: SyntaxTree, node: SyntaxTreeNode): SourceRange[] {
   return tree.children(node).flatMap((child) => {
@@ -107,7 +107,7 @@ function updateInlineRegion(
   region: InlineRegion,
   descriptor: InlineRegionDescriptor,
   labels: ReadonlySet<string>,
-  edits: readonly SourceEdit[] | null,
+  edits: readonly TextEdit[] | null,
 ): InlineRegion {
   const document = region.document;
   const sourceEdits = edits && region.view.text !== descriptor.view.text
@@ -129,8 +129,8 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-class MarkdownCompositeDocument implements MarkdownSyntax {
-  #blocks: readonly CompositeBlockDescriptor[] = [];
+class MarkdownSyntaxImpl implements MarkdownSyntax {
+  #blocks: readonly SyntaxBlockDescriptor[] = [];
   #inlineTrees = new WeakMap<SyntaxTree, InlineRegion>();
   #regions = new Map<number, InlineRegion>();
   #source: string;
@@ -142,11 +142,11 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
     this.update(tree, source);
   }
 
-  blocks(): readonly CompositeBlockDescriptor[] {
+  blocks(): readonly SyntaxBlockDescriptor[] {
     return this.#blocks;
   }
 
-  update(tree: SyntaxTree, source: string, edits: readonly SourceEdit[] = []): void {
+  update(tree: SyntaxTree, source: string, edits: readonly TextEdit[] = []): void {
     this.#inlineTrees = new WeakMap();
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
@@ -219,7 +219,7 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
       regions.set(descriptor.id, region);
     }
     const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));
-    const nextBlocks = blocks.map((block): CompositeBlockDescriptor => {
+    const nextBlocks = blocks.map((block): SyntaxBlockDescriptor => {
       const previous = previousBlocks.get(block.id);
       const regionRevisions = block.regionIds.map((id) => {
         const region = regions.get(id);
@@ -316,6 +316,6 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
   }
 }
 
-export function createMarkdownCompositeDocument(tree: SyntaxTree, source: string): MarkdownCompositeDocument {
-  return new MarkdownCompositeDocument(tree, source);
+export function createMarkdownSyntax(tree: SyntaxTree, source: string): MarkdownSyntaxImpl {
+  return new MarkdownSyntaxImpl(tree, source);
 }

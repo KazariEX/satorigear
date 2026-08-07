@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { bench, do_not_optimize, run, summary } from "mitata";
-import { createMarkdownDocument, markdownToMdast, type TextEdit } from "satorigear";
+import { createDocument, parse, type TextEdit } from "satorigear";
 
 const body = Array.from({ length: 200 }, (_, index) => [
   `## Section ${index}`,
@@ -49,14 +49,14 @@ const scenarios = [
 
 summary(() => {
   const bytes = Buffer.byteLength(base);
-  const document = createMarkdownDocument(base);
-  document.toMdast();
+  const document = createDocument(base);
+  document.snapshot();
 
   bench(`snapshot materialization (${bytes} bytes)`, () => {
-    do_not_optimize(document.toMdast());
+    do_not_optimize(document.snapshot());
   });
   bench(`fresh rebuild (${bytes} bytes)`, () => {
-    do_not_optimize(markdownToMdast(base));
+    do_not_optimize(parse(base));
   });
 });
 
@@ -64,18 +64,18 @@ for (const scenario of scenarios) {
   summary(() => {
     const bytes = Math.max(Buffer.byteLength(scenario.first), Buffer.byteLength(scenario.second));
     let incrementalSource = scenario.first;
-    const document = createMarkdownDocument(incrementalSource);
+    const document = createDocument(incrementalSource);
     let freshSource = scenario.first;
 
     bench(`incremental (${scenario.name}, ${bytes} bytes)`, () => {
       const next = incrementalSource === scenario.first ? scenario.second : scenario.first;
       document.edit([editBetween(incrementalSource, next)]);
       incrementalSource = next;
-      do_not_optimize(document.toMdast());
+      do_not_optimize(document.snapshot());
     });
     bench(`fresh (${scenario.name}, ${bytes} bytes)`, () => {
       freshSource = freshSource === scenario.first ? scenario.second : scenario.first;
-      do_not_optimize(markdownToMdast(freshSource));
+      do_not_optimize(parse(freshSource));
     });
   });
 }

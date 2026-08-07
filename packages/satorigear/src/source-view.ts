@@ -1,12 +1,8 @@
+import type { TextEdit } from "./text-edit.ts";
+
 export interface SourceRange {
   offset: number;
   end: number;
-}
-
-export interface SourceEdit {
-  end: number;
-  start: number;
-  text: string;
 }
 
 export interface SourceViewSegment extends SourceRange {
@@ -25,13 +21,13 @@ export interface SourceView {
 export function projectSourceEdits(
   previous: SourceView,
   next: SourceView,
-  edits: readonly SourceEdit[],
-): SourceEdit[] | null {
+  edits: readonly TextEdit[],
+): TextEdit[] | null {
   if (previous.segments.length !== next.segments.length) {
     return null;
   }
 
-  const projected: SourceEdit[] = [];
+  const projected: TextEdit[] = [];
   let editIndex = 0;
   let documentDelta = 0;
   let viewDelta = 0;

@@ -1,31 +1,22 @@
 import type { Root } from "mdast";
 import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
-import {
-  markdownFragmentsToMdast,
-  markdownSyntaxBlockToMdastFragment,
-  type MdastBlockFragment,
-} from "./mdast.ts";
-import { createMarkdownCompositeDocument, markdownBlockParser } from "./parser.ts";
-import type { EmittedDocument } from "./emitted-parser.ts";
+import { type BlockFragment, materializeMdast, projectBlock } from "./mdast.ts";
+import { blockParser, createMarkdownSyntax } from "./parser.ts";
+import type { EmittedParserDocument } from "./emitted-parser.ts";
+import type { TextEdit } from "./text-edit.ts";
 
-export interface TextEdit {
-  end: number;
-  start: number;
-  text: string;
-}
-
-export interface MarkdownUpdate {
+export interface EditResult {
   changedRange: {
     end: number;
     start: number;
   };
 }
 
-export interface MarkdownDocument {
+export interface Document {
   readonly source: string;
 
-  edit: (edits: readonly TextEdit[]) => MarkdownUpdate;
-  toMdast: () => Root;
+  edit: (edits: readonly TextEdit[]) => EditResult;
+  snapshot: () => Root;
 }
 
 function validateEdits(source: string, edits: readonly TextEdit[]): void {
@@ -44,7 +35,7 @@ function validateEdits(source: string, edits: readonly TextEdit[]): void {
   }
 }
 
-function changedRangeOf(edits: readonly TextEdit[]): MarkdownUpdate["changedRange"] {
+function changedRangeOf(edits: readonly TextEdit[]): EditResult["changedRange"] {
   if (edits.length === 0) {
     return { start: 0, end: 0 };
   }
@@ -67,23 +58,23 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
   });
 }
 
-class StatefulMarkdownDocument implements MarkdownDocument {
-  #blocks: EmittedDocument;
-  #composite: ReturnType<typeof createMarkdownCompositeDocument>;
-  #fragments = new Map<number, { fragment: MdastBlockFragment; version: number }>();
+class DocumentImpl implements Document {
+  #blocks: EmittedParserDocument;
+  #syntax: ReturnType<typeof createMarkdownSyntax>;
+  #fragments = new Map<number, { fragment: BlockFragment; version: number }>();
   #tokenizer: ReturnType<typeof createMarkdownBlockTokenizer>;
 
   constructor(source: string) {
     this.#tokenizer = createMarkdownBlockTokenizer(source);
-    this.#blocks = markdownBlockParser.createDocument(source, this.#tokenizer.tokens);
-    this.#composite = createMarkdownCompositeDocument(this.#blocks.tree(this.#tokenizer.tokens), source);
+    this.#blocks = blockParser.createDocument(source, this.#tokenizer.tokens);
+    this.#syntax = createMarkdownSyntax(this.#blocks.tree(this.#tokenizer.tokens), source);
   }
 
   get source(): string {
     return this.#tokenizer.source;
   }
 
-  edit(edits: readonly TextEdit[]): MarkdownUpdate {
+  edit(edits: readonly TextEdit[]): EditResult {
     validateEdits(this.source, edits);
     if (edits.length === 0) {
       return { changedRange: { start: 0, end: 0 } };
@@ -91,29 +82,29 @@ class StatefulMarkdownDocument implements MarkdownDocument {
     const changedRange = changedRangeOf(edits);
     const update = this.#tokenizer.edit(edits);
     this.#blocks.edit(sequentialEdits(edits), update.change);
-    this.#composite.update(this.#blocks.tree(this.#tokenizer.tokens), this.source, edits);
+    this.#syntax.update(this.#blocks.tree(this.#tokenizer.tokens), this.source, edits);
     return { changedRange };
   }
 
-  toMdast(): Root {
-    const fragments = new Map<number, { fragment: MdastBlockFragment; version: number }>();
-    const blocks = this.#composite.blocks().map((block) => {
+  snapshot(): Root {
+    const fragments = new Map<number, { fragment: BlockFragment; version: number }>();
+    const blocks = this.#syntax.blocks().map((block) => {
       const previous = this.#fragments.get(block.id);
       const fragment = previous?.version === block.version
         ? previous.fragment
-        : markdownSyntaxBlockToMdastFragment(block.node, this.source, block.syntax);
+        : projectBlock(block.node, this.source, block.syntax);
       fragments.set(block.id, { fragment, version: block.version });
       return { fragment, offset: block.offset };
     });
     this.#fragments = fragments;
-    return markdownFragmentsToMdast(blocks, this.source, (offset) => this.#tokenizer.point(offset));
+    return materializeMdast(blocks, this.source, (offset) => this.#tokenizer.point(offset));
   }
 }
 
-export function createMarkdownDocument(source: string): MarkdownDocument {
-  return new StatefulMarkdownDocument(source);
+export function createDocument(source: string): Document {
+  return new DocumentImpl(source);
 }
 
-export function markdownToMdast(source: string): Root {
-  return createMarkdownDocument(source).toMdast();
+export function parse(source: string): Root {
+  return createDocument(source).snapshot();
 }
