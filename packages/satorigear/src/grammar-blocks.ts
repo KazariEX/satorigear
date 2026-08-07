@@ -1023,6 +1023,40 @@ function applyBlockEdits(source: string, edits: readonly BlockTextEdit[]): strin
   return parts.join("");
 }
 
+function definitionRestartBefore(source: string, changedEnd: number): number | null {
+  let lineStart = Math.max(0, changedEnd - 1);
+  while (lineStart > 0 && source[lineStart - 1] !== "\n" && source[lineStart - 1] !== "\r") {
+    lineStart--;
+  }
+
+  let candidate: number | null = null;
+  for (;;) {
+    let lineEnd = lineStart;
+    while (lineEnd < source.length && source[lineEnd] !== "\n" && source[lineEnd] !== "\r") {
+      lineEnd++;
+    }
+    const line = { start: lineStart, end: lineEnd, next: lineEnd };
+    if (isBlank(source, line)) {
+      break;
+    }
+    if (lineBody(source, line)?.text.startsWith("[")) {
+      candidate = lineStart;
+    }
+    if (lineStart === 0) {
+      break;
+    }
+    let previous = lineStart - 1;
+    if (source[previous] === "\n" && previous > 0 && source[previous - 1] === "\r") {
+      previous--;
+    }
+    lineStart = previous;
+    while (lineStart > 0 && source[lineStart - 1] !== "\n" && source[lineStart - 1] !== "\r") {
+      lineStart--;
+    }
+  }
+  return candidate;
+}
+
 function shiftedLine(line: Line, delta: number): Line {
   return { start: line.start + delta, end: line.end + delta, next: line.next + delta };
 }
@@ -1139,7 +1173,15 @@ class StatefulMarkdownBlockTokenizer {
     if (affected < 0) {
       affected = Math.max(0, this.#checkpoints.length - 1);
     }
-    const restart = this.#checkpoints[affected]?.lineStart > firstEdit.start ? -1 : Math.max(0, affected - 1);
+    let restart = this.#checkpoints[affected]?.lineStart > firstEdit.start ? -1 : Math.max(0, affected - 1);
+    const definitionRestart = definitionRestartBefore(nextSource, changedEnd);
+    if (definitionRestart !== null && definitionRestart < firstEdit.start) {
+      const candidate = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineStart <= definitionRestart
+        && checkpoint.lineEnd > definitionRestart);
+      if (candidate >= 0) {
+        restart = restart < 0 ? restart : Math.min(restart, candidate);
+      }
+    }
     const checkpoint = this.#checkpoints[restart];
     const restartOffset = checkpoint?.lineStart ?? 0;
     const oldTokenStart = checkpoint?.tokenStart ?? 0;

@@ -54,6 +54,14 @@ describe("markdown document", () => {
     });
   });
 
+  it("restarts an earlier multiline definition candidate", () => {
+    const document = createMarkdownDocument("[foo]\n>\nxxxbar\n");
+    document.edit([{ start: 11, end: 14, text: "foo&]:&rl" }]);
+
+    expect(document.toMdast()).toEqual(markdownToMdast(document.source));
+    expect(document.toMdast().children[0]).toMatchObject({ type: "definition", identifier: "foo] > xxxfoo&" });
+  });
+
   it("does not mutate an earlier mdast snapshot after edits", () => {
     const document = createMarkdownDocument("first\n\nsecond\n");
     const before = document.toMdast();

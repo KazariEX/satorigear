@@ -23,8 +23,8 @@ function applyEdits(source: string, edits: readonly TextEdit[]): string {
 }
 
 function nextEdits(source: string, choose: () => number, step: number): TextEdit[] {
-  const replacements = ["", "x", "*", "`", "\n", "\r\n", "✨", "> ", "[a]"];
-  if (step === 2) {
+  const replacements = ["", "x", "*", "`", "~", "<", ">", "](", ")", "&", "\\", "\n", "\r\n", "✨", "> ", "[a]"];
+  if (step % 3 === 2) {
     const first = Math.floor(choose() * (source.length + 1));
     const second = first + Math.floor(choose() * (source.length - first + 1));
     return [
@@ -44,7 +44,7 @@ describe("incremental differential fuzz", () => {
       let source = test.markdown.replace(/→/g, "\t");
       const document = createMarkdownDocument(source);
       const choose = random(caseIndex + 1);
-      for (let step = 0; step < 3; step++) {
+      for (let step = 0; step < 8; step++) {
         const edits = nextEdits(source, choose, step);
         source = applyEdits(source, edits);
         document.edit(edits);
