@@ -22,7 +22,6 @@ import type {
   Strong,
 } from "mdast";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
-import { markdownPhasedParser } from "./parser.ts";
 
 interface Resource {
   url: string;
@@ -811,9 +810,4 @@ export function markdownCstToMdast(tree: CstNode, source: string): Root {
     children: childNodes(tree, "Block").map((child) => blockContent(child, context)),
   } satisfies Root, 0, source.length);
   return attachPositions(context, root);
-}
-
-/** Parse CommonMark source with Monogram and expose its semantic tree as mdast. */
-export function markdownToMdast(source: string): Root {
-  return markdownCstToMdast(markdownPhasedParser.parse(source), source);
 }

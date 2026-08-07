@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { tests } from "commonmark-spec";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { afterAll, describe, expect, it } from "vitest";
-import { markdownToMdast } from "../packages/satorigear/src/mdast.ts";
+import { markdownToMdast } from "../packages/satorigear/src/index.ts";
 
 interface SpecCase { markdown: string; section: string }
 
