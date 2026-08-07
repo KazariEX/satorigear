@@ -1,6 +1,7 @@
 import type { Token } from "monogram/gen-lexer.ts";
 import {
   createEmittedParser,
+  type EmittedArena,
   type EmittedParserDocument,
   type SyntaxTree,
   type SyntaxTreeEntry,
@@ -108,11 +109,21 @@ function tokenSpans(token: Token): SourceSpan[] {
   return spans;
 }
 
-function spansOf(tree: SyntaxTree, node: SyntaxTreeNode): SourceSpan[] {
+function inlineSpansOf(
+  tree: SyntaxTree,
+  arena: EmittedArena,
+  nodeId: number,
+  tokenBase: number,
+): SourceSpan[] {
   const spans: SourceSpan[] = [];
-  for (const child of tree.children(node)) {
-    if (child.kind === "leaf" && tree.leafTokenType(child) === "InlineChunk") {
-      appendTokenSpans(spans, tree.leafToken(child));
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const entry = arena.childAt(nodeId, index);
+    if (entry < 0) {
+      const token = tree.tokenAt(arena.leafToken(entry, tokenBase));
+      if (token.type === "InlineChunk") {
+        appendTokenSpans(spans, token);
+      }
     }
   }
   return spans;
@@ -165,48 +176,69 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   }
 
   update(tree: SyntaxTree, source: string, edits: readonly TextEdit[] = []): void {
+    const arena = tree.arena;
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
     const stableRegionIds = new Set<number>();
     const blocks: CollectedBlock[] = [];
-    const collect = (node: SyntaxTreeNode, regionIds: number[]): void => {
-      const rule = tree.ruleName(node);
+    const collect = (
+      nodeId: number,
+      offset: number,
+      tokenBase: number,
+      regionIds: number[],
+    ): void => {
+      const rule = arena.ruleNameOf(nodeId);
       if (rule === "LinkDefinition") {
-        const span = tree.span(node);
-        const label = referenceLabelText(source.slice(span.start, span.end));
+        const label = referenceLabelText(source.slice(offset, offset + arena.lenOf(nodeId)));
         if (label) {
           labels.add(label);
         }
         return;
       }
       if (rule === "Paragraph" || rule === "AtxHeading" || rule === "SetextHeading") {
-        const spans = spansOf(tree, node);
+        const spans = inlineSpansOf(tree, arena, nodeId, tokenBase);
         if (spans.length > 0) {
-          descriptors.push({ id: node.id, rule, span: tree.span(node), view: createSourceView(source, spans) });
-          stableRegionIds.add(node.id);
-          regionIds.push(node.id);
+          descriptors.push({
+            id: nodeId,
+            rule,
+            span: { start: offset, end: offset + arena.lenOf(nodeId) },
+            view: createSourceView(source, spans),
+          });
+          stableRegionIds.add(nodeId);
+          regionIds.push(nodeId);
         }
         return;
       }
-      for (const child of tree.children(node)) {
-        if (child.kind === "node") {
-          collect(child, regionIds);
+      const childCount = arena.childCount(nodeId);
+      for (let index = 0; index < childCount; index++) {
+        const child = arena.childAt(nodeId, index);
+        if (child >= 0) {
+          collect(
+            child,
+            offset + arena.childRelAt(nodeId, index),
+            tokenBase + arena.childTokRelAt(nodeId, index),
+            regionIds,
+          );
         }
       }
     };
-    for (const child of tree.children(tree.root)) {
-      if (child.kind !== "node" || tree.ruleName(child) !== "Block") {
+    const root = tree.root;
+    const rootChildCount = arena.childCount(root.id);
+    for (let index = 0; index < rootChildCount; index++) {
+      const childId = arena.childAt(root.id, index);
+      if (childId < 0 || arena.ruleNameOf(childId) !== "Block") {
         continue;
       }
-      const span = tree.span(child);
+      const offset = root.offset + arena.childRelAt(root.id, index);
+      const tokenBase = root.tokenBase + arena.childTokRelAt(root.id, index);
       const regionIds: number[] = [];
-      collect(child, regionIds);
+      collect(childId, offset, tokenBase, regionIds);
       blocks.push({
-        id: child.id,
-        node: child,
-        offset: child.offset,
+        id: childId,
+        node: tree.node(childId, offset, tokenBase),
+        offset,
         regionIds,
-        source: source.slice(span.start, span.end),
+        source: source.slice(offset, offset + arena.lenOf(childId)),
       });
     }
 

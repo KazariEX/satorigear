@@ -1,7 +1,7 @@
 import type { Token } from "monogram/gen-lexer.ts";
 import type { TextEdit } from "./text-edit.ts";
 
-interface ArenaTree {
+export interface EmittedArena {
   childAt: (id: number, index: number) => number;
   childCount: (id: number) => number;
   childRelAt: (id: number, index: number) => number;
@@ -15,7 +15,7 @@ interface ArenaTree {
 export interface EmittedParserModule<Handle extends EmittedParserHandle> {
   createParser: () => EmittedParserInstance<Handle>;
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => number;
-  tree: ArenaTree;
+  tree: EmittedArena;
 }
 
 export interface EmittedParserHandle {
@@ -29,7 +29,7 @@ interface EmittedParserInstance<Handle extends EmittedParserHandle> {
     change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
   ) => void;
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => Handle;
-  tree: ArenaTree;
+  tree: EmittedArena;
 }
 
 export interface EmittedParserDocument {
@@ -61,13 +61,16 @@ export interface SyntaxTreeLeaf {
 export type SyntaxTreeEntry = SyntaxTreeLeaf | SyntaxTreeNode;
 
 export interface SyntaxTree {
+  readonly arena: EmittedArena;
   readonly root: SyntaxTreeNode;
 
   children: (node: SyntaxTreeNode) => readonly SyntaxTreeEntry[];
   leafToken: (leaf: SyntaxTreeLeaf) => Token;
   leafTokenType: (leaf: SyntaxTreeLeaf) => string;
+  node: (id: number, offset: number, tokenBase: number) => SyntaxTreeNode;
   ruleName: (node: SyntaxTreeNode) => string;
   span: (entry: SyntaxTreeEntry) => { end: number; start: number };
+  tokenAt: (index: number) => Token;
 }
 
 export interface EmittedParser {
@@ -94,7 +97,7 @@ function createEmittedParserDocument<Handle extends EmittedParserHandle>(
   };
 }
 
-function leafTokenType(entry: number, token: Token, tree: ArenaTree): string {
+function leafTokenType(entry: number, token: Token, tree: EmittedArena): string {
   const kind = tree.leafKindOf(entry);
   if (kind === 1) {
     return "$keyword";
@@ -108,7 +111,7 @@ function leafTokenType(entry: number, token: Token, tree: ArenaTree): string {
 function createSyntaxTree(
   rootId: number,
   tokens: readonly Token[],
-  tree: ArenaTree,
+  tree: EmittedArena,
 ): SyntaxTree {
   const tokenAt = (index: number): Token => {
     const token = tokens[index];
@@ -126,6 +129,7 @@ function createSyntaxTree(
     tokenBase: 0,
   } as SyntaxTreeNode;
   const result: SyntaxTree = {
+    arena: tree,
     root,
     children: (node) => {
       if (node.entries) {
@@ -157,6 +161,7 @@ function createSyntaxTree(
     },
     leafToken: (leaf) => tokenAt(leaf.token),
     leafTokenType: (leaf) => leafTokenType(leaf.entry, tokenAt(leaf.token), tree),
+    node: (id, offset, tokenBase) => ({ id, kind: "node", offset, tokenBase, tree: result }),
     ruleName: (node) => tree.ruleNameOf(node.id),
     span: (entry) => {
       if (entry.kind === "node") {
@@ -165,6 +170,7 @@ function createSyntaxTree(
       const token = tokenAt(entry.token);
       return { start: tokenOffset(token), end: tokenEnd(token) };
     },
+    tokenAt,
   };
   root.tree = result;
   return result;
