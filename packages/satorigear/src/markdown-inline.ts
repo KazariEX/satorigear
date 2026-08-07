@@ -334,30 +334,77 @@ export function normalizeMarkdownReferenceLabel(label: string): string {
   return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();
 }
 
+function tokenFragment(token: Token, type: string, text: string, offset: number, first = false): Token {
+  return {
+    ...token,
+    type,
+    text,
+    offset,
+    k: 0,
+    t: 0,
+    newlineBefore: first && token.newlineBefore,
+    commentBefore: first && token.commentBefore,
+    multilineFlowBefore: first && token.multilineFlowBefore,
+  };
+}
+
+function splitReferenceTail(token: Token): Token[] {
+  const label = token.text.slice(2, -1);
+  return [
+    tokenFragment(token, "ReferenceSeparatorClose", "]", token.offset, true),
+    tokenFragment(token, "BracketOpen", "[", token.offset + 1),
+    ...(label ? [tokenFragment(token, "Text", label, token.offset + 2)] : []),
+    tokenFragment(token, "ShortcutReferenceTail", "]", token.offset + token.text.length - 1),
+  ];
+}
+
+/**
+ * Recover the one-token overlap between adjacent full-reference candidates. A lexer cannot emit
+ * both `][bar]` and the overlapping `][baz]` from `[foo][bar][baz]`; when `bar` is undefined but
+ * `baz` is defined, split the former and promote the latter before the generic pair resolver runs.
+ */
+export function reassociateMarkdownReferenceTails(
+  source: string,
+  tokens: readonly Token[],
+  referenceLabels: ReadonlySet<string>,
+): Token[] {
+  const result: Token[] = [];
+  for (let index = 0; index < tokens.length; index++) {
+    const tail = tokens[index];
+    const label = tail.type === "ReferenceTail" ? tail.text.slice(2, -1) : "";
+    if (tail.type !== "ReferenceTail" || referenceLabels.has(normalizeMarkdownReferenceLabel(label))) {
+      result.push(tail);
+      continue;
+    }
+    const opener = tokens[index + 1];
+    if (opener?.type !== "BracketOpen" || opener.offset !== tail.offset + tail.text.length) {
+      result.push(tail);
+      continue;
+    }
+    let closerIndex = index + 2;
+    while (closerIndex < tokens.length && tokens[closerIndex].type !== "ShortcutReferenceTail") closerIndex++;
+    const closer = tokens[closerIndex];
+    if (!closer || tokens.slice(index + 2, closerIndex).some((token) => token.type === "BracketOpen" || token.type === "ImageOpen")) {
+      result.push(tail);
+      continue;
+    }
+    const nextLabel = source.slice(opener.offset + opener.text.length, closer.offset);
+    if (!referenceLabels.has(normalizeMarkdownReferenceLabel(nextLabel))) {
+      result.push(tail);
+      continue;
+    }
+    result.push(...splitReferenceTail(tail).slice(0, -1));
+    const offset = tail.offset + tail.text.length - 1;
+    result.push(tokenFragment(tail, "ReferenceTail", source.slice(offset, closer.offset + closer.text.length), offset));
+    index = closerIndex;
+  }
+  return result;
+}
+
 export function markdownBracketPairs(referenceLabels: ReadonlySet<string>): PairedTokenConfig[] {
   const activatesReference = ({ closer, content }: { closer: { text: string }; content: string }): boolean => {
     const explicit = closer.text.startsWith("][") ? closer.text.slice(2, -1) : "";
     return referenceLabels.has(normalizeMarkdownReferenceLabel(explicit || content));
-  };
-  const splitReferenceTail = (token: Token): Token[] => {
-    const label = token.text.slice(2, -1);
-    const fragment = (type: string, text: string, relativeOffset: number, first = false): Token => ({
-      ...token,
-      type,
-      text,
-      offset: token.offset + relativeOffset,
-      k: 0,
-      t: 0,
-      newlineBefore: first && token.newlineBefore,
-      commentBefore: first && token.commentBefore,
-      multilineFlowBefore: first && token.multilineFlowBefore,
-    });
-    return [
-      fragment("ReferenceSeparatorClose", "]", 0, true),
-      fragment("BracketOpen", "[", 1),
-      ...(label ? [fragment("Text", label, 2)] : []),
-      fragment("ShortcutReferenceTail", "]", token.text.length - 1),
-    ];
   };
   return [
     {

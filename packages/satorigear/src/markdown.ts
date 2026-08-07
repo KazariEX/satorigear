@@ -146,8 +146,9 @@ const InlineHtml = token(seq("<", optPattern("/"), oneOf(range("A", "Z"), range(
   scope: "meta.tag.inline.html",
 });
 const Entity = token(seq("&", altPattern(
-  seq("#", optPattern(oneOf("x", "X")), plus(oneOf(digit, range("A", "F"), range("a", "f")))),
-  plus(oneOf(range("A", "Z"), range("a", "z"), digit)),
+  seq("#", oneOf("x", "X"), repeat(oneOf(digit, range("A", "F"), range("a", "f")), 1, 6)),
+  seq("#", repeat(digit, 1, 7)),
+  seq(oneOf(range("A", "Z"), range("a", "z")), repeat(oneOf(range("A", "Z"), range("a", "z"), digit), 0, 30)),
 ), ";"), { scope: "constant.character.entity" });
 const HardBreak = token(altPattern(
   seq("\\", physicalLineEnd),

@@ -46,6 +46,26 @@ describe("parseTokens", () => {
     const tokens = parser.tokenize(source);
     expect(parser.parseTokens(source, tokens)).toEqual(parser.parse(source));
   });
+
+  it("preserves a caller-supplied logical token value across discontinuous ranges", () => {
+    const Logical = token(never());
+    const Document = rule(() => [Logical]);
+    const parser = createParser(defineGrammar({
+      name: "logical-token-test",
+      tokens: { Logical },
+      rules: { Document },
+      entry: Document,
+    }));
+    const source = "a>b";
+    const logical = {
+      ...named("Logical", "a b", 0),
+      ranges: [{ offset: 0, end: 1 }, { offset: 2, end: 3 }],
+    };
+    const tree = parser.parseTokens(source, [logical]);
+    const leaf = leaves(tree)[0];
+    expect(leaf.ranges).toEqual(logical.ranges);
+    expect(getText(leaf, source)).toBe("a b");
+  });
 });
 
 describe("source view", () => {

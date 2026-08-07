@@ -442,16 +442,27 @@ index 0000000..58712b3
 +  };
 +}
 diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
-index a4ed10c..e689092 100644
+index a4ed10c..53d0906 100644
 --- a/src/gen-lexer.ts
 +++ b/src/gen-lexer.ts
-@@ -1,4 +1,4 @@
+@@ -1,6 +1,7 @@
 -import type { CstGrammar } from './types.ts';
 +import type { CstGrammar, TokenDecl } from './types.ts';
  import { collectLiterals, isKeywordLiteral } from './grammar-utils.ts';
  import { tokenBlockPatternFirstCharSet, tokenBlockPatternSource, tokenEscapeValidPatternSource, tokenPatternFirstCharSet, tokenPatternHasStartAnchor, tokenPatternSource } from './token-pattern.ts';
++import type { SourceRange } from './source-view.ts';
+
+ // A lexer token: a declared token (type = its name) or a punctuation literal (type = '').
+ // `$templateHead/$templateMiddle/$templateTail` are synthetic types the lexer emits for
+@@ -16,6 +17,7 @@ export interface Token {
+                             // ENDS a plain scalar, so a folded multi-line scalar must not cross it)
+   multilineFlowBefore: boolean; // the flow collection that closed immediately before this token spanned >1 line
+                             // (indentation grammars: a flow used as an implicit block KEY must be single-line, §7.4.2)
++  ranges?: SourceRange[]; // physical ranges when a caller-supplied token spans a logical source view
+ }
  
-@@ -101,6 +101,9 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+ // Optional integer-interning config (the emitted parser supplies it): every token is
+@@ -101,6 +103,9 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
        isRegex: t.flags.includes('regex'),
        isString: !!t.string,
        blockOnly: !!t.blockOnly,   // matched only outside flow (flowDepth===0) — see TokenDecl.blockOnly
@@ -461,7 +472,7 @@ index a4ed10c..e689092 100644
        // First-char filters for the default and block patterns (computed once). A char the set rejects
        // can't start this token → the loop skips it. `null` = couldn't prove a filter → always try.
        first: tokenPatternFirstCharSet(t),
-@@ -249,6 +252,11 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -249,6 +254,11 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
      indent ? ([indent.indentToken, indent.dedentToken, indent.newlineToken].filter(Boolean) as string[])
             : newline ? [newline.token] : [],
    );
@@ -473,7 +484,7 @@ index a4ed10c..e689092 100644
    const flowOpenSet = new Set((indent ?? newline)?.flowOpen ?? []);
    const flowCloseSet = new Set((indent ?? newline)?.flowClose ?? []);
    // The matchers the per-position scan loop actually tries: the template token is handled by
-@@ -306,6 +314,8 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -306,6 +316,8 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
    const kVoidNameTok = kOf(markup?.voidNameToken ?? null);
    const tTagOpen = markup ? (puLitOf.get(markup.tagOpen) ?? 0) : 0;
    const kNewlineModeTok = kOf(newline?.token ?? null);
@@ -482,7 +493,7 @@ index a4ed10c..e689092 100644
    const kIndentTok = kOf(indent?.indentToken ?? null), kDedentTok = kOf(indent?.dedentToken ?? null), kIndentNewlineTok = kOf(indent?.newlineToken ?? null);
    const kBlockScalarTok = kOf(indent?.blockScalar?.token ?? null);
    const kRawBlockTok = kOf(indent?.rawBlock?.token ?? null);
-@@ -533,6 +543,76 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -533,6 +545,76 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
      // dedents below it. (yaml-test-suite 5WE3 / KK5P — the compact `: -` edge.)
      let lastExplicitKeyCol = -1;
      const indentStack: number[] = [0];
@@ -559,7 +570,7 @@ index a4ed10c..e689092 100644
      // §7.4 multi-line flow indentation: when the OUTERMOST flow collection opens as a block VALUE or
      // ITEM (the `[`/`{` directly follows a `:`/`-` indicator), every CONTENT line of that flow must be
      // indented strictly MORE than the enclosing block node's column `n` — else the flow is
-@@ -729,6 +809,29 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -729,6 +811,29 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
          // leading boundary before any content is suppressed via emittedContent) and move on. ──
          if (!indent) {
            if (emittedContent) push(mkNamed(newline!.token, '', pos, kNewlineModeTok));
@@ -589,7 +600,7 @@ index a4ed10c..e689092 100644
            lineStart = false;
            atLineLead = true;
            continue;
-@@ -791,6 +894,18 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -791,6 +896,18 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
        if (lineSensitive) {
          const c = source[pos];
          if (c === ' ' || c === '\t') {
@@ -608,7 +619,7 @@ index a4ed10c..e689092 100644
            // A TAB between a block indicator (`-`/`?`/map-`:`) and a NESTED block-structural node it
            // introduces is a §6.1 indentation error: the separation after the indicator counts as
            // the nested node's indentation (`-\t- x`, `?\tkey:`, `- \t-`, `:\tkey:`, `key:\t- a`). A
-@@ -1097,6 +1212,27 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+@@ -1097,6 +1214,27 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
        const cc = source.charCodeAt(pos);
        for (const tm of scanMatchers) {
          if (tm.blockOnly && flowDepth > 0) continue;    // line-structural token (YAML directive) — content in flow
@@ -637,7 +648,7 @@ index a4ed10c..e689092 100644
            // prev is a completed value → `/` is division, not a regex literal → skip.
            if (prevIsValue(tokens[tokens.length - 1])) continue;
 diff --git a/src/gen-parser.ts b/src/gen-parser.ts
-index 8f68656..a406456 100644
+index 8f68656..8155433 100644
 --- a/src/gen-parser.ts
 +++ b/src/gen-parser.ts
 @@ -2,6 +2,7 @@ import type { CstGrammar, RuleExpr, RuleDecl } from './types.ts';
@@ -648,7 +659,7 @@ index 8f68656..a406456 100644
  import { withAwaitYield } from './await-yield-fork.ts';
  
  // ── CST output ──
-@@ -11,12 +12,14 @@ export interface CstNode {
+@@ -11,12 +12,15 @@ export interface CstNode {
    children: CstChild[];
    offset: number;
    end: number;
@@ -660,23 +671,24 @@ index 8f68656..a406456 100644
    offset: number;
    end: number;
 +  ranges?: SourceRange[];
++  value?: string;
  }
  
  export type CstChild = CstNode | CstLeaf;
-@@ -26,8 +29,10 @@ export type CstChild = CstNode | CstLeaf;
+@@ -26,8 +30,10 @@ export type CstChild = CstNode | CstLeaf;
  // ── Parser ──
  
  // The CST is span-only: a node's text is derived from the source it was parsed from.
 -export function getText(node: { offset: number; end: number }, source: string): string {
 -  return source.slice(node.offset, node.end);
-+export function getText(node: { offset: number; end: number; ranges?: readonly SourceRange[] }, source: string): string {
-+  return node.ranges?.length
++export function getText(node: { offset: number; end: number; ranges?: readonly SourceRange[]; value?: string }, source: string): string {
++  return node.value ?? (node.ranges?.length
 +    ? node.ranges.map(range => source.slice(range.offset, range.end)).join('')
-+    : source.slice(node.offset, node.end);
++    : source.slice(node.offset, node.end));
  }
  
  export function createParser(grammar: CstGrammar) {
-@@ -353,7 +358,14 @@ export function createParser(grammar: CstGrammar) {
+@@ -353,7 +359,14 @@ export function createParser(grammar: CstGrammar) {
  
    const profCounts = new Map<string, number>();
    function parse(source: string, entryRule?: string): CstNode {
@@ -692,7 +704,42 @@ index 8f68656..a406456 100644
      let pos = 0;
      let maxPos = 0;   // farthest token index ever ADVANCED past (diagnostic; updated at the pos++ sites, mirroring the emitted engine so reject messages stay engine-identical)
      // Cap-propagation flag (capExpr), mirrors the emitted engine: set true when a parsePratt
-@@ -1186,7 +1198,7 @@ export function createParser(grammar: CstGrammar) {
+@@ -376,13 +389,17 @@ export function createParser(grammar: CstGrammar) {
+     // so it bypasses the packrat memo (which is keyed by start position only).
+     let parseLimit = -1;
+
++    function tokenEnd(tok: Token): number {
++      return tok.ranges?.at(-1)?.end ?? tok.offset + tok.text.length;
++    }
++
+     function peek(): Token | null {
+       if (parseLimit >= 0 && pos >= parseLimit) return null;
+       return tokens[pos] ?? null;
+     }
+
+     function offset(): number {
+-      return peek()?.offset ?? (tokens.length > 0 ? tokens[tokens.length - 1].offset + tokens[tokens.length - 1].text.length : 0);
++      return peek()?.offset ?? (tokens.length > 0 ? tokenEnd(tokens[tokens.length - 1]) : 0);
+     }
+
+     // Match a literal string against current token
+@@ -423,7 +440,14 @@ export function createParser(grammar: CstGrammar) {
+       if (!tok) return null;
+       if (tok.type === name) {
+         if (++pos > maxPos) maxPos = pos;
+-        return { tokenType: name, offset: tok.offset, end: tok.offset + tok.text.length };
++        const physical = tok.ranges?.map(range => source.slice(range.offset, range.end)).join('');
++        return {
++          tokenType: name,
++          offset: tok.ranges?.[0]?.offset ?? tok.offset,
++          end: tokenEnd(tok),
++          ...(tok.ranges?.length ? { ranges: tok.ranges.map(range => ({ ...range })) } : {}),
++          ...(physical !== undefined && physical !== tok.text ? { value: tok.text } : {}),
++        };
+       }
+       return null;
+     }
+@@ -1186,7 +1210,7 @@ export function createParser(grammar: CstGrammar) {
      cst.offset = next.offset; cst.end = next.end;
      cst.errors = next.errors;
    };

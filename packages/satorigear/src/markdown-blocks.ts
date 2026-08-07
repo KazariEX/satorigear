@@ -1,5 +1,6 @@
 import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "../../../vendors/monogram/src/api.ts";
 import type { Token } from "../../../vendors/monogram/src/gen-lexer.ts";
+import type { SourceRange } from "../../../vendors/monogram/src/source-view.ts";
 
 const ParagraphOpen = token(never());
 const ParagraphClose = token(never());
@@ -127,6 +128,7 @@ interface ListMarker {
   offset: number;
   contentOffset: number;
   contentIndent: number;
+  contentPrefixColumns: number;
   delimiter: string;
   text: string;
   startNumber?: number;
@@ -135,6 +137,11 @@ interface ListMarker {
 interface HtmlStart {
   interruptParagraph: boolean;
   terminator?: string;
+}
+
+interface BlockQuoteMarker {
+  offset: number;
+  prefixColumns: number;
 }
 
 const htmlBlockTags = new Set([
@@ -248,7 +255,7 @@ function isBlank(source: string, line: Line): boolean {
   return /^[ \t]*$/.test(source.slice(line.start, line.end));
 }
 
-function named(type: string, text: string, offset: number): Token {
+function named(type: string, text: string, offset: number, ranges?: SourceRange[]): Token {
   return {
     type,
     text,
@@ -258,11 +265,56 @@ function named(type: string, text: string, offset: number): Token {
     newlineBefore: false,
     commentBefore: false,
     multilineFlowBefore: false,
+    ...(ranges?.length ? { ranges } : {}),
   };
 }
 
 function structural(type: string, offset: number, text = ""): Token {
   return named(type, text, offset);
+}
+
+function logicalToken(type: string, source: string, lines: readonly Line[], start: number, end: number): Token {
+  const ranges = lines.slice(start, end).map((line) => ({ offset: line.start, end: line.next }));
+  return named(
+    type,
+    lines.slice(start, end).map((line) => logicalLine(source, line)).join(""),
+    ranges[0].offset,
+    ranges,
+  );
+}
+
+function physicalColumnAt(source: string, offset: number): number {
+  let start = offset;
+  while (start > 0 && source[start - 1] !== "\n" && source[start - 1] !== "\r") start--;
+  let column = 0;
+  while (start < offset) {
+    column += source[start] === "\t" ? 4 - (column % 4) : 1;
+    start++;
+  }
+  return column;
+}
+
+function logicalLine(source: string, line: Line): string {
+  let result = " ".repeat(line.prefixColumns ?? 0);
+  let offset = line.start;
+  let logicalColumn = line.prefixColumns ?? 0;
+  let physicalColumn = physicalColumnAt(source, offset);
+  while (offset < line.end && logicalColumn < 4 && (source[offset] === " " || source[offset] === "\t")) {
+    if (source[offset] === " ") {
+      result += " ";
+      logicalColumn++;
+      physicalColumn++;
+    }
+    else {
+      const logicalWidth = 4 - (logicalColumn % 4);
+      const physicalWidth = 4 - (physicalColumn % 4);
+      result += "\t" + " ".repeat(Math.max(0, physicalWidth - logicalWidth));
+      logicalColumn += Math.max(logicalWidth, physicalWidth);
+      physicalColumn += physicalWidth;
+    }
+    offset++;
+  }
+  return result + source.slice(offset, line.next);
 }
 
 function lineBody(source: string, line: Line): { offset: number; text: string } | null {
@@ -449,12 +501,17 @@ function isThematicBreak(source: string, line: Line): boolean {
   return compact.length >= 3 && /^\*+$|^-+$|^_+$/.test(compact);
 }
 
-function blockQuoteOffset(source: string, line: Line): number | null {
+function blockQuoteOffset(source: string, line: Line): BlockQuoteMarker | null {
   const body = lineBody(source, line);
   if (!body || source[body.offset] !== ">") return null;
   let offset = body.offset + 1;
-  if (source[offset] === " " || source[offset] === "\t") offset++;
-  return offset;
+  let prefixColumns = line.prefixColumns ?? 0;
+  if (source[offset] === " ") offset++;
+  else if (source[offset] === "\t") {
+    prefixColumns += 4 - (physicalColumnAt(source, offset) % 4) - 1;
+    offset++;
+  }
+  return { offset, prefixColumns };
 }
 
 function listMarkerAt(source: string, line: Line): ListMarker | null {
@@ -471,6 +528,7 @@ function listMarkerAt(source: string, line: Line): ListMarker | null {
       offset: body.offset,
       contentOffset: padding.offset,
       contentIndent: indent.columns + 1 + padding.columns,
+      contentPrefixColumns: padding.prefixColumns,
       delimiter: unordered[1],
       text: unordered[1],
     };
@@ -486,14 +544,15 @@ function listMarkerAt(source: string, line: Line): ListMarker | null {
     offset: body.offset,
     contentOffset: padding.offset,
     contentIndent: indent.columns + markerWidth + padding.columns,
+    contentPrefixColumns: padding.prefixColumns,
     delimiter: ordered[2],
     text: ordered[1] + ordered[2],
     startNumber: Number(ordered[1]),
   };
 }
 
-function listMarkerPadding(source: string, line: Line, markerEnd: number, markerColumn: number): { offset: number; columns: number } {
-  if (markerEnd === line.end) return { offset: markerEnd, columns: 1 };
+function listMarkerPadding(source: string, line: Line, markerEnd: number, markerColumn: number): { offset: number; columns: number; prefixColumns: number } {
+  if (markerEnd === line.end) return { offset: markerEnd, columns: 1, prefixColumns: 0 };
   let offset = markerEnd;
   let column = markerColumn;
   while (offset < line.end && (source[offset] === " " || source[offset] === "\t")) {
@@ -501,8 +560,9 @@ function listMarkerPadding(source: string, line: Line, markerEnd: number, marker
     offset++;
   }
   const whitespaceColumns = column - markerColumn;
-  if (offset < line.end && whitespaceColumns <= 4) return { offset, columns: whitespaceColumns };
-  return { offset: markerEnd + 1, columns: 1 };
+  if (offset < line.end && whitespaceColumns <= 4) return { offset, columns: whitespaceColumns, prefixColumns: 0 };
+  const consumedColumn = markerColumn + (source[markerEnd] === "\t" ? 4 - (markerColumn % 4) : 1);
+  return { offset: markerEnd + 1, columns: 1, prefixColumns: Math.max(0, consumedColumn - markerColumn - 1) };
 }
 
 function sameList(a: ListMarker, b: ListMarker): boolean {
@@ -557,9 +617,9 @@ function startsParagraphAt(source: string, line: Line): boolean {
 function endsWithParagraphLeaf(source: string, line: Line): boolean {
   let contentLine = line;
   for (;;) {
-    const quoteOffset = blockQuoteOffset(source, contentLine);
-    if (quoteOffset !== null) {
-      contentLine = { ...contentLine, start: quoteOffset };
+    const quote = blockQuoteOffset(source, contentLine);
+    if (quote !== null) {
+      contentLine = { ...contentLine, start: quote.offset, prefixColumns: quote.prefixColumns };
       continue;
     }
     const marker = listMarkerAt(source, contentLine);
@@ -619,7 +679,7 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
 
     const atx = atxAt(source, line);
     const fence = fenceAt(source, line);
-    const quoteOffset = blockQuoteOffset(source, line);
+    const quote = blockQuoteOffset(source, line);
     const listMarker = listMarkerAt(source, line);
     const htmlStart = htmlStartAt(source, line);
     const thematic = isThematicBreak(source, line);
@@ -658,8 +718,7 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       let endIndex = index + 1;
       while (endIndex < lines.length && !closesFence(source, lines[endIndex], fence)) endIndex++;
       if (endIndex < lines.length) endIndex++;
-      const end = lines[endIndex - 1]?.next ?? line.next;
-      out.push(named("FencedCodeBlock", source.slice(line.start, end), line.start));
+      out.push(logicalToken("FencedCodeBlock", source, lines, index, endIndex));
       index = endIndex;
       continue;
     }
@@ -680,20 +739,19 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       else if (!htmlStart.terminator) {
         while (endIndex < lines.length && !isBlank(source, lines[endIndex])) endIndex++;
       }
-      const end = lines[endIndex - 1]?.next ?? line.next;
-      out.push(named("HtmlBlockToken", source.slice(line.start, end), line.start));
+      out.push(logicalToken("HtmlBlockToken", source, lines, index, endIndex));
       index = endIndex;
       continue;
     }
 
-    if (quoteOffset !== null) {
+    if (quote !== null) {
       const quoteLines: Line[] = [];
       const start = line.start;
       let lazyParagraph = false;
       while (index < lines.length) {
-        const contentOffset = blockQuoteOffset(source, lines[index]);
-        if (contentOffset !== null) {
-          const contentLine = { ...lines[index], start: contentOffset, prefixColumns: 0 };
+        const content = blockQuoteOffset(source, lines[index]);
+        if (content !== null) {
+          const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
           quoteLines.push(contentLine);
           lazyParagraph = endsWithParagraphLeaf(source, contentLine);
           index++;
@@ -722,7 +780,7 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
         const marker = listMarkerAt(source, lines[index]);
         if (!marker || !sameList(marker, listMarker)) break;
         out.push(structural(itemOpen, marker.offset, marker.text));
-        const itemLines: Line[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: 0 }];
+        const itemLines: Line[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns }];
         let hasContent = !isBlank(source, itemLines[0]);
         let lazyParagraph = endsWithParagraphLeaf(source, itemLines[0]);
         index++;
@@ -767,11 +825,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
 
     const indent = indentOf(source, line);
     if (indent.columns >= 4) {
-      const start = line.start;
       let endIndex = index + 1;
       while (endIndex < lines.length && (isBlank(source, lines[endIndex]) || indentOf(source, lines[endIndex]).columns >= 4)) endIndex++;
-      const end = lines[endIndex - 1].next;
-      out.push(named("IndentedCodeBlockToken", source.slice(start, end), start));
+      out.push(logicalToken("IndentedCodeBlockToken", source, lines, index, endIndex));
       index = endIndex;
       continue;
     }

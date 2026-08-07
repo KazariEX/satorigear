@@ -1,8 +1,14 @@
 import { createCompositeParser } from "../../../vendors/monogram/src/composite-parser.ts";
-import { createDelimiterParser } from "../../../vendors/monogram/src/delimiter-parser.ts";
+import { createDelimiterParser, resolveDelimitedTokens } from "../../../vendors/monogram/src/delimiter-parser.ts";
 import { createParser, type CstNode, getText } from "../../../vendors/monogram/src/gen-parser.ts";
 import { markdownBlockGrammar, tokenizeMarkdownBlocks } from "./markdown-blocks.ts";
-import { markdownBracketPairs, markdownDelimiterRuns, markdownInlineGrammar, normalizeMarkdownReferenceLabel } from "./markdown-inline.ts";
+import {
+  markdownBracketPairs,
+  markdownDelimiterRuns,
+  markdownInlineGrammar,
+  normalizeMarkdownReferenceLabel,
+  reassociateMarkdownReferenceTails,
+} from "./markdown-inline.ts";
 
 const blockParser = createParser(markdownBlockGrammar);
 const inlineParser = createDelimiterParser(markdownInlineGrammar, markdownDelimiterRuns);
@@ -44,7 +50,11 @@ export const markdownPhasedParser = createCompositeParser({
     within: ["Paragraph", "AtxHeading", "SetextHeading"],
     contentToken: "InlineChunk",
     inner: (referenceLabels) => ({
-      parse: (source, entryRule) => inlineParser.parseWithPairs(source, markdownBracketPairs(referenceLabels), entryRule),
+      parse: (source, entryRule) => {
+        const pairs = markdownBracketPairs(referenceLabels);
+        const tokens = reassociateMarkdownReferenceTails(source, inlineParser.tokenize(source), referenceLabels);
+        return inlineParser.parseTokens(source, resolveDelimitedTokens(source, tokens, markdownDelimiterRuns, pairs), entryRule);
+      },
     }),
     entryRule: "InlineLines",
   }],
