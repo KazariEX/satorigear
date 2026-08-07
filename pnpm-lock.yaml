@@ -104,6 +104,9 @@ importers:
       '@types/mdast':
         specifier: 'catalog:'
         version: 4.0.4
+      entities:
+        specifier: 'catalog:'
+        version: 3.0.1
 
 packages:
 
