@@ -7,9 +7,24 @@ import { markdownInlineGrammar } from "./src/grammar-inline.ts";
 
 export default defineConfig({
   exports: true,
+  hash: false,
+  outputOptions: {
+    codeSplitting: {
+      groups: [
+        {
+          name: "generated/blocks",
+          test: /[\\/]src[\\/]generated[\\/]blocks\.ts$/,
+        },
+        {
+          name: "generated/inline",
+          test: /[\\/]src[\\/]generated[\\/]inline\.ts$/,
+        },
+      ],
+    },
+  },
   plugins: [
     {
-      name: "generate-parser",
+      name: "emit-parser",
       async buildStart() {
         // keep the generator outside tsconfig graph to avoid TS6133 error
         const { emitJsLexer, emitJsParser } = await import("monogram/emit-parser.ts" as any);
@@ -24,10 +39,26 @@ export default defineConfig({
         await Promise.all(
           parsers.map(async ([name, grammar]) => {
             const emitted = emitJsParser(grammar, emitJsLexer(grammar));
-            const minified = await minify("testify.ts", emitted);
-            await writeFile(join(generated, name), `// @ts-nocheck\n${minified.code}`);
+            await writeFile(join(generated, name), `// @ts-nocheck\n${emitted}`);
           }),
         );
+      },
+      generateBundle: {
+        order: "post",
+        async handler(options, bundle) {
+          await Promise.all(
+            Object.values(bundle).map(async (chunk) => {
+              if (
+                chunk.type !== "chunk" ||
+                chunk.moduleIds.every((id) => !/[\\/]src[\\/]generated[\\/]/.test(id))
+              ) {
+                return;
+              }
+              // Keep the public entry readable while compacting generated parser payloads.
+              chunk.code = (await minify(chunk.fileName, chunk.code)).code;
+            }),
+          );
+        },
       },
     },
   ],
