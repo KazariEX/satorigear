@@ -46,7 +46,7 @@ function referenceLabelText(text: string): string | null {
   return null;
 }
 
-function tokenizeInline(source: string, referenceLabels: ReadonlySet<string>): { candidates: Set<string>; tokens: Token[] } {
+function tokenizeInline(source: string, referenceLabels: ReadonlySet<string>): { candidates: Set<string>; tokens: readonly Token[] } {
   const candidates = new Set<string>();
   const tokens = reassociateMarkdownReferenceTails(source, inlineParser.tokenize(source), referenceLabels);
   return {

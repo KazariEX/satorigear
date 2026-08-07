@@ -57,4 +57,27 @@ describe("markdown mdast conversion", () => {
       end: { line: 2, column: 4, offset: 11 },
     });
   });
+
+  it("uses original delimiter run lengths for the rule of three", () => {
+    const tree = markdownToMdast("*****b___(__\n___**_.****(__*****\n");
+    expect(tree.children).toMatchObject([{
+      type: "paragraph",
+      children: [
+        {
+          type: "emphasis",
+          children: [{
+            type: "strong",
+            children: [
+              {
+                type: "strong",
+                children: [{ type: "text", value: "b___(__\n___" }],
+              },
+              { type: "text", value: "_.****(__" },
+            ],
+          }],
+        },
+        { type: "text", value: "**" },
+      ],
+    }]);
+  });
 });

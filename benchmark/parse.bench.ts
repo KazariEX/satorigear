@@ -28,9 +28,12 @@ const corpus = (tests)
   .map((test) => test.markdown.replace(/→/g, "\t"))
   .join("\n\n");
 
+const delimiterStress = `${"a**a ".repeat(1_000)}${"a* ".repeat(1_000)}`;
+
 const inputs = [
   { name: "representative document", source: representative },
   { name: "official corpus as one document", source: corpus },
+  { name: "delimiter stress document", source: delimiterStress },
 ];
 
 const satteriOptions = {
