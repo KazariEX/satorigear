@@ -1,5 +1,5 @@
 import { decodeHTMLStrict } from "entities";
-import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/cst.ts";
+import { type CstLeaf, type CstNode, getText } from "monogram/cst.ts";
 import type {
   BlockContent,
   Blockquote,
@@ -22,6 +22,7 @@ import type {
   Strong,
 } from "mdast";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
+import type { CstTreeLeaf, CstTreeNode } from "./emitted-parser.ts";
 
 interface Resource {
   url: string;
@@ -45,10 +46,29 @@ export interface SourcePoint {
   offset: number;
 }
 
-interface ProjectionContext {
+interface PositionContext {
   point?: (offset: number) => SourcePoint;
   source: string;
   spans: Map<object, SourceSpan>;
+}
+
+interface ProjectionContext extends PositionContext {
+  syntax: MarkdownSyntax;
+}
+
+export type MarkdownSyntaxNode = CstNode | CstTreeNode;
+export type MarkdownSyntaxLeaf = CstLeaf | CstTreeLeaf;
+export type MarkdownSyntaxChild = MarkdownSyntaxLeaf | MarkdownSyntaxNode;
+
+export interface MarkdownSyntax {
+  children: (node: MarkdownSyntaxNode) => readonly MarkdownSyntaxChild[];
+  inline: (node: MarkdownSyntaxNode) => MarkdownSyntaxNode | undefined;
+  isLeaf: (child: MarkdownSyntaxChild) => child is MarkdownSyntaxLeaf;
+  ranges: (leaf: MarkdownSyntaxLeaf) => readonly { end: number; offset: number }[] | undefined;
+  rule: (node: MarkdownSyntaxNode) => string;
+  span: (value: MarkdownSyntaxChild) => SourceSpan;
+  text: (value: MarkdownSyntaxChild) => string;
+  tokenType: (leaf: MarkdownSyntaxLeaf) => string;
 }
 
 export interface MdastBlockFragment {
@@ -61,30 +81,31 @@ interface PositionedValue {
   position?: { end: SourcePoint; start: SourcePoint };
 }
 
-function withSpan<const T extends object>(context: ProjectionContext, value: T, start: number, end: number): T {
+function withSpan<const T extends object>(context: PositionContext, value: T, start: number, end: number): T {
   context.spans.set(value, { start, end });
   return value;
 }
 
-function spanOf(context: ProjectionContext, value: object): SourceSpan {
+function spanOf(context: PositionContext, value: object): SourceSpan {
   const span = context.spans.get(value);
   if (!span) {
-    throw new Error("mdast node is missing its CST source span");
+    throw new Error("mdast node is missing its syntax source span");
   }
   return span;
 }
 
-function extendSpan(context: ProjectionContext, value: object, end: number): void {
+function extendSpan(context: PositionContext, value: object, end: number): void {
   const span = spanOf(context, value);
   span.end = Math.max(span.end, end);
 }
 
-function blockEnd(value: CstNode, source: string): number {
-  let end = value.end;
-  if (end > value.offset && source[end - 1] === "\n") {
+function blockEnd(value: MarkdownSyntaxNode, context: ProjectionContext): number {
+  const span = context.syntax.span(value);
+  let end = span.end;
+  if (end > span.start && context.source[end - 1] === "\n") {
     end--;
   }
-  if (end > value.offset && source[end - 1] === "\r") {
+  if (end > span.start && context.source[end - 1] === "\r") {
     end--;
   }
   return end;
@@ -109,7 +130,7 @@ function lineEndingStart(source: string, offset: number): number {
   return source[start - 1] === "\n" && source[start - 2] === "\r" ? start - 2 : start - 1;
 }
 
-function firstChildStart(context: ProjectionContext, value: { children: readonly object[] }): number {
+function firstChildStart(context: PositionContext, value: { children: readonly object[] }): number {
   const first = value.children[0];
   if (!first) {
     throw new Error("mdast container unexpectedly has no children");
@@ -117,7 +138,7 @@ function firstChildStart(context: ProjectionContext, value: { children: readonly
   return spanOf(context, first).start;
 }
 
-function lastChildEnd(context: ProjectionContext, value: { children: readonly object[] }, emptyEnd: number): number {
+function lastChildEnd(context: PositionContext, value: { children: readonly object[] }, emptyEnd: number): number {
   const last = value.children.at(-1);
   return last ? spanOf(context, last).end : emptyEnd;
 }
@@ -129,15 +150,16 @@ function firstNonspace(source: string, start: number, end: number): number {
   return start;
 }
 
-function indentedCodeEnd(value: CstNode, source: string): number {
-  const token = leaf(value, "IndentedCodeBlockToken");
-  const ranges = token.ranges ?? [{ offset: token.offset, end: token.end }];
+function indentedCodeEnd(value: MarkdownSyntaxNode, context: ProjectionContext): number {
+  const token = leaf(value, "IndentedCodeBlockToken", context);
+  const tokenSpan = context.syntax.span(token);
+  const ranges = context.syntax.ranges(token) ?? [{ offset: tokenSpan.start, end: tokenSpan.end }];
   // Blank indented lines belong to the block; the bare separator newline after them does not.
   for (let index = ranges.length - 1; index >= 0; index--) {
     const range = ranges[index];
-    if (/[^\r\n]/.test(source.slice(range.offset, range.end))) {
+    if (/[^\r\n]/.test(context.source.slice(range.offset, range.end))) {
       let end = range.end;
-      while (end > range.offset && /[\r\n]/.test(source[end - 1])) {
+      while (end > range.offset && /[\r\n]/.test(context.source[end - 1])) {
         end--;
       }
       return end;
@@ -146,7 +168,7 @@ function indentedCodeEnd(value: CstNode, source: string): number {
   throw new Error("IndentedCodeBlockToken has no source content");
 }
 
-function attachPositions(context: ProjectionContext, root: Root): Root {
+function attachPositions(context: PositionContext, root: Root): Root {
   const { source } = context;
   const point = context.point ?? createPoint(source);
   const visit = (value: PositionedValue): void => {
@@ -194,42 +216,64 @@ function identifier(value: string): string {
   return normalizeMarkdownReferenceLabel(value).toLowerCase();
 }
 
-function childNodes(value: CstNode, rule?: string): CstNode[] {
-  return value.children.filter((child): child is CstNode => !("tokenType" in child) && (!rule || child.rule === rule));
+function childNodes(value: MarkdownSyntaxNode, rule: string | null, context: ProjectionContext): MarkdownSyntaxNode[] {
+  return context.syntax.children(value).filter((child): child is MarkdownSyntaxNode => (
+    !context.syntax.isLeaf(child) && (!rule || context.syntax.rule(child) === rule)
+  ));
 }
 
-function directLeaf(value: CstNode, tokenType: string): CstLeaf | undefined {
-  return value.children.find((child): child is CstLeaf => "tokenType" in child && child.tokenType === tokenType);
+function directLeaf(
+  value: MarkdownSyntaxNode,
+  tokenType: string,
+  context: ProjectionContext,
+): MarkdownSyntaxLeaf | undefined {
+  return context.syntax.children(value).find((child): child is MarkdownSyntaxLeaf => (
+    context.syntax.isLeaf(child) && context.syntax.tokenType(child) === tokenType
+  ));
 }
 
-function leaf(value: CstNode, tokenType: string): CstLeaf {
-  const result = directLeaf(value, tokenType);
+function leaf(value: MarkdownSyntaxNode, tokenType: string, context: ProjectionContext): MarkdownSyntaxLeaf {
+  const result = directLeaf(value, tokenType, context);
   if (!result) {
-    throw new Error(`Expected ${value.rule} CST to contain ${tokenType}`);
+    throw new Error(`Expected ${context.syntax.rule(value)} syntax to contain ${tokenType}`);
   }
   return result;
 }
 
-function leafOfTypes(value: CstNode, tokenTypes: readonly string[]): CstLeaf {
-  const result = value.children.find((child): child is CstLeaf => "tokenType" in child && tokenTypes.includes(child.tokenType));
+function leafOfTypes(
+  value: MarkdownSyntaxNode,
+  tokenTypes: readonly string[],
+  context: ProjectionContext,
+): MarkdownSyntaxLeaf {
+  const result = context.syntax.children(value).find((child): child is MarkdownSyntaxLeaf => (
+    context.syntax.isLeaf(child) && tokenTypes.includes(context.syntax.tokenType(child))
+  ));
   if (!result) {
-    throw new Error(`Expected ${value.rule} CST to contain one of: ${tokenTypes.join(", ")}`);
+    throw new Error(`Expected ${context.syntax.rule(value)} syntax to contain one of: ${tokenTypes.join(", ")}`);
   }
   return result;
 }
 
-function descendantLeaves(value: CstNode): CstLeaf[] {
-  return value.children.flatMap((child) => ("tokenType" in child ? [child] : descendantLeaves(child)));
+function descendantLeaves(value: MarkdownSyntaxNode, context: ProjectionContext): MarkdownSyntaxLeaf[] {
+  return context.syntax.children(value).flatMap((child) => (
+    context.syntax.isLeaf(child) ? [child] : descendantLeaves(child, context)
+  ));
 }
 
-function payloadStart(value: CstNode): number {
-  const offsets = descendantLeaves(value).filter((leaf) => leaf.end > leaf.offset).map((leaf) => leaf.offset);
-  return offsets.length ? Math.min(...offsets) : value.end;
+function payloadStart(value: MarkdownSyntaxNode, context: ProjectionContext): number {
+  const offsets = descendantLeaves(value, context)
+    .map((leaf) => context.syntax.span(leaf))
+    .filter((span) => span.end > span.start)
+    .map((span) => span.start);
+  return offsets.length ? Math.min(...offsets) : context.syntax.span(value).end;
 }
 
-function payloadEnd(value: CstNode): number {
-  const offsets = descendantLeaves(value).filter((leaf) => leaf.end > leaf.offset).map((leaf) => leaf.end);
-  return offsets.length ? Math.max(...offsets) : value.offset;
+function payloadEnd(value: MarkdownSyntaxNode, context: ProjectionContext): number {
+  const offsets = descendantLeaves(value, context)
+    .map((leaf) => context.syntax.span(leaf))
+    .filter((span) => span.end > span.start)
+    .map((span) => span.end);
+  return offsets.length ? Math.max(...offsets) : context.syntax.span(value).start;
 }
 
 function normalizeLines(value: string): string {
@@ -248,19 +292,19 @@ function hasBlankLineBetween(source: string, start: number, end: number, stripBl
   });
 }
 
-function listItemSpread(value: CstNode, source: string): boolean {
-  const blocks = childNodes(value, "Block");
+function listItemSpread(value: MarkdownSyntaxNode, context: ProjectionContext): boolean {
+  const blocks = childNodes(value, "Block", context);
   for (let index = 1; index < blocks.length; index++) {
-    if (hasBlankLineBetween(source, payloadEnd(blocks[index - 1]), payloadStart(blocks[index]), true)) {
+    if (hasBlankLineBetween(context.source, payloadEnd(blocks[index - 1], context), payloadStart(blocks[index], context), true)) {
       return true;
     }
   }
   return false;
 }
 
-function listSpread(items: readonly CstNode[], source: string): boolean {
+function listSpread(items: readonly MarkdownSyntaxNode[], context: ProjectionContext): boolean {
   for (let index = 1; index < items.length; index++) {
-    if (hasBlankLineBetween(source, payloadEnd(items[index - 1]), payloadStart(items[index]), false)) {
+    if (hasBlankLineBetween(context.source, payloadEnd(items[index - 1], context), payloadStart(items[index], context), false)) {
       return true;
     }
   }
@@ -323,9 +367,9 @@ function destinationTitle(bodySource: string): Resource {
   };
 }
 
-function definition(value: CstNode, context: ProjectionContext): Definition {
-  const { source } = context;
-  const text = getText(value, source);
+function definition(value: MarkdownSyntaxNode, context: ProjectionContext): Definition {
+  const text = context.syntax.text(value);
+  const span = context.syntax.span(value);
   const open = text.indexOf("[");
   let close = open + 1;
   while (close < text.length) {
@@ -345,7 +389,7 @@ function definition(value: CstNode, context: ProjectionContext): Definition {
     identifier: identifier(labelSource),
     label: semanticText(labelSource),
     ...destinationTitle(text.slice(close + 2)),
-  }, value.offset + open, blockEnd(value, source));
+  }, span.start + open, blockEnd(value, context));
 }
 
 function codeSpanValue(value: string): string {
@@ -384,10 +428,10 @@ function appendPhrasing(context: ProjectionContext, target: PhrasingContent[], v
   }
 }
 
-function inlineLeaf(value: CstLeaf, context: ProjectionContext): PhrasingContent | undefined {
-  const { source } = context;
-  const text = getText(value, source);
-  switch (value.tokenType) {
+function inlineLeaf(value: MarkdownSyntaxLeaf, context: ProjectionContext): PhrasingContent | undefined {
+  const text = context.syntax.text(value);
+  const span = context.syntax.span(value);
+  switch (context.syntax.tokenType(value)) {
     case "Text":
     case "Delimiter":
     case "Escape":
@@ -399,12 +443,12 @@ function inlineLeaf(value: CstLeaf, context: ProjectionContext): PhrasingContent
     case "ReferenceTail":
     case "ShortcutReferenceTail":
     case "ReferenceSeparatorClose":
-      return withSpan(context, { type: "text", value: semanticText(text) }, value.offset, value.end);
-    case "CodeSpan": return withSpan(context, { type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode, value.offset, value.end);
+      return withSpan(context, { type: "text", value: semanticText(text) }, span.start, span.end);
+    case "CodeSpan": return withSpan(context, { type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode, span.start, span.end);
     case "InlineHtml":
-    case "HtmlComment": return withSpan(context, { type: "html", value: text } satisfies Html, value.offset, value.end);
-    case "HardBreak": return withSpan(context, { type: "break" }, value.offset, value.end);
-    case "Newline": return withSpan(context, { type: "text", value: "\n" }, value.offset, value.end);
+    case "HtmlComment": return withSpan(context, { type: "html", value: text } satisfies Html, span.start, span.end);
+    case "HardBreak": return withSpan(context, { type: "break" }, span.start, span.end);
+    case "Newline": return withSpan(context, { type: "text", value: "\n" }, span.start, span.end);
     case "EmphasisOpen":
     case "EmphasisClose":
     case "StrongOpen":
@@ -424,15 +468,23 @@ function inlineLeaf(value: CstLeaf, context: ProjectionContext): PhrasingContent
         type: "link",
         url: label.includes(":") ? label : `mailto:${label}`,
         title: null,
-        children: [withSpan(context, { type: "text", value: label }, value.offset + 1, value.end - 1)],
-      } satisfies Link, value.offset, value.end);
+        children: [withSpan(context, { type: "text", value: label }, span.start + 1, span.end - 1)],
+      } satisfies Link, span.start, span.end);
     }
-    default: throw new Error(`Unexpected inline token: ${value.tokenType}`);
+    default: throw new Error(`Unexpected inline token: ${context.syntax.tokenType(value)}`);
   }
 }
 
-function contentBounds(value: CstNode, openTypes: readonly string[], closeTypes: readonly string[]): [number, number] {
-  return [leafOfTypes(value, openTypes).end, leafOfTypes(value, closeTypes).offset];
+function contentBounds(
+  value: MarkdownSyntaxNode,
+  openTypes: readonly string[],
+  closeTypes: readonly string[],
+  context: ProjectionContext,
+): [number, number] {
+  return [
+    context.syntax.span(leafOfTypes(value, openTypes, context)).end,
+    context.syntax.span(leafOfTypes(value, closeTypes, context)).start,
+  ];
 }
 
 function appendInlineValue(
@@ -443,7 +495,7 @@ function appendInlineValue(
 ): void {
   const first = Array.isArray(value) ? value[0] : value;
   if (first?.type === "text" && first.value.startsWith("\n")) {
-    // Composite CST newlines point past stripped container prefixes, while mdast spans include the physical line ending.
+    // Composite syntax newlines point past stripped container prefixes, while mdast spans include the physical line ending.
     const previous = target.at(-1);
     if (!Array.isArray(value) && previous?.type === "break") {
       extendSpan(context, previous, lineStart(context.source, nextLineOffset));
@@ -463,7 +515,7 @@ function appendInlineValue(
 }
 
 function inlineSequence(
-  children: readonly CstChild[],
+  children: readonly MarkdownSyntaxChild[],
   context: ProjectionContext,
   start: number | null = null,
   end: number | null = null,
@@ -472,15 +524,16 @@ function inlineSequence(
   const result: PhrasingContent[] = [];
   let cursor = start;
   for (const child of children) {
-    const projected = "tokenType" in child ? inlineLeaf(child, context) : inlineNode(child, context);
+    const projected = context.syntax.isLeaf(child) ? inlineLeaf(child, context) : inlineNode(child, context);
     if (!projected) {
       continue;
     }
-    if (cursor !== null && child.offset > cursor) {
-      appendText(context, result, semanticText(source.slice(cursor, child.offset).replace(/[\r\n]/g, "")), cursor, child.offset);
+    const span = context.syntax.span(child);
+    if (cursor !== null && span.start > cursor) {
+      appendText(context, result, semanticText(source.slice(cursor, span.start).replace(/[\r\n]/g, "")), cursor, span.start);
     }
-    appendInlineValue(context, result, projected, child.offset);
-    cursor = child.end;
+    appendInlineValue(context, result, projected, span.start);
+    cursor = span.end;
   }
   if (cursor !== null && end !== null && end > cursor) {
     appendText(context, result, semanticText(source.slice(cursor, end).replace(/[\r\n]/g, "")), cursor, end);
@@ -488,11 +541,10 @@ function inlineSequence(
   return result;
 }
 
-function reference(value: CstNode, context: ProjectionContext, image: boolean): Reference {
-  const { source } = context;
-  const close = leaf(value, image ? "ImageReferenceClose" : "ReferenceClose");
-  const closeText = getText(close, source);
-  const text = getText(value, source);
+function reference(value: MarkdownSyntaxNode, context: ProjectionContext, image: boolean): Reference {
+  const close = leaf(value, image ? "ImageReferenceClose" : "ReferenceClose", context);
+  const closeText = context.syntax.text(close);
+  const text = context.syntax.text(value);
   const content = text.slice(image ? 2 : 1, text.length - closeText.length);
   const full = closeText.startsWith("][") && closeText !== "][]";
   const labelSource = full ? closeText.slice(2, -1) : content;
@@ -522,29 +574,30 @@ function phrasingText(children: readonly PhrasingContent[]): string {
   return result;
 }
 
-function inlineLines(value: CstNode, context: ProjectionContext): PhrasingContent[] {
+function inlineLines(value: MarkdownSyntaxNode, context: ProjectionContext): PhrasingContent[] {
   const children: PhrasingContent[] = [];
-  for (const child of value.children) {
-    const projected = "tokenType" in child ? inlineLeaf(child, context) : inlineNode(child, context);
+  for (const child of context.syntax.children(value)) {
+    const projected = context.syntax.isLeaf(child) ? inlineLeaf(child, context) : inlineNode(child, context);
     if (!projected) {
       continue;
     }
-    appendInlineValue(context, children, projected, child.offset);
+    appendInlineValue(context, children, projected, context.syntax.span(child).start);
   }
   return children;
 }
 
-function emphasis(value: CstNode, context: ProjectionContext, kind: "emphasis" | "strong"): Emphasis | Strong {
+function emphasis(value: MarkdownSyntaxNode, context: ProjectionContext, kind: "emphasis" | "strong"): Emphasis | Strong {
   const marker = kind === "strong" ? "Strong" : "Emphasis";
-  const [start, end] = contentBounds(value, [`${marker}Open`], [`${marker}Close`]);
-  const children = inlineSequence(value.children, context, start, end);
+  const [start, end] = contentBounds(value, [`${marker}Open`], [`${marker}Close`], context);
+  const children = inlineSequence(context.syntax.children(value), context, start, end);
+  const span = context.syntax.span(value);
   return kind === "strong"
-    ? withSpan(context, { type: "strong", children } satisfies Strong, value.offset, value.end)
-    : withSpan(context, { type: "emphasis", children } satisfies Emphasis, value.offset, value.end);
+    ? withSpan(context, { type: "strong", children } satisfies Strong, span.start, span.end)
+    : withSpan(context, { type: "emphasis", children } satisfies Emphasis, span.start, span.end);
 }
 
 function linkOrImage(
-  value: CstNode,
+  value: MarkdownSyntaxNode,
   context: ProjectionContext,
   media: "image" | "link",
   resourceKind: "direct" | "reference",
@@ -553,28 +606,29 @@ function linkOrImage(
   const referenceNode = resourceKind === "reference";
   const prefix = image ? "Image" : "";
   const resourcePrefix = referenceNode ? "Reference" : "Link";
-  const [start, end] = contentBounds(value, [`${prefix}${resourcePrefix}Open`], [`${prefix}${resourcePrefix}Close`]);
-  const children = inlineSequence(value.children, context, start, end);
+  const [start, end] = contentBounds(value, [`${prefix}${resourcePrefix}Open`], [`${prefix}${resourcePrefix}Close`], context);
+  const children = inlineSequence(context.syntax.children(value), context, start, end);
+  const span = context.syntax.span(value);
   if (referenceNode) {
     const association = reference(value, context, image);
     return image
-      ? withSpan(context, { type: "imageReference", alt: phrasingText(children), ...association } satisfies ImageReference, value.offset, value.end)
-      : withSpan(context, { type: "linkReference", children, ...association } satisfies LinkReference, value.offset, value.end);
+      ? withSpan(context, { type: "imageReference", alt: phrasingText(children), ...association } satisfies ImageReference, span.start, span.end)
+      : withSpan(context, { type: "linkReference", children, ...association } satisfies LinkReference, span.start, span.end);
   }
-  const resource = destinationTitle(getText(leaf(value, `${prefix}LinkClose`), context.source).slice(2, -1));
+  const resource = destinationTitle(context.syntax.text(leaf(value, `${prefix}LinkClose`, context)).slice(2, -1));
   return image
-    ? withSpan(context, { type: "image", alt: phrasingText(children), ...resource } satisfies Image, value.offset, value.end)
-    : withSpan(context, { type: "link", children, ...resource } satisfies Link, value.offset, value.end);
+    ? withSpan(context, { type: "image", alt: phrasingText(children), ...resource } satisfies Image, span.start, span.end)
+    : withSpan(context, { type: "link", children, ...resource } satisfies Link, span.start, span.end);
 }
 
-function inlineNode(value: CstNode, context: ProjectionContext): PhrasingContent[] | PhrasingContent {
-  switch (value.rule) {
+function inlineNode(value: MarkdownSyntaxNode, context: ProjectionContext): PhrasingContent[] | PhrasingContent {
+  switch (context.syntax.rule(value)) {
     case "InlineLines": return inlineLines(value, context);
     case "InlineLine":
     case "Inline":
     case "LinkContent":
     case "BracketFallback":
-      return inlineSequence(value.children, context);
+      return inlineSequence(context.syntax.children(value), context);
     case "Emphasis":
     case "LinkEmphasis": return emphasis(value, context, "emphasis");
     case "Strong":
@@ -585,17 +639,17 @@ function inlineNode(value: CstNode, context: ProjectionContext): PhrasingContent
     case "LinkReferenceImage": return linkOrImage(value, context, "image", "reference");
     case "Link": return linkOrImage(value, context, "link", "direct");
     case "ReferenceLink": return linkOrImage(value, context, "link", "reference");
-    default: throw new Error(`Unexpected inline CST rule: ${value.rule}`);
+    default: throw new Error(`Unexpected inline syntax rule: ${context.syntax.rule(value)}`);
   }
 }
 
-function inlineChildren(value: CstNode, context: ProjectionContext): PhrasingContent[] {
-  const inline = childNodes(value, "InlineLines")[0];
+function inlineChildren(value: MarkdownSyntaxNode, context: ProjectionContext): PhrasingContent[] {
+  const inline = context.syntax.inline(value);
   if (!inline) {
-    if (value.rule === "AtxHeading") {
+    if (context.syntax.rule(value) === "AtxHeading") {
       return [];
     }
-    throw new Error(`Expected ${value.rule} CST to contain InlineLines`);
+    throw new Error(`Expected ${context.syntax.rule(value)} syntax to contain InlineLines`);
   }
   const result = inlineLines(inline, context);
   const last = result.at(-1);
@@ -705,124 +759,161 @@ function htmlBlockValue(value: string): string {
   return terminator && !lower.includes(terminator) ? source : source.replace(/\n$/, "");
 }
 
-function blockContent(value: CstNode, context: ProjectionContext): BlockContent | DefinitionContent {
-  if (value.rule !== "Block") {
-    throw new Error(`Expected Block CST, received ${value.rule}`);
+function blockContent(value: MarkdownSyntaxNode, context: ProjectionContext): BlockContent | DefinitionContent {
+  if (context.syntax.rule(value) !== "Block") {
+    throw new Error(`Expected Block syntax, received ${context.syntax.rule(value)}`);
   }
-  const children = childNodes(value);
+  const children = childNodes(value, null, context);
   if (children.length !== 1) {
-    throw new Error(`Expected Block CST to contain one node, received ${children.length}`);
+    throw new Error(`Expected Block syntax to contain one node, received ${children.length}`);
   }
   return blockNode(children[0], context);
 }
 
-function listItem(value: CstNode, context: ProjectionContext): ListItem {
-  const { source } = context;
-  if (value.rule !== "OrderedListItem" && value.rule !== "UnorderedListItem") {
-    throw new Error(`Expected list item CST, received ${value.rule}`);
+function listItem(value: MarkdownSyntaxNode, context: ProjectionContext): ListItem {
+  const rule = context.syntax.rule(value);
+  if (rule !== "OrderedListItem" && rule !== "UnorderedListItem") {
+    throw new Error(`Expected list item syntax, received ${rule}`);
   }
-  const marker = leaf(value, value.rule === "OrderedListItem" ? "OrderedItemOpen" : "UnorderedItemOpen");
+  const marker = leaf(value, rule === "OrderedListItem" ? "OrderedItemOpen" : "UnorderedItemOpen", context);
+  const markerSpan = context.syntax.span(marker);
   const result = {
     type: "listItem",
-    spread: listItemSpread(value, source),
+    spread: listItemSpread(value, context),
     checked: null,
-    children: childNodes(value, "Block").map((child) => blockContent(child, context)),
+    children: childNodes(value, "Block", context).map((child) => blockContent(child, context)),
   } satisfies ListItem;
-  return withSpan(context, result, marker.offset, lastChildEnd(context, result, blockEnd(value, source)));
+  return withSpan(context, result, markerSpan.start, lastChildEnd(context, result, blockEnd(value, context)));
 }
 
-function blockNode(value: CstNode, context: ProjectionContext): BlockContent | DefinitionContent {
+function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): BlockContent | DefinitionContent {
   const { source } = context;
-  switch (value.rule) {
+  const span = context.syntax.span(value);
+  const rule = context.syntax.rule(value);
+  switch (rule) {
     case "BlockQuote": {
       const result = {
         type: "blockquote",
-        children: childNodes(value, "Block").map((child) => blockContent(child, context)),
+        children: childNodes(value, "Block", context).map((child) => blockContent(child, context)),
       } satisfies Blockquote;
-      const marker = leaf(value, "BlockQuoteOpen");
-      const start = firstNonspace(source, marker.offset, lineEnd(source, value.offset));
-      return withSpan(context, result, start, blockEnd(value, source));
+      const marker = context.syntax.span(leaf(value, "BlockQuoteOpen", context));
+      const start = firstNonspace(source, marker.start, lineEnd(source, span.start));
+      return withSpan(context, result, start, blockEnd(value, context));
     }
     case "UnorderedList":
     case "OrderedList": {
-      const ordered = value.rule === "OrderedList";
+      const ordered = rule === "OrderedList";
       const itemRule = ordered ? "OrderedListItem" : "UnorderedListItem";
-      const items = childNodes(value, itemRule);
-      const listMarker = leaf(value, ordered ? "OrderedListOpen" : "UnorderedListOpen");
+      const items = childNodes(value, itemRule, context);
+      const listMarker = leaf(value, ordered ? "OrderedListOpen" : "UnorderedListOpen", context);
+      const markerSpan = context.syntax.span(listMarker);
       const result = {
         type: "list",
         ordered,
-        start: ordered ? Number.parseInt(getText(listMarker, source), 10) : null,
-        spread: listSpread(items, source),
+        start: ordered ? Number.parseInt(context.syntax.text(listMarker), 10) : null,
+        spread: listSpread(items, context),
         children: items.map((item) => listItem(item, context)),
       } satisfies List;
-      return withSpan(context, result, listMarker.offset, lastChildEnd(context, result, listMarker.end));
+      return withSpan(context, result, markerSpan.start, lastChildEnd(context, result, markerSpan.end));
     }
     case "AtxHeading": {
-      const marker = leaf(value, "AtxHeadingOpen");
+      const marker = context.syntax.span(leaf(value, "AtxHeadingOpen", context));
       return withSpan(context, {
         type: "heading",
-        depth: marker.end - marker.offset as Heading["depth"],
+        depth: marker.end - marker.start as Heading["depth"],
         children: inlineChildren(value, context),
-      } satisfies Heading, marker.offset, blockEnd(value, source));
+      } satisfies Heading, marker.start, blockEnd(value, context));
     }
     case "SetextHeading": {
-      const levelOne = directLeaf(value, "SetextHeading1Open");
+      const levelOne = directLeaf(value, "SetextHeading1Open", context);
       if (!levelOne) {
-        leaf(value, "SetextHeading2Open");
+        leaf(value, "SetextHeading2Open", context);
       }
       const result = {
         type: "heading",
         depth: levelOne ? 1 : 2,
         children: inlineChildren(value, context),
       } satisfies Heading;
-      return withSpan(context, result, firstChildStart(context, result), leaf(value, "HeadingClose").offset);
+      return withSpan(
+        context,
+        result,
+        firstChildStart(context, result),
+        context.syntax.span(leaf(value, "HeadingClose", context)).start,
+      );
     }
     case "Paragraph": {
       const result = { type: "paragraph", children: inlineChildren(value, context) } satisfies Paragraph;
-      return withSpan(context, result, firstChildStart(context, result), blockEnd(value, source));
+      return withSpan(context, result, firstChildStart(context, result), blockEnd(value, context));
     }
     case "ThematicBreak": return withSpan(
       context,
       { type: "thematicBreak" },
-      firstNonspace(source, value.offset, value.end),
-      blockEnd(value, source),
+      firstNonspace(source, span.start, span.end),
+      blockEnd(value, context),
     );
     case "FencedCode": {
-      const fence = fencedCode(getText(leaf(value, "FencedCodeBlock"), source));
+      const fence = fencedCode(context.syntax.text(leaf(value, "FencedCodeBlock", context)));
       // An unclosed fence owns the final newline only when it reaches the document's EOF.
-      const end = fence.closed || value.end < source.length ? blockEnd(value, source) : value.end;
-      return withSpan(context, fence.node, firstNonspace(source, value.offset, lineEnd(source, value.offset)), end);
+      const end = fence.closed || span.end < source.length ? blockEnd(value, context) : span.end;
+      return withSpan(context, fence.node, firstNonspace(source, span.start, lineEnd(source, span.start)), end);
     }
     case "IndentedCodeBlock": return withSpan(
       context,
-      indentedCode(getText(leaf(value, "IndentedCodeBlockToken"), source)),
-      value.offset,
-      indentedCodeEnd(value, source),
+      indentedCode(context.syntax.text(leaf(value, "IndentedCodeBlockToken", context))),
+      span.start,
+      indentedCodeEnd(value, context),
     );
     case "HtmlBlock": {
-      const html = htmlBlockValue(getText(leaf(value, "HtmlBlockToken"), source));
-      return withSpan(context, { type: "html", value: html } satisfies Html, value.offset, html.endsWith("\n") ? value.end : blockEnd(value, source));
+      const html = htmlBlockValue(context.syntax.text(leaf(value, "HtmlBlockToken", context)));
+      return withSpan(context, { type: "html", value: html } satisfies Html, span.start, html.endsWith("\n") ? span.end : blockEnd(value, context));
     }
     case "LinkDefinition": return definition(value, context);
-    default: throw new Error(`Unexpected block CST rule: ${value.rule}`);
+    default: throw new Error(`Unexpected block syntax rule: ${rule}`);
   }
 }
 
-export function markdownBlockToMdastFragment(tree: CstNode, source: string): MdastBlockFragment {
-  const context = { source, spans: new Map<object, SourceSpan>() };
+function objectSyntax(source: string): MarkdownSyntax {
+  const isLeaf = (child: MarkdownSyntaxChild): child is CstLeaf => "tokenType" in child;
+  return {
+    children: (node) => (node as CstNode).children,
+    inline: (node) => (node as CstNode).children.find((child) => (
+      !isLeaf(child) && child.rule === "InlineLines"
+    )) as CstNode | undefined,
+    isLeaf,
+    ranges: (value) => (value as CstLeaf).ranges,
+    rule: (node) => (node as CstNode).rule,
+    span: (value) => {
+      const syntaxValue = value as CstLeaf | CstNode;
+      return { start: syntaxValue.offset, end: syntaxValue.end };
+    },
+    text: (value) => getText(value as CstLeaf | CstNode, source),
+    tokenType: (value) => (value as CstLeaf).tokenType,
+  };
+}
+
+export function markdownSyntaxBlockToMdastFragment(
+  tree: MarkdownSyntaxNode,
+  source: string,
+  syntax: MarkdownSyntax,
+): MdastBlockFragment {
+  const context = { source, syntax, spans: new Map<object, SourceSpan>() };
   const node = blockContent(tree, context);
+  const offset = syntax.span(tree).start;
   for (const span of context.spans.values()) {
-    span.start -= tree.offset;
-    span.end -= tree.offset;
+    span.start -= offset;
+    span.end -= offset;
   }
   return { node, spans: context.spans };
+}
+
+export function markdownBlockToMdastFragment(tree: CstNode, source: string): MdastBlockFragment {
+  return markdownSyntaxBlockToMdastFragment(tree, source, objectSyntax(source));
 }
 
 function materializeFragment(
   fragment: MdastBlockFragment,
   offset: number,
-  context: ProjectionContext,
+  context: PositionContext,
 ): BlockContent | DefinitionContent {
   const clone = (value: PositionedValue): PositionedValue => {
     const result = {
@@ -854,11 +945,13 @@ export function markdownFragmentsToMdast(
 
 /** Convert a block-first Markdown CST into an mdast root without invoking a renderer. */
 export function markdownCstToMdast(tree: CstNode, source: string): Root {
-  if (tree.rule !== "Document") {
-    throw new Error(`Expected Markdown Document CST, received '${tree.rule}'`);
+  const syntax = objectSyntax(source);
+  if (syntax.rule(tree) !== "Document") {
+    throw new Error(`Expected Markdown Document CST, received '${syntax.rule(tree)}'`);
   }
-  return markdownFragmentsToMdast(childNodes(tree, "Block").map((child) => ({
-    fragment: markdownBlockToMdastFragment(child, source),
-    offset: child.offset,
+  const context = { source, syntax, spans: new Map<object, SourceSpan>() };
+  return markdownFragmentsToMdast(childNodes(tree, "Block", context).map((child) => ({
+    fragment: markdownSyntaxBlockToMdastFragment(child, source, syntax),
+    offset: syntax.span(child).start,
   })), source);
 }

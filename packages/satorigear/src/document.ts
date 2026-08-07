@@ -1,8 +1,8 @@
 import type { Root } from "mdast";
 import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
 import {
-  markdownBlockToMdastFragment,
   markdownFragmentsToMdast,
+  markdownSyntaxBlockToMdastFragment,
   type MdastBlockFragment,
 } from "./mdast.ts";
 import { createMarkdownCompositeDocument, markdownBlockParser } from "./parser.ts";
@@ -105,7 +105,7 @@ export class StatefulMarkdownDocument implements MarkdownDocument {
       const previous = this.#fragments.get(block.id);
       const fragment = previous?.source === block.source && previous.version === block.version
         ? previous.fragment
-        : markdownBlockToMdastFragment(block.materialize(), this.source);
+        : markdownSyntaxBlockToMdastFragment(block.node, this.source, block.syntax);
       fragments.set(block.id, { fragment, source: block.source, version: block.version });
       return { fragment, offset: block.offset };
     });

@@ -1,15 +1,13 @@
-import { rebaseCst } from "monogram/composite-parser.ts";
 import { createDelimitedTokenResolver } from "monogram/delimiter-parser.ts";
 import { createSourceView, type SourceRange, type SourceView } from "monogram/source-view.ts";
-import type { CstChild, CstNode } from "monogram/cst.ts";
 import type { Token } from "monogram/gen-lexer.ts";
 import {
   createCstParser,
   type CstParserDocument,
   type CstTree,
+  type CstTreeEntry,
+  type CstTreeLeaf,
   type CstTreeNode,
-  materializeCst,
-  materializeCstNode,
 } from "./emitted-parser.ts";
 import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
@@ -21,6 +19,12 @@ import {
   reassociateMarkdownReferenceTails,
 } from "./grammar-inline.ts";
 import { changedTokenRange } from "./token-change.ts";
+import type {
+  MarkdownSyntax,
+  MarkdownSyntaxChild,
+  MarkdownSyntaxLeaf,
+  MarkdownSyntaxNode,
+} from "./mdast.ts";
 
 export const markdownBlockParser = createCstParser(blockRuntime, tokenizeMarkdownBlocks);
 const inlineParser = createCstParser(inlineRuntime, inlineRuntime.tokenize);
@@ -167,9 +171,10 @@ function intersects(left: ReadonlySet<string>, right: ReadonlySet<string>): bool
   return [...left].some((value) => right.has(value));
 }
 
-class MarkdownCompositeDocument {
+class MarkdownCompositeDocument implements MarkdownSyntax {
   #blocks: readonly CompositeBlockDescriptor[] = [];
   #labels = new Set<string>();
+  #inlineTrees = new WeakMap<CstTree, InlineRegion>();
   #regions = new Map<number, InlineRegion>();
   #source: string;
   #tree: CstTree;
@@ -193,23 +198,18 @@ class MarkdownCompositeDocument {
 
   blocks(): readonly {
     id: number;
-    materialize: () => CstNode;
+    node: MarkdownSyntaxNode;
     offset: number;
     source: string;
+    syntax: MarkdownSyntax;
     version: string;
   }[] {
     return this.#blocks.map((block) => ({
       id: block.id,
-      materialize: () => {
-        return materializeCstNode(
-          this.#tree,
-          this.#source,
-          block.node,
-          (node, children) => this.#attachInline(node, children),
-        );
-      },
+      node: block.node,
       offset: block.offset,
       source: block.source,
+      syntax: this,
       version: block.regionIds.map((id) => `${id}:${this.#regions.get(id)?.revision}`).join("|"),
     }));
   }
@@ -293,34 +293,75 @@ class MarkdownCompositeDocument {
     this.#regions = regions;
   }
 
-  toCst(): CstNode {
-    return materializeCst(
-      this.#tree,
-      this.#source,
-      (node, children) => this.#attachInline(node, children),
-    );
+  children(value: MarkdownSyntaxNode): readonly MarkdownSyntaxChild[] {
+    const node = value as CstTreeNode;
+    return node.tree.children(node);
   }
 
-  #attachInline(arenaNode: CstTreeNode, children: CstChild[]): CstChild[] {
-    const region = this.#regions.get(arenaNode.id);
-    if (!region) {
-      return children;
+  inline(value: MarkdownSyntaxNode): MarkdownSyntaxNode | undefined {
+    const node = value as CstTreeNode;
+    if (node.tree !== this.#tree) {
+      return;
     }
-    const local = region.document
-      ? region.document.toCst(region.view.text, region.tokens)
-      : inlineParser.parseTokens(region.view.text, region.tokens, "InlineLines");
-    const inner = rebaseCst(local, region.view);
-    let inserted = false;
-    return children.flatMap((child) => {
-      if (!("tokenType" in child) || child.tokenType !== "InlineChunk") {
-        return [child];
-      }
-      if (inserted) {
-        return [];
-      }
-      inserted = true;
-      return [inner];
-    });
+    const region = this.#regions.get(node.id);
+    if (!region) {
+      return;
+    }
+    const tree = region.document
+      ? region.document.tree(region.tokens)
+      : inlineParser.parseTree(region.view.text, region.tokens, "InlineLines");
+    this.#inlineTrees.set(tree, region);
+    return tree.root;
+  }
+
+  isLeaf(value: MarkdownSyntaxChild): value is MarkdownSyntaxLeaf {
+    return (value as CstTreeEntry).kind === "leaf";
+  }
+
+  ranges(value: MarkdownSyntaxLeaf): readonly SourceRange[] {
+    const leaf = value as CstTreeLeaf;
+    const token = leaf.tree.leafToken(leaf);
+    const ranges = token.ranges ?? [{ offset: token.offset, end: token.offset + token.text.length }];
+    const region = this.#regionOf(leaf);
+    return region ? ranges.flatMap((range) => region.view.mapRange(range.offset, range.end)) : ranges;
+  }
+
+  rule(value: MarkdownSyntaxNode): string {
+    const node = value as CstTreeNode;
+    return node.tree.ruleName(node);
+  }
+
+  span(value: MarkdownSyntaxChild): { end: number; start: number } {
+    const entry = value as CstTreeEntry;
+    const span = entry.tree.span(entry);
+    const region = this.#regionOf(entry);
+    if (!region) {
+      return span;
+    }
+    const ranges = region.view.mapRange(span.start, span.end);
+    if (ranges.length === 0) {
+      const point = region.view.mapPoint(span.start);
+      return { start: point, end: point };
+    }
+    return { start: ranges[0].offset, end: ranges.at(-1)!.end };
+  }
+
+  text(value: MarkdownSyntaxChild): string {
+    const entry = value as CstTreeEntry;
+    if (entry.kind === "leaf") {
+      return entry.tree.leafToken(entry).text;
+    }
+    const span = entry.tree.span(entry);
+    return (this.#regionOf(entry)?.view.text ?? this.#source).slice(span.start, span.end);
+  }
+
+  tokenType(value: MarkdownSyntaxLeaf): string {
+    const leaf = value as CstTreeLeaf;
+    return leaf.tree.leafTokenType(leaf);
+  }
+
+  #regionOf(value: CstTreeEntry): InlineRegion | undefined {
+    return this.#inlineTrees.get(value.tree);
   }
 }
 

@@ -48,12 +48,14 @@ export interface CstTreeNode {
   kind: "node";
   offset: number;
   tokenBase: number;
+  tree: CstTree;
 }
 
 export interface CstTreeLeaf {
   entry: number;
   kind: "leaf";
   token: number;
+  tree: CstTree;
 }
 
 export type CstTreeEntry = CstTreeLeaf | CstTreeNode;
@@ -71,6 +73,7 @@ export interface CstTree {
 export interface CstParser {
   createDocument: (source: string, tokens: readonly Token[], entryRule?: string) => CstParserDocument;
   parse: (source: string, entryRule?: string) => CstNode;
+  parseTree: (source: string, tokens: readonly Token[], entryRule?: string) => CstTree;
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => CstNode;
   tokenize: (source: string) => Token[];
 }
@@ -139,8 +142,8 @@ function createCstTree(
     id: rootId,
     offset: tokens[0] ? tokenOffset(tokens[0]) : 0,
     tokenBase: 0,
-  } satisfies CstTreeNode;
-  return {
+  } as CstTreeNode;
+  const result: CstTree = {
     root,
     children: (node) => Array.from({ length: tree.childCount(node.id) }, (_, index) => {
       const entry = tree.childAt(node.id, index);
@@ -149,6 +152,7 @@ function createCstTree(
           kind: "leaf",
           entry,
           token: tree.leafToken(entry, node.tokenBase),
+          tree: result,
         } satisfies CstTreeLeaf;
       }
       return {
@@ -156,6 +160,7 @@ function createCstTree(
         id: entry,
         offset: node.offset + tree.childRelAt(node.id, index),
         tokenBase: node.tokenBase + tree.childTokRelAt(node.id, index),
+        tree: result,
       } satisfies CstTreeNode;
     }),
     leafToken: (leaf) => tokenAt(leaf.token),
@@ -169,6 +174,8 @@ function createCstTree(
       return { start: tokenOffset(token), end: tokenEnd(token) };
     },
   };
+  root.tree = result;
+  return result;
 }
 
 type CstChildrenTransform = (node: CstTreeNode, children: CstChild[]) => CstChild[];
@@ -206,13 +213,17 @@ export function createCstParser<Handle extends EmittedParserHandle>(
   runtime: EmittedParserModule<Handle>,
   tokenize: (source: string) => Token[],
 ): CstParser {
-  const parseTokens = (source: string, tokens: readonly Token[], entryRule?: string): CstNode => {
+  const parseTree = (source: string, tokens: readonly Token[], entryRule?: string): CstTree => {
     const root = runtime.parseTokens(source, tokens, entryRule);
-    return materializeCst(createCstTree(root, tokens, runtime.tree), source);
+    return createCstTree(root, tokens, runtime.tree);
   };
+  const parseTokens = (source: string, tokens: readonly Token[], entryRule?: string): CstNode => (
+    materializeCst(parseTree(source, tokens, entryRule), source)
+  );
   return {
     createDocument: (source, tokens, entryRule) => createCstDocument(runtime, source, tokens, entryRule),
     parse: (source, entryRule) => parseTokens(source, tokenize(source), entryRule),
+    parseTree,
     parseTokens,
     tokenize,
   };

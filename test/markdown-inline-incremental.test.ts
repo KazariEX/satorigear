@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createMarkdownBlockTokenizer } from "../packages/satorigear/src/grammar-blocks.ts";
 import {
+  markdownCstToMdast,
+  markdownFragmentsToMdast,
+  markdownSyntaxBlockToMdastFragment,
+} from "../packages/satorigear/src/mdast.ts";
+import {
   createMarkdownCompositeDocument,
   markdownBlockParser,
 } from "../packages/satorigear/src/parser.ts";
@@ -19,6 +24,16 @@ function editState(state: ReturnType<typeof setup>, edit: { end: number; start: 
   state.composite.update(state.blocks.tree(state.tokenizer.tokens), state.tokenizer.source);
 }
 
+function expectSemanticTree(state: ReturnType<typeof setup>): void {
+  const source = state.tokenizer.source;
+  const actual = markdownFragmentsToMdast(state.composite.blocks().map((block) => ({
+    fragment: markdownSyntaxBlockToMdastFragment(block.node, source, block.syntax),
+    offset: block.offset,
+  })), source);
+  const expected = markdownCstToMdast(markdownPhasedParser.parse(source), source);
+  expect(actual).toEqual(expected);
+}
+
 describe("incremental inline regions", () => {
   it("retains every paragraph parser handle for an internal edit", () => {
     const source = "first *one*\n\nsecond **two**\n\nthird [three](/url)\n";
@@ -30,7 +45,7 @@ describe("incremental inline regions", () => {
 
     const next = state.composite.inlineDocuments();
     expect(next).toEqual(previous);
-    expect(state.composite.toCst()).toEqual(markdownPhasedParser.parse(state.tokenizer.source));
+    expectSemanticTree(state);
   });
 
   it("does not replace sibling item handles when one list item changes", () => {
@@ -45,7 +60,7 @@ describe("incremental inline regions", () => {
     expect(next[0]).toBe(previous[0]);
     expect(next[1]).toBe(previous[1]);
     expect(next[2]).toBe(previous[2]);
-    expect(state.composite.toCst()).toEqual(markdownPhasedParser.parse(state.tokenizer.source));
+    expectSemanticTree(state);
   });
 
   it("invalidates only regions that name a changed reference", () => {
@@ -69,7 +84,7 @@ describe("incremental inline regions", () => {
       text: "[bar]: /bar\n",
     });
     expect(state.composite.inlineRevisions()).toEqual([1, 1, 0]);
-    expect(state.composite.toCst()).toEqual(markdownPhasedParser.parse(state.tokenizer.source));
+    expectSemanticTree(state);
   });
 
   it("keeps a reference region when a duplicate definition takes over", () => {
@@ -81,6 +96,6 @@ describe("incremental inline regions", () => {
     editState(state, { start, end, text: "" });
 
     expect(state.composite.inlineRevisions()).toEqual([0]);
-    expect(state.composite.toCst()).toEqual(markdownPhasedParser.parse(state.tokenizer.source));
+    expectSemanticTree(state);
   });
 });

@@ -74,6 +74,6 @@ describe("markdown mdast conversion", () => {
         end: 0,
         children: [{ rule: "UnknownBlock", offset: 0, end: 0, children: [] }],
       }],
-    }, "")).toThrow("Unexpected block CST rule: UnknownBlock");
+    }, "")).toThrow("Unexpected block syntax rule: UnknownBlock");
   });
 });
