@@ -1,9 +1,15 @@
 import { createCompositeParser, rebaseCst } from "monogram/composite-parser.ts";
 import { type CstNode, getText } from "monogram/cst.ts";
 import { resolveDelimitedTokens } from "monogram/delimiter-parser.ts";
-import { createLexer } from "monogram/gen-lexer.ts";
+import { createLexer, type Token } from "monogram/gen-lexer.ts";
 import { createSourceView, type SourceRange, type SourceView } from "monogram/source-view.ts";
-import { createCstParser, type CstTree, type CstTreeNode, materializeCst } from "./emitted-parser.ts";
+import {
+  createCstParser,
+  type CstParserDocument,
+  type CstTree,
+  type CstTreeNode,
+  materializeCst,
+} from "./emitted-parser.ts";
 import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
 import { tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
@@ -14,6 +20,7 @@ import {
   normalizeMarkdownReferenceLabel,
   reassociateMarkdownReferenceTails,
 } from "./grammar-inline.ts";
+import { changedTokenRange } from "./token-change.ts";
 
 export const markdownBlockParser = createCstParser(blockRuntime, tokenizeMarkdownBlocks);
 const inlineParser = createCstParser(inlineRuntime, createLexer(markdownInlineGrammar).tokenize);
@@ -86,11 +93,15 @@ function collectTreeReferenceLabels(tree: CstTree, source: string): Set<string> 
 function inlineParserFor(referenceLabels: ReadonlySet<string>) {
   return {
     parse: (source: string, entryRule?: string) => {
-      const pairs = markdownBracketPairs(referenceLabels);
-      const tokens = reassociateMarkdownReferenceTails(source, inlineParser.tokenize(source), referenceLabels);
-      return inlineParser.parseTokens(source, resolveDelimitedTokens(source, tokens, markdownDelimiterRuns, pairs), entryRule);
+      return inlineParser.parseTokens(source, inlineTokens(source, referenceLabels), entryRule);
     },
   };
+}
+
+function inlineTokens(source: string, referenceLabels: ReadonlySet<string>): Token[] {
+  const pairs = markdownBracketPairs(referenceLabels);
+  const tokens = reassociateMarkdownReferenceTails(source, inlineParser.tokenize(source), referenceLabels);
+  return resolveDelimitedTokens(source, tokens, markdownDelimiterRuns, pairs);
 }
 
 /**
@@ -109,8 +120,18 @@ export const markdownPhasedParser = createCompositeParser({
 });
 
 interface InlineRegion {
-  inner: CstNode;
-  text: string;
+  document: CstParserDocument;
+  id: number;
+  rule: string;
+  span: { end: number; start: number };
+  tokens: readonly Token[];
+  view: SourceView;
+}
+
+interface InlineRegionDescriptor {
+  id: number;
+  rule: string;
+  span: { end: number; start: number };
   view: SourceView;
 }
 
@@ -122,6 +143,53 @@ function rangesOf(tree: CstTree, node: CstTreeNode): SourceRange[] {
     const token = tree.leafToken(child);
     return token.ranges?.length ? [...token.ranges] : [{ offset: token.offset, end: token.offset + token.text.length }];
   });
+}
+
+function textEdit(previous: string, next: string): readonly { end: number; start: number; text: string }[] {
+  let start = 0;
+  const common = Math.min(previous.length, next.length);
+  while (start < common && previous[start] === next[start]) {
+    start++;
+  }
+  let suffix = 0;
+  while (suffix < common - start && previous[previous.length - 1 - suffix] === next[next.length - 1 - suffix]) {
+    suffix++;
+  }
+  if (start === previous.length && start === next.length) {
+    return [];
+  }
+  return [{
+    start,
+    end: previous.length - suffix,
+    text: next.slice(start, next.length - suffix),
+  }];
+}
+
+function createInlineRegion(descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>): InlineRegion {
+  const tokens = inlineTokens(descriptor.view.text, labels);
+  return {
+    ...descriptor,
+    tokens,
+    document: inlineParser.createDocument(descriptor.view.text, tokens, "InlineLines"),
+  };
+}
+
+function updateInlineRegion(
+  region: InlineRegion,
+  descriptor: InlineRegionDescriptor,
+  labels: ReadonlySet<string>,
+  labelsChanged: boolean,
+): InlineRegion {
+  if (!labelsChanged && region.view.text === descriptor.view.text) {
+    return { ...region, ...descriptor };
+  }
+  const edits = textEdit(region.view.text, descriptor.view.text);
+  const tokens = inlineTokens(descriptor.view.text, labels);
+  const change = changedTokenRange(region.tokens, tokens, descriptor.view.text.length - region.view.text.length);
+  if (edits.length > 0 || change.oldStart !== change.oldEnd || change.tokens.length > 0) {
+    region.document.edit(edits, change);
+  }
+  return { ...region, ...descriptor, tokens };
 }
 
 class MarkdownCompositeDocument {
@@ -136,31 +204,58 @@ class MarkdownCompositeDocument {
     this.update(tree, source);
   }
 
+  inlineDocuments(): readonly CstParserDocument[] {
+    return [...this.#regions.values()].map((region) => region.document);
+  }
+
   update(tree: CstTree, source: string): void {
     const labels = collectTreeReferenceLabels(tree, source);
     const labelsChanged = !sameLabels(this.#labels, labels);
-    const regions = new Map<number, InlineRegion>();
-    const visit = (node: CstTreeNode): void => {
+    const descriptors: InlineRegionDescriptor[] = [];
+    const collect = (node: CstTreeNode): void => {
       const rule = tree.ruleName(node);
       if (rule === "Paragraph" || rule === "AtxHeading" || rule === "SetextHeading") {
         const ranges = rangesOf(tree, node);
         if (ranges.length > 0) {
-          const view = createSourceView(source, ranges);
-          const previous = this.#regions.get(node.id);
-          const inner = !labelsChanged && previous?.text === view.text
-            ? previous.inner
-            : inlineParserFor(labels).parse(view.text, "InlineLines");
-          regions.set(node.id, { inner, text: view.text, view });
+          descriptors.push({ id: node.id, rule, span: tree.span(node), view: createSourceView(source, ranges) });
         }
         return;
       }
       for (const child of tree.children(node)) {
         if (child.kind === "node") {
-          visit(child);
+          collect(child);
         }
       }
     };
-    visit(tree.root);
+    collect(tree.root);
+
+    const regions = new Map<number, InlineRegion>();
+    const stableIds = new Set(descriptors.map((descriptor) => descriptor.id));
+    const available = [...this.#regions.values()].filter((region) => !stableIds.has(region.id));
+    for (const descriptor of descriptors) {
+      let previous = this.#regions.get(descriptor.id);
+      if (!previous) {
+        let nearest = -1;
+        let distance = Number.POSITIVE_INFINITY;
+        for (let index = 0; index < available.length; index++) {
+          const candidate = available[index];
+          const candidateDistance = candidate.rule === descriptor.rule
+            ? Math.abs(candidate.span.start - descriptor.span.start)
+            : Number.POSITIVE_INFINITY;
+          if (candidateDistance < distance) {
+            distance = candidateDistance;
+            nearest = index;
+          }
+        }
+        if (nearest >= 0) {
+          previous = available.splice(nearest, 1)[0];
+        }
+      }
+      const region = previous
+        ? updateInlineRegion(previous, descriptor, labels, labelsChanged)
+        : createInlineRegion(descriptor, labels);
+      regions.set(descriptor.id, region);
+    }
     this.#tree = tree;
     this.#source = source;
     this.#labels = labels;
@@ -172,7 +267,7 @@ class MarkdownCompositeDocument {
     const attach = (arenaNode: CstTreeNode, node: CstNode): void => {
       const region = this.#regions.get(arenaNode.id);
       if (region) {
-        const inner = rebaseCst(region.inner, region.view);
+        const inner = rebaseCst(region.document.toCst(region.view.text, region.tokens), region.view);
         let inserted = false;
         node.children = node.children.flatMap((child) => {
           if (!("tokenType" in child) || child.tokenType !== "InlineChunk") {
