@@ -105,7 +105,7 @@ export class StatefulMarkdownDocument implements MarkdownDocument {
       const previous = this.#fragments.get(block.id);
       const fragment = previous?.source === block.source && previous.version === block.version
         ? previous.fragment
-        : markdownBlockToMdastFragment(block.node, this.source);
+        : markdownBlockToMdastFragment(block.materialize(), this.source);
       fragments.set(block.id, { fragment, source: block.source, version: block.version });
       return { fragment, offset: block.offset };
     });

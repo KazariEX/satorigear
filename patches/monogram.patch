@@ -480,10 +480,21 @@ index 0000000..58712b3
 +  };
 +}
 diff --git a/src/emit-parser.ts b/src/emit-parser.ts
-index 74feb92..792a8ec 100644
+index 74feb92..4b65fc3 100644
 --- a/src/emit-parser.ts
 +++ b/src/emit-parser.ts
-@@ -2637,6 +2637,42 @@ ${e.soa ? `  tokenize(source);
+@@ -2332,6 +2332,10 @@ function emitMixfixLed(e: Emitter, a: ReturnType<typeof analyze>, fnName: string
+ // Emit parseRuleEntry (memo + context handling for pratt/left-rec rules, mirrors
+ // parseRule's pratt/left-rec branch) and the parse() driver.
+ function emitDriver(e: Emitter, a: ReturnType<typeof analyze>, entry: string) {
++  const K_ARR = a.kArr;
++  const T_ARR = a.tArr;
++  const K_BYTES = a.kArr === 'Uint8Array' ? 1 : 2;
++  const T_BYTES = a.tArr === 'Uint8Array' ? 1 : 2;
+   e.emit(String.raw`
+ // parseRule for a pratt/left-rec rule: memo + context + suppress, then the core.
+ // The memo is per-rule arrays indexed by start pos (lazily sized to the token count,
+@@ -2637,6 +2641,42 @@ ${e.soa ? `  tokenize(source);
    tokN = _n;`}
  }
  
@@ -526,7 +537,7 @@ index 74feb92..792a8ec 100644
  function farthest(errPos: number) {
    if (maxPos <= errPos || maxPos >= tokN) return '';
    return ' [farthest: offset ' + toff(maxPos) + " near '" + tokTextAt(maxPos).slice(0, 20) + "']";
-@@ -3498,6 +3534,7 @@ let altN = 0;   // old-stream token count while a window lex runs (lexCore's res
+@@ -3498,6 +3538,7 @@ let altN = 0;   // old-stream token count while a window lex runs (lexCore's res
  type Diag = { offset: number; end: number; message: string; related?: { offset: number; end: number; message: string } };
  type LexDiag = { offset: number; end: number; kind: number; ch: string };
  type Edit = { start: number; end: number; text: string };
@@ -534,7 +545,67 @@ index 74feb92..792a8ec 100644
  type Doc = {
    tkK: typeof tkK; tkT: typeof tkT; tkOff: typeof tkOff; tkEnd: typeof tkEnd; tkFl: typeof tkFl; tkDp: typeof tkDp; tkPd: typeof tkPd;
    tkCap: number; tokN: number; srcLenP1: number; negFrom: number;
-@@ -3600,6 +3637,17 @@ function parseCore(source: string, entryRule?: string) {
+@@ -3514,21 +3555,45 @@ ${e.soa ? '  parenCachePos: number; parenCacheStack: boolean[];' : ''}
+   altCap: number; altN: number;
+ };
+ type Handle = { d: Doc; gen: number; root: number; errors: Diag[] };
+-function makeDoc(): Doc {
++function makeDoc(tokenCapacity = 4096, rowCapacity = 8192, childCapacity = 16384): Doc {
++  const tokenBuffer = new ArrayBuffer(tokenCapacity * ${K_BYTES + T_BYTES + 12});
++  const docTkK = new ${K_ARR}(tokenBuffer, 0, tokenCapacity);
++  const docTkT = new ${T_ARR}(tokenBuffer, tokenCapacity * ${K_BYTES}, tokenCapacity);
++  const docTkOff = new Int32Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES}, tokenCapacity);
++  const docTkEnd = new Int32Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES + 4}, tokenCapacity);
++  const docTkFl = new Uint8Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES + 8}, tokenCapacity);
++  const docTkDp = new Uint8Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES + 9}, tokenCapacity);
++  const docTkPd = new Uint16Array(tokenBuffer, tokenCapacity * ${K_BYTES + T_BYTES + 10}, tokenCapacity);
++  const rowBuffer = new ArrayBuffer(rowCapacity * 37);
++  const docRowRule = new Uint16Array(rowBuffer, 0, rowCapacity);
++  const docRowLen = new Int32Array(rowBuffer, rowCapacity * 2, rowCapacity);
++  const docRowTokLen = new Int32Array(rowBuffer, rowCapacity * 6, rowCapacity);
++  const docRowStart = new Int32Array(rowBuffer, rowCapacity * 10, rowCapacity);
++  const docRowCount = new Int32Array(rowBuffer, rowCapacity * 14, rowCapacity);
++  const docRowExt = new Int32Array(rowBuffer, rowCapacity * 18, rowCapacity);
++  const docRowOK = new Uint8Array(rowBuffer, rowCapacity * 22, rowCapacity);
++  const docRowKC = new Uint8Array(rowBuffer, rowCapacity * 23, rowCapacity);
++  const docRowNF = new Int32Array(rowBuffer, rowCapacity * 24, rowCapacity).fill(0x7fffffff);
++  const docRowRM = new Uint8Array(rowBuffer, rowCapacity * 28, rowCapacity);
++  const docAbsChar = new Int32Array(rowBuffer, rowCapacity * 29, rowCapacity);
++  const docAbsTok = new Int32Array(rowBuffer, rowCapacity * 33, rowCapacity);
++  const childBuffer = new ArrayBuffer(childCapacity * 12);
+   return {
+-    tkK: new (tkK.constructor as any)(4096), tkT: new (tkT.constructor as any)(4096),
+-    tkOff: new Int32Array(4096), tkEnd: new Int32Array(4096), tkFl: new Uint8Array(4096),
+-    tkDp: new Uint8Array(4096), tkPd: new Uint16Array(4096),
+-    tkCap: 4096, tokN: 0, srcLenP1: 1, negFrom: 0x7fffffff,
+-    rowRule: new Uint16Array(8192), rowLen: new Int32Array(8192), rowTokLen: new Int32Array(8192),
+-    rowStart: new Int32Array(8192), rowCount: new Int32Array(8192), rowExt: new Int32Array(8192),
+-    rowOK: new Uint8Array(8192), rowKC: new Uint8Array(8192),
+-    rowNF: new Int32Array(8192).fill(0x7fffffff),
+-    rowRM: new Uint8Array(8192),
+-    absChar: new Int32Array(8192), absTok: new Int32Array(8192),
+-    rowCap: 8192, nodeN: 0,
+-    kids: new Int32Array(16384), kidRel: new Int32Array(16384), kidTokRel: new Int32Array(16384),
+-    kidCap: 16384, kidN: 0,
++    tkK: docTkK, tkT: docTkT,
++    tkOff: docTkOff, tkEnd: docTkEnd, tkFl: docTkFl,
++    tkDp: docTkDp, tkPd: docTkPd,
++    tkCap: tokenCapacity, tokN: 0, srcLenP1: 1, negFrom: 0x7fffffff,
++    rowRule: docRowRule, rowLen: docRowLen, rowTokLen: docRowTokLen,
++    rowStart: docRowStart, rowCount: docRowCount, rowExt: docRowExt,
++    rowOK: docRowOK, rowKC: docRowKC,
++    rowNF: docRowNF,
++    rowRM: docRowRM,
++    absChar: docAbsChar, absTok: docAbsTok,
++    rowCap: rowCapacity, nodeN: 0,
++    kids: new Int32Array(childBuffer, 0, childCapacity),
++    kidRel: new Int32Array(childBuffer, childCapacity * 4, childCapacity),
++    kidTokRel: new Int32Array(childBuffer, childCapacity * 8, childCapacity),
++    kidCap: childCapacity, kidN: 0,
+     memoNode: [], memoEnd: [], memoExt: [], memoGen: [], memoGenCur: 0,
+     docDiags: [], docLex: [], docPar: [],
+     docPieces: null, docPieceOff: null, docLen: 0, docFlat: null, docCur: 0,
+@@ -3600,6 +3665,17 @@ function parseCore(source: string, entryRule?: string) {
    adoptRoot = -1;
    adoptRunPos = -1;
    lexInto(source);
@@ -552,7 +623,7 @@ index 74feb92..792a8ec 100644
    if (memoEnd.length !== MEMO_RULES) {
      memoNode = new Array(MEMO_RULES);
      memoEnd = new Array(MEMO_RULES);
-@@ -3683,8 +3731,40 @@ function apiMisuse(msg: string) {
+@@ -3683,8 +3759,40 @@ function apiMisuse(msg: string) {
    e.apiMisuse = true;
    return e;
  }
@@ -595,7 +666,7 @@ index 74feb92..792a8ec 100644
      throw apiMisuse('edit() requires the changes: [{ start, end, text }] (LSP-style - each edit in the coordinates of the document AFTER the preceding edits in the array)');
    }
    // The engine owns the document text: the new source is BUILT from the changes,
-@@ -3725,6 +3805,49 @@ function editCore(entryRule: string | undefined, edits?: Edit[]) {
+@@ -3725,6 +3833,49 @@ function editCore(entryRule: string | undefined, edits?: Edit[]) {
    const ceNew = editDmgE < cs ? cs : editDmgE;
    const ceOld = ceNew - (newLen - oldLen);
    const charDelta = newLen - oldLen;
@@ -645,7 +716,7 @@ index 74feb92..792a8ec 100644
  ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    // Restart anchor: the last token B ending at/before the damage whose recorded
    // depths are zero and whose shape carries no cross-token lexer flag (')' control-
-@@ -3841,13 +3964,13 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3841,13 +3992,13 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    }
    // TRUE token prefix p: the window re-derives [B+1 .. p) byte-identically; only past
    // p is real damage (compared BEFORE the splice clobbers the old slots).
@@ -662,7 +733,7 @@ index 74feb92..792a8ec 100644
    // ── splice: old[0..B] + window[0..W) + old[R..oN), then shift the suffix spans ──
    const nN = B + 1 + W + (oN - R);
    while (tkCap < nN + 1) growTok();
-@@ -3880,7 +4003,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3880,7 +4031,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
      for (let i = 0; i < docEmptyPops.length; i++) { const v = docEmptyPops[i]; if (v >= R) nep.push(v + tokenDelta); }
      docEmptyPops = nep;
    }
@@ -671,7 +742,7 @@ index 74feb92..792a8ec 100644
    const oK = tkK, oT = tkT, oOff = tkOff, oEnd = tkEnd, oFl = tkFl, oN = tokN;
    const oText = tkText;
    if (altK === null || altK.length !== tkCap) {
-@@ -3899,7 +4022,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3899,7 +4050,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    lexInto(flattenDoc());
    const nN = tokN;
    const minN = oN < nN ? oN : nN;
@@ -680,7 +751,7 @@ index 74feb92..792a8ec 100644
    while (p < minN && oK[p] === tkK[p] && oT[p] === tkT[p] && oFl[p] === tkFl[p]
        && oOff[p] === tkOff[p] && oEnd[p] === tkEnd[p] && oText[p] === tkText[p]) p++;
    let s = 0;
-@@ -3909,9 +4032,10 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3909,9 +4060,10 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
        && oOff[i] + charDelta === tkOff[j] && oEnd[i] + charDelta === tkEnd[j] && oText[i] === tkText[j]) s++;
      else break;
    }
@@ -694,7 +765,7 @@ index 74feb92..792a8ec 100644
    // M4: NO memo carry — the memo is intra-parse; reuse flows through old-tree
    // adoption (parseRuleEntry consults the previous root via adoptSeek), so the whole
    // O(rules × n) carry/invalidate machinery is gone.
-@@ -4055,7 +4179,8 @@ export { tokenize };
+@@ -4055,7 +4207,8 @@ export { tokenize };
  // ── Module-level API: the DEFAULT document (one shared session; tokenize and the
  // raw tree/tokenAt views read the ACTIVE doc — they are gate/debug surfaces) ──
  export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }
@@ -704,8 +775,12 @@ index 74feb92..792a8ec 100644
  // Arena reclamation introspection + budget override — TEST HOOKS (issue #45 C1). __arenaStats
  // reports the live arena, the compacted-size baseline, and how many edits re-parsed to reclaim;
  // __setArenaBudget lowers the factor/min so a gate can force compaction deterministically.
-@@ -4073,76 +4198,85 @@ export function createParser() {
-   const d = makeDoc();
+@@ -4070,79 +4223,88 @@ export function visit(entry: number, fns: _VisitFns, charBase?: number, tokBase?
+ // the previous tree; the next edit falls back to a full re-parse internally. Only
+ // parse() re-opening the document invalidates old handles (they throw).
+ export function createParser() {
+-  const d = makeDoc();
++  const d = makeDoc(16, 32, 64);
    let gen = 0;
    let entryUsed: string | undefined;
 +  let externalUsed = false;
@@ -845,7 +920,7 @@ index 74feb92..792a8ec 100644
        activate(d);
        try {
          cst.root = editCore(entryUsed, edits);
-@@ -4151,6 +4285,17 @@ export function createParser() {
+@@ -4151,6 +4313,17 @@ export function createParser() {
          cst.root = totalNet(e);
        }
      },

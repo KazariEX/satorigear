@@ -119,7 +119,7 @@ export const markdownPhasedParser = createCompositeParser({
 
 interface InlineRegion {
   candidates: ReadonlySet<string>;
-  document: CstParserDocument;
+  document?: CstParserDocument;
   id: number;
   revision: number;
   rule: string;
@@ -172,7 +172,6 @@ function createInlineRegion(descriptor: InlineRegionDescriptor, labels: Readonly
     candidates: inline.candidates,
     revision: 0,
     tokens: inline.tokens,
-    document: inlineParser.createDocument(descriptor.view.text, inline.tokens, "InlineLines"),
   };
 }
 
@@ -188,13 +187,20 @@ function updateInlineRegion(
   const edits = textEdit(region.view.text, descriptor.view.text);
   const inline = tokenizeInline(descriptor.view.text, labels);
   const change = changedTokenRange(region.tokens, inline.tokens, descriptor.view.text.length - region.view.text.length);
+  let document = region.document;
   if (edits.length > 0 || change.oldStart !== change.oldEnd || change.tokens.length > 0) {
-    region.document.edit(edits, change);
+    if (document) {
+      document.edit(edits, change);
+    }
+    else {
+      document = inlineParser.createDocument(descriptor.view.text, inline.tokens, "InlineLines");
+    }
   }
   return {
     ...region,
     ...descriptor,
     candidates: inline.candidates,
+    document,
     revision: region.revision + 1,
     tokens: inline.tokens,
   };
@@ -232,24 +238,35 @@ class MarkdownCompositeDocument {
   }
 
   inlineDocuments(): readonly CstParserDocument[] {
-    return [...this.#regions.values()].map((region) => region.document);
+    return [...this.#regions.values()].map((region) => {
+      region.document ??= inlineParser.createDocument(region.view.text, region.tokens, "InlineLines");
+      return region.document;
+    });
   }
 
   inlineRevisions(): readonly number[] {
     return [...this.#regions.values()].map((region) => region.revision);
   }
 
-  blocks(): readonly { id: number; node: CstNode; offset: number; source: string; version: string }[] {
+  blocks(): readonly {
+    id: number;
+    materialize: () => CstNode;
+    offset: number;
+    source: string;
+    version: string;
+  }[] {
     return this.#tree.children(this.#tree.root).flatMap((child) => {
       if (child.kind !== "node" || this.#tree.ruleName(child) !== "Block") {
         return [];
       }
       const span = this.#tree.span(child);
-      const node = materializeCstNode(this.#tree, this.#source, child);
-      this.#attach(child, node);
       return [{
         id: child.id,
-        node,
+        materialize: () => {
+          const node = materializeCstNode(this.#tree, this.#source, child);
+          this.#attach(child, node);
+          return node;
+        },
         offset: child.offset,
         source: this.#source.slice(span.start, span.end),
         version: this.#inlineVersion(child),
@@ -320,7 +337,10 @@ class MarkdownCompositeDocument {
   #attach(arenaNode: CstTreeNode, node: CstNode): void {
     const region = this.#regions.get(arenaNode.id);
     if (region) {
-      const inner = rebaseCst(region.document.toCst(region.view.text, region.tokens), region.view);
+      const local = region.document
+        ? region.document.toCst(region.view.text, region.tokens)
+        : inlineParser.parseTokens(region.view.text, region.tokens, "InlineLines");
+      const inner = rebaseCst(local, region.view);
       let inserted = false;
       node.children = node.children.flatMap((child) => {
         if (!("tokenType" in child) || child.tokenType !== "InlineChunk") {
