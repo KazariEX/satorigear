@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { StatefulMarkdownDocument } from "../packages/satorigear/src/document.ts";
 import { createMarkdownDocument, markdownToMdast } from "../packages/satorigear/src/index.ts";
 
 describe("markdown document", () => {
@@ -65,22 +64,6 @@ describe("markdown document", () => {
 
     expect(before).toEqual(snapshot);
     expect(after.children[2].position?.start.offset).toBeGreaterThan(before.children[1].position?.start.offset ?? 0);
-  });
-
-  it("retains internal fragments for unrelated blocks", () => {
-    const source = "one\n\ntwo\n\nthree\n\nfour\n\nfive\n";
-    const document = new StatefulMarkdownDocument(source);
-    document.toMdast();
-    const before = document.fragmentObjects();
-    const start = source.indexOf("three");
-
-    document.edit([{ start, end: start + 5, text: "changed" }]);
-    document.toMdast();
-    const after = document.fragmentObjects();
-
-    expect(after[0]).toBe(before[0]);
-    expect(after[2]).not.toBe(before[2]);
-    expect(after[4]).toBe(before[4]);
   });
 
   it("updates positions when edits join and split CRLF", () => {

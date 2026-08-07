@@ -35,7 +35,7 @@ for (const test of cases) {
   }
 }
 
-describe("markdown CST to mdast conformance", () => {
+describe("markdown mdast conformance", () => {
   it("matches mdast-util-from-markdown for the official corpus", () => {
     expect(exact).toBe(cases.length);
   });

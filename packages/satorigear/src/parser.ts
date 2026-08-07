@@ -2,12 +2,12 @@ import { createDelimitedTokenResolver } from "monogram/delimiter-parser.ts";
 import { createSourceView, type SourceRange, type SourceView } from "monogram/source-view.ts";
 import type { Token } from "monogram/gen-lexer.ts";
 import {
-  createCstParser,
-  type CstParserDocument,
-  type CstTree,
-  type CstTreeEntry,
-  type CstTreeLeaf,
-  type CstTreeNode,
+  createEmittedParser,
+  type EmittedDocument,
+  type SyntaxTree,
+  type SyntaxTreeEntry,
+  type SyntaxTreeLeaf,
+  type SyntaxTreeNode,
 } from "./emitted-parser.ts";
 import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
@@ -26,8 +26,8 @@ import type {
   MarkdownSyntaxNode,
 } from "./mdast.ts";
 
-export const markdownBlockParser = createCstParser(blockRuntime, tokenizeMarkdownBlocks);
-const inlineParser = createCstParser(inlineRuntime, inlineRuntime.tokenize);
+export const markdownBlockParser = createEmittedParser(blockRuntime, tokenizeMarkdownBlocks);
+const inlineParser = createEmittedParser(inlineRuntime, inlineRuntime.tokenize);
 const inlineResolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
 
 function referenceLabelText(text: string): string | null {
@@ -57,7 +57,7 @@ function tokenizeInline(source: string, referenceLabels: ReadonlySet<string>): {
 
 interface InlineRegion {
   candidates: ReadonlySet<string>;
-  document?: CstParserDocument;
+  document?: EmittedDocument;
   id: number;
   revision: number;
   rule: string;
@@ -75,13 +75,13 @@ interface InlineRegionDescriptor {
 
 interface CompositeBlockDescriptor {
   id: number;
-  node: CstTreeNode;
+  node: SyntaxTreeNode;
   offset: number;
   regionIds: readonly number[];
   source: string;
 }
 
-function rangesOf(tree: CstTree, node: CstTreeNode): SourceRange[] {
+function rangesOf(tree: SyntaxTree, node: SyntaxTreeNode): SourceRange[] {
   return tree.children(node).flatMap((child) => {
     if (child.kind === "node" || tree.leafTokenType(child) !== "InlineChunk") {
       return [];
@@ -174,26 +174,15 @@ function intersects(left: ReadonlySet<string>, right: ReadonlySet<string>): bool
 class MarkdownCompositeDocument implements MarkdownSyntax {
   #blocks: readonly CompositeBlockDescriptor[] = [];
   #labels = new Set<string>();
-  #inlineTrees = new WeakMap<CstTree, InlineRegion>();
+  #inlineTrees = new WeakMap<SyntaxTree, InlineRegion>();
   #regions = new Map<number, InlineRegion>();
   #source: string;
-  #tree: CstTree;
+  #tree: SyntaxTree;
 
-  constructor(tree: CstTree, source: string) {
+  constructor(tree: SyntaxTree, source: string) {
     this.#tree = tree;
     this.#source = source;
     this.update(tree, source);
-  }
-
-  inlineDocuments(): readonly CstParserDocument[] {
-    return [...this.#regions.values()].map((region) => {
-      region.document ??= inlineParser.createDocument(region.view.text, region.tokens, "InlineLines");
-      return region.document;
-    });
-  }
-
-  inlineRevisions(): readonly number[] {
-    return [...this.#regions.values()].map((region) => region.revision);
   }
 
   blocks(): readonly {
@@ -214,11 +203,11 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
     }));
   }
 
-  update(tree: CstTree, source: string): void {
+  update(tree: SyntaxTree, source: string): void {
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
     const blocks: CompositeBlockDescriptor[] = [];
-    const collect = (node: CstTreeNode, regionIds: number[]): void => {
+    const collect = (node: SyntaxTreeNode, regionIds: number[]): void => {
       const rule = tree.ruleName(node);
       if (rule === "LinkDefinition") {
         const span = tree.span(node);
@@ -294,12 +283,12 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
   }
 
   children(value: MarkdownSyntaxNode): readonly MarkdownSyntaxChild[] {
-    const node = value as CstTreeNode;
+    const node = value as SyntaxTreeNode;
     return node.tree.children(node);
   }
 
   inline(value: MarkdownSyntaxNode): MarkdownSyntaxNode | undefined {
-    const node = value as CstTreeNode;
+    const node = value as SyntaxTreeNode;
     if (node.tree !== this.#tree) {
       return;
     }
@@ -315,11 +304,11 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
   }
 
   isLeaf(value: MarkdownSyntaxChild): value is MarkdownSyntaxLeaf {
-    return (value as CstTreeEntry).kind === "leaf";
+    return (value as SyntaxTreeEntry).kind === "leaf";
   }
 
   ranges(value: MarkdownSyntaxLeaf): readonly SourceRange[] {
-    const leaf = value as CstTreeLeaf;
+    const leaf = value as SyntaxTreeLeaf;
     const token = leaf.tree.leafToken(leaf);
     const ranges = token.ranges ?? [{ offset: token.offset, end: token.offset + token.text.length }];
     const region = this.#regionOf(leaf);
@@ -327,12 +316,12 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
   }
 
   rule(value: MarkdownSyntaxNode): string {
-    const node = value as CstTreeNode;
+    const node = value as SyntaxTreeNode;
     return node.tree.ruleName(node);
   }
 
   span(value: MarkdownSyntaxChild): { end: number; start: number } {
-    const entry = value as CstTreeEntry;
+    const entry = value as SyntaxTreeEntry;
     const span = entry.tree.span(entry);
     const region = this.#regionOf(entry);
     if (!region) {
@@ -347,7 +336,7 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
   }
 
   text(value: MarkdownSyntaxChild): string {
-    const entry = value as CstTreeEntry;
+    const entry = value as SyntaxTreeEntry;
     if (entry.kind === "leaf") {
       return entry.tree.leafToken(entry).text;
     }
@@ -356,15 +345,15 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
   }
 
   tokenType(value: MarkdownSyntaxLeaf): string {
-    const leaf = value as CstTreeLeaf;
+    const leaf = value as SyntaxTreeLeaf;
     return leaf.tree.leafTokenType(leaf);
   }
 
-  #regionOf(value: CstTreeEntry): InlineRegion | undefined {
+  #regionOf(value: SyntaxTreeEntry): InlineRegion | undefined {
     return this.#inlineTrees.get(value.tree);
   }
 }
 
-export function createMarkdownCompositeDocument(tree: CstTree, source: string): MarkdownCompositeDocument {
+export function createMarkdownCompositeDocument(tree: SyntaxTree, source: string): MarkdownCompositeDocument {
   return new MarkdownCompositeDocument(tree, source);
 }

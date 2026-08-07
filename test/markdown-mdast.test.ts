@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownCstToMdast, markdownToMdast } from "../packages/satorigear/src/index.ts";
+import { markdownToMdast } from "../packages/satorigear/src/index.ts";
 
 describe("markdown mdast conversion", () => {
   it("preserves mdast definitions and references", () => {
@@ -46,7 +46,7 @@ describe("markdown mdast conversion", () => {
     expect(markdownToMdast("``` &#87654321;\nx\n```\n").children[0]).toMatchObject({ lang: "&#87654321;" });
   });
 
-  it("maps CST offsets to mdast positions", () => {
+  it("maps source offsets to mdast positions", () => {
     const tree = markdownToMdast("  foo  \nbar\n");
     expect(tree.position).toEqual({
       start: { line: 1, column: 1, offset: 0 },
@@ -56,24 +56,5 @@ describe("markdown mdast conversion", () => {
       start: { line: 1, column: 3, offset: 2 },
       end: { line: 2, column: 4, offset: 11 },
     });
-  });
-
-  it("rejects a non-document CST root", () => {
-    expect(() => markdownCstToMdast({ rule: "Paragraph", children: [], offset: 0, end: 0 }, ""))
-      .toThrow("Expected Markdown Document CST");
-  });
-
-  it("fails loudly when the phased CST contract changes", () => {
-    expect(() => markdownCstToMdast({
-      rule: "Document",
-      offset: 0,
-      end: 0,
-      children: [{
-        rule: "Block",
-        offset: 0,
-        end: 0,
-        children: [{ rule: "UnknownBlock", offset: 0, end: 0, children: [] }],
-      }],
-    }, "")).toThrow("Unexpected block syntax rule: UnknownBlock");
   });
 });

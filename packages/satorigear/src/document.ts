@@ -6,7 +6,7 @@ import {
   type MdastBlockFragment,
 } from "./mdast.ts";
 import { createMarkdownCompositeDocument, markdownBlockParser } from "./parser.ts";
-import type { CstParserDocument } from "./emitted-parser.ts";
+import type { EmittedDocument } from "./emitted-parser.ts";
 
 export interface TextEdit {
   end: number;
@@ -67,8 +67,8 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
   });
 }
 
-export class StatefulMarkdownDocument implements MarkdownDocument {
-  #blocks: CstParserDocument;
+class StatefulMarkdownDocument implements MarkdownDocument {
+  #blocks: EmittedDocument;
   #composite: ReturnType<typeof createMarkdownCompositeDocument>;
   #fragments = new Map<number, { fragment: MdastBlockFragment; source: string; version: string }>();
   #tokenizer: ReturnType<typeof createMarkdownBlockTokenizer>;
@@ -81,10 +81,6 @@ export class StatefulMarkdownDocument implements MarkdownDocument {
 
   get source(): string {
     return this.#tokenizer.source;
-  }
-
-  fragmentObjects(): readonly MdastBlockFragment[] {
-    return [...this.#fragments.values()].map((value) => value.fragment);
   }
 
   edit(edits: readonly TextEdit[]): MarkdownUpdate {

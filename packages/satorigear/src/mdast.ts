@@ -1,5 +1,4 @@
 import { decodeHTMLStrict } from "entities";
-import { type CstLeaf, type CstNode, getText } from "monogram/cst.ts";
 import type {
   BlockContent,
   Blockquote,
@@ -22,7 +21,7 @@ import type {
   Strong,
 } from "mdast";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
-import type { CstTreeLeaf, CstTreeNode } from "./emitted-parser.ts";
+import type { SyntaxTreeLeaf, SyntaxTreeNode } from "./emitted-parser.ts";
 
 interface Resource {
   url: string;
@@ -56,8 +55,8 @@ interface ProjectionContext extends PositionContext {
   syntax: MarkdownSyntax;
 }
 
-export type MarkdownSyntaxNode = CstNode | CstTreeNode;
-export type MarkdownSyntaxLeaf = CstLeaf | CstTreeLeaf;
+export type MarkdownSyntaxNode = SyntaxTreeNode;
+export type MarkdownSyntaxLeaf = SyntaxTreeLeaf;
 export type MarkdownSyntaxChild = MarkdownSyntaxLeaf | MarkdownSyntaxNode;
 
 export interface MarkdownSyntax {
@@ -872,25 +871,6 @@ function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): Block
   }
 }
 
-function objectSyntax(source: string): MarkdownSyntax {
-  const isLeaf = (child: MarkdownSyntaxChild): child is CstLeaf => "tokenType" in child;
-  return {
-    children: (node) => (node as CstNode).children,
-    inline: (node) => (node as CstNode).children.find((child) => (
-      !isLeaf(child) && child.rule === "InlineLines"
-    )) as CstNode | undefined,
-    isLeaf,
-    ranges: (value) => (value as CstLeaf).ranges,
-    rule: (node) => (node as CstNode).rule,
-    span: (value) => {
-      const syntaxValue = value as CstLeaf | CstNode;
-      return { start: syntaxValue.offset, end: syntaxValue.end };
-    },
-    text: (value) => getText(value as CstLeaf | CstNode, source),
-    tokenType: (value) => (value as CstLeaf).tokenType,
-  };
-}
-
 export function markdownSyntaxBlockToMdastFragment(
   tree: MarkdownSyntaxNode,
   source: string,
@@ -904,10 +884,6 @@ export function markdownSyntaxBlockToMdastFragment(
     span.end -= offset;
   }
   return { node, spans: context.spans };
-}
-
-export function markdownBlockToMdastFragment(tree: CstNode, source: string): MdastBlockFragment {
-  return markdownSyntaxBlockToMdastFragment(tree, source, objectSyntax(source));
 }
 
 function materializeFragment(
@@ -941,17 +917,4 @@ export function markdownFragmentsToMdast(
     children: fragments.map(({ fragment, offset }) => materializeFragment(fragment, offset, context)),
   } satisfies Root, 0, source.length);
   return attachPositions(context, root);
-}
-
-/** Convert a block-first Markdown CST into an mdast root without invoking a renderer. */
-export function markdownCstToMdast(tree: CstNode, source: string): Root {
-  const syntax = objectSyntax(source);
-  if (syntax.rule(tree) !== "Document") {
-    throw new Error(`Expected Markdown Document CST, received '${syntax.rule(tree)}'`);
-  }
-  const context = { source, syntax, spans: new Map<object, SourceSpan>() };
-  return markdownFragmentsToMdast(childNodes(tree, "Block", context).map((child) => ({
-    fragment: markdownSyntaxBlockToMdastFragment(child, source, syntax),
-    offset: syntax.span(child).start,
-  })), source);
 }
