@@ -1,4 +1,4 @@
-import type { CstLeaf, CstNode } from "monogram/cst.ts";
+import type { CstChild, CstLeaf, CstNode } from "monogram/cst.ts";
 import type { Token } from "monogram/gen-lexer.ts";
 
 interface ArenaTree {
@@ -171,14 +171,22 @@ function createCstTree(
   };
 }
 
-export function materializeCstNode(tree: CstTree, source: string, root: CstTreeNode): CstNode {
+type CstChildrenTransform = (node: CstTreeNode, children: CstChild[]) => CstChild[];
+
+export function materializeCstNode(
+  tree: CstTree,
+  source: string,
+  root: CstTreeNode,
+  transformChildren?: CstChildrenTransform,
+): CstNode {
   const visit = (node: CstTreeNode): CstNode => {
     const span = tree.span(node);
+    const children = tree.children(node).map((child) => (
+      child.kind === "node" ? visit(child) : materializeLeaf(child, source, tree)
+    ));
     return {
       rule: tree.ruleName(node),
-      children: tree.children(node).map((child) => (
-        child.kind === "node" ? visit(child) : materializeLeaf(child, source, tree)
-      )),
+      children: transformChildren?.(node, children) ?? children,
       offset: span.start,
       end: span.end,
     };
@@ -186,8 +194,12 @@ export function materializeCstNode(tree: CstTree, source: string, root: CstTreeN
   return visit(root);
 }
 
-export function materializeCst(tree: CstTree, source: string): CstNode {
-  return materializeCstNode(tree, source, tree.root);
+export function materializeCst(
+  tree: CstTree,
+  source: string,
+  transformChildren?: CstChildrenTransform,
+): CstNode {
+  return materializeCstNode(tree, source, tree.root, transformChildren);
 }
 
 export function createCstParser<Handle extends EmittedParserHandle>(

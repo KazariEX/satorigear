@@ -1,5 +1,5 @@
 import { createCompositeParser, rebaseCst } from "monogram/composite-parser.ts";
-import { type CstNode, getText } from "monogram/cst.ts";
+import { type CstChild, type CstNode, getText } from "monogram/cst.ts";
 import { resolveDelimitedTokens } from "monogram/delimiter-parser.ts";
 import { createLexer, type Token } from "monogram/gen-lexer.ts";
 import { createSourceView, type SourceRange, type SourceView } from "monogram/source-view.ts";
@@ -246,9 +246,12 @@ class MarkdownCompositeDocument {
     return this.#blocks.map((block) => ({
       id: block.id,
       materialize: () => {
-        const node = materializeCstNode(this.#tree, this.#source, block.node);
-        this.#attach(block.node, node);
-        return node;
+        return materializeCstNode(
+          this.#tree,
+          this.#source,
+          block.node,
+          (node, children) => this.#attachInline(node, children),
+        );
       },
       offset: block.offset,
       source: block.source,
@@ -336,39 +339,33 @@ class MarkdownCompositeDocument {
   }
 
   toCst(): CstNode {
-    const root = materializeCst(this.#tree, this.#source);
-    this.#attach(this.#tree.root, root);
-    return root;
+    return materializeCst(
+      this.#tree,
+      this.#source,
+      (node, children) => this.#attachInline(node, children),
+    );
   }
 
-  #attach(arenaNode: CstTreeNode, node: CstNode): void {
+  #attachInline(arenaNode: CstTreeNode, children: CstChild[]): CstChild[] {
     const region = this.#regions.get(arenaNode.id);
-    if (region) {
-      const local = region.document
-        ? region.document.toCst(region.view.text, region.tokens)
-        : inlineParser.parseTokens(region.view.text, region.tokens, "InlineLines");
-      const inner = rebaseCst(local, region.view);
-      let inserted = false;
-      node.children = node.children.flatMap((child) => {
-        if (!("tokenType" in child) || child.tokenType !== "InlineChunk") {
-          return [child];
-        }
-        if (inserted) {
-          return [];
-        }
-        inserted = true;
-        return [inner];
-      });
-      return;
+    if (!region) {
+      return children;
     }
-    const arenaChildren = this.#tree.children(arenaNode);
-    for (let index = 0; index < arenaChildren.length; index++) {
-      const arenaChild = arenaChildren[index];
-      const child = node.children[index];
-      if (arenaChild.kind === "node" && child && !("tokenType" in child)) {
-        this.#attach(arenaChild, child);
+    const local = region.document
+      ? region.document.toCst(region.view.text, region.tokens)
+      : inlineParser.parseTokens(region.view.text, region.tokens, "InlineLines");
+    const inner = rebaseCst(local, region.view);
+    let inserted = false;
+    return children.flatMap((child) => {
+      if (!("tokenType" in child) || child.tokenType !== "InlineChunk") {
+        return [child];
       }
-    }
+      if (inserted) {
+        return [];
+      }
+      inserted = true;
+      return [inner];
+    });
   }
 }
 
