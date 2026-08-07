@@ -28,13 +28,19 @@ function uncoveredPayload(node: CstNode, source: string): string {
   for (const parent of physicalRanges(node)) {
     let offset = parent.offset;
     for (const range of covered) {
-      if (range.end <= parent.offset || range.offset >= parent.end) continue;
+      if (range.end <= parent.offset || range.offset >= parent.end) {
+        continue;
+      }
       const start = Math.max(parent.offset, range.offset);
       const end = Math.min(parent.end, range.end);
-      if (start > offset) result += source.slice(offset, start);
+      if (start > offset) {
+        result += source.slice(offset, start);
+      }
       offset = Math.max(offset, end);
     }
-    if (offset < parent.end) result += source.slice(offset, parent.end);
+    if (offset < parent.end) {
+      result += source.slice(offset, parent.end);
+    }
   }
   return result;
 }
@@ -55,7 +61,9 @@ function validateSpan(span: Span, source: string): void {
     expect(range.offset).toBeGreaterThanOrEqual(0);
     expect(range.end).toBeGreaterThanOrEqual(range.offset);
     expect(range.end).toBeLessThanOrEqual(source.length);
-    if (index > 0) expect(range.offset).toBeGreaterThanOrEqual(ranges[index - 1].end);
+    if (index > 0) {
+      expect(range.offset).toBeGreaterThanOrEqual(ranges[index - 1].end);
+    }
   }
 }
 
@@ -68,7 +76,9 @@ function validateNode(node: CstNode, source: string, parent?: CstNode, path = no
   const nodeRanges = physicalRanges(node);
   if (parent) {
     const parentRanges = physicalRanges(parent);
-    for (const range of nodeRanges) expect(rangeIsCovered(range, parentRanges)).toBe(true);
+    for (const range of nodeRanges) {
+      expect(rangeIsCovered(range, parentRanges)).toBe(true);
+    }
   }
 
   let previousStart = -1;
@@ -84,7 +94,9 @@ function validateNode(node: CstNode, source: string, parent?: CstNode, path = no
       throw new Error(`Out-of-order child range in ${path}: ${childRanges[0].offset} < ${previousStart}`);
     }
     previousStart = childRanges[0].offset;
-    if (!("tokenType" in child)) validateNode(child, source, node, `${path}/${child.rule}`);
+    if (!("tokenType" in child)) {
+      validateNode(child, source, node, `${path}/${child.rule}`);
+    }
   }
 
   if (node.rule === "InlineLines") {

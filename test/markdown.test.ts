@@ -20,7 +20,11 @@ function rules(node: CstNode): string[] {
   const out: string[] = [];
   const visit = (value: CstNode): void => {
     out.push(value.rule);
-    for (const child of value.children) if ("rule" in child) visit(child);
+    for (const child of value.children) {
+      if ("rule" in child) {
+        visit(child);
+      }
+    }
   };
   visit(node);
   return out;
@@ -60,7 +64,9 @@ describe("markdown lexer", () => {
     "SetextUnderline",
     "FenceBlock",
     "IndentedCode",
-  ]) check(`lexes ${expected}`, ts.includes(expected));
+  ]) {
+    check(`lexes ${expected}`, ts.includes(expected));
+  }
 
   check("fenced body is opaque", ts.filter((t) => t === "AtxHeadingMarker").length === 1);
   check("an inline hash is text, not a heading", !types("value # still text").includes("AtxHeadingMarker"));
@@ -107,7 +113,9 @@ describe("markdown parser", () => {
     "SetextHeading",
     "FencedCode",
     "IndentedCodeBlock",
-  ]) check(`builds ${expected}`, rs.includes(expected));
+  ]) {
+    check(`builds ${expected}`, rs.includes(expected));
+  }
 
   // Markdown is intentionally error-tolerant: unmatched delimiters are literal punctuation.
   check("keeps unmatched inline delimiters parseable", parse("plain * unmatched [ text").rule === "Document");

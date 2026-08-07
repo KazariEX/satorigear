@@ -220,10 +220,16 @@ function linesOf(source: string): Line[] {
   let start = 0;
   while (start < source.length) {
     let end = start;
-    while (end < source.length && source[end] !== "\n" && source[end] !== "\r") end++;
+    while (end < source.length && source[end] !== "\n" && source[end] !== "\r") {
+      end++;
+    }
     let next = end;
-    if (source[next] === "\r") next += source[next + 1] === "\n" ? 2 : 1;
-    else if (source[next] === "\n") next++;
+    if (source[next] === "\r") {
+      next += source[next + 1] === "\n" ? 2 : 1;
+    }
+    else if (source[next] === "\n") {
+      next++;
+    }
     lines.push({ start, end, next });
     start = next;
   }
@@ -241,7 +247,9 @@ function indentOf(source: string, line: Line, limit = Number.POSITIVE_INFINITY):
     }
     if (source[offset] === "\t") {
       const width = 4 - (columns % 4);
-      if (columns + width > limit) break;
+      if (columns + width > limit) {
+        break;
+      }
       offset++;
       columns += width;
       continue;
@@ -285,7 +293,9 @@ function logicalToken(type: string, source: string, lines: readonly Line[], star
 
 function physicalColumnAt(source: string, offset: number): number {
   let start = offset;
-  while (start > 0 && source[start - 1] !== "\n" && source[start - 1] !== "\r") start--;
+  while (start > 0 && source[start - 1] !== "\n" && source[start - 1] !== "\r") {
+    start--;
+  }
   let column = 0;
   while (start < offset) {
     column += source[start] === "\t" ? 4 - (column % 4) : 1;
@@ -319,33 +329,51 @@ function logicalLine(source: string, line: Line): string {
 
 function lineBody(source: string, line: Line): { offset: number; text: string } | null {
   const indent = indentOf(source, line, 3);
-  if (source[indent.offset] === " " || source[indent.offset] === "\t") return null;
+  if (source[indent.offset] === " " || source[indent.offset] === "\t") {
+    return null;
+  }
   return { offset: indent.offset, text: source.slice(indent.offset, line.end) };
 }
 
 function htmlStartAt(source: string, line: Line): HtmlStart | null {
   const body = lineBody(source, line);
-  if (!body || body.text[0] !== "<") return null;
+  if (!body || body.text[0] !== "<") {
+    return null;
+  }
   const lower = body.text.toLowerCase();
   for (const tag of ["script", "pre", "style", "textarea"]) {
     if (lower.startsWith(`<${tag}`) && (lower.length === tag.length + 1 || /[ \t>]/.test(lower[tag.length + 1]))) {
       return { interruptParagraph: true, terminator: `</${tag}>` };
     }
   }
-  if (body.text.startsWith("<!--")) return { interruptParagraph: true, terminator: "-->" };
-  if (body.text.startsWith("<?")) return { interruptParagraph: true, terminator: "?>" };
-  if (body.text.startsWith("<![CDATA[")) return { interruptParagraph: true, terminator: "]]>" };
-  if (body.text.startsWith("<!") && /[A-Z]/.test(body.text[2] ?? "")) return { interruptParagraph: true, terminator: ">" };
+  if (body.text.startsWith("<!--")) {
+    return { interruptParagraph: true, terminator: "-->" };
+  }
+  if (body.text.startsWith("<?")) {
+    return { interruptParagraph: true, terminator: "?>" };
+  }
+  if (body.text.startsWith("<![CDATA[")) {
+    return { interruptParagraph: true, terminator: "]]>" };
+  }
+  if (body.text.startsWith("<!") && /[A-Z]/.test(body.text[2] ?? "")) {
+    return { interruptParagraph: true, terminator: ">" };
+  }
 
   const tag = /^<\/?([a-z][a-z0-9-]*)(?=[ \t\n\r/>]|$)/i.exec(body.text)?.[1].toLowerCase();
-  if (tag && htmlBlockTags.has(tag)) return { interruptParagraph: true };
-  if (completeHtmlTag.test(body.text)) return { interruptParagraph: false };
+  if (tag && htmlBlockTags.has(tag)) {
+    return { interruptParagraph: true };
+  }
+  if (completeHtmlTag.test(body.text)) {
+    return { interruptParagraph: false };
+  }
   return null;
 }
 
 function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: number): number | null {
   const body = lineBody(source, lines[startIndex]);
-  if (!body?.text.startsWith("[")) return null;
+  if (!body?.text.startsWith("[")) {
+    return null;
+  }
   let lineIndex = startIndex;
   let offset = body.offset + 1;
   let labelLength = 0;
@@ -354,8 +382,12 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
   for (;;) {
     const line = lines[lineIndex];
     if (!line || offset >= line.end) {
-      if (!line || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) return null;
-      if (++labelLength > 999) return null;
+      if (!line || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
+        return null;
+      }
+      if (++labelLength > 999) {
+        return null;
+      }
       lineIndex++;
       offset = lines[lineIndex].start;
       continue;
@@ -366,21 +398,35 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
       offset += 2;
       continue;
     }
-    if (source[offset] === "[") return null;
-    if (source[offset] === "]" && source[offset + 1] === ":") break;
-    if (!/[ \t]/.test(source[offset])) labelHasContent = true;
-    if (++labelLength > 999) return null;
+    if (source[offset] === "[") {
+      return null;
+    }
+    if (source[offset] === "]" && source[offset + 1] === ":") {
+      break;
+    }
+    if (!/[ \t]/.test(source[offset])) {
+      labelHasContent = true;
+    }
+    if (++labelLength > 999) {
+      return null;
+    }
     offset++;
   }
-  if (!labelHasContent) return null;
+  if (!labelHasContent) {
+    return null;
+  }
   offset += 2;
 
   const skipSpaces = (): void => {
-    while (offset < lines[lineIndex].end && (source[offset] === " " || source[offset] === "\t")) offset++;
+    while (offset < lines[lineIndex].end && (source[offset] === " " || source[offset] === "\t")) {
+      offset++;
+    }
   };
   skipSpaces();
   if (offset === lines[lineIndex].end) {
-    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) return null;
+    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
+      return null;
+    }
     lineIndex++;
     offset = lines[lineIndex].start;
     skipSpaces();
@@ -389,11 +435,19 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
   if (source[offset] === "<") {
     offset++;
     while (offset < lines[lineIndex].end && source[offset] !== ">") {
-      if (source[offset] === "<") return null;
-      if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) offset += 2;
-      else offset++;
+      if (source[offset] === "<") {
+        return null;
+      }
+      if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
+        offset += 2;
+      }
+      else {
+        offset++;
+      }
     }
-    if (source[offset] !== ">") return null;
+    if (source[offset] !== ">") {
+      return null;
+    }
     offset++;
   }
   else {
@@ -405,16 +459,24 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
         continue;
       }
       if (source[offset] === "(") {
-        if (++depth > 32) return null;
+        if (++depth > 32) {
+          return null;
+        }
       }
-      else if (source[offset] === ")" && --depth < 0) return null;
+      else if (source[offset] === ")" && --depth < 0) {
+        return null;
+      }
       offset++;
     }
-    if (offset === destinationStart || depth !== 0) return null;
+    if (offset === destinationStart || depth !== 0) {
+      return null;
+    }
   }
 
   const destinationLine = lineIndex;
-  if (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") return null;
+  if (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
+    return null;
+  }
   skipSpaces();
   let titleOnNextLine = false;
   if (offset === lines[lineIndex].end && lineIndex + 1 < lines.length && !isBlank(source, lines[lineIndex + 1])) {
@@ -425,7 +487,9 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
   }
 
   const closer = source[offset] === "(" ? ")" : source[offset] === "\"" || source[offset] === "'" ? source[offset] : null;
-  if (!closer) return destinationLine + 1;
+  if (!closer) {
+    return destinationLine + 1;
+  }
   offset++;
   let closed = false;
   while (lineIndex < lines.length) {
@@ -442,48 +506,76 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
       }
       offset++;
     }
-    if (closed) break;
-    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) break;
+    if (closed) {
+      break;
+    }
+    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
+      break;
+    }
     lineIndex++;
     offset = lines[lineIndex].start;
   }
-  if (!closed) return titleOnNextLine ? destinationLine + 1 : null;
+  if (!closed) {
+    return titleOnNextLine ? destinationLine + 1 : null;
+  }
   skipSpaces();
-  if (offset !== lines[lineIndex].end) return titleOnNextLine ? destinationLine + 1 : null;
+  if (offset !== lines[lineIndex].end) {
+    return titleOnNextLine ? destinationLine + 1 : null;
+  }
   return lineIndex + 1;
 }
 
 function fenceAt(source: string, line: Line): Fence | null {
   const body = lineBody(source, line);
-  if (!body || (body.text[0] !== "`" && body.text[0] !== "~")) return null;
+  if (!body || (body.text[0] !== "`" && body.text[0] !== "~")) {
+    return null;
+  }
   const marker = body.text[0] as Fence["marker"];
   let length = 0;
-  while (body.text[length] === marker) length++;
-  if (length < 3 || (marker === "`" && body.text.slice(length).includes("`"))) return null;
+  while (body.text[length] === marker) {
+    length++;
+  }
+  if (length < 3 || (marker === "`" && body.text.slice(length).includes("`"))) {
+    return null;
+  }
   return { marker, length };
 }
 
 function closesFence(source: string, line: Line, fence: Fence): boolean {
   const body = lineBody(source, line);
-  if (!body || body.text[0] !== fence.marker) return false;
+  if (!body || body.text[0] !== fence.marker) {
+    return false;
+  }
   let length = 0;
-  while (body.text[length] === fence.marker) length++;
+  while (body.text[length] === fence.marker) {
+    length++;
+  }
   return length >= fence.length && /^[ \t]*$/.test(body.text.slice(length));
 }
 
 function atxAt(source: string, line: Line): { markerOffset: number; marker: string; contentOffset: number; contentEnd: number } | null {
   const body = lineBody(source, line);
-  if (!body) return null;
+  if (!body) {
+    return null;
+  }
   const match = /^(#{1,6})(?:[ \t]+|$)/.exec(body.text);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const contentOffset = body.offset + match[0].length;
   let contentEnd = line.end;
-  while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) contentEnd--;
+  while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
+    contentEnd--;
+  }
   let closer = contentEnd;
-  while (closer > contentOffset && source[closer - 1] === "#") closer--;
+  while (closer > contentOffset && source[closer - 1] === "#") {
+    closer--;
+  }
   if (closer < contentEnd && (closer === contentOffset || source[closer - 1] === " " || source[closer - 1] === "\t")) {
     contentEnd = closer;
-    while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) contentEnd--;
+    while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
+      contentEnd--;
+    }
   }
   return { markerOffset: body.offset, marker: match[1], contentOffset, contentEnd };
 }
@@ -496,17 +588,23 @@ function setextAt(source: string, line: Line): "=" | "-" | null {
 
 function isThematicBreak(source: string, line: Line): boolean {
   const body = lineBody(source, line);
-  if (!body) return false;
+  if (!body) {
+    return false;
+  }
   const compact = body.text.replace(/[ \t]/g, "");
   return compact.length >= 3 && /^\*+$|^-+$|^_+$/.test(compact);
 }
 
 function blockQuoteOffset(source: string, line: Line): BlockQuoteMarker | null {
   const body = lineBody(source, line);
-  if (!body || source[body.offset] !== ">") return null;
+  if (!body || source[body.offset] !== ">") {
+    return null;
+  }
   let offset = body.offset + 1;
   let prefixColumns = line.prefixColumns ?? 0;
-  if (source[offset] === " ") offset++;
+  if (source[offset] === " ") {
+    offset++;
+  }
   else if (source[offset] === "\t") {
     prefixColumns += 4 - (physicalColumnAt(source, offset) % 4) - 1;
     offset++;
@@ -516,7 +614,9 @@ function blockQuoteOffset(source: string, line: Line): BlockQuoteMarker | null {
 
 function listMarkerAt(source: string, line: Line): ListMarker | null {
   const body = lineBody(source, line);
-  if (!body) return null;
+  if (!body) {
+    return null;
+  }
   const indent = indentOf(source, line, 3);
   const unordered = /^([-+*])(?=[ \t]|$)/.exec(body.text);
   if (unordered && !isThematicBreak(source, line)) {
@@ -534,7 +634,9 @@ function listMarkerAt(source: string, line: Line): ListMarker | null {
     };
   }
   const ordered = /^(\d{1,9})([.)])(?=[ \t]|$)/.exec(body.text);
-  if (!ordered) return null;
+  if (!ordered) {
+    return null;
+  }
   const markerEnd = body.offset + ordered[0].length;
   const markerWidth = ordered[0].length;
   const padding = listMarkerPadding(source, line, markerEnd, indent.columns + markerWidth);
@@ -552,7 +654,9 @@ function listMarkerAt(source: string, line: Line): ListMarker | null {
 }
 
 function listMarkerPadding(source: string, line: Line, markerEnd: number, markerColumn: number): { offset: number; columns: number; prefixColumns: number } {
-  if (markerEnd === line.end) return { offset: markerEnd, columns: 1, prefixColumns: 0 };
+  if (markerEnd === line.end) {
+    return { offset: markerEnd, columns: 1, prefixColumns: 0 };
+  }
   let offset = markerEnd;
   let column = markerColumn;
   while (offset < line.end && (source[offset] === " " || source[offset] === "\t")) {
@@ -560,7 +664,9 @@ function listMarkerPadding(source: string, line: Line, markerEnd: number, marker
     offset++;
   }
   const whitespaceColumns = column - markerColumn;
-  if (offset < line.end && whitespaceColumns <= 4) return { offset, columns: whitespaceColumns, prefixColumns: 0 };
+  if (offset < line.end && whitespaceColumns <= 4) {
+    return { offset, columns: whitespaceColumns, prefixColumns: 0 };
+  }
   const consumedColumn = markerColumn + (source[markerEnd] === "\t" ? 4 - (markerColumn % 4) : 1);
   return { offset: markerEnd + 1, columns: 1, prefixColumns: Math.max(0, consumedColumn - markerColumn - 1) };
 }
@@ -572,7 +678,9 @@ function sameList(a: ListMarker, b: ListMarker): boolean {
 function contentAfterColumns(source: string, line: Line, columns: number): { offset: number; prefixColumns: number } {
   let offset = line.start;
   let consumed = line.prefixColumns ?? 0;
-  if (consumed >= columns) return { offset, prefixColumns: consumed - columns };
+  if (consumed >= columns) {
+    return { offset, prefixColumns: consumed - columns };
+  }
   while (offset < line.end && consumed < columns) {
     if (source[offset] === " ") {
       consumed++;
@@ -635,12 +743,16 @@ function emitInlineChunks(source: string, lines: readonly Line[], out: Token[]):
   lines.forEach((line, index) => {
     const offset = paragraphContentStart(source, line);
     const end = index < lines.length - 1 ? line.next : line.end;
-    if (end > offset) out.push(named("InlineChunk", source.slice(offset, end), offset));
+    if (end > offset) {
+      out.push(named("InlineChunk", source.slice(offset, end), offset));
+    }
   });
 }
 
 function emitParagraph(source: string, lines: readonly Line[], out: Token[]): void {
-  if (lines.length === 0) return;
+  if (lines.length === 0) {
+    return;
+  }
   out.push(structural("ParagraphOpen", lines[0].start));
   emitInlineChunks(source, lines, out);
   out.push(structural("ParagraphClose", lines[lines.length - 1].end));
@@ -689,7 +801,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       index++;
       continue;
     }
-    if (paragraph.length > 0) flushParagraph();
+    if (paragraph.length > 0) {
+      flushParagraph();
+    }
 
     const definitionEnd = linkDefinitionEnd(source, lines, index);
     if (definitionEnd !== null) {
@@ -716,8 +830,12 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
 
     if (fence) {
       let endIndex = index + 1;
-      while (endIndex < lines.length && !closesFence(source, lines[endIndex], fence)) endIndex++;
-      if (endIndex < lines.length) endIndex++;
+      while (endIndex < lines.length && !closesFence(source, lines[endIndex], fence)) {
+        endIndex++;
+      }
+      if (endIndex < lines.length) {
+        endIndex++;
+      }
       out.push(logicalToken("FencedCodeBlock", source, lines, index, endIndex));
       index = endIndex;
       continue;
@@ -733,11 +851,17 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       let endIndex = index + 1;
       if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
         while (endIndex < lines.length
-          && !source.slice(lines[endIndex].start, lines[endIndex].end).toLowerCase().includes(htmlStart.terminator)) endIndex++;
-        if (endIndex < lines.length) endIndex++;
+          && !source.slice(lines[endIndex].start, lines[endIndex].end).toLowerCase().includes(htmlStart.terminator)) {
+          endIndex++;
+        }
+        if (endIndex < lines.length) {
+          endIndex++;
+        }
       }
       else if (!htmlStart.terminator) {
-        while (endIndex < lines.length && !isBlank(source, lines[endIndex])) endIndex++;
+        while (endIndex < lines.length && !isBlank(source, lines[endIndex])) {
+          endIndex++;
+        }
       }
       out.push(logicalToken("HtmlBlockToken", source, lines, index, endIndex));
       index = endIndex;
@@ -758,7 +882,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
           continue;
         }
         if (!lazyParagraph || isBlank(source, lines[index])
-          || (!lines[index].lazy && interruptsParagraphAt(source, lines[index]))) break;
+          || (!lines[index].lazy && interruptsParagraphAt(source, lines[index]))) {
+          break;
+        }
         quoteLines.push({ ...lines[index], lazy: true });
         index++;
       }
@@ -778,7 +904,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       let listEnd = listMarker.offset + listMarker.text.length;
       while (index < lines.length) {
         const marker = listMarkerAt(source, lines[index]);
-        if (!marker || !sameList(marker, listMarker)) break;
+        if (!marker || !sameList(marker, listMarker)) {
+          break;
+        }
         out.push(structural(itemOpen, marker.offset, marker.text));
         const itemLines: Line[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns }];
         let hasContent = !isBlank(source, itemLines[0]);
@@ -786,7 +914,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
         index++;
         while (index < lines.length) {
           const candidate = listMarkerAt(source, lines[index]);
-          if (candidate && candidate.indent < marker.contentIndent) break;
+          if (candidate && candidate.indent < marker.contentIndent) {
+            break;
+          }
           if (isBlank(source, lines[index])) {
             if (!hasContent) {
               index++;
@@ -811,7 +941,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
             index++;
             continue;
           }
-          if (!lazyParagraph || interruptsParagraphAt(source, lines[index])) break;
+          if (!lazyParagraph || interruptsParagraphAt(source, lines[index])) {
+            break;
+          }
           itemLines.push({ ...lines[index], lazy: true });
           index++;
         }
@@ -826,7 +958,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
     const indent = indentOf(source, line);
     if (indent.columns >= 4) {
       let endIndex = index + 1;
-      while (endIndex < lines.length && (isBlank(source, lines[endIndex]) || indentOf(source, lines[endIndex]).columns >= 4)) endIndex++;
+      while (endIndex < lines.length && (isBlank(source, lines[endIndex]) || indentOf(source, lines[endIndex]).columns >= 4)) {
+        endIndex++;
+      }
       out.push(logicalToken("IndentedCodeBlockToken", source, lines, index, endIndex));
       index = endIndex;
       continue;

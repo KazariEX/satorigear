@@ -37,7 +37,9 @@ const sourceOf = (t: SpecCase): string => t.markdown.replace(/→/g, "\t");
 
 function childrenOf(node: any): any[] {
   const out: any[] = [];
-  for (let child = node.firstChild; child; child = child.next) out.push(child);
+  for (let child = node.firstChild; child; child = child.next) {
+    out.push(child);
+  }
   return out;
 }
 
@@ -82,7 +84,9 @@ function normalizeChildren(children: Sem[]): Sem[] {
     const normalized = sem(child.type, child.children ?? [], child.attr);
     // Literal chunk boundaries are implementation details. Adjacent text leaves are one semantic
     // text run for comparison purposes.
-    if (normalized.type === "text" && out.at(-1)?.type === "text") continue;
+    if (normalized.type === "text" && out.at(-1)?.type === "text") {
+      continue;
+    }
     out.push(normalized);
   }
   return out;
@@ -95,8 +99,12 @@ function nodesNamed(node: CstNode, rule: string): CstNode[] {
 function leaves(node: CstNode): Extract<CstChild, { tokenType: string }>[] {
   const out: Extract<CstChild, { tokenType: string }>[] = [];
   const visit = (child: CstChild): void => {
-    if ("tokenType" in child) out.push(child);
-    else child.children.forEach(visit);
+    if ("tokenType" in child) {
+      out.push(child);
+    }
+    else {
+      child.children.forEach(visit);
+    }
   };
   node.children.forEach(visit);
   return out;
@@ -108,11 +116,18 @@ function inlineFromLeaf(leaf: Extract<CstChild, { tokenType: string }>): Sem | n
     case "CodeSpan": return sem("code");
     case "Emphasis": return sem("emph", [textChild()]);
     case "Strong": return sem("strong", [textChild()]);
-    case "Link": case "ReferenceLink": case "Autolink": return sem("link", [textChild()]);
+    case "Link":
+    case "ReferenceLink":
+    case "Autolink": return sem("link", [textChild()]);
     case "Image": return sem("image", [textChild()]);
-    case "InlineHtml": case "HtmlComment": return sem("html_inline");
+    case "InlineHtml":
+    case "HtmlComment": return sem("html_inline");
     case "HardBreak": return sem("linebreak");
-    case "Text": case "Delimiter": case "Escape": case "Entity": case "Strikethrough":
+    case "Text":
+    case "Delimiter":
+    case "Escape":
+    case "Entity":
+    case "Strikethrough":
     case "SetextUnderline": return textChild();
     default: return null;
   }
@@ -140,12 +155,18 @@ function inlineLinesChildren(node: CstNode): Sem[] {
       lines.push(current);
       return;
     }
-    for (const child of current.children) if ("rule" in child) collect(child);
+    for (const child of current.children) {
+      if ("rule" in child) {
+        collect(child);
+      }
+    }
   };
   collect(node);
   const children: Sem[] = [];
   lines.forEach((line, index) => {
-    if (index && children.at(-1)?.type !== "linebreak") children.push(sem("softbreak"));
+    if (index && children.at(-1)?.type !== "linebreak") {
+      children.push(sem("softbreak"));
+    }
     children.push(...inlineChildren(line, index < lines.length - 1));
   });
   return normalizeChildren(children);
@@ -160,12 +181,18 @@ function monoSem(node: CstNode): Sem | null {
     case "Block": {
       for (const child of node.children) {
         if ("tokenType" in child) {
-          if (child.tokenType === "ThematicBreak" || child.tokenType === "DashThematicBreak") return sem("thematic_break");
-          if (child.tokenType === "LinkDefinition") return null;
+          if (child.tokenType === "ThematicBreak" || child.tokenType === "DashThematicBreak") {
+            return sem("thematic_break");
+          }
+          if (child.tokenType === "LinkDefinition") {
+            return null;
+          }
           continue;
         }
         const mapped = monoSem(child);
-        if (mapped) return mapped;
+        if (mapped) {
+          return mapped;
+        }
       }
       return null;
     }
@@ -183,18 +210,22 @@ function monoSem(node: CstNode): Sem | null {
       const lines = inlineLinesChildren(node);
       return sem("paragraph", lines.length ? lines : inlineChildren(node));
     }
-    case "FencedCode": case "IndentedCodeBlock": return sem("code_block");
+    case "FencedCode":
+    case "IndentedCodeBlock": return sem("code_block");
     case "HtmlBlock": return sem("html_block");
     case "BlockQuote": {
       const lines = nodesNamed(node, "BlockQuoteLine");
       const content: Sem[] = [];
       lines.forEach((line, i) => {
-        if (i && content.at(-1)?.type !== "linebreak") content.push(sem("softbreak"));
+        if (i && content.at(-1)?.type !== "linebreak") {
+          content.push(sem("softbreak"));
+        }
         content.push(...inlineChildren(line, i < lines.length - 1));
       });
       return sem("block_quote", [sem("paragraph", content)]);
     }
-    case "UnorderedList": case "OrderedList": {
+    case "UnorderedList":
+    case "OrderedList": {
       const itemRule = node.rule === "UnorderedList" ? "UnorderedListItem" : "OrderedListItem";
       const items = nodesNamed(node, itemRule).map((item) => sem("item", [sem("paragraph", inlineChildren(item))]));
       return sem("list", items, node.rule === "OrderedList" ? "ordered" : "bullet");
@@ -212,8 +243,12 @@ function blockShape(node: Sem): Sem {
 }
 
 function inlineEvents(node: Sem, out: string[] = []): string[] {
-  if (!isBlockNode(node)) out.push(node.type);
-  for (const child of node.children ?? []) inlineEvents(child, out);
+  if (!isBlockNode(node)) {
+    out.push(node.type);
+  }
+  for (const child of node.children ?? []) {
+    inlineEvents(child, out);
+  }
   return out;
 }
 
@@ -235,7 +270,9 @@ for (const test of cases) {
   }
   catch { /* recorded as a parse failure below */ }
   if (!actual) {
-    if (failures.length < 20) failures.push({ number: test.number, section: test.section, kind: "parse", markdown: source });
+    if (failures.length < 20) {
+      failures.push({ number: test.number, section: test.section, kind: "parse", markdown: source });
+    }
     continue;
   }
   counts.accepted++; section.accepted++;
@@ -251,7 +288,9 @@ for (const test of cases) {
   if (full) {
     counts.fullExact++; section.fullExact++;
   }
-  if (!full && failures.length < 20) failures.push({ number: test.number, section: test.section, kind: block ? "inline" : "block", markdown: source });
+  if (!full && failures.length < 20) {
+    failures.push({ number: test.number, section: test.section, kind: block ? "inline" : "block", markdown: source });
+  }
 }
 
 const pct = (n: number, total = counts.total): string => `${(100 * n / total).toFixed(1)}%`;

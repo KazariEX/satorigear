@@ -16,10 +16,16 @@ const inlineParser = createDelimiterParser(markdownInlineGrammar, markdownDelimi
 function referenceLabel(definition: CstNode, source: string): string | null {
   const text = getText(definition, source);
   const open = text.indexOf("[");
-  if (open < 0) return null;
+  if (open < 0) {
+    return null;
+  }
   for (let offset = open + 1; offset < text.length; offset++) {
-    if (text[offset] === "\\") offset++;
-    else if (text[offset] === "]") return normalizeMarkdownReferenceLabel(text.slice(open + 1, offset));
+    if (text[offset] === "\\") {
+      offset++;
+    }
+    else if (text[offset] === "]") {
+      return normalizeMarkdownReferenceLabel(text.slice(open + 1, offset));
+    }
   }
   return null;
 }
@@ -29,10 +35,16 @@ function collectReferenceLabels(root: CstNode, source: string): Set<string> {
   const visit = (node: CstNode): void => {
     if (node.rule === "LinkDefinition") {
       const label = referenceLabel(node, source);
-      if (label) labels.add(label);
+      if (label) {
+        labels.add(label);
+      }
       return;
     }
-    for (const child of node.children) if (!("tokenType" in child)) visit(child);
+    for (const child of node.children) {
+      if (!("tokenType" in child)) {
+        visit(child);
+      }
+    }
   };
   visit(root);
   return labels;

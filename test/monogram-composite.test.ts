@@ -19,8 +19,12 @@ import markdown from "../packages/satorigear/src/grammar.ts";
 function leaves(node: CstNode): CstLeaf[] {
   const result: CstLeaf[] = [];
   const visit = (child: CstChild): void => {
-    if ("tokenType" in child) result.push(child);
-    else child.children.forEach(visit);
+    if ("tokenType" in child) {
+      result.push(child);
+    }
+    else {
+      child.children.forEach(visit);
+    }
   };
   node.children.forEach(visit);
   return result;

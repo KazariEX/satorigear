@@ -9,8 +9,12 @@ const patch = join(root, "patches/monogram.patch");
 
 function git(args: string[], allowFailure = false): boolean {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
-  if (result.status === 0) return true;
-  if (allowFailure) return false;
+  if (result.status === 0) {
+    return true;
+  }
+  if (allowFailure) {
+    return false;
+  }
   const detail = (result.stderr || result.stdout || "").trim();
   throw new Error(`git ${args.join(" ")} failed${detail ? `:\n${detail}` : ""}`);
 }

@@ -164,7 +164,9 @@ const inlineTextPattern = plus(altPattern(
 ));
 
 function bracketFallbacks(rule: RuleDecl): RuleDecl {
-  if (rule.name !== "Inline" || rule.body.type !== "alt") return rule;
+  if (rule.name !== "Inline" || rule.body.type !== "alt") {
+    return rule;
+  }
   return {
     ...rule,
     body: {
@@ -196,7 +198,9 @@ function linkContentReferences(expression: RuleExpr): RuleExpr {
     };
     return variants[expression.name] ? { ...expression, name: variants[expression.name] } : expression;
   }
-  if (expression.type === "seq") return { ...expression, items: expression.items.map(linkContentReferences) };
+  if (expression.type === "seq") {
+    return { ...expression, items: expression.items.map(linkContentReferences) };
+  }
   if (expression.type === "quantifier" || expression.type === "not") {
     return { ...expression, body: linkContentReferences(expression.body) };
   }
@@ -207,7 +211,9 @@ function linkContentReferences(expression: RuleExpr): RuleExpr {
       ...(expression.tsRelaxed ? { tsRelaxed: linkContentReferences(expression.tsRelaxed) } : {}),
     };
   }
-  if (expression.type === "sep") return { ...expression, element: linkContentReferences(expression.element) };
+  if (expression.type === "sep") {
+    return { ...expression, element: linkContentReferences(expression.element) };
+  }
   return expression;
 }
 
@@ -226,24 +232,36 @@ export const markdownInlineGrammar: CstGrammar = {
   tokens: markdown.tokens
     .filter((token) => inlineTokens.has(token.name))
     .flatMap((token) => {
-      if (["Emphasis", "Strong", "Image", "Link", "ReferenceLink"].includes(token.name)) return [];
-      if (token.name === "Autolink") return { ...token, pattern: autolinkPattern };
-      if (token.name === "InlineHtml") return { ...token, pattern: inlineHtmlPattern };
-      if (token.name === "Text") return { ...token, pattern: inlineTextPattern };
+      if (["Emphasis", "Strong", "Image", "Link", "ReferenceLink"].includes(token.name)) {
+        return [];
+      }
+      if (token.name === "Autolink") {
+        return { ...token, pattern: autolinkPattern };
+      }
+      if (token.name === "InlineHtml") {
+        return { ...token, pattern: inlineHtmlPattern };
+      }
+      if (token.name === "Text") {
+        return { ...token, pattern: inlineTextPattern };
+      }
       if (token.name === "HtmlComment") {
         return {
           ...token,
           pattern: altPattern("<!-->", "<!--->", token.pattern),
         };
       }
-      if (token.name !== "CodeSpan") return token;
+      if (token.name !== "CodeSpan") {
+        return token;
+      }
       return {
         ...token,
         delimitedSpan: token.delimitedSpan && { ...token.delimitedSpan, multiline: true },
       };
     })
     .flatMap((token) => {
-      if (token.name !== "Delimiter") return [token];
+      if (token.name !== "Delimiter") {
+        return [token];
+      }
       return [
         engineToken("AsteriskRun", plus("*")),
         engineToken("UnderscoreRun", plus("_")),
@@ -382,7 +400,9 @@ export function reassociateMarkdownReferenceTails(
       continue;
     }
     let closerIndex = index + 2;
-    while (closerIndex < tokens.length && tokens[closerIndex].type !== "ShortcutReferenceTail") closerIndex++;
+    while (closerIndex < tokens.length && tokens[closerIndex].type !== "ShortcutReferenceTail") {
+      closerIndex++;
+    }
     const closer = tokens[closerIndex];
     if (!closer || tokens.slice(index + 2, closerIndex).some((token) => token.type === "BracketOpen" || token.type === "ImageOpen")) {
       result.push(tail);

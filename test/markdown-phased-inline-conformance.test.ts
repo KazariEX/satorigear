@@ -48,7 +48,9 @@ const leafEvents: Record<string, string[]> = {
 function normalize(events: readonly string[]): string[] {
   const result: string[] = [];
   for (const event of events) {
-    if (event === "text" && result.at(-1) === "text") continue;
+    if (event === "text" && result.at(-1) === "text") {
+      continue;
+    }
     result.push(event);
   }
   return result;
@@ -57,8 +59,12 @@ function normalize(events: readonly string[]): string[] {
 function officialEvents(root: any): string[] {
   const events: string[] = [];
   const visit = (node: any): void => {
-    if (!blockTypes.has(node.type) && inlineTypes.has(node.type)) events.push(node.type);
-    for (let child = node.firstChild; child; child = child.next) visit(child);
+    if (!blockTypes.has(node.type) && inlineTypes.has(node.type)) {
+      events.push(node.type);
+    }
+    for (let child = node.firstChild; child; child = child.next) {
+      visit(child);
+    }
   };
   visit(root);
   return normalize(events);
@@ -69,17 +75,27 @@ function phasedEvents(root: CstNode): string[] {
   const visit = (child: CstChild): void => {
     if ("tokenType" in child) {
       for (const event of leafEvents[child.tokenType] ?? []) {
-        if (event !== "softbreak" || events.at(-1) !== "linebreak") events.push(event);
+        if (event !== "softbreak" || events.at(-1) !== "linebreak") {
+          events.push(event);
+        }
       }
       return;
     }
-    if (child.rule === "Emphasis" || child.rule === "LinkEmphasis") events.push("emph");
-    else if (child.rule === "Strong" || child.rule === "LinkStrong") events.push("strong");
-    else if (child.rule === "Link" || child.rule === "ReferenceLink") events.push("link");
+    if (child.rule === "Emphasis" || child.rule === "LinkEmphasis") {
+      events.push("emph");
+    }
+    else if (child.rule === "Strong" || child.rule === "LinkStrong") {
+      events.push("strong");
+    }
+    else if (child.rule === "Link" || child.rule === "ReferenceLink") {
+      events.push("link");
+    }
     else if (["Image", "LinkImage", "ReferenceImage", "LinkReferenceImage"].includes(child.rule)) {
       events.push("image");
     }
-    else if (child.rule === "BracketFallback") events.push("text");
+    else if (child.rule === "BracketFallback") {
+      events.push("text");
+    }
     child.children.forEach(visit);
   };
   root.children.forEach(visit);
@@ -104,7 +120,9 @@ for (const test of cases) {
       inlineProjectionExact++;
       section.exact++;
     }
-    else if (failures.length < 30) failures.push({ section: test.section, markdown: source, expected, actual });
+    else if (failures.length < 30) {
+      failures.push({ section: test.section, markdown: source, expected, actual });
+    }
   }
   catch { /* counted by the accepted baseline */ }
 }

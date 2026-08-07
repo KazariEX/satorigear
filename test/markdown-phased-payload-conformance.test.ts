@@ -27,7 +27,9 @@ function semanticText(value: string): string {
 function codeLiteral(value: string): string {
   const markerLength = /^`+/.exec(value)![0].length;
   let literal = value.slice(markerLength, -markerLength).replace(/\r\n|\r|\n/g, " ");
-  if (literal.startsWith(" ") && literal.endsWith(" ") && /[^ ]/.test(literal)) literal = literal.slice(1, -1);
+  if (literal.startsWith(" ") && literal.endsWith(" ") && /[^ ]/.test(literal)) {
+    literal = literal.slice(1, -1);
+  }
   return literal;
 }
 
@@ -37,15 +39,23 @@ function trimLinkWhitespace(value: string): string {
 
 function destinationTitle(bodySource: string): Pick<Payload, "destination" | "title"> {
   const body = trimLinkWhitespace(bodySource);
-  if (!body) return { destination: "", title: "" };
+  if (!body) {
+    return { destination: "", title: "" };
+  }
   let offset = 0;
   let destination = "";
   if (body[0] === "<") {
     offset = 1;
     while (offset < body.length) {
-      if (body[offset] === "\\") offset += 2;
-      else if (body[offset] === ">") break;
-      else offset++;
+      if (body[offset] === "\\") {
+        offset += 2;
+      }
+      else if (body[offset] === ">") {
+        break;
+      }
+      else {
+        offset++;
+      }
     }
     destination = body.slice(1, offset);
     offset++;
@@ -53,7 +63,9 @@ function destinationTitle(bodySource: string): Pick<Payload, "destination" | "ti
   else {
     let depth = 0;
     while (offset < body.length) {
-      if (body[offset] === "\\") offset += 2;
+      if (body[offset] === "\\") {
+        offset += 2;
+      }
       else if (body[offset] === "(") {
         depth++;
         offset++;
@@ -62,8 +74,12 @@ function destinationTitle(bodySource: string): Pick<Payload, "destination" | "ti
         depth--;
         offset++;
       }
-      else if (/[ \t\r\n]/.test(body[offset]) && depth === 0) break;
-      else offset++;
+      else if (/[ \t\r\n]/.test(body[offset]) && depth === 0) {
+        break;
+      }
+      else {
+        offset++;
+      }
     }
     destination = body.slice(0, offset);
   }
@@ -82,11 +98,15 @@ function linkPayload(value: string): Pick<Payload, "destination" | "title"> {
 function officialPayloads(root: any): Payload[] {
   const result: Payload[] = [];
   const visit = (node: any): void => {
-    if (node.type === "code" || node.type === "html_inline") result.push({ type: node.type, literal: node.literal });
+    if (node.type === "code" || node.type === "html_inline") {
+      result.push({ type: node.type, literal: node.literal });
+    }
     else if (node.type === "link" || node.type === "image") {
       result.push({ type: node.type, destination: node.destination, title: node.title ?? "" });
     }
-    for (let child = node.firstChild; child; child = child.next) visit(child);
+    for (let child = node.firstChild; child; child = child.next) {
+      visit(child);
+    }
   };
   visit(root);
   return result;
@@ -104,15 +124,27 @@ function definitionPayloads(root: CstNode, source: string): Map<string, Pick<Pay
       const open = value.indexOf("[");
       let close = open + 1;
       while (close < value.length) {
-        if (value[close] === "\\") close += 2;
-        else if (value[close] === "]" && value[close + 1] === ":") break;
-        else close++;
+        if (value[close] === "\\") {
+          close += 2;
+        }
+        else if (value[close] === "]" && value[close + 1] === ":") {
+          break;
+        }
+        else {
+          close++;
+        }
       }
       const label = normalizeMarkdownReferenceLabel(value.slice(open + 1, close));
-      if (!definitions.has(label)) definitions.set(label, destinationTitle(value.slice(close + 2)));
+      if (!definitions.has(label)) {
+        definitions.set(label, destinationTitle(value.slice(close + 2)));
+      }
       return;
     }
-    for (const child of node.children) if (!("tokenType" in child)) visit(child);
+    for (const child of node.children) {
+      if (!("tokenType" in child)) {
+        visit(child);
+      }
+    }
   };
   visit(root);
   return definitions;
@@ -135,7 +167,9 @@ function phasedPayloads(root: CstNode, source: string): { payloads: Payload[]; s
   const visit = (child: CstChild): void => {
     if ("tokenType" in child) {
       const value = getText(child, source);
-      if (child.tokenType === "CodeSpan") payloads.push({ type: "code", literal: codeLiteral(value) });
+      if (child.tokenType === "CodeSpan") {
+        payloads.push({ type: "code", literal: codeLiteral(value) });
+      }
       else if (child.tokenType === "InlineHtml" || child.tokenType === "HtmlComment") {
         payloads.push({ type: "html_inline", literal: value });
       }
@@ -151,18 +185,30 @@ function phasedPayloads(root: CstNode, source: string): { payloads: Payload[]; s
     }
     if (child.rule === "ReferenceLink") {
       const payload = definitions.get(referenceLabel(child, source, false));
-      if (!payload) supported = false;
-      else payloads.push({ type: "link", ...payload });
+      if (!payload) {
+        supported = false;
+      }
+      else {
+        payloads.push({ type: "link", ...payload });
+      }
     }
     else if (child.rule === "ReferenceImage" || child.rule === "LinkReferenceImage") {
       const payload = definitions.get(referenceLabel(child, source, true));
-      if (!payload) supported = false;
-      else payloads.push({ type: "image", ...payload });
+      if (!payload) {
+        supported = false;
+      }
+      else {
+        payloads.push({ type: "image", ...payload });
+      }
     }
     else if (child.rule === "Link" || child.rule === "Image" || child.rule === "LinkImage") {
       const close = directLeaf(child, child.rule === "Link" ? "LinkClose" : "ImageLinkClose");
-      if (!close) supported = false;
-      else payloads.push({ type: child.rule === "Link" ? "link" : "image", ...linkPayload(getText(close, source)) });
+      if (!close) {
+        supported = false;
+      }
+      else {
+        payloads.push({ type: child.rule === "Link" ? "link" : "image", ...linkPayload(getText(close, source)) });
+      }
     }
     child.children.forEach(visit);
   };

@@ -4,21 +4,33 @@ import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
 
 function rules(node: CstNode): string[] {
   const result = [node.rule];
-  for (const child of node.children) if (!("tokenType" in child)) result.push(...rules(child));
+  for (const child of node.children) {
+    if (!("tokenType" in child)) {
+      result.push(...rules(child));
+    }
+  }
   return result;
 }
 
 function nodes(node: CstNode, rule: string): CstNode[] {
   const result = node.rule === rule ? [node] : [];
-  for (const child of node.children) if (!("tokenType" in child)) result.push(...nodes(child, rule));
+  for (const child of node.children) {
+    if (!("tokenType" in child)) {
+      result.push(...nodes(child, rule));
+    }
+  }
   return result;
 }
 
 function leaves(node: CstNode): CstLeaf[] {
   const result: CstLeaf[] = [];
   const visit = (child: CstChild): void => {
-    if ("tokenType" in child) result.push(child);
-    else child.children.forEach(visit);
+    if ("tokenType" in child) {
+      result.push(child);
+    }
+    else {
+      child.children.forEach(visit);
+    }
   };
   node.children.forEach(visit);
   return result;

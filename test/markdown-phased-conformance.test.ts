@@ -28,7 +28,9 @@ function officialShape(node: any): Shape | null {
   const children: Shape[] = [];
   for (let child = node.firstChild; child; child = child.next) {
     const mapped = officialShape(child);
-    if (mapped) children.push(mapped);
+    if (mapped) {
+      children.push(mapped);
+    }
   }
   switch (node.type) {
     case "document": return shape("document", children);
@@ -51,7 +53,9 @@ function childNodes(node: CstNode, rule?: string): CstNode[] {
 function firstMappedChild(node: CstNode): Shape | null {
   for (const child of childNodes(node)) {
     const mapped = phasedShape(child);
-    if (mapped) return mapped;
+    if (mapped) {
+      return mapped;
+    }
   }
   return null;
 }
@@ -77,7 +81,8 @@ function phasedShape(node: CstNode): Shape | null {
       return shape("heading", [], marker && "tokenType" in marker && marker.tokenType === "SetextHeading1Open" ? "1" : "2");
     }
     case "Paragraph": return shape("paragraph");
-    case "FencedCode": case "IndentedCodeBlock": return shape("code_block");
+    case "FencedCode":
+    case "IndentedCodeBlock": return shape("code_block");
     case "HtmlBlock": return shape("html_block");
     case "ThematicBreak": return shape("thematic_break");
     default: return null;
@@ -102,7 +107,9 @@ for (const test of cases) {
       blockExact++;
       section.exact++;
     }
-    else if (failures.length < 30) failures.push({ section: test.section, markdown: source });
+    else if (failures.length < 30) {
+      failures.push({ section: test.section, markdown: source });
+    }
   }
   catch { /* counted by the accepted baseline */ }
 }

@@ -42,12 +42,18 @@ function node(type: string, children: SemanticNode[] = [], attributes: Omit<Sema
 }
 
 function append(target: SemanticNode[], value: SemanticNode): void {
-  if (value.type === "text" && !value.literal) return;
+  if (value.type === "text" && !value.literal) {
+    return;
+  }
   const previous = target.at(-1);
-  if (value.type === "softbreak" && previous?.type === "linebreak") return;
+  if (value.type === "softbreak" && previous?.type === "linebreak") {
+    return;
+  }
   if (value.type === "softbreak" && previous?.type === "text") {
     previous.literal = previous.literal!.replace(/[ \t]+$/, "");
-    if (!previous.literal) target.pop();
+    if (!previous.literal) {
+      target.pop();
+    }
   }
   if (value.type === "text" && previous?.type === "text") {
     if (typeof previous.literal !== "string" || typeof value.literal !== "string") {
@@ -55,17 +61,26 @@ function append(target: SemanticNode[], value: SemanticNode): void {
     }
     previous.literal += value.literal;
   }
-  else target.push(value);
+  else {
+    target.push(value);
+  }
 }
 
 function officialTree(value: any): SemanticNode | null {
   const children: SemanticNode[] = [];
   for (let child = value.firstChild; child; child = child.next) {
     const projected = officialTree(child);
-    if (projected) append(children, projected);
+    if (projected) {
+      append(children, projected);
+    }
   }
   switch (value.type) {
-    case "document": case "block_quote": case "item": case "paragraph": case "emph": case "strong":
+    case "document":
+    case "block_quote":
+    case "item":
+    case "paragraph":
+    case "emph":
+    case "strong":
       return node(value.type, children);
     case "list": return node("list", children, {
       listType: value.listType === "ordered" ? "ordered" : "bullet",
@@ -75,10 +90,16 @@ function officialTree(value: any): SemanticNode | null {
     });
     case "heading": return node("heading", children, { level: value.level });
     case "code_block": return node("code_block", [], { literal: value.literal, info: value.info });
-    case "html_block": case "text": case "code": case "html_inline":
+    case "html_block":
+    case "text":
+    case "code":
+    case "html_inline":
       return node(value.type, [], { literal: value.literal });
-    case "softbreak": case "linebreak": case "thematic_break": return node(value.type);
-    case "link": case "image":
+    case "softbreak":
+    case "linebreak":
+    case "thematic_break": return node(value.type);
+    case "link":
+    case "image":
       return node(value.type, children, { destination: value.destination, title: value.title ?? "" });
     default: return null;
   }
@@ -110,7 +131,9 @@ function hasBlankLineBetween(source: string, start: number, end: number, stripBl
   const lines = normalizeLines(source.slice(Math.max(0, start - 1), end)).split("\n");
   return lines.slice(1, -1).some((line) => {
     if (stripBlockQuotes) {
-      while (/^ {0,3}>/.test(line)) line = line.replace(/^ {0,3}>[ \t]?/, "");
+      while (/^ {0,3}>/.test(line)) {
+        line = line.replace(/^ {0,3}>[ \t]?/, "");
+      }
     }
     return /^[ \t]*$/.test(line);
   });
@@ -121,11 +144,15 @@ function listTight(value: CstNode, source: string, itemRule: string): boolean {
   for (const item of items) {
     const blocks = childNodes(item, "Block");
     for (let index = 1; index < blocks.length; index++) {
-      if (hasBlankLineBetween(source, payloadEnd(blocks[index - 1]), payloadStart(blocks[index]), true)) return false;
+      if (hasBlankLineBetween(source, payloadEnd(blocks[index - 1]), payloadStart(blocks[index]), true)) {
+        return false;
+      }
     }
   }
   for (let index = 1; index < items.length; index++) {
-    if (hasBlankLineBetween(source, payloadEnd(items[index - 1]), payloadStart(items[index]), false)) return false;
+    if (hasBlankLineBetween(source, payloadEnd(items[index - 1]), payloadStart(items[index]), false)) {
+      return false;
+    }
   }
   return true;
 }
@@ -136,22 +163,32 @@ function trimLinkWhitespace(value: string): string {
 
 function destinationTitle(bodySource: string): Definition {
   const body = trimLinkWhitespace(bodySource);
-  if (!body) return { destination: "", title: "" };
+  if (!body) {
+    return { destination: "", title: "" };
+  }
   let offset = 0;
   let destination = "";
   if (body[0] === "<") {
     offset = 1;
     while (offset < body.length) {
-      if (body[offset] === "\\") offset += 2;
-      else if (body[offset] === ">") break;
-      else offset++;
+      if (body[offset] === "\\") {
+        offset += 2;
+      }
+      else if (body[offset] === ">") {
+        break;
+      }
+      else {
+        offset++;
+      }
     }
     destination = body.slice(1, offset++);
   }
   else {
     let depth = 0;
     while (offset < body.length) {
-      if (body[offset] === "\\") offset += 2;
+      if (body[offset] === "\\") {
+        offset += 2;
+      }
       else if (body[offset] === "(") {
         depth++;
         offset++;
@@ -160,8 +197,12 @@ function destinationTitle(bodySource: string): Definition {
         depth--;
         offset++;
       }
-      else if (/[ \t\r\n]/.test(body[offset]) && depth === 0) break;
-      else offset++;
+      else if (/[ \t\r\n]/.test(body[offset]) && depth === 0) {
+        break;
+      }
+      else {
+        offset++;
+      }
     }
     destination = body.slice(0, offset);
   }
@@ -180,12 +221,20 @@ function definitionsOf(root: CstNode, source: string): Map<string, Definition> {
       const open = text.indexOf("[");
       let close = open + 1;
       while (close < text.length) {
-        if (text[close] === "\\") close += 2;
-        else if (text[close] === "]" && text[close + 1] === ":") break;
-        else close++;
+        if (text[close] === "\\") {
+          close += 2;
+        }
+        else if (text[close] === "]" && text[close + 1] === ":") {
+          break;
+        }
+        else {
+          close++;
+        }
       }
       const label = normalizeMarkdownReferenceLabel(text.slice(open + 1, close));
-      if (!definitions.has(label)) definitions.set(label, destinationTitle(text.slice(close + 2)));
+      if (!definitions.has(label)) {
+        definitions.set(label, destinationTitle(text.slice(close + 2)));
+      }
       return;
     }
     childNodes(value).forEach(visit);
@@ -206,19 +255,30 @@ function referenceLabel(value: CstNode, source: string, image: boolean): string 
 function codeLiteral(value: string): string {
   const markerLength = /^`+/.exec(value)![0].length;
   let literal = value.slice(markerLength, -markerLength).replace(/\r\n|\r|\n/g, " ");
-  if (literal.startsWith(" ") && literal.endsWith(" ") && /[^ ]/.test(literal)) literal = literal.slice(1, -1);
+  if (literal.startsWith(" ") && literal.endsWith(" ") && /[^ ]/.test(literal)) {
+    literal = literal.slice(1, -1);
+  }
   return literal;
 }
 
 function inlineLeaf(value: CstLeaf, source: string): SemanticNode | null {
   const text = getText(value, source);
   switch (value.tokenType) {
-    case "Text": case "Delimiter": case "Escape": case "Entity": case "Strikethrough":
-    case "BracketOpen": case "ImageOpen": case "LinkTail": case "ReferenceTail":
-    case "ShortcutReferenceTail": case "ReferenceSeparatorClose":
+    case "Text":
+    case "Delimiter":
+    case "Escape":
+    case "Entity":
+    case "Strikethrough":
+    case "BracketOpen":
+    case "ImageOpen":
+    case "LinkTail":
+    case "ReferenceTail":
+    case "ShortcutReferenceTail":
+    case "ReferenceSeparatorClose":
       return node("text", [], { literal: semanticText(text) });
     case "CodeSpan": return node("code", [], { literal: codeLiteral(text) });
-    case "InlineHtml": case "HtmlComment": return node("html_inline", [], { literal: text });
+    case "InlineHtml":
+    case "HtmlComment": return node("html_inline", [], { literal: text });
     case "Autolink": {
       const label = text.slice(1, -1);
       return node("link", [node("text", [], { literal: label })], {
@@ -245,12 +305,18 @@ function projectInlineSequence(
     const projected = "tokenType" in child
       ? inlineLeaf(child, source)
       : projectInlineNode(child, source, definitions);
-    if (!projected) continue;
+    if (!projected) {
+      continue;
+    }
     if (cursor !== null && child.offset > cursor) {
       append(result, node("text", [], { literal: semanticText(source.slice(cursor, child.offset).replace(/[\r\n]/g, "")) }));
     }
-    if (projected.type === "$sequence") projected.children?.forEach((value) => append(result, value));
-    else append(result, projected);
+    if (projected.type === "$sequence") {
+      projected.children?.forEach((value) => append(result, value));
+    }
+    else {
+      append(result, projected);
+    }
     cursor = child.end;
   }
   if (cursor !== null && end !== null && end > cursor) {
@@ -270,8 +336,12 @@ function projectInlineNode(value: CstNode, source: string, definitions: Readonly
     const children: SemanticNode[] = [];
     for (const child of value.children) {
       const projected = "tokenType" in child ? inlineLeaf(child, source) : projectInlineNode(child, source, definitions);
-      if (projected?.type === "$sequence") projected.children?.forEach((value) => append(children, value));
-      else if (projected) append(children, projected);
+      if (projected?.type === "$sequence") {
+        projected.children?.forEach((value) => append(children, value));
+      }
+      else if (projected) {
+        append(children, projected);
+      }
     }
     return node("$sequence", children);
   }
@@ -301,13 +371,17 @@ function projectInlineNode(value: CstNode, source: string, definitions: Readonly
 
 function inlineChildren(value: CstNode, source: string, definitions: ReadonlyMap<string, Definition>): SemanticNode[] {
   const inline = childNodes(value).find((child) => child.rule === "InlineLines");
-  if (!inline) return [];
+  if (!inline) {
+    return [];
+  }
   const projected = projectInlineNode(inline, source, definitions);
   const result = projected?.children ?? [];
   const last = result.at(-1);
   if (last?.type === "text") {
     last.literal = last.literal!.replace(/[ \t]+$/, "");
-    if (!last.literal) result.pop();
+    if (!last.literal) {
+      result.pop();
+    }
   }
   return result;
 }
@@ -321,12 +395,18 @@ function fencedPayload(value: string): { literal: string; info: string } {
   const lines = source.match(/[^\n]*(?:\n|$)/g)!.filter(Boolean);
   const opening = lines.shift()!;
   let indent = 0;
-  while (indent < 3 && opening[indent] === " ") indent++;
+  while (indent < 3 && opening[indent] === " ") {
+    indent++;
+  }
   const marker = opening[indent];
   let markerEnd = indent;
-  while (opening[markerEnd] === marker) markerEnd++;
+  while (opening[markerEnd] === marker) {
+    markerEnd++;
+  }
   const length = markerEnd - indent;
-  if (lines.length && new RegExp(`^ {0,3}\\${marker}{${length},}[ \\t]*(?:\\n|$)`).test(lines.at(-1)!)) lines.pop();
+  if (lines.length && new RegExp(`^ {0,3}\\${marker}{${length},}[ \\t]*(?:\\n|$)`).test(lines.at(-1)!)) {
+    lines.pop();
+  }
   const literal = lines.map((line) => line.replace(new RegExp(`^ {0,${indent}}`), "").replace(/\n?$/, "\n")).join("");
   return { literal, info: semanticText(opening.slice(markerEnd).trim()) };
 }
@@ -335,9 +415,15 @@ function removeIndent(value: string, columns: number): string {
   let offset = 0;
   let consumed = 0;
   while (offset < value.length && consumed < columns) {
-    if (value[offset] === " ") consumed++;
-    else if (value[offset] === "\t") consumed += 4 - (consumed % 4);
-    else break;
+    if (value[offset] === " ") {
+      consumed++;
+    }
+    else if (value[offset] === "\t") {
+      consumed += 4 - (consumed % 4);
+    }
+    else {
+      break;
+    }
     offset++;
   }
   return " ".repeat(Math.max(0, consumed - columns)) + value.slice(offset);
@@ -345,15 +431,21 @@ function removeIndent(value: string, columns: number): string {
 
 function indentedLiteral(value: string): string {
   const lines = normalizeLines(value).split("\n").map((line) => removeIndent(line, 4));
-  while (lines.length && !lines.at(-1)) lines.pop();
-  while (lines.length && /^[ \t]*$/.test(lines.at(-1)!)) lines.pop();
+  while (lines.length && !lines.at(-1)) {
+    lines.pop();
+  }
+  while (lines.length && /^[ \t]*$/.test(lines.at(-1)!)) {
+    lines.pop();
+  }
   return lines.length ? `${lines.join("\n")}\n` : "";
 }
 
 function firstMappedChild(value: CstNode, source: string, definitions: ReadonlyMap<string, Definition>): SemanticNode | null {
   for (const child of childNodes(value)) {
     const projected = phasedTree(child, source, definitions);
-    if (projected) return projected;
+    if (projected) {
+      return projected;
+    }
   }
   return null;
 }
@@ -381,7 +473,8 @@ function phasedTree(value: CstNode, source: string, definitions: ReadonlyMap<str
         listTight: listTight(value, source, "OrderedListItem"),
       });
     }
-    case "UnorderedListItem": case "OrderedListItem": return node("item", blocks());
+    case "UnorderedListItem":
+    case "OrderedListItem": return node("item", blocks());
     case "AtxHeading": {
       const marker = directLeaf(value, "AtxHeadingOpen")!;
       return node("heading", inlineChildren(value, source, definitions), { level: marker.end - marker.offset });
@@ -423,7 +516,9 @@ for (const test of cases) {
     exact++;
     section.exact++;
   }
-  else if (failures.length < 30) failures.push({ section: test.section, markdown: source, expected, actual });
+  else if (failures.length < 30) {
+    failures.push({ section: test.section, markdown: source, expected, actual });
+  }
 }
 
 describe("block-first markdown complete semantic tree gate", () => {
@@ -439,7 +534,9 @@ describe("block-first markdown complete semantic tree gate", () => {
 
 afterAll(() => {
   console.log(`Block-first Markdown ${VERSION}: ${exact}/${cases.length} exact complete semantic trees`);
-  for (const [section, counts] of bySection) console.log(`  ${section.padEnd(40)} ${String(counts.exact).padStart(3)}/${counts.total}`);
+  for (const [section, counts] of bySection) {
+    console.log(`  ${section.padEnd(40)} ${String(counts.exact).padStart(3)}/${counts.total}`);
+  }
   console.log("\nFirst semantic tree divergences:");
   for (const failure of failures) {
     console.log(`  [${failure.section}] ${JSON.stringify(failure.markdown)}`);
