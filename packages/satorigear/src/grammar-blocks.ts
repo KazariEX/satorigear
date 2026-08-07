@@ -114,6 +114,12 @@ interface Line {
   prefixColumns?: number;
 }
 
+interface SourcePoint {
+  column: number;
+  line: number;
+  offset: number;
+}
+
 interface Indent {
   offset: number;
   columns: number;
@@ -1111,6 +1117,40 @@ function sameShiftedBlock(
   return true;
 }
 
+function pointIn(
+  lines: readonly Line[],
+  sourceLength: number,
+  endsInLineEnding: boolean,
+  offset: number,
+): SourcePoint {
+  if (offset < 0 || offset > sourceLength) {
+    throw new RangeError(`Source offset ${offset} is outside the document`);
+  }
+  if (lines.length === 0) {
+    return { line: 1, column: 1, offset };
+  }
+  if (offset === sourceLength && endsInLineEnding) {
+    return { line: lines.length + 1, column: 1, offset };
+  }
+  let low = 0;
+  let high = lines.length;
+  while (low + 1 < high) {
+    const middle = (low + high) >>> 1;
+    if (lines[middle].start <= offset) {
+      low = middle;
+    }
+    else {
+      high = middle;
+    }
+  }
+  return { line: low + 1, column: offset - lines[low].start + 1, offset };
+}
+
+function endsInLineEnding(source: string): boolean {
+  const ending = source.charCodeAt(source.length - 1);
+  return ending === 10 || ending === 13;
+}
+
 class MarkdownBlockTokenizerImpl {
   #checkpoints: BlockCheckpoint[];
   #lines: Line[];
@@ -1133,28 +1173,11 @@ class MarkdownBlockTokenizerImpl {
     return this.#tokens;
   }
 
-  point(offset: number): { column: number; line: number; offset: number } {
-    if (offset < 0 || offset > this.#source.length) {
-      throw new RangeError(`Source offset ${offset} is outside the document`);
-    }
-    if (this.#lines.length === 0) {
-      return { line: 1, column: 1, offset };
-    }
-    if (offset === this.#source.length && /[\r\n]$/.test(this.#source)) {
-      return { line: this.#lines.length + 1, column: 1, offset };
-    }
-    let low = 0;
-    let high = this.#lines.length;
-    while (low + 1 < high) {
-      const middle = (low + high) >>> 1;
-      if (this.#lines[middle].start <= offset) {
-        low = middle;
-      }
-      else {
-        high = middle;
-      }
-    }
-    return { line: low + 1, column: offset - this.#lines[low].start + 1, offset };
+  locator(): (offset: number) => SourcePoint {
+    const lines = this.#lines;
+    const sourceLength = this.#source.length;
+    const trailingLineEnding = endsInLineEnding(this.#source);
+    return (offset) => pointIn(lines, sourceLength, trailingLineEnding, offset);
   }
 
   edit(edits: readonly TextEdit[]): BlockEditResult {

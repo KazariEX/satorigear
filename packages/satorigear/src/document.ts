@@ -1,6 +1,11 @@
 import type { Root } from "mdast";
 import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
-import { type BlockFragment, materializeMdast, projectBlock } from "./mdast.ts";
+import {
+  type BlockFragment,
+  materializeMdast,
+  type PlacedBlockFragment,
+  projectBlock,
+} from "./mdast.ts";
 import { blockParser, createMarkdownSyntax } from "./parser.ts";
 import type { EmittedParserDocument } from "./emitted-parser.ts";
 import type { TextEdit } from "./text-edit.ts";
@@ -86,7 +91,7 @@ class DocumentImpl implements Document {
     return { changedRange };
   }
 
-  snapshot(): Root {
+  #projectBlocks(): PlacedBlockFragment[] {
     const fragments = new Map<number, { fragment: BlockFragment; version: number }>();
     const blocks = this.#syntax.blocks().map((block) => {
       const previous = this.#fragments.get(block.id);
@@ -97,7 +102,11 @@ class DocumentImpl implements Document {
       return { fragment, offset: block.offset };
     });
     this.#fragments = fragments;
-    return materializeMdast(blocks, this.source, (offset) => this.#tokenizer.point(offset));
+    return blocks;
+  }
+
+  snapshot(): Root {
+    return materializeMdast(this.#projectBlocks(), this.source.length, this.#tokenizer.locator());
   }
 }
 

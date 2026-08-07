@@ -39,7 +39,7 @@ interface SourceSpan {
   start: number;
 }
 
-export interface SourcePoint {
+interface SourcePoint {
   column: number;
   line: number;
   offset: number;
@@ -72,6 +72,11 @@ export interface MarkdownSyntax {
 export interface BlockFragment {
   node: BlockContent | DefinitionContent;
   spans: Map<object, SourceSpan>;
+}
+
+export interface PlacedBlockFragment {
+  fragment: BlockFragment;
+  offset: number;
 }
 
 interface FragmentValue {
@@ -168,32 +173,6 @@ function indentedCodeEnd(value: MarkdownSyntaxNode, context: ProjectionContext):
     }
   }
   throw new Error("IndentedCodeBlockToken has no source content");
-}
-
-function createPoint(source: string): (offset: number) => SourcePoint {
-  const starts = [0];
-  for (let offset = 0; offset < source.length; offset++) {
-    if (source[offset] === "\n") {
-      starts.push(offset + 1);
-    }
-    else if (source[offset] === "\r" && source[offset + 1] !== "\n") {
-      starts.push(offset + 1);
-    }
-  }
-  return (offset) => {
-    let low = 0;
-    let high = starts.length;
-    while (low + 1 < high) {
-      const middle = (low + high) >>> 1;
-      if (starts[middle] <= offset) {
-        low = middle;
-      }
-      else {
-        high = middle;
-      }
-    }
-    return { line: low + 1, column: offset - starts[low] + 1, offset };
-  };
 }
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
@@ -885,7 +864,7 @@ export function projectBlock(
   return { node, spans: context.spans };
 }
 
-function materializeFragment(
+function materializeBlock(
   fragment: BlockFragment,
   offset: number,
   point: (offset: number) => SourcePoint,
@@ -911,14 +890,13 @@ function materializeFragment(
 }
 
 export function materializeMdast(
-  fragments: readonly { fragment: BlockFragment; offset: number }[],
-  source: string,
-  point?: (offset: number) => SourcePoint,
+  fragments: readonly PlacedBlockFragment[],
+  sourceLength: number,
+  locate: (offset: number) => SourcePoint,
 ): Root {
-  const locate = point ?? createPoint(source);
   return {
     type: "root",
-    children: fragments.map(({ fragment, offset }) => materializeFragment(fragment, offset, locate)),
-    position: { start: locate(0), end: locate(source.length) },
+    children: fragments.map(({ fragment, offset }) => materializeBlock(fragment, offset, locate)),
+    position: { start: locate(0), end: locate(sourceLength) },
   } satisfies Root;
 }
