@@ -140,6 +140,170 @@ index 0000000..9a0b21b
 +
 +  return { parse, parseOuter };
 +}
+diff --git a/src/delimiter-parser.ts b/src/delimiter-parser.ts
+new file mode 100644
+index 0000000..589514d
+--- /dev/null
++++ b/src/delimiter-parser.ts
+@@ -0,0 +1,158 @@
++import type { CstGrammar } from './types.ts';
++import { createLexer, type Token } from './gen-lexer.ts';
++import { createParser } from './gen-parser.ts';
++
++export interface DelimiterRunConfig {
++  token: string;
++  marker: string;
++  fallbackToken: string;
++  single: { open: string; close: string };
++  double: { open: string; close: string };
++  intraword?: boolean;
++  ruleOfThree?: boolean;
++}
++
++interface Run {
++  tokenIndex: number;
++  token: Token;
++  config: DelimiterRunConfig;
++  length: number;
++  remaining: number;
++  canOpen: boolean;
++  canClose: boolean;
++  active: boolean;
++}
++
++interface Replacement {
++  offset: number;
++  end: number;
++  type: string;
++}
++
++const whitespace = /\s/u;
++const punctuation = /[\p{P}\p{S}]/u;
++
++function characterBefore(source: string, offset: number): string {
++  if (offset <= 0) return '\n';
++  const trailing = source.charCodeAt(offset - 1);
++  if (trailing >= 0xDC00 && trailing <= 0xDFFF && offset > 1) {
++    const leading = source.charCodeAt(offset - 2);
++    if (leading >= 0xD800 && leading <= 0xDBFF) return source.slice(offset - 2, offset);
++  }
++  return source[offset - 1];
++}
++
++function characterAfter(source: string, offset: number): string {
++  return offset < source.length ? String.fromCodePoint(source.codePointAt(offset)!) : '\n';
++}
++
++function flanking(source: string, token: Token, config: DelimiterRunConfig): Pick<Run, 'canOpen' | 'canClose'> {
++  const before = characterBefore(source, token.offset);
++  const after = characterAfter(source, token.offset + token.text.length);
++  const beforeWhitespace = whitespace.test(before);
++  const afterWhitespace = whitespace.test(after);
++  const beforePunctuation = punctuation.test(before);
++  const afterPunctuation = punctuation.test(after);
++  const left = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
++  const right = !beforeWhitespace && (!beforePunctuation || afterWhitespace || afterPunctuation);
++  if (config.intraword !== false) return { canOpen: left, canClose: right };
++  return {
++    canOpen: left && (!right || beforePunctuation),
++    canClose: right && (!left || afterPunctuation),
++  };
++}
++
++function canPair(opener: Run, closer: Run): boolean {
++  if (!opener.canOpen || !closer.canClose) return false;
++  if (!closer.config.ruleOfThree || (!opener.canClose && !closer.canOpen)) return true;
++  const sum = opener.remaining + closer.remaining;
++  return sum % 3 !== 0 || (opener.remaining % 3 === 0 && closer.remaining % 3 === 0);
++}
++
++function replacementToken(base: Token, replacement: Replacement, first: boolean): Token {
++  return {
++    ...base,
++    type: replacement.type,
++    text: base.text.slice(replacement.offset - base.offset, replacement.end - base.offset),
++    offset: replacement.offset,
++    k: 0,
++    t: 0,
++    newlineBefore: first && base.newlineBefore,
++    commentBefore: first && base.commentBefore,
++    multilineFlowBefore: first && base.multilineFlowBefore,
++  };
++}
++
++/** Resolve flanking delimiter runs into balanced structural tokens before ordinary CST parsing. */
++export function resolveDelimiterRuns(
++  source: string,
++  tokens: readonly Token[],
++  configs: readonly DelimiterRunConfig[],
++): Token[] {
++  const configByToken = new Map(configs.map(config => [config.token, config]));
++  const runs: Run[] = [];
++  tokens.forEach((token, tokenIndex) => {
++    const config = configByToken.get(token.type);
++    if (!config) return;
++    const length = token.text.length / config.marker.length;
++    runs.push({ tokenIndex, token, config, length, remaining: length, active: true, ...flanking(source, token, config) });
++  });
++
++  const replacements = new Map<number, Replacement[]>();
++  for (let closerIndex = 0; closerIndex < runs.length; closerIndex++) {
++    const closer = runs[closerIndex];
++    while (closer.active && closer.canClose && closer.remaining > 0) {
++      let openerIndex = closerIndex - 1;
++      while (openerIndex >= 0) {
++        const candidate = runs[openerIndex];
++        if (candidate.active && candidate.config === closer.config && candidate.remaining > 0 && canPair(candidate, closer)) break;
++        openerIndex--;
++      }
++      if (openerIndex < 0) break;
++      const opener = runs[openerIndex];
++      const use = opener.remaining >= 2 && closer.remaining >= 2 ? 2 : 1;
++      const openEnd = opener.token.offset + opener.remaining * opener.config.marker.length;
++      const openStart = openEnd - use * opener.config.marker.length;
++      const closeStart = closer.token.offset + (closer.length - closer.remaining) * closer.config.marker.length;
++      const closeEnd = closeStart + use * closer.config.marker.length;
++      const pair = use === 2 ? closer.config.double : closer.config.single;
++      const openerReplacements = replacements.get(opener.tokenIndex) ?? [];
++      openerReplacements.push({ offset: openStart, end: openEnd, type: pair.open });
++      replacements.set(opener.tokenIndex, openerReplacements);
++      const closerReplacements = replacements.get(closer.tokenIndex) ?? [];
++      closerReplacements.push({ offset: closeStart, end: closeEnd, type: pair.close });
++      replacements.set(closer.tokenIndex, closerReplacements);
++      opener.remaining -= use;
++      closer.remaining -= use;
++      for (let between = openerIndex + 1; between < closerIndex; between++) runs[between].active = false;
++    }
++  }
++
++  return tokens.flatMap((token, tokenIndex) => {
++    const config = configByToken.get(token.type);
++    if (!config) return [token];
++    const matched = (replacements.get(tokenIndex) ?? []).sort((a, b) => a.offset - b.offset);
++    const fragments: Replacement[] = [];
++    let offset = token.offset;
++    for (const replacement of matched) {
++      if (replacement.offset > offset) fragments.push({ offset, end: replacement.offset, type: config.fallbackToken });
++      fragments.push(replacement);
++      offset = replacement.end;
++    }
++    const end = token.offset + token.text.length;
++    if (offset < end) fragments.push({ offset, end, type: config.fallbackToken });
++    return fragments.map((replacement, index) => replacementToken(token, replacement, index === 0));
++  });
++}
++
++/** Create a parser whose lexer token stream is transformed by the generic delimiter resolver. */
++export function createDelimiterParser(grammar: CstGrammar, configs: readonly DelimiterRunConfig[]) {
++  const parser = createParser(grammar);
++  const lexer = createLexer(grammar);
++  return {
++    ...parser,
++    parse(source: string, entryRule?: string) {
++      return parser.parseTokens(source, resolveDelimiterRuns(source, lexer.tokenize(source), configs), entryRule);
++    },
++  };
++}
 diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
 index a4ed10c..e689092 100644
 --- a/src/gen-lexer.ts

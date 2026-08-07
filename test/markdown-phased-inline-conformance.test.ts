@@ -73,6 +73,8 @@ function phasedEvents(root: CstNode): string[] {
       }
       return;
     }
+    if (child.rule === "Emphasis") events.push("emph");
+    else if (child.rule === "Strong") events.push("strong");
     child.children.forEach(visit);
   };
   root.children.forEach(visit);
