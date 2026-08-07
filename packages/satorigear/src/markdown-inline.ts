@@ -109,6 +109,12 @@ export const markdownInlineGrammar: CstGrammar = {
       if (token.name === "ReferenceLink") return { ...token, name: "ReferenceCandidate" };
       if (token.name === "Autolink") return { ...token, pattern: autolinkPattern };
       if (token.name === "InlineHtml") return { ...token, pattern: inlineHtmlPattern };
+      if (token.name === "HtmlComment") {
+        return {
+          ...token,
+          pattern: altPattern("<!-->", "<!--->", token.pattern),
+        };
+      }
       if (token.name !== "CodeSpan") return token;
       return {
         ...token,
