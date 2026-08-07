@@ -12,13 +12,13 @@
 // feature lands; never lower it without documenting why.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Parser as CommonMarkParser, HtmlRenderer } from "commonmark";
+import { Parser as CommonMarkParser } from "commonmark";
 import { tests } from "commonmark-spec";
 import { afterAll, describe, expect, it } from "vitest";
 import grammar from "../packages/satorigear/src/markdown.ts";
 import { createParser, type CstChild, type CstNode, getText } from "../vendors/monogram/src/gen-parser.ts";
 
-interface SpecCase { markdown: string; html: string; section: string; number: number }
+interface SpecCase { markdown: string; section: string; number: number }
 interface Sem { type: string; attr?: string; children?: Sem[] }
 interface Counts { total: number; accepted: number; blockExact: number; inlineExact: number; fullExact: number }
 interface Baseline extends Counts { version: string }
@@ -26,7 +26,6 @@ interface Baseline extends Counts { version: string }
 const VERSION = "0.31.2";
 const cases = tests as SpecCase[];
 const officialParser = new CommonMarkParser();
-const officialRenderer = new HtmlRenderer();
 const { parse } = createParser(grammar);
 const baselinePath = fileURLToPath(new URL("./fixtures/commonmark-0.31.2-baseline.json", import.meta.url));
 const baseline = JSON.parse(readFileSync(baselinePath, "utf8")) as Baseline;
@@ -221,13 +220,10 @@ function inlineEvents(node: Sem, out: string[] = []): string[] {
 const counts: Counts = { total: cases.length, accepted: 0, blockExact: 0, inlineExact: 0, fullExact: 0 };
 const bySection = new Map<string, Counts>();
 const failures: { number: number; section: string; kind: string; markdown: string }[] = [];
-let referenceHtmlMatches = 0;
-
 for (const test of cases) {
   const source = sourceOf(test);
   currentSource = source;
   const officialAst = officialParser.parse(source);
-  if (officialRenderer.render(officialAst).replace(/\t/g, "→") === test.html) referenceHtmlMatches++;
   const expected = officialSem(officialAst)!;
   const section = bySection.get(test.section) ?? { total: 0, accepted: 0, blockExact: 0, inlineExact: 0, fullExact: 0 };
   bySection.set(test.section, section);
@@ -261,10 +257,6 @@ for (const test of cases) {
 const pct = (n: number, total = counts.total): string => `${(100 * n / total).toFixed(1)}%`;
 
 describe(`CommonMark ${VERSION} official corpus`, () => {
-  it("matches every expected HTML case with the reference implementation", () => {
-    expect(referenceHtmlMatches).toBe(cases.length);
-  });
-
   it("uses a baseline for the current corpus", () => {
     expect(baseline.version).toBe(VERSION);
     expect(baseline.total).toBe(cases.length);

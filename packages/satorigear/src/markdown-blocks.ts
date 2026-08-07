@@ -22,6 +22,9 @@ const FencedCodeBlock = token(never());
 const IndentedCodeBlockToken = token(never());
 const ThematicBreakToken = token(never());
 const HtmlBlockToken = token(never());
+const LinkDefinitionOpen = token(never());
+const LinkDefinitionChunk = token(never());
+const LinkDefinitionClose = token(never());
 
 const Paragraph = rule(() => [[ParagraphOpen, many1(InlineChunk), ParagraphClose]]);
 const AtxHeading = rule(() => [[AtxHeadingOpen, many(InlineChunk), HeadingClose]]);
@@ -30,6 +33,7 @@ const FencedCode = rule(() => [FencedCodeBlock]);
 const IndentedCodeBlock = rule(() => [IndentedCodeBlockToken]);
 const ThematicBreak = rule(() => [ThematicBreakToken]);
 const HtmlBlock = rule(() => [HtmlBlockToken]);
+const LinkDefinition = rule(() => [[LinkDefinitionOpen, many1(LinkDefinitionChunk), LinkDefinitionClose]]);
 let Block: RuleRef;
 const BlockQuote = rule(() => [[BlockQuoteOpen, many(Block), BlockQuoteClose]]);
 const UnorderedListItem = rule(() => [[UnorderedItemOpen, many(Block), UnorderedItemClose]]);
@@ -43,6 +47,7 @@ Block = rule(() => [
   FencedCode,
   IndentedCodeBlock,
   HtmlBlock,
+  LinkDefinition,
   BlockQuote,
   UnorderedList,
   OrderedList,
@@ -74,6 +79,9 @@ export const markdownBlockGrammar = defineGrammar({
     IndentedCodeBlockToken,
     ThematicBreakToken,
     HtmlBlockToken,
+    LinkDefinitionOpen,
+    LinkDefinitionChunk,
+    LinkDefinitionClose,
   },
   rules: {
     Paragraph,
@@ -82,6 +90,7 @@ export const markdownBlockGrammar = defineGrammar({
     FencedCode,
     IndentedCodeBlock,
     HtmlBlock,
+    LinkDefinition,
     ThematicBreak,
     BlockQuote,
     UnorderedListItem,
@@ -624,6 +633,13 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
 
     const definitionEnd = linkDefinitionEnd(source, lines, index);
     if (definitionEnd !== null) {
+      out.push(structural("LinkDefinitionOpen", line.start));
+      for (let definitionLine = index; definitionLine < definitionEnd; definitionLine++) {
+        const current = lines[definitionLine];
+        const end = definitionLine + 1 < definitionEnd ? current.next : current.end;
+        out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+      }
+      out.push(structural("LinkDefinitionClose", lines[definitionEnd - 1].end));
       index = definitionEnd;
       continue;
     }

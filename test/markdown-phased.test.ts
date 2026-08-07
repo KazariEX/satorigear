@@ -64,9 +64,19 @@ describe("block-first markdown parser", () => {
     expect(treeRules.filter((rule) => rule === "Paragraph")).toHaveLength(1);
   });
 
-  it("removes valid multiline definitions but retains invalid bracketed labels", () => {
+  it("recognizes valid multiline definitions but retains invalid bracketed labels", () => {
     const source = "[Foo bar]:\n<my url>\n'title'\n\n[Foo bar]\n\n[ref[]: /uri\n";
-    const treeRules = rules(markdownPhasedParser.parse(source));
+    const tree = markdownPhasedParser.parse(source);
+    const treeRules = rules(tree);
+    expect(treeRules.filter((rule) => rule === "LinkDefinition")).toHaveLength(1);
+    expect(leaves(tree).filter((leaf) => leaf.tokenType === "LinkDefinitionChunk")).toHaveLength(3);
     expect(treeRules.filter((rule) => rule === "Paragraph")).toHaveLength(2);
+  });
+
+  it("preserves definitions and lexes references as context-free candidates", () => {
+    const tree = markdownPhasedParser.parse("[defined]\n\n[defined]: /url\n\n[missing]\n");
+    expect(rules(tree).filter((rule) => rule === "LinkDefinition")).toHaveLength(1);
+    expect(leaves(tree).filter((leaf) => leaf.tokenType === "ReferenceCandidate")).toHaveLength(2);
+    expect(leaves(tree).filter((leaf) => leaf.tokenType === "LinkDefinitionChunk")).toHaveLength(1);
   });
 });
