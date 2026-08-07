@@ -1,5 +1,3 @@
-import type { Token } from "monogram/gen-lexer.ts";
-import { createDelimitedTokenResolver } from "./delimiter-parser.ts";
 import {
   createEmittedParser,
   type EmittedDocument,
@@ -11,14 +9,9 @@ import {
 import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
 import { tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
-import {
-  markdownBracketPairs,
-  markdownDelimiterRuns,
-  normalizeMarkdownReferenceLabel,
-  reassociateMarkdownReferenceTails,
-} from "./grammar-inline.ts";
+import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
+import { InlineTokenDocument } from "./inline-tokenizer.ts";
 import { createSourceView, type SourceRange, type SourceView } from "./source-view.ts";
-import { changedTokenRange } from "./token-change.ts";
 import type {
   MarkdownSyntax,
   MarkdownSyntaxChild,
@@ -28,7 +21,6 @@ import type {
 
 export const markdownBlockParser = createEmittedParser(blockRuntime, tokenizeMarkdownBlocks);
 const inlineParser = createEmittedParser(inlineRuntime, inlineRuntime.tokenize);
-const inlineResolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
 
 function referenceLabelText(text: string): string | null {
   const open = text.indexOf("[");
@@ -46,31 +38,36 @@ function referenceLabelText(text: string): string | null {
   return null;
 }
 
-function tokenizeInline(source: string, referenceLabels: ReadonlySet<string>): { candidates: Set<string>; tokens: readonly Token[] } {
-  const candidates = new Set<string>();
-  const tokens = reassociateMarkdownReferenceTails(source, inlineParser.tokenize(source), referenceLabels);
-  return {
-    candidates,
-    tokens: inlineResolver.resolve(source, tokens, { labels: referenceLabels, candidates }),
-  };
-}
-
-interface InlineRegion {
-  candidates: ReadonlySet<string>;
-  document?: EmittedDocument;
-  id: number;
-  revision: number;
-  rule: string;
-  span: { end: number; start: number };
-  tokens: readonly Token[];
-  view: SourceView;
-}
-
 interface InlineRegionDescriptor {
   id: number;
   rule: string;
   span: { end: number; start: number };
   view: SourceView;
+}
+
+class InlineRegion extends InlineTokenDocument {
+  document?: EmittedDocument;
+  id: number;
+  revision = 0;
+  rule: string;
+  span: { end: number; start: number };
+  view: SourceView;
+
+  constructor(descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>) {
+    super();
+    this.id = descriptor.id;
+    this.rule = descriptor.rule;
+    this.span = descriptor.span;
+    this.view = descriptor.view;
+    this.update(descriptor.view.text, labels);
+  }
+
+  describe(descriptor: InlineRegionDescriptor): void {
+    this.id = descriptor.id;
+    this.rule = descriptor.rule;
+    this.span = descriptor.span;
+    this.view = descriptor.view;
+  }
 }
 
 interface CompositeBlockDescriptor {
@@ -96,89 +93,26 @@ function rangesOf(tree: SyntaxTree, node: SyntaxTreeNode): SourceRange[] {
   });
 }
 
-function textEdit(previous: string, next: string): readonly { end: number; start: number; text: string }[] {
-  let start = 0;
-  const common = Math.min(previous.length, next.length);
-  while (start < common && previous[start] === next[start]) {
-    start++;
-  }
-  let suffix = 0;
-  while (suffix < common - start && previous[previous.length - 1 - suffix] === next[next.length - 1 - suffix]) {
-    suffix++;
-  }
-  if (start === previous.length && start === next.length) {
-    return [];
-  }
-  return [{
-    start,
-    end: previous.length - suffix,
-    text: next.slice(start, next.length - suffix),
-  }];
-}
-
 function createInlineRegion(descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>): InlineRegion {
-  const inline = tokenizeInline(descriptor.view.text, labels);
-  return {
-    ...descriptor,
-    candidates: inline.candidates,
-    revision: 0,
-    tokens: inline.tokens,
-  };
+  return new InlineRegion(descriptor, labels);
 }
 
 function updateInlineRegion(
   region: InlineRegion,
   descriptor: InlineRegionDescriptor,
   labels: ReadonlySet<string>,
-  referencesChanged: boolean,
 ): InlineRegion {
-  if (!referencesChanged && region.view.text === descriptor.view.text) {
-    return { ...region, ...descriptor };
+  const document = region.document;
+  const changed = region.update(descriptor.view.text, labels, document?.edit);
+  region.describe(descriptor);
+  if (!changed) {
+    return region;
   }
-  const edits = textEdit(region.view.text, descriptor.view.text);
-  const inline = tokenizeInline(descriptor.view.text, labels);
-  const change = changedTokenRange(region.tokens, inline.tokens, descriptor.view.text.length - region.view.text.length);
-  let document = region.document;
-  if (edits.length > 0 || change.oldStart !== change.oldEnd || change.tokens.length > 0) {
-    if (document) {
-      document.edit(edits, change);
-    }
-    else {
-      document = inlineParser.createDocument(descriptor.view.text, inline.tokens, "InlineLines");
-    }
+  if (!document) {
+    region.document = inlineParser.createDocument(descriptor.view.text, region.tokens, "InlineLines");
   }
-  return {
-    ...region,
-    ...descriptor,
-    candidates: inline.candidates,
-    document,
-    revision: region.revision + 1,
-    tokens: inline.tokens,
-  };
-}
-
-function changedLabels(previous: ReadonlySet<string>, next: ReadonlySet<string>): Set<string> {
-  const changed = new Set<string>();
-  for (const label of previous) {
-    if (!next.has(label)) {
-      changed.add(label);
-    }
-  }
-  for (const label of next) {
-    if (!previous.has(label)) {
-      changed.add(label);
-    }
-  }
-  return changed;
-}
-
-function intersects(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  for (const value of left) {
-    if (right.has(value)) {
-      return true;
-    }
-  }
-  return false;
+  region.revision++;
+  return region;
 }
 
 function sameNumbers(left: readonly number[], right: readonly number[]): boolean {
@@ -187,7 +121,6 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
 
 class MarkdownCompositeDocument implements MarkdownSyntax {
   #blocks: readonly CompositeBlockDescriptor[] = [];
-  #labels = new Set<string>();
   #inlineTrees = new WeakMap<SyntaxTree, InlineRegion>();
   #regions = new Map<number, InlineRegion>();
   #source: string;
@@ -204,6 +137,7 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
   }
 
   update(tree: SyntaxTree, source: string): void {
+    this.#inlineTrees = new WeakMap();
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
     const blocks: CollectedBlock[] = [];
@@ -247,7 +181,6 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
       });
     }
 
-    const changed = changedLabels(this.#labels, labels);
     const regions = new Map<number, InlineRegion>();
     const stableIds = new Set(descriptors.map((descriptor) => descriptor.id));
     const available = [...this.#regions.values()].filter((region) => !stableIds.has(region.id));
@@ -271,7 +204,7 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
         }
       }
       const region = previous
-        ? updateInlineRegion(previous, descriptor, labels, intersects(previous.candidates, changed))
+        ? updateInlineRegion(previous, descriptor, labels)
         : createInlineRegion(descriptor, labels);
       regions.set(descriptor.id, region);
     }
@@ -298,7 +231,6 @@ class MarkdownCompositeDocument implements MarkdownSyntax {
     this.#tree = tree;
     this.#source = source;
     this.#blocks = nextBlocks;
-    this.#labels = labels;
     this.#regions = regions;
   }
 

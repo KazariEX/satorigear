@@ -31,6 +31,13 @@ export function sameShiftedToken(previous: Token, next: Token, delta: number): b
 }
 
 export function changedTokenRange(previous: readonly Token[], next: readonly Token[], delta: number): TokenChange {
+  if (previous.length === 0) {
+    return { oldStart: 0, oldEnd: 0, tokens: next };
+  }
+  if (next.length === 0) {
+    return { oldStart: 0, oldEnd: previous.length, tokens: next };
+  }
+
   const common = Math.min(previous.length, next.length);
   let start = 0;
   while (start < common && sameShiftedToken(previous[start], next[start], 0)) {
