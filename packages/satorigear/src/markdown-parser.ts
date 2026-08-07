@@ -1,11 +1,36 @@
 import { createCompositeParser } from "../../../vendors/monogram/src/composite-parser.ts";
 import { createDelimiterParser } from "../../../vendors/monogram/src/delimiter-parser.ts";
-import { createParser } from "../../../vendors/monogram/src/gen-parser.ts";
+import { createParser, type CstNode, getText } from "../../../vendors/monogram/src/gen-parser.ts";
 import { markdownBlockGrammar, tokenizeMarkdownBlocks } from "./markdown-blocks.ts";
-import { markdownBracketPairs, markdownDelimiterRuns, markdownInlineGrammar } from "./markdown-inline.ts";
+import { markdownBracketPairs, markdownDelimiterRuns, markdownInlineGrammar, normalizeMarkdownReferenceLabel } from "./markdown-inline.ts";
 
 const blockParser = createParser(markdownBlockGrammar);
-const inlineParser = createDelimiterParser(markdownInlineGrammar, markdownDelimiterRuns, markdownBracketPairs);
+const inlineParser = createDelimiterParser(markdownInlineGrammar, markdownDelimiterRuns);
+
+function referenceLabel(definition: CstNode, source: string): string | null {
+  const text = getText(definition, source);
+  const open = text.indexOf("[");
+  if (open < 0) return null;
+  for (let offset = open + 1; offset < text.length; offset++) {
+    if (text[offset] === "\\") offset++;
+    else if (text[offset] === "]") return normalizeMarkdownReferenceLabel(text.slice(open + 1, offset));
+  }
+  return null;
+}
+
+function collectReferenceLabels(root: CstNode, source: string): Set<string> {
+  const labels = new Set<string>();
+  const visit = (node: CstNode): void => {
+    if (node.rule === "LinkDefinition") {
+      const label = referenceLabel(node, source);
+      if (label) labels.add(label);
+      return;
+    }
+    for (const child of node.children) if (!("tokenType" in child)) visit(child);
+  };
+  visit(root);
+  return labels;
+}
 
 /**
  * Block-first Markdown parser under development. It runs beside the legacy single-pass grammar
@@ -14,10 +39,13 @@ const inlineParser = createDelimiterParser(markdownInlineGrammar, markdownDelimi
 export const markdownPhasedParser = createCompositeParser({
   outer: blockParser,
   outerTokens: tokenizeMarkdownBlocks,
+  prepare: collectReferenceLabels,
   regions: [{
     within: ["Paragraph", "AtxHeading", "SetextHeading"],
     contentToken: "InlineChunk",
-    inner: inlineParser,
+    inner: (referenceLabels) => ({
+      parse: (source, entryRule) => inlineParser.parseWithPairs(source, markdownBracketPairs(referenceLabels), entryRule),
+    }),
     entryRule: "InlineLines",
   }],
 });

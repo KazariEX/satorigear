@@ -31,7 +31,7 @@ const leafEvents: Record<string, string[]> = {
   Emphasis: ["emph", "text"],
   Strong: ["strong", "text"],
   Link: ["link", "text"],
-  ReferenceCandidate: ["link", "text"],
+  ReferenceLink: ["link", "text"],
   Autolink: ["link", "text"],
   Image: ["image", "text"],
   InlineHtml: ["html_inline"],
@@ -75,8 +75,8 @@ function phasedEvents(root: CstNode): string[] {
     }
     if (child.rule === "Emphasis" || child.rule === "LinkEmphasis") events.push("emph");
     else if (child.rule === "Strong" || child.rule === "LinkStrong") events.push("strong");
-    else if (child.rule === "Link" || child.rule === "ReferenceCandidate") events.push("link");
-    else if (["Image", "LinkImage", "ImageReferenceCandidate", "LinkImageReferenceCandidate"].includes(child.rule)) {
+    else if (child.rule === "Link" || child.rule === "ReferenceLink") events.push("link");
+    else if (["Image", "LinkImage", "ReferenceImage", "LinkReferenceImage"].includes(child.rule)) {
       events.push("image");
     }
     else if (child.rule === "BracketFallback") events.push("text");

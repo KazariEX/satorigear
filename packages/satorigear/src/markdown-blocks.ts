@@ -297,13 +297,13 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
   let lineIndex = startIndex;
   let offset = body.offset + 1;
   let labelLength = 0;
-  let labelNewlines = 0;
   let labelHasContent = false;
 
   for (;;) {
     const line = lines[lineIndex];
     if (!line || offset >= line.end) {
-      if (!line || ++labelNewlines > 1 || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) return null;
+      if (!line || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) return null;
+      if (++labelLength > 999) return null;
       lineIndex++;
       offset = lines[lineIndex].start;
       continue;
@@ -706,7 +706,7 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       }
       out.push(structural("BlockQuoteOpen", start, ">"));
       resolveLines(source, quoteLines, out);
-      out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.end ?? start));
+      out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? start));
       continue;
     }
 
@@ -717,6 +717,7 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
       const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
       const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
       out.push(structural(listOpen, listMarker.offset, listMarker.text));
+      let listEnd = listMarker.offset + listMarker.text.length;
       while (index < lines.length) {
         const marker = listMarkerAt(source, lines[index]);
         if (!marker || !sameList(marker, listMarker)) break;
@@ -757,9 +758,10 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[]): voi
           index++;
         }
         resolveLines(source, itemLines, out);
-        out.push(structural(itemClose, itemLines.at(-1)?.end ?? marker.offset));
+        listEnd = itemLines.at(-1)?.next ?? marker.offset;
+        out.push(structural(itemClose, listEnd));
       }
-      out.push(structural(listClose, lines[Math.max(0, index - 1)].end));
+      out.push(structural(listClose, listEnd));
       continue;
     }
 

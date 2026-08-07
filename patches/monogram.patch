@@ -35,10 +35,10 @@ index 99d693f..5dfcc34 100644
        escapePattern: tok.opts.escape,
 diff --git a/src/composite-parser.ts b/src/composite-parser.ts
 new file mode 100644
-index 0000000..9a0b21b
+index 0000000..7571e51
 --- /dev/null
 +++ b/src/composite-parser.ts
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,104 @@
 +import type { Token } from './gen-lexer.ts';
 +import type { CstChild, CstLeaf, CstNode } from './gen-parser.ts';
 +import { createSourceView, type SourceRange, type SourceView } from './source-view.ts';
@@ -48,18 +48,19 @@ index 0000000..9a0b21b
 +  parseTokens(source: string, tokens: readonly Token[], entryRule?: string): CstNode;
 +}
 +
-+export interface CompositeRegion {
++export interface CompositeRegion<Context = undefined> {
 +  within: readonly string[];
 +  contentToken: string;
-+  inner: Pick<CompositeParserHandle, 'parse'>;
++  inner: Pick<CompositeParserHandle, 'parse'> | ((context: Context) => Pick<CompositeParserHandle, 'parse'>);
 +  entryRule?: string;
 +}
 +
-+export interface CompositeParserOptions {
++export interface CompositeParserOptions<Context = undefined> {
 +  outer: CompositeParserHandle;
 +  outerTokens?: (source: string) => readonly Token[];
 +  outerEntryRule?: string;
-+  regions: readonly CompositeRegion[];
++  prepare?: (root: CstNode, source: string) => Context;
++  regions: readonly CompositeRegion<Context>[];
 +}
 +
 +function rangesOf(child: CstLeaf): SourceRange[] {
@@ -94,8 +95,8 @@ index 0000000..9a0b21b
 + * by token type; the runner builds a SourceView, parses it with the inner Monogram parser, rebases
 + * the resulting CST, and replaces the content leaves with that CST root.
 + */
-+export function createCompositeParser(options: CompositeParserOptions) {
-+  const regionByRule = new Map<string, CompositeRegion>();
++export function createCompositeParser<Context = undefined>(options: CompositeParserOptions<Context>) {
++  const regionByRule = new Map<string, CompositeRegion<Context>>();
 +  for (const region of options.regions) {
 +    for (const rule of region.within) {
 +      if (regionByRule.has(rule)) throw new Error(`Multiple composite regions declared for rule '${rule}'`);
@@ -111,6 +112,7 @@ index 0000000..9a0b21b
 +
 +  function parse(source: string, entryRule?: string): CstNode {
 +    const root = parseOuter(source, entryRule);
++    const context = options.prepare?.(root, source) as Context;
 +
 +    const compose = (node: CstNode): void => {
 +      const region = regionByRule.get(node.rule);
@@ -120,7 +122,8 @@ index 0000000..9a0b21b
 +        );
 +        if (content.length > 0) {
 +          const view = createSourceView(source, content.flatMap(rangesOf));
-+          const inner = rebaseCst(region.inner.parse(view.text, region.entryRule), view);
++          const parser = typeof region.inner === 'function' ? region.inner(context) : region.inner;
++          const inner = rebaseCst(parser.parse(view.text, region.entryRule), view);
 +          let inserted = false;
 +          node.children = node.children.flatMap((child) => {
 +            if (!('tokenType' in child) || child.tokenType !== region.contentToken) return [child];
@@ -142,10 +145,10 @@ index 0000000..9a0b21b
 +}
 diff --git a/src/delimiter-parser.ts b/src/delimiter-parser.ts
 new file mode 100644
-index 0000000..026f303
+index 0000000..d6ad957
 --- /dev/null
 +++ b/src/delimiter-parser.ts
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,291 @@
 +import type { CstGrammar } from './types.ts';
 +import { createLexer, type Token } from './gen-lexer.ts';
 +import { createParser } from './gen-parser.ts';
@@ -172,6 +175,16 @@ index 0000000..026f303
 +    maxCharacters?: number;
 +    forbidTokens?: readonly string[];
 +  };
++  activate?: (context: PairedTokenActivationContext) => boolean;
++  splitUnmatchedCloser?: (token: Token) => Token[];
++}
++
++export interface PairedTokenActivationContext {
++  source: string;
++  tokens: readonly Token[];
++  opener: Token;
++  closer: Token;
++  content: string;
 +}
 +
 +export interface TokenIsolationRange {
@@ -274,6 +287,13 @@ index 0000000..026f303
 +      const forbidden = new Set(contentConfig.forbidTokens);
 +      if (tokens.slice(opener.tokenIndex + 1, tokenIndex).some(inner => forbidden.has(inner.type))) return;
 +    }
++    if (config.activate && !config.activate({
++      source,
++      tokens,
++      opener: tokens[opener.tokenIndex],
++      closer: token,
++      content,
++    })) return;
 +    replacements.set(opener.tokenIndex, config.open);
 +    replacements.set(tokenIndex, config.close);
 +
@@ -389,7 +409,15 @@ index 0000000..026f303
 +  delimiterConfigs: readonly DelimiterRunConfig[],
 +  pairConfigs: readonly PairedTokenConfig[] = [],
 +): Token[] {
-+  const paired = resolvePairedTokens(source, tokens, pairConfigs);
++  let paired = resolvePairedTokens(source, tokens, pairConfigs);
++  const splitByCloser = new Map(pairConfigs
++    .filter(config => config.splitUnmatchedCloser)
++    .map(config => [config.closer, config.splitUnmatchedCloser!]));
++  const expanded = tokens.flatMap((token, tokenIndex) => {
++    const split = splitByCloser.get(token.type);
++    return split && paired.tokens[tokenIndex].type === token.type ? split(token) : [token];
++  });
++  if (expanded.length !== tokens.length) paired = resolvePairedTokens(source, expanded, pairConfigs);
 +  return resolveDelimiterRuns(source, paired.tokens, delimiterConfigs, paired.delimiterIsolations);
 +}
 +
@@ -401,11 +429,15 @@ index 0000000..026f303
 +) {
 +  const parser = createParser(grammar);
 +  const lexer = createLexer(grammar);
++  const parseWithPairs = (source: string, pairs: readonly PairedTokenConfig[], entryRule?: string) => {
++    return parser.parseTokens(source, resolveDelimitedTokens(source, lexer.tokenize(source), configs, pairs), entryRule);
++  };
 +  return {
 +    ...parser,
 +    parse(source: string, entryRule?: string) {
-+      return parser.parseTokens(source, resolveDelimitedTokens(source, lexer.tokenize(source), configs, pairConfigs), entryRule);
++      return parseWithPairs(source, pairConfigs, entryRule);
 +    },
++    parseWithPairs,
 +  };
 +}
 diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts

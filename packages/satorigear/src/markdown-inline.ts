@@ -1,6 +1,7 @@
 import { altPattern, anyChar, end, followedBy, noneOf, notFollowedBy, oneOf, optPattern, plus, range, repeat, seq, star } from "../../../vendors/monogram/src/api.ts";
 import markdown from "./markdown.ts";
 import type { DelimiterRunConfig, PairedTokenConfig } from "../../../vendors/monogram/src/delimiter-parser.ts";
+import type { Token } from "../../../vendors/monogram/src/gen-lexer.ts";
 import type { CstGrammar, RuleDecl, RuleExpr, TokenDecl } from "../../../vendors/monogram/src/types.ts";
 
 const inlineTokens = new Set([
@@ -121,19 +122,19 @@ const inlineHtmlPattern = altPattern(
 const escapedInlineCharacter = seq("\\", anyChar());
 const linkWhitespace = oneOf(" ", "\t", "\n", "\r");
 const bareDestination = (depth: number): ReturnType<typeof altPattern> => {
-  const ordinary = altPattern(escapedInlineCharacter, noneOf(" ", "\t", "\n", "\r", "(", ")"));
+  const ordinary = altPattern(escapedInlineCharacter, noneOf(" ", "\t", "\n", "\r", "(", ")", "\\"));
   return depth === 0
     ? ordinary
     : altPattern(ordinary, seq("(", star(bareDestination(depth - 1)), ")"));
 };
 const linkDestination = altPattern(
-  seq("<", star(noneOf("<", ">", "\n", "\r")), ">"),
-  plus(bareDestination(32)),
+  seq("<", star(altPattern(escapedInlineCharacter, noneOf("<", ">", "\n", "\r", "\\"))), ">"),
+  seq(notFollowedBy("<"), plus(bareDestination(32))),
 );
 const linkTitle = altPattern(
-  seq("\"", star(altPattern(escapedInlineCharacter, noneOf("\"", "\n", "\r"))), "\""),
-  seq("'", star(altPattern(escapedInlineCharacter, noneOf("'", "\n", "\r"))), "'"),
-  seq("(", star(altPattern(escapedInlineCharacter, noneOf(")", "\n", "\r"))), ")"),
+  seq("\"", star(altPattern(escapedInlineCharacter, noneOf("\"", "\n", "\r", "\\"))), "\""),
+  seq("'", star(altPattern(escapedInlineCharacter, noneOf("'", "\n", "\r", "\\"))), "'"),
+  seq("(", star(altPattern(escapedInlineCharacter, noneOf(")", "\n", "\r", "\\"))), ")"),
 );
 const linkTailPattern = seq(
   "](",
@@ -142,10 +143,10 @@ const linkTailPattern = seq(
   star(linkWhitespace),
   ")",
 );
-const referenceLabelCharacter = altPattern(escapedInlineCharacter, noneOf("[", "]"));
+const referenceLabelCharacter = altPattern(escapedInlineCharacter, noneOf("[", "]", "\\"));
 const referenceLabelNonWhitespace = altPattern(
   escapedInlineCharacter,
-  noneOf("[", "]", " ", "\t", "\n", "\r"),
+  noneOf("[", "]", " ", "\t", "\n", "\r", "\\"),
 );
 const referenceLabel = altPattern(
   "",
@@ -158,23 +159,9 @@ const referenceTailPattern = seq("]", "[", referenceLabel, "]");
 const physicalLineEnd = altPattern("\r\n", "\r", "\n", end());
 const inlineTextPattern = plus(altPattern(
   noneOf("\n", "\r", "\\", "`", "*", "_", "[", "]", "<", "!", "&", "~", " "),
+  seq("\\", oneOf(" ", "\t")),
   seq(" ", notFollowedBy(seq(" ", star(" "), physicalLineEnd))),
 ));
-
-function candidateReferences(expression: RuleExpr): RuleExpr {
-  switch (expression.type) {
-    case "ref": return expression.name === "ReferenceLink" ? { ...expression, name: "ReferenceCandidate" } : expression;
-    case "seq": case "alt": return { ...expression, items: expression.items.map(candidateReferences) };
-    case "quantifier": case "not": return { ...expression, body: candidateReferences(expression.body) };
-    case "group": return {
-      ...expression,
-      body: candidateReferences(expression.body),
-      ...(expression.tsRelaxed ? { tsRelaxed: candidateReferences(expression.tsRelaxed) } : {}),
-    };
-    case "sep": return { ...expression, element: candidateReferences(expression.element) };
-    default: return expression;
-  }
-}
 
 function bracketFallbacks(rule: RuleDecl): RuleDecl {
   if (rule.name !== "Inline" || rule.body.type !== "alt") return rule;
@@ -183,7 +170,7 @@ function bracketFallbacks(rule: RuleDecl): RuleDecl {
     body: {
       ...rule.body,
       items: rule.body.items.concat([
-        ruleReference("ImageReferenceCandidate"),
+        ruleReference("ReferenceImage"),
         ruleReference("BracketFallback"),
       ]),
     },
@@ -195,7 +182,8 @@ function linkContentReferences(expression: RuleExpr): RuleExpr {
     return {
       ...expression,
       items: expression.items
-        .filter((item) => item.type !== "ref" || (item.name !== "Link" && item.name !== "Autolink"))
+        .filter((item) => item.type !== "ref"
+          || (item.name !== "Link" && item.name !== "ReferenceLink" && item.name !== "Autolink"))
         .map(linkContentReferences),
     };
   }
@@ -204,8 +192,7 @@ function linkContentReferences(expression: RuleExpr): RuleExpr {
       Emphasis: "LinkEmphasis",
       Strong: "LinkStrong",
       Image: "LinkImage",
-      ImageReferenceCandidate: "LinkImageReferenceCandidate",
-      ReferenceCandidate: "LinkReferenceCandidate",
+      ReferenceImage: "LinkReferenceImage",
     };
     return variants[expression.name] ? { ...expression, name: variants[expression.name] } : expression;
   }
@@ -226,7 +213,7 @@ function linkContentReferences(expression: RuleExpr): RuleExpr {
 
 const baseInlineRules = markdown.rules
   .filter((rule) => inlineRules.has(rule.name))
-  .map((rule) => bracketFallbacks({ ...rule, body: candidateReferences(rule.body) }));
+  .map((rule) => bracketFallbacks(rule));
 const linkContentBody = linkContentReferences(baseInlineRules.find((rule) => rule.name === "Inline")!.body);
 
 /**
@@ -269,6 +256,7 @@ export const markdownInlineGrammar: CstGrammar = {
         engineToken("LinkTail", linkTailPattern),
         engineToken("ReferenceTail", referenceTailPattern),
         engineToken("ShortcutReferenceTail", "]"),
+        engineToken("ReferenceSeparatorClose"),
         engineToken("LinkOpen"),
         engineToken("LinkClose"),
         engineToken("ImageLinkOpen"),
@@ -287,11 +275,10 @@ export const markdownInlineGrammar: CstGrammar = {
     delimiterRule("LinkStrong", "StrongOpen", "StrongClose", "LinkContent"),
     bracketRule("Image", "ImageLinkOpen", "ImageLinkClose"),
     bracketRule("Link", "LinkOpen", "LinkClose", "LinkContent"),
-    bracketRule("ReferenceCandidate", "ReferenceOpen", "ReferenceClose"),
-    bracketRule("ImageReferenceCandidate", "ImageReferenceOpen", "ImageReferenceClose"),
+    bracketRule("ReferenceLink", "ReferenceOpen", "ReferenceClose"),
+    bracketRule("ReferenceImage", "ImageReferenceOpen", "ImageReferenceClose"),
     bracketRule("LinkImage", "ImageLinkOpen", "ImageLinkClose", "LinkContent"),
-    bracketRule("LinkImageReferenceCandidate", "ImageReferenceOpen", "ImageReferenceClose", "LinkContent"),
-    bracketRule("LinkReferenceCandidate", "ReferenceOpen", "ReferenceClose", "LinkContent"),
+    bracketRule("LinkReferenceImage", "ImageReferenceOpen", "ImageReferenceClose", "LinkContent"),
     { name: "LinkContent", flags: [], body: linkContentBody },
     {
       name: "BracketFallback",
@@ -304,6 +291,7 @@ export const markdownInlineGrammar: CstGrammar = {
           "LinkTail",
           "ReferenceTail",
           "ShortcutReferenceTail",
+          "ReferenceSeparatorClose",
           "LinkOpen",
           "LinkClose",
           "ImageLinkOpen",
@@ -342,57 +330,95 @@ export const markdownDelimiterRuns: DelimiterRunConfig[] = [
   },
 ];
 
-export const markdownBracketPairs: PairedTokenConfig[] = [
-  {
-    opener: "BracketOpen",
-    closer: "LinkTail",
-    open: "LinkOpen",
-    close: "LinkClose",
-    deactivateEarlier: ["BracketOpen"],
-    isolateDelimiters: true,
-  },
-  {
-    opener: "ImageOpen",
-    closer: "LinkTail",
-    open: "ImageLinkOpen",
-    close: "ImageLinkClose",
-  },
-  {
-    opener: "BracketOpen",
-    closer: "ReferenceTail",
-    open: "ReferenceOpen",
-    close: "ReferenceClose",
-    isolateDelimiters: true,
-  },
-  {
-    opener: "BracketOpen",
-    closer: "ShortcutReferenceTail",
-    open: "ReferenceOpen",
-    close: "ReferenceClose",
-    isolateDelimiters: true,
-    content: {
-      requireNonWhitespace: true,
-      maxCharacters: 999,
-      forbidTokens: ["BracketOpen", "ImageOpen"],
+export function normalizeMarkdownReferenceLabel(label: string): string {
+  return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();
+}
+
+export function markdownBracketPairs(referenceLabels: ReadonlySet<string>): PairedTokenConfig[] {
+  const activatesReference = ({ closer, content }: { closer: { text: string }; content: string }): boolean => {
+    const explicit = closer.text.startsWith("][") ? closer.text.slice(2, -1) : "";
+    return referenceLabels.has(normalizeMarkdownReferenceLabel(explicit || content));
+  };
+  const splitReferenceTail = (token: Token): Token[] => {
+    const label = token.text.slice(2, -1);
+    const fragment = (type: string, text: string, relativeOffset: number, first = false): Token => ({
+      ...token,
+      type,
+      text,
+      offset: token.offset + relativeOffset,
+      k: 0,
+      t: 0,
+      newlineBefore: first && token.newlineBefore,
+      commentBefore: first && token.commentBefore,
+      multilineFlowBefore: first && token.multilineFlowBefore,
+    });
+    return [
+      fragment("ReferenceSeparatorClose", "]", 0, true),
+      fragment("BracketOpen", "[", 1),
+      ...(label ? [fragment("Text", label, 2)] : []),
+      fragment("ShortcutReferenceTail", "]", token.text.length - 1),
+    ];
+  };
+  return [
+    {
+      opener: "BracketOpen",
+      closer: "LinkTail",
+      open: "LinkOpen",
+      close: "LinkClose",
+      deactivateEarlier: ["BracketOpen"],
+      isolateDelimiters: true,
     },
-  },
-  {
-    opener: "ImageOpen",
-    closer: "ReferenceTail",
-    open: "ImageReferenceOpen",
-    close: "ImageReferenceClose",
-    isolateDelimiters: true,
-  },
-  {
-    opener: "ImageOpen",
-    closer: "ShortcutReferenceTail",
-    open: "ImageReferenceOpen",
-    close: "ImageReferenceClose",
-    isolateDelimiters: true,
-    content: {
-      requireNonWhitespace: true,
-      maxCharacters: 999,
-      forbidTokens: ["BracketOpen", "ImageOpen"],
+    {
+      opener: "ImageOpen",
+      closer: "LinkTail",
+      open: "ImageLinkOpen",
+      close: "ImageLinkClose",
     },
-  },
-];
+    {
+      opener: "BracketOpen",
+      closer: "ReferenceTail",
+      open: "ReferenceOpen",
+      close: "ReferenceClose",
+      deactivateEarlier: ["BracketOpen"],
+      isolateDelimiters: true,
+      activate: activatesReference,
+      splitUnmatchedCloser: splitReferenceTail,
+    },
+    {
+      opener: "BracketOpen",
+      closer: "ShortcutReferenceTail",
+      open: "ReferenceOpen",
+      close: "ReferenceClose",
+      deactivateEarlier: ["BracketOpen"],
+      isolateDelimiters: true,
+      activate: activatesReference,
+      content: {
+        requireNonWhitespace: true,
+        maxCharacters: 999,
+        forbidTokens: ["BracketOpen", "ImageOpen"],
+      },
+    },
+    {
+      opener: "ImageOpen",
+      closer: "ReferenceTail",
+      open: "ImageReferenceOpen",
+      close: "ImageReferenceClose",
+      isolateDelimiters: true,
+      activate: activatesReference,
+      splitUnmatchedCloser: splitReferenceTail,
+    },
+    {
+      opener: "ImageOpen",
+      closer: "ShortcutReferenceTail",
+      open: "ImageReferenceOpen",
+      close: "ImageReferenceClose",
+      isolateDelimiters: true,
+      activate: activatesReference,
+      content: {
+        requireNonWhitespace: true,
+        maxCharacters: 999,
+        forbidTokens: ["BracketOpen", "ImageOpen"],
+      },
+    },
+  ];
+}

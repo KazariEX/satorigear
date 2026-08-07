@@ -10,7 +10,8 @@ function tokenTypes(source: string): string[] {
 }
 
 function pairedTokenTypes(source: string): string[] {
-  return resolveDelimitedTokens(source, lexer.tokenize(source), markdownDelimiterRuns, markdownBracketPairs)
+  const references = new Set(["CANDIDATE", "NESTED", "REF"]);
+  return resolveDelimitedTokens(source, lexer.tokenize(source), markdownDelimiterRuns, markdownBracketPairs(references))
     .map((token) => token.type);
 }
 
