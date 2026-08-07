@@ -48,6 +48,7 @@ export interface MarkdownSyntax {
   children: (node: MarkdownSyntaxNode) => readonly MarkdownSyntaxChild[];
   inline: (node: MarkdownSyntaxNode) => MarkdownSyntaxNode | undefined;
   isLeaf: (child: MarkdownSyntaxChild) => child is MarkdownSyntaxLeaf;
+  sourceGap: (value: MarkdownSyntaxChild, start: number, end: number) => string;
   spans: (leaf: MarkdownSyntaxLeaf) => readonly SourceSpan[] | undefined;
   rule: (node: MarkdownSyntaxNode) => string;
   span: (value: MarkdownSyntaxChild) => SourceSpan;
@@ -486,28 +487,39 @@ function appendInlineValue(
 }
 
 function inlineSequence(
-  children: readonly MarkdownSyntaxChild[],
+  value: MarkdownSyntaxNode,
   context: ProjectionContext,
-  start: number | null = null,
-  end: number | null = null,
+  start?: number,
+  end?: number,
 ): PhrasingContent[] {
-  const { source } = context;
   const result: PhrasingContent[] = [];
   let cursor = start;
-  for (const child of children) {
+  for (const child of context.syntax.children(value)) {
     const projected = context.syntax.isLeaf(child) ? inlineLeaf(child, context) : inlineNode(child, context);
     if (!projected) {
       continue;
     }
     const span = context.syntax.span(child);
-    if (cursor !== null && span.start > cursor) {
-      appendText(context, result, semanticText(source.slice(cursor, span.start).replace(/[\r\n]/g, "")), cursor, span.start);
+    if (cursor !== void 0 && span.start > cursor) {
+      appendText(
+        context,
+        result,
+        semanticText(context.syntax.sourceGap(value, cursor, span.start).replace(/[\r\n]/g, "")),
+        cursor,
+        span.start,
+      );
     }
     appendInlineValue(context, result, projected, span.start);
     cursor = span.end;
   }
-  if (cursor !== null && end !== null && end > cursor) {
-    appendText(context, result, semanticText(source.slice(cursor, end).replace(/[\r\n]/g, "")), cursor, end);
+  if (cursor !== void 0 && end !== void 0 && end > cursor) {
+    appendText(
+      context,
+      result,
+      semanticText(context.syntax.sourceGap(value, cursor, end).replace(/[\r\n]/g, "")),
+      cursor,
+      end,
+    );
   }
   return result;
 }
@@ -560,7 +572,7 @@ function inlineLines(value: MarkdownSyntaxNode, context: ProjectionContext): Phr
 function emphasis(value: MarkdownSyntaxNode, context: ProjectionContext, kind: "emphasis" | "strong"): Emphasis | Strong {
   const marker = kind === "strong" ? "Strong" : "Emphasis";
   const [start, end] = contentBounds(value, [`${marker}Open`], [`${marker}Close`], context);
-  const children = inlineSequence(context.syntax.children(value), context, start, end);
+  const children = inlineSequence(value, context, start, end);
   const span = context.syntax.span(value);
   return kind === "strong"
     ? withSpan({ type: "strong", children } satisfies Strong, span.start, span.end)
@@ -578,7 +590,7 @@ function linkOrImage(
   const prefix = image ? "Image" : "";
   const resourcePrefix = referenceNode ? "Reference" : "Link";
   const [start, end] = contentBounds(value, [`${prefix}${resourcePrefix}Open`], [`${prefix}${resourcePrefix}Close`], context);
-  const children = inlineSequence(context.syntax.children(value), context, start, end);
+  const children = inlineSequence(value, context, start, end);
   const span = context.syntax.span(value);
   if (referenceNode) {
     const association = reference(value, context, image);
@@ -599,7 +611,7 @@ function inlineNode(value: MarkdownSyntaxNode, context: ProjectionContext): Phra
     case "Inline":
     case "LinkContent":
     case "BracketFallback":
-      return inlineSequence(context.syntax.children(value), context);
+      return inlineSequence(value, context);
     case "Emphasis":
     case "LinkEmphasis": return emphasis(value, context, "emphasis");
     case "Strong":

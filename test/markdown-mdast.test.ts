@@ -58,6 +58,70 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it("maps soft line endings across stripped block quote prefixes", () => {
+    const tree = parse("> one\n> two\n");
+    expect(tree.children[0]).toMatchObject({
+      type: "blockquote",
+      children: [{
+        type: "paragraph",
+        children: [{
+          type: "text",
+          value: "one\ntwo",
+          position: {
+            start: { line: 1, column: 3, offset: 2 },
+            end: { line: 2, column: 6, offset: 11 },
+          },
+        }],
+      }],
+    });
+  });
+
+  it("keeps stripped block quote prefixes out of inline containers", () => {
+    const tree = parse("> a *b\n> c* d\n");
+    expect(tree.children[0]).toMatchObject({
+      type: "blockquote",
+      children: [{
+        type: "paragraph",
+        children: [
+          { type: "text", value: "a " },
+          {
+            type: "emphasis",
+            children: [{
+              type: "text",
+              value: "b\nc",
+              position: {
+                start: { line: 1, column: 6, offset: 5 },
+                end: { line: 2, column: 4, offset: 10 },
+              },
+            }],
+          },
+          { type: "text", value: " d" },
+        ],
+      }],
+    });
+  });
+
+  it("extends hard breaks across stripped block quote prefixes", () => {
+    const tree = parse("> a  \n> b\n");
+    expect(tree.children[0]).toMatchObject({
+      type: "blockquote",
+      children: [{
+        type: "paragraph",
+        children: [
+          { type: "text", value: "a" },
+          {
+            type: "break",
+            position: {
+              start: { line: 1, column: 4, offset: 3 },
+              end: { line: 2, column: 1, offset: 6 },
+            },
+          },
+          { type: "text", value: "b" },
+        ],
+      }],
+    });
+  });
+
   it("uses original delimiter run lengths for the rule of three", () => {
     const tree = parse("*****b___(__\n___**_.****(__*****\n");
     expect(tree.children).toMatchObject([{

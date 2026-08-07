@@ -293,6 +293,11 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return (value as SyntaxTreeEntry).kind === "leaf";
   }
 
+  sourceGap(value: MarkdownSyntaxChild, start: number, end: number): string {
+    const entry = value as SyntaxTreeEntry;
+    return this.#regionOf(entry)!.view.sourceText(start, end);
+  }
+
   spans(value: MarkdownSyntaxLeaf): readonly SourceSpan[] {
     const leaf = value as SyntaxTreeLeaf;
     const token = leaf.tree.leafToken(leaf);

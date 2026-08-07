@@ -23,6 +23,7 @@ export interface SourceView {
   mapPoint: (offset: number) => number;
   mapSpan: (start: number, end: number) => SourceSpan;
   mapSpans: (start: number, end: number) => SourceSpan[];
+  sourceText: (start: number, end: number) => string;
 }
 
 function containingSegment(view: SourceView, offset: number): number {
@@ -107,6 +108,30 @@ function mapSpans(this: SourceView, start: number, end: number): SourceSpan[] {
   return mapped;
 }
 
+function viewPoint(view: SourceView, offset: number): number {
+  let low = 0;
+  let high = view.segments.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (offset <= view.segments[middle].end) {
+      high = middle;
+    }
+    else {
+      low = middle + 1;
+    }
+  }
+  if (low === view.segments.length) {
+    return view.text.length;
+  }
+  const segment = view.segments[low];
+  // Stripped source gaps collapse to the shared view boundary between neighboring segments.
+  return offset <= segment.start ? segment.viewStart : segment.viewStart + offset - segment.start;
+}
+
+function sourceText(this: SourceView, start: number, end: number): string {
+  return this.text.slice(viewPoint(this, start), viewPoint(this, end));
+}
+
 // Project document edits into a view whose physical segments remain structurally stable.
 export function projectSourceEdits(
   previous: SourceView,
@@ -178,5 +203,5 @@ export function createSourceView(source: string, spans: readonly SourceSpan[]): 
     previousEnd = span.end;
   }
 
-  return { text: parts.join(""), segments, mapPoint, mapSpan, mapSpans };
+  return { text: parts.join(""), segments, mapPoint, mapSpan, mapSpans, sourceText };
 }
