@@ -67,21 +67,22 @@ interface Replacement {
 }
 
 interface PairIndex<State> {
-  byCloser: ReadonlyMap<string, ReadonlyMap<string, IndexedPair<State>>>;
-  forbiddenTypes: ReadonlySet<string>;
-  openerTypes: ReadonlySet<string>;
+  byCloser: ReadonlyMap<string, readonly IndexedPair<State>[]>;
+  openerTypes: readonly boolean[];
   splitByCloser: ReadonlyMap<string, (token: Token) => Token[]>;
+  typeIndices: ReadonlyMap<string, number>;
 }
 
 interface IndexedPair<State> {
   config: PairedTokenConfig<State>;
-  deactivatedTypes: ReadonlySet<string>;
-  forbiddenTypes: ReadonlySet<string>;
+  deactivatedTypes: readonly number[];
+  forbiddenTypes: readonly number[];
+  openerType: number;
 }
 
 interface PairResolution {
-  replacements: ReadonlyMap<number, string>;
-  matchedClosers: ReadonlySet<number>;
+  replacements: readonly string[];
+  matchedClosers: readonly boolean[];
   delimiterIsolations: TokenIsolationRange[];
 }
 
@@ -170,28 +171,35 @@ function acceptsContent(
 }
 
 function indexPairs<State>(configs: readonly PairedTokenConfig<State>[]): PairIndex<State> {
-  const byCloser = new Map<string, Map<string, IndexedPair<State>>>();
-  const forbiddenTypes = new Set<string>();
-  const openerTypes = new Set<string>();
+  const byCloser = new Map<string, IndexedPair<State>[]>();
+  const typeIndices = new Map<string, number>();
+  const openerTypes: boolean[] = [];
   const splitByCloser = new Map<string, (token: Token) => Token[]>();
-  for (const config of configs) {
-    openerTypes.add(config.opener);
-    const byOpener = byCloser.get(config.closer) ?? new Map<string, IndexedPair<State>>();
-    const forbidden = new Set(config.content?.forbidTokens);
-    for (const type of forbidden) {
-      forbiddenTypes.add(type);
+  const typeIndex = (type: string): number => {
+    const previous = typeIndices.get(type);
+    if (previous !== void 0) {
+      return previous;
     }
-    byOpener.set(config.opener, {
+    const index = typeIndices.size;
+    typeIndices.set(type, index);
+    return index;
+  };
+  for (const config of configs) {
+    const openerType = typeIndex(config.opener);
+    openerTypes[openerType] = true;
+    const pairs = byCloser.get(config.closer) ?? [];
+    pairs.push({
       config,
-      deactivatedTypes: new Set(config.deactivateEarlier),
-      forbiddenTypes: forbidden,
+      deactivatedTypes: config.deactivateEarlier?.map(typeIndex) ?? [],
+      forbiddenTypes: config.content?.forbidTokens?.map(typeIndex) ?? [],
+      openerType,
     });
-    byCloser.set(config.closer, byOpener);
+    byCloser.set(config.closer, pairs);
     if (config.splitUnmatchedCloser) {
       splitByCloser.set(config.closer, config.splitUnmatchedCloser);
     }
   }
-  return { byCloser, forbiddenTypes, openerTypes, splitByCloser };
+  return { byCloser, openerTypes, splitByCloser, typeIndices };
 }
 
 function resolvePairedTokens<State>(
@@ -200,54 +208,53 @@ function resolvePairedTokens<State>(
   index: PairIndex<State>,
   state: State,
 ): PairResolution {
-  const openerStacks = new Map<string, number[]>();
-  const inactiveBefore = new Map<string, number>();
-  const lastSeen = new Map<string, number>();
-  const replacements = new Map<number, string>();
-  const matchedClosers = new Set<number>();
+  const openerStacks: number[][] = [];
+  const inactiveBefore: number[] = [];
+  const lastSeen: number[] = [];
+  const replacements: string[] = [];
+  const matchedClosers: boolean[] = [];
   const delimiterIsolations: TokenIsolationRange[] = [];
 
   function resolveCloser(token: Token, tokenIndex: number): void {
-    const byOpener = index.byCloser.get(token.type);
-    if (!byOpener) {
+    const pairs = index.byCloser.get(token.type);
+    if (!pairs) {
       return;
     }
 
     let openerIndex = -1;
-    let openerType: string | null = null;
+    let pair = pairs[0];
     let openerStack: number[] | null = null;
-    for (const candidateType of byOpener.keys()) {
-      const candidates = openerStacks.get(candidateType);
+    for (const candidate of pairs) {
+      const candidates = openerStacks[candidate.openerType];
       if (!candidates || candidates.length === 0) {
         continue;
       }
-      const candidate = candidates[candidates.length - 1];
-      if (candidate > openerIndex) {
-        openerIndex = candidate;
-        openerType = candidateType;
+      const candidateIndex = candidates[candidates.length - 1];
+      if (candidateIndex > openerIndex) {
+        openerIndex = candidateIndex;
+        pair = candidate;
         openerStack = candidates;
       }
     }
-    if (openerIndex < 0 || openerType === null || openerStack === null) {
+    if (openerStack === null) {
       return;
     }
 
     openerStack.pop();
-    if (openerIndex < (inactiveBefore.get(openerType) ?? -1)) {
+    if (openerIndex + 1 < (inactiveBefore[pair.openerType] ?? 0)) {
       return;
     }
 
-    const indexed = byOpener.get(openerType)!;
-    const { config } = indexed;
+    const { config } = pair;
     const openerToken = tokens[openerIndex];
     const contentStart = openerToken.offset + openerToken.text.length;
     const contentConfig = config.content;
     if (contentConfig && !acceptsContent(source, contentStart, token.offset, contentConfig)) {
       return;
     }
-    if (indexed.forbiddenTypes.size > 0) {
-      for (const forbiddenType of indexed.forbiddenTypes) {
-        if ((lastSeen.get(forbiddenType) ?? -1) > openerIndex) {
+    if (pair.forbiddenTypes.length > 0) {
+      for (const forbiddenType of pair.forbiddenTypes) {
+        if ((lastSeen[forbiddenType] ?? 0) > openerIndex + 1) {
           return;
         }
       }
@@ -258,13 +265,13 @@ function resolvePairedTokens<State>(
         return;
       }
     }
-    replacements.set(openerIndex, config.open);
-    replacements.set(tokenIndex, config.close);
-    matchedClosers.add(tokenIndex);
+    replacements[openerIndex] = config.open;
+    replacements[tokenIndex] = config.close;
+    matchedClosers[tokenIndex] = true;
 
-    if (indexed.deactivatedTypes.size > 0) {
-      for (const type of indexed.deactivatedTypes) {
-        inactiveBefore.set(type, Math.max(inactiveBefore.get(type) ?? -1, openerIndex));
+    if (pair.deactivatedTypes.length > 0) {
+      for (const type of pair.deactivatedTypes) {
+        inactiveBefore[type] = Math.max(inactiveBefore[type] ?? 0, openerIndex + 1);
       }
     }
 
@@ -279,14 +286,15 @@ function resolvePairedTokens<State>(
 
   for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
     const token = tokens[tokenIndex];
-    if (index.openerTypes.has(token.type)) {
-      const stack = openerStacks.get(token.type) ?? [];
+    const typeIndex = index.typeIndices.get(token.type);
+    if (typeIndex !== void 0 && index.openerTypes[typeIndex]) {
+      const stack = openerStacks[typeIndex] ?? [];
       stack.push(tokenIndex);
-      openerStacks.set(token.type, stack);
+      openerStacks[typeIndex] = stack;
     }
     resolveCloser(token, tokenIndex);
-    if (index.forbiddenTypes.has(token.type)) {
-      lastSeen.set(token.type, tokenIndex);
+    if (typeIndex !== void 0) {
+      lastSeen[typeIndex] = tokenIndex + 1;
     }
   }
 
@@ -297,13 +305,19 @@ function resolvePairedTokens<State>(
   };
 }
 
-function applyPairReplacements(tokens: readonly Token[], replacements: ReadonlyMap<number, string>): readonly Token[] {
-  if (replacements.size === 0) {
+function applyPairReplacements(
+  tokens: readonly Token[],
+  replacements: readonly string[],
+): readonly Token[] {
+  if (replacements.length === 0) {
     return tokens;
   }
   const result = tokens.slice();
-  for (const [tokenIndex, type] of replacements) {
-    result[tokenIndex] = { ...result[tokenIndex], type, k: 0, t: 0 };
+  for (let tokenIndex = 0; tokenIndex < replacements.length; tokenIndex++) {
+    const type = replacements[tokenIndex];
+    if (type) {
+      result[tokenIndex] = { ...result[tokenIndex], type, k: 0, t: 0 };
+    }
   }
   return result;
 }
@@ -533,7 +547,7 @@ export function createDelimitedTokenResolver<State = undefined>(
     for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
       const token = tokens[tokenIndex];
       const split = pairIndex.splitByCloser.get(token.type);
-      const fragments = split && !paired.matchedClosers.has(tokenIndex) ? split(token) : null;
+      const fragments = split && !paired.matchedClosers[tokenIndex] ? split(token) : null;
       if (fragments) {
         expanded ??= tokens.slice(0, tokenIndex);
         expanded.push(...fragments);
