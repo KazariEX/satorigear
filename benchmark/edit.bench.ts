@@ -40,6 +40,19 @@ const scenarios = [
   { name: "list indentation", first: base, second: base.replace("- item 100.2", "    - item 100.2") },
 ];
 
+summary(() => {
+  const bytes = Buffer.byteLength(base);
+  const document = createMarkdownDocument(base);
+  document.toMdast();
+
+  bench(`snapshot materialization (${bytes} bytes)`, () => {
+    do_not_optimize(document.toMdast());
+  });
+  bench(`fresh rebuild (${bytes} bytes)`, () => {
+    do_not_optimize(markdownToMdast(base));
+  });
+});
+
 for (const scenario of scenarios) {
   summary(() => {
     const bytes = Math.max(Buffer.byteLength(scenario.first), Buffer.byteLength(scenario.second));

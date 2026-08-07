@@ -45,13 +45,12 @@ export interface SourcePoint {
   offset: number;
 }
 
-interface PositionContext {
-  point?: (offset: number) => SourcePoint;
+interface SpanContext {
   source: string;
   spans: Map<object, SourceSpan>;
 }
 
-interface ProjectionContext extends PositionContext {
+interface ProjectionContext extends SpanContext {
   syntax: MarkdownSyntax;
 }
 
@@ -75,17 +74,21 @@ export interface MdastBlockFragment {
   spans: Map<object, SourceSpan>;
 }
 
-interface PositionedValue {
-  children?: PositionedValue[];
-  position?: { end: SourcePoint; start: SourcePoint };
+interface FragmentValue {
+  children?: FragmentValue[];
 }
 
-function withSpan<const T extends object>(context: PositionContext, value: T, start: number, end: number): T {
+interface MaterializedValue extends FragmentValue {
+  children?: MaterializedValue[];
+  position: { end: SourcePoint; start: SourcePoint };
+}
+
+function withSpan<const T extends object>(context: SpanContext, value: T, start: number, end: number): T {
   context.spans.set(value, { start, end });
   return value;
 }
 
-function spanOf(context: PositionContext, value: object): SourceSpan {
+function spanOf(context: SpanContext, value: object): SourceSpan {
   const span = context.spans.get(value);
   if (!span) {
     throw new Error("mdast node is missing its syntax source span");
@@ -93,7 +96,7 @@ function spanOf(context: PositionContext, value: object): SourceSpan {
   return span;
 }
 
-function extendSpan(context: PositionContext, value: object, end: number): void {
+function extendSpan(context: SpanContext, value: object, end: number): void {
   const span = spanOf(context, value);
   span.end = Math.max(span.end, end);
 }
@@ -129,7 +132,7 @@ function lineEndingStart(source: string, offset: number): number {
   return source[start - 1] === "\n" && source[start - 2] === "\r" ? start - 2 : start - 1;
 }
 
-function firstChildStart(context: PositionContext, value: { children: readonly object[] }): number {
+function firstChildStart(context: SpanContext, value: { children: readonly object[] }): number {
   const first = value.children[0];
   if (!first) {
     throw new Error("mdast container unexpectedly has no children");
@@ -137,7 +140,7 @@ function firstChildStart(context: PositionContext, value: { children: readonly o
   return spanOf(context, first).start;
 }
 
-function lastChildEnd(context: PositionContext, value: { children: readonly object[] }, emptyEnd: number): number {
+function lastChildEnd(context: SpanContext, value: { children: readonly object[] }, emptyEnd: number): number {
   const last = value.children.at(-1);
   return last ? spanOf(context, last).end : emptyEnd;
 }
@@ -165,18 +168,6 @@ function indentedCodeEnd(value: MarkdownSyntaxNode, context: ProjectionContext):
     }
   }
   throw new Error("IndentedCodeBlockToken has no source content");
-}
-
-function attachPositions(context: PositionContext, root: Root): Root {
-  const { source } = context;
-  const point = context.point ?? createPoint(source);
-  const visit = (value: PositionedValue): void => {
-    const span = spanOf(context, value);
-    value.position = { start: point(span.start), end: point(span.end) };
-    value.children?.forEach(visit);
-  };
-  visit(root as PositionedValue);
-  return root;
 }
 
 function createPoint(source: string): (offset: number) => SourcePoint {
@@ -889,21 +880,26 @@ export function markdownSyntaxBlockToMdastFragment(
 function materializeFragment(
   fragment: MdastBlockFragment,
   offset: number,
-  context: PositionContext,
+  point: (offset: number) => SourcePoint,
 ): BlockContent | DefinitionContent {
-  const clone = (value: PositionedValue): PositionedValue => {
-    const result = {
-      ...value,
-      ...(value.children ? { children: value.children.map(clone) } : {}),
-    };
+  const clone = (value: FragmentValue): MaterializedValue => {
     const span = fragment.spans.get(value);
     if (!span) {
       throw new Error("mdast fragment node is missing its relative source span");
     }
-    context.spans.set(result, { start: offset + span.start, end: offset + span.end });
+    const result = {
+      ...value,
+      position: {
+        start: point(offset + span.start),
+        end: point(offset + span.end),
+      },
+    } as MaterializedValue;
+    if (value.children) {
+      result.children = value.children.map(clone);
+    }
     return result;
   };
-  return clone(fragment.node as PositionedValue) as BlockContent | DefinitionContent;
+  return clone(fragment.node as FragmentValue) as BlockContent | DefinitionContent;
 }
 
 export function markdownFragmentsToMdast(
@@ -911,10 +907,10 @@ export function markdownFragmentsToMdast(
   source: string,
   point?: (offset: number) => SourcePoint,
 ): Root {
-  const context = { source, spans: new Map<object, SourceSpan>(), ...(point ? { point } : {}) };
-  const root = withSpan(context, {
+  const locate = point ?? createPoint(source);
+  return {
     type: "root",
-    children: fragments.map(({ fragment, offset }) => materializeFragment(fragment, offset, context)),
-  } satisfies Root, 0, source.length);
-  return attachPositions(context, root);
+    children: fragments.map(({ fragment, offset }) => materializeFragment(fragment, offset, locate)),
+    position: { start: locate(0), end: locate(source.length) },
+  } satisfies Root;
 }
