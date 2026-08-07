@@ -119,4 +119,20 @@ describe("markdown document", () => {
     split.edit([{ start: 0, end: 0, text: "\n" }]);
     expect(split.snapshot()).toEqual(parse(split.source));
   });
+
+  it.each([
+    { name: "equal-length content", before: "item", after: "ITEM", omegaLine: 6 },
+    { name: "inserted line ending", before: "lazy continuation\r\n", after: "lazy continuation\r\n\n", omegaLine: 7 },
+    { name: "shortened line ending", before: "lazy continuation\r\n", after: "lazy continuation\r", omegaLine: 6 },
+  ])("converges after $name edits without losing suffix positions", ({ before, after, omegaLine }) => {
+    const document = createDocument("head\r\n\r\n> - \titem\r\n>   lazy continuation\r\n\r\nomega\r\n\r\ntail\r\n");
+    const start = document.source.indexOf(before);
+    document.edit([{ start, end: start + before.length, text: after }]);
+
+    const tree = document.snapshot();
+    const omegaOffset = document.source.indexOf("omega");
+    const omega = tree.children.find((child) => child.position?.start.offset === omegaOffset);
+    expect(tree).toEqual(parse(document.source));
+    expect(omega?.position?.start).toEqual({ line: omegaLine, column: 1, offset: omegaOffset });
+  });
 });
