@@ -10,7 +10,8 @@ import {
   token,
 } from "monogram/api.ts";
 import { createCompositeParser } from "monogram/composite-parser.ts";
-import { createParser, type CstChild, type CstLeaf, type CstNode, getText } from "monogram/gen-parser.ts";
+import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/cst.ts";
+import { createParser } from "monogram/gen-parser.ts";
 import { createSourceView } from "monogram/source-view.ts";
 import { describe, expect, it } from "vitest";
 import type { Token } from "monogram/gen-lexer.ts";

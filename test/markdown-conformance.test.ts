@@ -14,8 +14,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Parser as CommonMarkParser } from "commonmark";
 import { tests } from "commonmark-spec";
-import { createParser, type CstChild, type CstNode, getText } from "monogram/gen-parser.ts";
+import { type CstChild, type CstNode, getText } from "monogram/cst.ts";
+import { createLexer } from "monogram/gen-lexer.ts";
 import { afterAll, describe, expect, it } from "vitest";
+import { createCstParser } from "../packages/satorigear/src/emitted-parser.ts";
+import * as runtime from "../packages/satorigear/src/generated/markdown.ts";
 import grammar from "../packages/satorigear/src/grammar.ts";
 
 interface SpecCase { markdown: string; section: string; number: number }
@@ -26,7 +29,7 @@ interface Baseline extends Counts { version: string }
 const VERSION = "0.31.2";
 const cases = tests as SpecCase[];
 const officialParser = new CommonMarkParser();
-const { parse } = createParser(grammar);
+const { parse } = createCstParser(runtime, createLexer(grammar).tokenize);
 const baselinePath = fileURLToPath(new URL("./fixtures/commonmark-0.31.2-baseline.json", import.meta.url));
 const baseline = JSON.parse(readFileSync(baselinePath, "utf8")) as Baseline;
 let currentSource = "";

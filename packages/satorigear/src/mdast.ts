@@ -1,5 +1,5 @@
 import { decodeHTMLStrict } from "entities";
-import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/gen-parser.ts";
+import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/cst.ts";
 import type {
   BlockContent,
   Blockquote,

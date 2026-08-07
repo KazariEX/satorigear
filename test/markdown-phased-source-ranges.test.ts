@@ -1,6 +1,6 @@
 import { tests } from "commonmark-spec";
 import { describe, expect, it } from "vitest";
-import type { CstLeaf, CstNode } from "monogram/gen-parser.ts";
+import type { CstLeaf, CstNode } from "monogram/cst.ts";
 import type { SourceRange } from "monogram/source-view.ts";
 import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
 

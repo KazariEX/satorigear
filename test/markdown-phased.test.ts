@@ -1,4 +1,4 @@
-import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/gen-parser.ts";
+import { type CstChild, type CstLeaf, type CstNode, getText } from "monogram/cst.ts";
 import { describe, expect, it } from "vitest";
 import { markdownPhasedParser } from "../packages/satorigear/src/parser.ts";
 

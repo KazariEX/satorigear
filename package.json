@@ -3,16 +3,17 @@
   "private": true,
   "packageManager": "pnpm@11.20.0",
   "scripts": {
-    "build": "pnpm --filter satorigear... build",
-    "dev": "pnpm --filter satorigear... --parallel dev",
+    "build": "pnpm codegen && pnpm --filter satorigear... build",
+    "dev": "pnpm codegen && pnpm --filter satorigear... --parallel dev",
+    "codegen": "unrun scripts/parser.mjs",
     "prepare": "zin link satorigear",
     "prepare:vendor": "node scripts/vendor.ts",
     "release": "bumpp -r --no-push -c \"release: v%s\"",
-    "test": "vitest",
-    "typecheck": "tsc",
-    "benchmark": "node --expose-gc benchmark/parse.bench.ts",
-    "test:markdown": "vitest run test/markdown.test.ts",
-    "conformance:markdown": "vitest run test/markdown-conformance.test.ts test/markdown-phased-conformance.test.ts test/markdown-phased-inline-conformance.test.ts test/markdown-phased-payload-conformance.test.ts test/markdown-phased-semantic-conformance.test.ts test/markdown-phased-source-ranges.test.ts test/markdown-mdast-conformance.test.ts --reporter=verbose"
+    "test": "pnpm codegen && vitest",
+    "typecheck": "pnpm codegen && tsc",
+    "benchmark": "pnpm codegen && node --expose-gc benchmark/parse.bench.ts",
+    "test:markdown": "pnpm codegen && vitest run test/markdown.test.ts",
+    "conformance:markdown": "pnpm codegen && vitest run test/markdown-conformance.test.ts test/markdown-phased-conformance.test.ts test/markdown-phased-inline-conformance.test.ts test/markdown-phased-payload-conformance.test.ts test/markdown-phased-semantic-conformance.test.ts test/markdown-phased-source-ranges.test.ts test/markdown-mdast-conformance.test.ts --reporter=verbose"
   },
   "devDependencies": {
     "@types/commonmark": "catalog:",
@@ -31,6 +32,7 @@
     "remark": "catalog:",
     "satteri": "catalog:",
     "tsdown": "catalog:",
+    "unrun": "catalog:",
     "vitest": "catalog:"
   }
 }

@@ -35,12 +35,12 @@ index 99d693f..5dfcc34 100644
        escapePattern: tok.opts.escape,
 diff --git a/src/composite-parser.ts b/src/composite-parser.ts
 new file mode 100644
-index 0000000..7571e51
+index 0000000..65c6f3a
 --- /dev/null
 +++ b/src/composite-parser.ts
 @@ -0,0 +1,104 @@
 +import type { Token } from './gen-lexer.ts';
-+import type { CstChild, CstLeaf, CstNode } from './gen-parser.ts';
++import type { CstChild, CstLeaf, CstNode } from './cst.ts';
 +import { createSourceView, type SourceRange, type SourceView } from './source-view.ts';
 +
 +export interface CompositeParserHandle {
@@ -142,6 +142,41 @@ index 0000000..7571e51
 +  }
 +
 +  return { parse, parseOuter };
++}
+diff --git a/src/cst.ts b/src/cst.ts
+new file mode 100644
+index 0000000..8a07404
+--- /dev/null
++++ b/src/cst.ts
+@@ -0,0 +1,29 @@
++import type { SourceRange } from './source-view.ts';
++
++export interface CstNode {
++  rule: string;
++  children: CstChild[];
++  offset: number;
++  end: number;
++  ranges?: SourceRange[];
++}
++
++export interface CstLeaf {
++  tokenType: string;
++  offset: number;
++  end: number;
++  ranges?: SourceRange[];
++  value?: string;
++}
++
++export type CstChild = CstNode | CstLeaf;
++
++/** Read a CST span from its logical value, mapped ranges, or contiguous source range. */
++export function getText(
++  node: { offset: number; end: number; ranges?: readonly SourceRange[]; value?: string },
++  source: string,
++): string {
++  return node.value ?? (node.ranges?.length
++    ? node.ranges.map(range => source.slice(range.offset, range.end)).join('')
++    : source.slice(node.offset, node.end));
 +}
 diff --git a/src/delimiter-parser.ts b/src/delimiter-parser.ts
 new file mode 100644
@@ -441,6 +476,76 @@ index 0000000..58712b3
 +    parseWithPairs,
 +  };
 +}
+diff --git a/src/emit-parser.ts b/src/emit-parser.ts
+index 74feb92..1c87274 100644
+--- a/src/emit-parser.ts
++++ b/src/emit-parser.ts
+@@ -2637,6 +2637,39 @@ ${e.soa ? `  tokenize(source);
+   tokN = _n;`}
+ }
+ 
++type ExternalToken = {
++  type: string;
++  text: string;
++  offset: number;
++  newlineBefore: boolean;
++  commentBefore: boolean;
++  multilineFlowBefore: boolean;
++  ranges?: readonly { offset: number; end: number }[];
++};
++
++function tokensInto(source: string, tokens: readonly ExternalToken[]) {
++  docPieces = [source]; docPieceOff = [0]; docLen = source.length; docFlat = source; docCur = 0;
++  srcLenP1 = source.length + 1;
++  negFrom = 0x7fffffff;
++  const n = tokens.length;
++  while (tkCap < n + 1) growTok();
++${e.soa ? '' : '  tkText.length = 0;'}
++  for (let i = 0; i < n; i++) {
++    const token = tokens[i];
++    const type = token.type;
++    const ranges = token.ranges;
++    tkK[i] = type === '' ? K_PUNCT : (TYPE_KIND.get(type) ?? K_NAMED_FALLBACK);
++    tkT[i] = (type === '' ? LIT_PU : LIT_KW).get(token.text) ?? 0;
++    tkOff[i] = ranges?.[0]?.offset ?? token.offset;
++    tkEnd[i] = ranges?.[ranges.length - 1]?.end ?? token.offset + token.text.length;
++    tkFl[i] = (token.newlineBefore ? 1 : 0) | (token.commentBefore ? 2 : 0) | (token.multilineFlowBefore ? 4 : 0);
++    tkDp[i] = 0; tkPd[i] = 0;
++${e.soa ? '' : '    tkText[i] = token.text;'}
++  }
++  tokN = n;
++  docEmptyPops = [];
++}
++
+ function farthest(errPos: number) {
+   if (maxPos <= errPos || maxPos >= tokN) return '';
+   return ' [farthest: offset ' + toff(maxPos) + " near '" + tokTextAt(maxPos).slice(0, 20) + "']";
+@@ -3600,6 +3633,17 @@ function parseCore(source: string, entryRule?: string) {
+   adoptRoot = -1;
+   adoptRunPos = -1;
+   lexInto(source);
++  return parsePrepared(entryRule);
++}
++
++function parseTokensCore(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
++  adoptRoot = -1;
++  adoptRunPos = -1;
++  tokensInto(source, tokens);
++  return parsePrepared(entryRule);
++}
++
++function parsePrepared(entryRule?: string) {
+   if (memoEnd.length !== MEMO_RULES) {
+     memoNode = new Array(MEMO_RULES);
+     memoEnd = new Array(MEMO_RULES);
+@@ -4055,6 +4099,7 @@ export { tokenize };
+ // ── Module-level API: the DEFAULT document (one shared session; tokenize and the
+ // raw tree/tokenAt views read the ACTIVE doc — they are gate/debug surfaces) ──
+ export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }
++export function parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) { activate(docDefault); return parseTokensCore(source, tokens, entryRule); }
+ export function parseEdited(entryRule?: string, edits?: Edit[]) { activate(docDefault); return editCore(entryRule, edits); }
+ // Arena reclamation introspection + budget override — TEST HOOKS (issue #45 C1). __arenaStats
+ // reports the live arena, the compacted-size baseline, and how many edits re-parsed to reclaim;
 diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
 index a4ed10c..53d0906 100644
 --- a/src/gen-lexer.ts
@@ -451,7 +556,7 @@ index a4ed10c..53d0906 100644
  import { collectLiterals, isKeywordLiteral } from './grammar-utils.ts';
  import { tokenBlockPatternFirstCharSet, tokenBlockPatternSource, tokenEscapeValidPatternSource, tokenPatternFirstCharSet, tokenPatternHasStartAnchor, tokenPatternSource } from './token-pattern.ts';
 +import type { SourceRange } from './source-view.ts';
-
+ 
  // A lexer token: a declared token (type = its name) or a punctuation literal (type = '').
  // `$templateHead/$templateMiddle/$templateTail` are synthetic types the lexer emits for
 @@ -16,6 +17,7 @@ export interface Token {
@@ -648,47 +753,47 @@ index a4ed10c..53d0906 100644
            // prev is a completed value → `/` is division, not a regex literal → skip.
            if (prevIsValue(tokens[tokens.length - 1])) continue;
 diff --git a/src/gen-parser.ts b/src/gen-parser.ts
-index 8f68656..8155433 100644
+index 8f68656..2e5c753 100644
 --- a/src/gen-parser.ts
 +++ b/src/gen-parser.ts
-@@ -2,6 +2,7 @@ import type { CstGrammar, RuleExpr, RuleDecl } from './types.ts';
+@@ -2,34 +2,15 @@ import type { CstGrammar, RuleExpr, RuleDecl } from './types.ts';
  import { isKeywordLiteral } from './grammar-utils.ts';
  import { analyzeGrammar, findEntryRule } from './grammar-analysis.ts';
  import { createLexer, type Token } from './gen-lexer.ts';
-+import type { SourceRange } from './source-view.ts';
++import type { CstChild, CstLeaf, CstNode } from './cst.ts';
  import { withAwaitYield } from './await-yield-fork.ts';
  
- // ── CST output ──
-@@ -11,12 +12,15 @@ export interface CstNode {
-   children: CstChild[];
-   offset: number;
-   end: number;
-+  ranges?: SourceRange[];
- }
+-// ── CST output ──
+-
+-export interface CstNode {
+-  rule: string;
+-  children: CstChild[];
+-  offset: number;
+-  end: number;
+-}
+-
+-export interface CstLeaf {
+-  tokenType: string;
+-  offset: number;
+-  end: number;
+-}
+-
+-export type CstChild = CstNode | CstLeaf;
++export { type CstChild, type CstLeaf, type CstNode, getText } from './cst.ts';
  
- export interface CstLeaf {
-   tokenType: string;
-   offset: number;
-   end: number;
-+  ranges?: SourceRange[];
-+  value?: string;
- }
+ // ── Precedence info ──
  
- export type CstChild = CstNode | CstLeaf;
-@@ -26,8 +30,10 @@ export type CstChild = CstNode | CstLeaf;
  // ── Parser ──
  
- // The CST is span-only: a node's text is derived from the source it was parsed from.
+-// The CST is span-only: a node's text is derived from the source it was parsed from.
 -export function getText(node: { offset: number; end: number }, source: string): string {
 -  return source.slice(node.offset, node.end);
-+export function getText(node: { offset: number; end: number; ranges?: readonly SourceRange[]; value?: string }, source: string): string {
-+  return node.value ?? (node.ranges?.length
-+    ? node.ranges.map(range => source.slice(range.offset, range.end)).join('')
-+    : source.slice(node.offset, node.end));
- }
- 
+-}
+-
  export function createParser(grammar: CstGrammar) {
-@@ -353,7 +359,14 @@ export function createParser(grammar: CstGrammar) {
+   // [Await]/[Yield] fork — same rule-identity space as the emitted parser (no-op
+   // without ctx markers). Keeps the interp ≡ emit equivalence the gates compare.
+@@ -353,7 +334,14 @@ export function createParser(grammar: CstGrammar) {
  
    const profCounts = new Map<string, number>();
    function parse(source: string, entryRule?: string): CstNode {
@@ -704,10 +809,10 @@ index 8f68656..8155433 100644
      let pos = 0;
      let maxPos = 0;   // farthest token index ever ADVANCED past (diagnostic; updated at the pos++ sites, mirroring the emitted engine so reject messages stay engine-identical)
      // Cap-propagation flag (capExpr), mirrors the emitted engine: set true when a parsePratt
-@@ -376,13 +389,17 @@ export function createParser(grammar: CstGrammar) {
+@@ -376,13 +364,17 @@ export function createParser(grammar: CstGrammar) {
      // so it bypasses the packrat memo (which is keyed by start position only).
      let parseLimit = -1;
-
+ 
 +    function tokenEnd(tok: Token): number {
 +      return tok.ranges?.at(-1)?.end ?? tok.offset + tok.text.length;
 +    }
@@ -716,14 +821,14 @@ index 8f68656..8155433 100644
        if (parseLimit >= 0 && pos >= parseLimit) return null;
        return tokens[pos] ?? null;
      }
-
+ 
      function offset(): number {
 -      return peek()?.offset ?? (tokens.length > 0 ? tokens[tokens.length - 1].offset + tokens[tokens.length - 1].text.length : 0);
 +      return peek()?.offset ?? (tokens.length > 0 ? tokenEnd(tokens[tokens.length - 1]) : 0);
      }
-
+ 
      // Match a literal string against current token
-@@ -423,7 +440,14 @@ export function createParser(grammar: CstGrammar) {
+@@ -423,7 +415,14 @@ export function createParser(grammar: CstGrammar) {
        if (!tok) return null;
        if (tok.type === name) {
          if (++pos > maxPos) maxPos = pos;
@@ -739,7 +844,7 @@ index 8f68656..8155433 100644
        }
        return null;
      }
-@@ -1186,7 +1210,7 @@ export function createParser(grammar: CstGrammar) {
+@@ -1186,7 +1185,7 @@ export function createParser(grammar: CstGrammar) {
      cst.offset = next.offset; cst.end = next.end;
      cst.errors = next.errors;
    };

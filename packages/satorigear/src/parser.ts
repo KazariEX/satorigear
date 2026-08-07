@@ -1,7 +1,11 @@
 import { createCompositeParser } from "monogram/composite-parser.ts";
-import { createDelimiterParser, resolveDelimitedTokens } from "monogram/delimiter-parser.ts";
-import { createParser, type CstNode, getText } from "monogram/gen-parser.ts";
-import { markdownBlockGrammar, tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
+import { type CstNode, getText } from "monogram/cst.ts";
+import { resolveDelimitedTokens } from "monogram/delimiter-parser.ts";
+import { createLexer } from "monogram/gen-lexer.ts";
+import { createCstParser } from "./emitted-parser.ts";
+import * as blockRuntime from "./generated/blocks.ts";
+import * as inlineRuntime from "./generated/inline.ts";
+import { tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
 import {
   markdownBracketPairs,
   markdownDelimiterRuns,
@@ -10,8 +14,8 @@ import {
   reassociateMarkdownReferenceTails,
 } from "./grammar-inline.ts";
 
-const blockParser = createParser(markdownBlockGrammar);
-const inlineParser = createDelimiterParser(markdownInlineGrammar, markdownDelimiterRuns);
+const blockParser = createCstParser(blockRuntime, tokenizeMarkdownBlocks);
+const inlineParser = createCstParser(inlineRuntime, createLexer(markdownInlineGrammar).tokenize);
 
 function referenceLabel(definition: CstNode, source: string): string | null {
   const text = getText(definition, source);
@@ -56,7 +60,6 @@ function collectReferenceLabels(root: CstNode, source: string): Set<string> {
  */
 export const markdownPhasedParser = createCompositeParser({
   outer: blockParser,
-  outerTokens: tokenizeMarkdownBlocks,
   prepare: collectReferenceLabels,
   regions: [{
     within: ["Paragraph", "AtxHeading", "SetextHeading"],

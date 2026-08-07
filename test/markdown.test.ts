@@ -1,10 +1,12 @@
 import { createLexer } from "monogram/gen-lexer.ts";
-import { createParser, type CstNode } from "monogram/gen-parser.ts";
 import { describe, expect, it } from "vitest";
+import type { CstNode } from "monogram/cst.ts";
+import { createCstParser } from "../packages/satorigear/src/emitted-parser.ts";
+import * as runtime from "../packages/satorigear/src/generated/markdown.ts";
 import grammar from "../packages/satorigear/src/grammar.ts";
 
 const { tokenize } = createLexer(grammar);
-const { parse } = createParser(grammar);
+const { parse } = createCstParser(runtime, tokenize);
 
 function check(label: string, condition: boolean): void {
   it(label, () => {
