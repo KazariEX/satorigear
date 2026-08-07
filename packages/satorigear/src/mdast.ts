@@ -49,6 +49,13 @@ interface InlineProjectionContext {
   view: SourceView;
 }
 
+interface InlineAccumulator {
+  context: InlineProjectionContext;
+  gapEnd: number;
+  gapStart: number;
+  target: PhrasingContent[];
+}
+
 export interface MarkdownInlineSyntax {
   arena: EmittedArena;
   rootId: number;
@@ -451,19 +458,68 @@ function appendPhrasing(target: PhrasingContent[], value: PhrasingContent): void
   }
 }
 
-function firstPhrasing(value: PhrasingContent[] | PhrasingContent): PhrasingContent | undefined {
-  return Array.isArray(value) ? value[0] : value;
+function createInlineAccumulator(
+  context: InlineProjectionContext,
+  target: PhrasingContent[],
+): InlineAccumulator {
+  return { context, gapEnd: -1, gapStart: -1, target };
 }
 
-function inlineLeaf(
+function appendInlineGap(accumulator: InlineAccumulator, start: number, end: number): void {
+  accumulator.gapStart = -1;
+  accumulator.gapEnd = -1;
+  const { context, target } = accumulator;
+  const gapSpan = context.view.mapSpan(start, end);
+  appendText(
+    target,
+    semanticText(context.view.text.slice(start, end).replace(/[\r\n]/g, "")),
+    gapSpan.start,
+    gapSpan.end,
+  );
+}
+
+function appendInline(
+  accumulator: InlineAccumulator,
+  value: PhrasingContent,
+  nextLineOffset: number,
+): void {
+  const { context, target } = accumulator;
+  const newline = value.type === "text" && value.value.startsWith("\n");
+  if (accumulator.gapStart >= 0) {
+    if (!newline) {
+      appendInlineGap(accumulator, accumulator.gapStart, accumulator.gapEnd);
+    }
+    else {
+      accumulator.gapStart = -1;
+      accumulator.gapEnd = -1;
+    }
+  }
+  if (newline) {
+    // Markdown syntax newlines point past stripped container prefixes, while mdast spans include the physical line ending.
+    const previous = target.at(-1);
+    if (previous?.type === "break") {
+      extendSpan(previous, lineStart(context.source, nextLineOffset));
+      return;
+    }
+    (value as PhrasingContent & FragmentValue).startOffset = lineEndingStart(context.source, nextLineOffset);
+    if (previous?.type === "text") {
+      previous.value = previous.value.slice(0, trailingWhitespaceStart(previous.value));
+    }
+  }
+  appendPhrasing(target, value);
+}
+
+function appendInlineLeaf(
   entry: number,
   tokenBase: number,
   token: Token,
   sourceSpan: SourceSpan,
-  context: InlineProjectionContext,
-): PhrasingContent | undefined {
+  accumulator: InlineAccumulator,
+): boolean {
+  const { context } = accumulator;
   const text = token.text;
   const tokenType = context.arena.leafTokenType(entry, tokenBase);
+  let value: PhrasingContent;
   switch (tokenType) {
     case "Text":
     case "Delimiter":
@@ -476,12 +532,21 @@ function inlineLeaf(
     case "ReferenceTail":
     case "ShortcutReferenceTail":
     case "ReferenceSeparatorClose":
-      return withSpan({ type: "text", value: semanticText(text) }, sourceSpan.start, sourceSpan.end);
-    case "CodeSpan": return withSpan({ type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode, sourceSpan.start, sourceSpan.end);
+      value = withSpan({ type: "text", value: semanticText(text) }, sourceSpan.start, sourceSpan.end);
+      break;
+    case "CodeSpan":
+      value = withSpan({ type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode, sourceSpan.start, sourceSpan.end);
+      break;
     case "InlineHtml":
-    case "HtmlComment": return withSpan({ type: "html", value: text } satisfies Html, sourceSpan.start, sourceSpan.end);
-    case "HardBreak": return withSpan({ type: "break" }, sourceSpan.start, sourceSpan.end);
-    case "Newline": return withSpan({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end);
+    case "HtmlComment":
+      value = withSpan({ type: "html", value: text } satisfies Html, sourceSpan.start, sourceSpan.end);
+      break;
+    case "HardBreak":
+      value = withSpan({ type: "break" }, sourceSpan.start, sourceSpan.end);
+      break;
+    case "Newline":
+      value = withSpan({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end);
+      break;
     case "EmphasisOpen":
     case "EmphasisClose":
     case "StrongOpen":
@@ -494,18 +559,21 @@ function inlineLeaf(
     case "ImageLinkClose":
     case "ImageReferenceOpen":
     case "ImageReferenceClose":
-      return;
+      return false;
     case "Autolink": {
       const label = text.slice(1, -1);
-      return withSpan({
+      value = withSpan({
         type: "link",
         url: label.includes(":") ? label : `mailto:${label}`,
         title: null,
         children: [withSpan({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1)],
       } satisfies Link, sourceSpan.start, sourceSpan.end);
+      break;
     }
     default: throw new Error(`Unexpected inline token: ${tokenType}`);
   }
+  appendInline(accumulator, value, sourceSpan.start);
+  return true;
 }
 
 function contentBounds(
@@ -529,43 +597,17 @@ function trailingWhitespaceStart(value: string): number {
   return offset;
 }
 
-function appendInlineValue(
-  context: InlineProjectionContext,
-  target: PhrasingContent[],
-  value: PhrasingContent[] | PhrasingContent,
-  nextLineOffset: number,
-): void {
-  const first = firstPhrasing(value);
-  if (first?.type === "text" && first.value.startsWith("\n")) {
-    // Markdown syntax newlines point past stripped container prefixes, while mdast spans include the physical line ending.
-    const previous = target.at(-1);
-    if (!Array.isArray(value) && previous?.type === "break") {
-      extendSpan(previous, lineStart(context.source, nextLineOffset));
-      return;
-    }
-    (first as PhrasingContent & FragmentValue).startOffset = lineEndingStart(context.source, nextLineOffset);
-    if (previous?.type === "text") {
-      previous.value = previous.value.slice(0, trailingWhitespaceStart(previous.value));
-    }
-  }
-  if (Array.isArray(value)) {
-    value.forEach((child) => appendPhrasing(target, child));
-  }
-  else {
-    appendPhrasing(target, value);
-  }
-}
-
 function inlineSequence(
   nodeId: number,
   offset: number,
   tokenBase: number,
-  context: InlineProjectionContext,
+  accumulator: InlineAccumulator,
   start?: number,
   end?: number,
-): PhrasingContent[] {
-  const result: PhrasingContent[] = [];
+): boolean {
+  const { context } = accumulator;
   let cursor = start;
+  let emitted = false;
   const { arena } = context;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
@@ -575,37 +617,24 @@ function inlineSequence(
     const childEnd = token ? tokenEnd(token) : childOffset + arena.lenOf(entry);
     const childTokenBase = token ? tokenBase : tokenBase + arena.childTokRelAt(nodeId, index);
     const sourceSpan = context.view.mapSpan(childOffset, childEnd);
-    const projected = token
-      ? inlineLeaf(entry, tokenBase, token, sourceSpan, context)
-      : inlineNode(entry, childOffset, childEnd, childTokenBase, sourceSpan, context);
-    if (!projected) {
+    if (cursor !== void 0 && childOffset > cursor) {
+      accumulator.gapStart = cursor;
+      accumulator.gapEnd = childOffset;
+    }
+    const childEmitted = token
+      ? appendInlineLeaf(entry, tokenBase, token, sourceSpan, accumulator)
+      : appendInlineNode(entry, childOffset, childEnd, childTokenBase, sourceSpan, accumulator);
+    if (!childEmitted) {
       continue;
     }
-    const first = firstPhrasing(projected);
-    // Newline projection owns the whitespace between logical lines.
-    if (cursor !== void 0 && childOffset > cursor
-      && !(first?.type === "text" && first.value.startsWith("\n"))) {
-      const gapSpan = context.view.mapSpan(cursor, childOffset);
-      appendText(
-        result,
-        semanticText(context.view.text.slice(cursor, childOffset).replace(/[\r\n]/g, "")),
-        gapSpan.start,
-        gapSpan.end,
-      );
-    }
-    appendInlineValue(context, result, projected, sourceSpan.start);
+    emitted = true;
     cursor = childEnd;
   }
   if (cursor !== void 0 && end !== void 0 && end > cursor) {
-    const gapSpan = context.view.mapSpan(cursor, end);
-    appendText(
-      result,
-      semanticText(context.view.text.slice(cursor, end).replace(/[\r\n]/g, "")),
-      gapSpan.start,
-      gapSpan.end,
-    );
+    appendInlineGap(accumulator, cursor, end);
+    emitted = true;
   }
-  return result;
+  return emitted;
 }
 
 function reference(
@@ -648,15 +677,6 @@ function phrasingText(children: readonly PhrasingContent[]): string {
   return result;
 }
 
-function inlineLines(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: InlineProjectionContext,
-): PhrasingContent[] {
-  return inlineSequence(nodeId, offset, tokenBase, context);
-}
-
 function emphasis(
   nodeId: number,
   offset: number,
@@ -667,7 +687,8 @@ function emphasis(
 ): Emphasis | Strong {
   const marker = kind === "strong" ? "Strong" : "Emphasis";
   const [start, end] = contentBounds(nodeId, tokenBase, [`${marker}Open`], [`${marker}Close`], context);
-  const children = inlineSequence(nodeId, offset, tokenBase, context, start, end);
+  const children: PhrasingContent[] = [];
+  inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
   return kind === "strong"
     ? withSpan({ type: "strong", children } satisfies Strong, sourceSpan.start, sourceSpan.end)
     : withSpan({ type: "emphasis", children } satisfies Emphasis, sourceSpan.start, sourceSpan.end);
@@ -688,7 +709,8 @@ function linkOrImage(
   const prefix = image ? "Image" : "";
   const resourcePrefix = referenceNode ? "Reference" : "Link";
   const [start, end] = contentBounds(nodeId, tokenBase, [`${prefix}${resourcePrefix}Open`], [`${prefix}${resourcePrefix}Close`], context);
-  const children = inlineSequence(nodeId, offset, tokenBase, context, start, end);
+  const children: PhrasingContent[] = [];
+  inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
   if (referenceNode) {
     const association = reference(nodeId, tokenBase, offset, endOffset, context, image);
     return image
@@ -701,33 +723,49 @@ function linkOrImage(
     : withSpan({ type: "link", children, ...resource } satisfies Link, sourceSpan.start, sourceSpan.end);
 }
 
-function inlineNode(
+function appendInlineNode(
   nodeId: number,
   offset: number,
   endOffset: number,
   tokenBase: number,
   sourceSpan: SourceSpan,
-  context: InlineProjectionContext,
-): PhrasingContent[] | PhrasingContent {
+  accumulator: InlineAccumulator,
+): boolean {
+  const { context } = accumulator;
+  let value: PhrasingContent;
   switch (context.arena.ruleNameOf(nodeId)) {
-    case "InlineLines": return inlineLines(nodeId, offset, tokenBase, context);
+    case "InlineLines":
     case "InlineLine":
     case "Inline":
     case "LinkContent":
     case "BracketFallback":
-      return inlineSequence(nodeId, offset, tokenBase, context);
+      return inlineSequence(nodeId, offset, tokenBase, accumulator);
     case "Emphasis":
-    case "LinkEmphasis": return emphasis(nodeId, offset, tokenBase, sourceSpan, context, "emphasis");
+    case "LinkEmphasis":
+      value = emphasis(nodeId, offset, tokenBase, sourceSpan, context, "emphasis");
+      break;
     case "Strong":
-    case "LinkStrong": return emphasis(nodeId, offset, tokenBase, sourceSpan, context, "strong");
+    case "LinkStrong":
+      value = emphasis(nodeId, offset, tokenBase, sourceSpan, context, "strong");
+      break;
     case "Image":
-    case "LinkImage": return linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "image", "direct");
+    case "LinkImage":
+      value = linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "image", "direct");
+      break;
     case "ReferenceImage":
-    case "LinkReferenceImage": return linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "image", "reference");
-    case "Link": return linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "link", "direct");
-    case "ReferenceLink": return linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "link", "reference");
+    case "LinkReferenceImage":
+      value = linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "image", "reference");
+      break;
+    case "Link":
+      value = linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "link", "direct");
+      break;
+    case "ReferenceLink":
+      value = linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, context, "link", "reference");
+      break;
     default: throw new Error(`Unexpected inline syntax rule: ${context.arena.ruleNameOf(nodeId)}`);
   }
+  appendInline(accumulator, value, sourceSpan.start);
+  return true;
 }
 
 function inlineChildren(nodeId: number, context: BlockProjectionContext): PhrasingContent[] {
@@ -739,12 +777,19 @@ function inlineChildren(nodeId: number, context: BlockProjectionContext): Phrasi
     }
     throw new Error(`Expected ${rule} syntax to contain InlineLines`);
   }
-  const result = inlineLines(inline.rootId, inline.rootOffset, inline.rootTokenBase, {
+  const inlineContext: InlineProjectionContext = {
     arena: inline.arena,
     source: context.source,
     tokenAt: inline.tokenAt,
     view: inline.view,
-  });
+  };
+  const result: PhrasingContent[] = [];
+  inlineSequence(
+    inline.rootId,
+    inline.rootOffset,
+    inline.rootTokenBase,
+    createInlineAccumulator(inlineContext, result),
+  );
   const last = result.at(-1);
   if (last?.type === "text") {
     const end = trailingWhitespaceStart(last.value);
