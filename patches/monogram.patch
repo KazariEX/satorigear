@@ -145,10 +145,10 @@ index 0000000..7571e51
 +}
 diff --git a/src/delimiter-parser.ts b/src/delimiter-parser.ts
 new file mode 100644
-index 0000000..d6ad957
+index 0000000..58712b3
 --- /dev/null
 +++ b/src/delimiter-parser.ts
-@@ -0,0 +1,291 @@
+@@ -0,0 +1,292 @@
 +import type { CstGrammar } from './types.ts';
 +import { createLexer, type Token } from './gen-lexer.ts';
 +import { createParser } from './gen-parser.ts';
@@ -265,12 +265,12 @@ index 0000000..d6ad957
 +): PairedTokenResolution {
 +  const openerTypes = new Set(configs.map(config => config.opener));
 +  const configByPair = new Map(configs.map(config => [`${config.opener}\0${config.closer}`, config]));
-+  const stack: { tokenIndex: number; type: string }[] = [];
++  const stack: { tokenIndex: number; type: string; active: boolean }[] = [];
 +  const replacements = new Map<number, string>();
 +  const delimiterIsolations: TokenIsolationRange[] = [];
 +
 +  tokens.forEach((token, tokenIndex) => {
-+    if (openerTypes.has(token.type)) stack.push({ tokenIndex, type: token.type });
++    if (openerTypes.has(token.type)) stack.push({ tokenIndex, type: token.type, active: true });
 +
 +    let openerIndex = stack.length - 1;
 +    while (openerIndex >= 0 && !configByPair.has(`${stack[openerIndex].type}\0${token.type}`)) openerIndex--;
@@ -279,6 +279,7 @@ index 0000000..d6ad957
 +    const opener = stack[openerIndex];
 +    const config = configByPair.get(`${opener.type}\0${token.type}`)!;
 +    stack.splice(openerIndex, 1);
++    if (!opener.active) return;
 +    const content = source.slice(tokens[opener.tokenIndex].offset + tokens[opener.tokenIndex].text.length, token.offset);
 +    const contentConfig = config.content;
 +    if (contentConfig?.requireNonWhitespace && !/\S/u.test(content)) return;
@@ -300,7 +301,7 @@ index 0000000..d6ad957
 +    if (config.deactivateEarlier?.length) {
 +      const deactivated = new Set(config.deactivateEarlier);
 +      for (let index = openerIndex - 1; index >= 0; index--) {
-+        if (deactivated.has(stack[index].type)) stack.splice(index, 1);
++        if (deactivated.has(stack[index].type)) stack[index].active = false;
 +      }
 +    }
 +

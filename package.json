@@ -8,7 +8,7 @@
     "prepare": "zin link satorigear",
     "vendor:prepare": "node scripts/vendor.ts",
     "test:markdown": "vitest run test/markdown.test.ts",
-    "conformance:markdown": "vitest run test/markdown-conformance.test.ts test/markdown-phased-conformance.test.ts test/markdown-phased-inline-conformance.test.ts test/markdown-phased-source-ranges.test.ts --reporter=verbose",
+    "conformance:markdown": "vitest run test/markdown-conformance.test.ts test/markdown-phased-conformance.test.ts test/markdown-phased-inline-conformance.test.ts test/markdown-phased-payload-conformance.test.ts test/markdown-phased-source-ranges.test.ts --reporter=verbose",
     "release": "bumpp -r --no-push -c \"release: v%s\"",
     "test": "vitest"
   },
@@ -21,7 +21,9 @@
     "bumpp": "catalog:",
     "commonmark": "catalog:",
     "commonmark-spec": "catalog:",
+    "entities": "catalog:",
     "eslint": "catalog:",
+    "mdurl": "catalog:",
     "tsdown": "catalog:",
     "vitest": "catalog:"
   }

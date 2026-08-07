@@ -15,6 +15,8 @@ catalog:
   bumpp: ^12.2.0
   commonmark: 0.31.2
   commonmark-spec: 0.31.2
+  entities: 3.0.1
   eslint: ^10.8.0
+  mdurl: 1.0.1
   tsdown: ^0.22.14
   vitest: ^4.1.10

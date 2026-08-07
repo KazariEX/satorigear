@@ -30,9 +30,15 @@ catalogs:
     commonmark-spec:
       specifier: 0.31.2
       version: 0.31.2
+    entities:
+      specifier: 3.0.1
+      version: 3.0.1
     eslint:
       specifier: ^10.8.0
       version: 10.8.0
+    mdurl:
+      specifier: 1.0.1
+      version: 1.0.1
     tsdown:
       specifier: ^0.22.14
       version: 0.22.14
@@ -68,9 +74,15 @@ importers:
       commonmark-spec:
         specifier: 'catalog:'
         version: 0.31.2
+      entities:
+        specifier: 'catalog:'
+        version: 3.0.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.0(jiti@2.7.0)
+      mdurl:
+        specifier: 'catalog:'
+        version: 1.0.1
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(typescript@6.0.3)

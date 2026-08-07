@@ -58,6 +58,12 @@ describe("generic delimiter-run resolver", () => {
     expect(selectedTokenTypes("[outer [inner](/inner)](/outer)", structural)).toEqual(structural);
   });
 
+  it("keeps a deactivated opener as a barrier for the next closer", () => {
+    const structural = ["ImageLinkOpen", "ImageLinkClose", "LinkOpen", "LinkClose", "LinkTail"];
+    expect(selectedTokenTypes("![[[foo](uri1)](uri2)](uri3)", structural))
+      .toEqual(["ImageLinkOpen", "LinkOpen", "LinkClose", "LinkTail", "ImageLinkClose"]);
+  });
+
   it("isolates delimiter runs inside an activated pair", () => {
     const structural = ["Delimiter", "EmphasisOpen", "EmphasisClose", "LinkOpen", "LinkClose"];
     expect(selectedTokenTypes("*[bar*](/url)", structural))
