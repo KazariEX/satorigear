@@ -1,5 +1,5 @@
-import { createDelimitedTokenResolver } from "monogram/delimiter-parser.ts";
 import type { Token } from "monogram/gen-lexer.ts";
+import { createDelimitedTokenResolver } from "./delimiter-parser.ts";
 import {
   createEmittedParser,
   type EmittedDocument,
