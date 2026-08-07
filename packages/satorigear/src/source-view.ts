@@ -26,6 +26,7 @@ export interface SourceView {
   segments: readonly SourceViewSegment[];
   mapPoint: (offset: number) => number;
   mapRange: (offset: number, end: number) => SourceRange[];
+  mapSpan: (offset: number, end: number) => SourceRange;
 }
 
 /** Project document edits into a view whose physical segments remain structurally stable. */
@@ -130,11 +131,15 @@ export function createSourceView(source: string, ranges: readonly SourceRange[])
     return segment.offset + offset - segment.viewOffset;
   }
 
-  function mapRange(offset: number, end: number): SourceRange[] {
+  function validateRange(offset: number, end: number): void {
     if (!Number.isInteger(offset) || !Number.isInteger(end)
       || offset < 0 || end < offset || end > text.length) {
       throw new Error(`Invalid source-view range [${offset}, ${end}) for length ${text.length}`);
     }
+  }
+
+  function mapRange(offset: number, end: number): SourceRange[] {
+    validateRange(offset, end);
     if (offset === end) {
       return [];
     }
@@ -162,5 +167,22 @@ export function createSourceView(source: string, ranges: readonly SourceRange[])
     return mapped;
   }
 
-  return { text, segments, mapPoint, mapRange };
+  function mapSpan(offset: number, end: number): SourceRange {
+    validateRange(offset, end);
+    if (segments.length === 0) {
+      return { offset: 0, end: 0 };
+    }
+    if (offset === end) {
+      const point = mapPoint(offset);
+      return { offset: point, end: point };
+    }
+    const first = segments[containingSegment(offset)];
+    const last = segments[containingSegment(end - 1)];
+    return {
+      offset: first.offset + offset - first.viewOffset,
+      end: last.offset + end - last.viewOffset,
+    };
+  }
+
+  return { text, segments, mapPoint, mapRange, mapSpan };
 }

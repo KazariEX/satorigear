@@ -289,12 +289,8 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     if (!region) {
       return span;
     }
-    const ranges = region.view.mapRange(span.start, span.end);
-    if (ranges.length === 0) {
-      const point = region.view.mapPoint(span.start);
-      return { start: point, end: point };
-    }
-    return { start: ranges[0].offset, end: ranges.at(-1)!.end };
+    const mapped = region.view.mapSpan(span.start, span.end);
+    return { start: mapped.offset, end: mapped.end };
   }
 
   text(value: MarkdownSyntaxChild): string {
