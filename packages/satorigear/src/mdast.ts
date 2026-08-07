@@ -20,8 +20,9 @@ import type {
   Root,
   Strong,
 } from "mdast";
+import type { Token } from "monogram/gen-lexer.ts";
 import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
-import type { SyntaxTreeLeaf, SyntaxTreeNode } from "./emitted-parser.ts";
+import type { SyntaxTree, SyntaxTreeLeaf, SyntaxTreeNode } from "./emitted-parser.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 
 interface Resource {
@@ -35,12 +36,15 @@ interface Reference {
   referenceType: "collapsed" | "full" | "shortcut";
 }
 
-interface ProjectionContext {
+interface BlockProjectionContext {
+  block: SyntaxTree;
   source: string;
   syntax: MarkdownSyntax;
 }
 
-interface InlineProjectionContext extends ProjectionContext {
+interface InlineProjectionContext {
+  source: string;
+  syntax: MarkdownSyntax;
   view: SourceView;
 }
 
@@ -54,14 +58,14 @@ export interface MarkdownInlineSyntax {
 }
 
 export interface MarkdownSyntax {
+  blockTree: () => SyntaxTree;
   children: (node: MarkdownSyntaxNode) => readonly MarkdownSyntaxChild[];
-  inline: (node: MarkdownSyntaxNode) => MarkdownInlineSyntax | undefined;
+  inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
   isLeaf: (child: MarkdownSyntaxChild) => child is MarkdownSyntaxLeaf;
-  spans: (leaf: MarkdownSyntaxLeaf) => readonly SourceSpan[] | undefined;
   rule: (node: MarkdownSyntaxNode) => string;
   // Spans remain in the coordinate space of their owning syntax tree.
   span: (value: MarkdownSyntaxChild) => SourceSpan;
-  text: (value: MarkdownSyntaxChild) => string;
+  text: (leaf: MarkdownSyntaxLeaf) => string;
   tokenType: (leaf: MarkdownSyntaxLeaf) => string;
 }
 
@@ -99,16 +103,23 @@ function extendSpan(value: object, end: number): void {
   fragment.endOffset = Math.max(fragment.endOffset, end);
 }
 
-function blockEnd(value: MarkdownSyntaxNode, context: ProjectionContext): number {
-  const span = context.syntax.span(value);
-  let end = span.end;
-  if (end > span.start && context.source[end - 1] === "\n") {
+function blockEnd(nodeId: number, offset: number, context: BlockProjectionContext): number {
+  let end = offset + context.block.arena.lenOf(nodeId);
+  if (end > offset && context.source[end - 1] === "\n") {
     end--;
   }
-  if (end > span.start && context.source[end - 1] === "\r") {
+  if (end > offset && context.source[end - 1] === "\r") {
     end--;
   }
   return end;
+}
+
+function tokenStart(token: Token): number {
+  return token.ranges?.[0]?.offset ?? token.offset;
+}
+
+function tokenEnd(token: Token): number {
+  return token.ranges?.at(-1)?.end ?? token.offset + token.text.length;
 }
 
 function lineStart(source: string, offset: number): number {
@@ -150,16 +161,15 @@ function firstNonspace(source: string, start: number, end: number): number {
   return start;
 }
 
-function indentedCodeEnd(value: MarkdownSyntaxNode, context: ProjectionContext): number {
-  const token = leaf(value, "IndentedCodeBlockToken", context);
-  const tokenSpan = context.syntax.span(token);
-  const spans = context.syntax.spans(token) ?? [tokenSpan];
+function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockProjectionContext): number {
+  const token = blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context);
+  const spans = token.ranges ?? [{ offset: token.offset, end: token.offset + token.text.length }];
   // Blank indented lines belong to the block; the bare separator newline after them does not.
   for (let index = spans.length - 1; index >= 0; index--) {
     const span = spans[index];
-    if (/[^\r\n]/.test(context.source.slice(span.start, span.end))) {
+    if (/[^\r\n]/.test(context.source.slice(span.offset, span.end))) {
       let end = span.end;
-      while (end > span.start && /[\r\n]/.test(context.source[end - 1])) {
+      while (end > span.offset && /[\r\n]/.test(context.source[end - 1])) {
         end--;
       }
       return end;
@@ -178,23 +188,17 @@ function identifier(value: string): string {
   return normalizeMarkdownReferenceLabel(value).toLowerCase();
 }
 
-function childNodes(value: MarkdownSyntaxNode, rule: string | null, context: ProjectionContext): MarkdownSyntaxNode[] {
-  return context.syntax.children(value).filter((child): child is MarkdownSyntaxNode => (
-    !context.syntax.isLeaf(child) && (!rule || context.syntax.rule(child) === rule)
-  ));
-}
-
 function directLeaf(
   value: MarkdownSyntaxNode,
   tokenType: string,
-  context: ProjectionContext,
+  context: InlineProjectionContext,
 ): MarkdownSyntaxLeaf | undefined {
   return context.syntax.children(value).find((child): child is MarkdownSyntaxLeaf => (
     context.syntax.isLeaf(child) && context.syntax.tokenType(child) === tokenType
   ));
 }
 
-function leaf(value: MarkdownSyntaxNode, tokenType: string, context: ProjectionContext): MarkdownSyntaxLeaf {
+function leaf(value: MarkdownSyntaxNode, tokenType: string, context: InlineProjectionContext): MarkdownSyntaxLeaf {
   const result = directLeaf(value, tokenType, context);
   if (!result) {
     throw new Error(`Expected ${context.syntax.rule(value)} syntax to contain ${tokenType}`);
@@ -205,7 +209,7 @@ function leaf(value: MarkdownSyntaxNode, tokenType: string, context: ProjectionC
 function leafOfTypes(
   value: MarkdownSyntaxNode,
   tokenTypes: readonly string[],
-  context: ProjectionContext,
+  context: InlineProjectionContext,
 ): MarkdownSyntaxLeaf {
   const result = context.syntax.children(value).find((child): child is MarkdownSyntaxLeaf => (
     context.syntax.isLeaf(child) && tokenTypes.includes(context.syntax.tokenType(child))
@@ -216,24 +220,65 @@ function leafOfTypes(
   return result;
 }
 
-function payloadBounds(value: MarkdownSyntaxNode, context: ProjectionContext): SourceSpan {
-  const fallback = context.syntax.span(value);
-  const result = { start: fallback.end, end: fallback.start };
-  const visit = (node: MarkdownSyntaxNode): void => {
-    for (const child of context.syntax.children(node)) {
-      if (context.syntax.isLeaf(child)) {
-        const span = context.syntax.span(child);
-        if (span.end > span.start) {
-          result.start = Math.min(result.start, span.start);
-          result.end = Math.max(result.end, span.end);
+function directBlockToken(
+  nodeId: number,
+  tokenBase: number,
+  tokenType: string,
+  context: BlockProjectionContext,
+): Token | undefined {
+  const arena = context.block.arena;
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const entry = arena.childAt(nodeId, index);
+    if (entry < 0) {
+      const token = context.block.tokenAt(arena.leafToken(entry, tokenBase));
+      if (token.type === tokenType) {
+        return token;
+      }
+    }
+  }
+}
+
+function blockToken(
+  nodeId: number,
+  tokenBase: number,
+  tokenType: string,
+  context: BlockProjectionContext,
+): Token {
+  const token = directBlockToken(nodeId, tokenBase, tokenType, context);
+  if (!token) {
+    throw new Error(`Expected ${context.block.arena.ruleNameOf(nodeId)} syntax to contain ${tokenType}`);
+  }
+  return token;
+}
+
+function payloadBounds(
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: BlockProjectionContext,
+): SourceSpan {
+  const arena = context.block.arena;
+  const result = { start: offset + arena.lenOf(nodeId), end: offset };
+  const visit = (currentId: number, currentTokenBase: number): void => {
+    const childCount = arena.childCount(currentId);
+    for (let index = 0; index < childCount; index++) {
+      const child = arena.childAt(currentId, index);
+      if (child < 0) {
+        const token = context.block.tokenAt(arena.leafToken(child, currentTokenBase));
+        const start = tokenStart(token);
+        const end = tokenEnd(token);
+        if (end > start) {
+          result.start = Math.min(result.start, start);
+          result.end = Math.max(result.end, end);
         }
       }
       else {
-        visit(child);
+        visit(child, currentTokenBase + arena.childTokRelAt(currentId, index));
       }
     }
   };
-  visit(value);
+  visit(nodeId, tokenBase);
   return result;
 }
 
@@ -253,30 +298,26 @@ function hasBlankLineBetween(source: string, start: number, end: number, stripBl
   });
 }
 
-function listItemSpread(value: MarkdownSyntaxNode, context: ProjectionContext): boolean {
-  const blocks = childNodes(value, "Block", context);
-  if (blocks.length < 2) {
-    return false;
-  }
-  let previous = payloadBounds(blocks[0], context);
-  for (let index = 1; index < blocks.length; index++) {
-    const current = payloadBounds(blocks[index], context);
-    if (hasBlankLineBetween(context.source, previous.end, current.start, true)) {
-      return true;
+function childrenSpread(
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  childRule: string,
+  stripBlockQuotes: boolean,
+  context: BlockProjectionContext,
+): boolean {
+  const arena = context.block.arena;
+  let previous: SourceSpan | undefined;
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const childId = arena.childAt(nodeId, index);
+    if (childId < 0 || arena.ruleNameOf(childId) !== childRule) {
+      continue;
     }
-    previous = current;
-  }
-  return false;
-}
-
-function listSpread(items: readonly MarkdownSyntaxNode[], context: ProjectionContext): boolean {
-  if (items.length < 2) {
-    return false;
-  }
-  let previous = payloadBounds(items[0], context);
-  for (let index = 1; index < items.length; index++) {
-    const current = payloadBounds(items[index], context);
-    if (hasBlankLineBetween(context.source, previous.end, current.start, false)) {
+    const childOffset = offset + arena.childRelAt(nodeId, index);
+    const childTokenBase = tokenBase + arena.childTokRelAt(nodeId, index);
+    const current = payloadBounds(childId, childOffset, childTokenBase, context);
+    if (previous && hasBlankLineBetween(context.source, previous.end, current.start, stripBlockQuotes)) {
       return true;
     }
     previous = current;
@@ -340,9 +381,8 @@ function destinationTitle(bodySource: string): Resource {
   };
 }
 
-function definition(value: MarkdownSyntaxNode, context: ProjectionContext): Definition {
-  const text = context.syntax.text(value);
-  const span = context.syntax.span(value);
+function definition(nodeId: number, offset: number, context: BlockProjectionContext): Definition {
+  const text = context.source.slice(offset, offset + context.block.arena.lenOf(nodeId));
   const open = text.indexOf("[");
   let close = open + 1;
   while (close < text.length) {
@@ -362,7 +402,7 @@ function definition(value: MarkdownSyntaxNode, context: ProjectionContext): Defi
     identifier: identifier(labelSource),
     label: semanticText(labelSource),
     ...destinationTitle(text.slice(close + 2)),
-  }, span.start + open, blockEnd(value, context));
+  }, offset + open, blockEnd(nodeId, offset, context));
 }
 
 function codeSpanValue(value: string): string {
@@ -377,7 +417,7 @@ function codeSpanValue(value: string): string {
   return result;
 }
 
-function appendText(context: ProjectionContext, target: PhrasingContent[], value: string, start: number, end: number): void {
+function appendText(target: PhrasingContent[], value: string, start: number, end: number): void {
   if (!value) {
     return;
   }
@@ -391,10 +431,10 @@ function appendText(context: ProjectionContext, target: PhrasingContent[], value
   }
 }
 
-function appendPhrasing(context: ProjectionContext, target: PhrasingContent[], value: PhrasingContent): void {
+function appendPhrasing(target: PhrasingContent[], value: PhrasingContent): void {
   if (value.type === "text") {
     const fragment = value as PhrasingContent & FragmentValue;
-    appendText(context, target, value.value, fragment.startOffset, fragment.endOffset);
+    appendText(target, value.value, fragment.startOffset, fragment.endOffset);
   }
   else {
     target.push(value);
@@ -476,7 +516,7 @@ function trailingWhitespaceStart(value: string): number {
 }
 
 function appendInlineValue(
-  context: ProjectionContext,
+  context: InlineProjectionContext,
   target: PhrasingContent[],
   value: PhrasingContent[] | PhrasingContent,
   nextLineOffset: number,
@@ -495,10 +535,10 @@ function appendInlineValue(
     }
   }
   if (Array.isArray(value)) {
-    value.forEach((child) => appendPhrasing(context, target, child));
+    value.forEach((child) => appendPhrasing(target, child));
   }
   else {
-    appendPhrasing(context, target, value);
+    appendPhrasing(target, value);
   }
 }
 
@@ -525,7 +565,6 @@ function inlineSequence(
       && !(first?.type === "text" && first.value.startsWith("\n"))) {
       const gapSpan = context.view.mapSpan(cursor, syntaxSpan.start);
       appendText(
-        context,
         result,
         semanticText(context.view.text.slice(cursor, syntaxSpan.start).replace(/[\r\n]/g, "")),
         gapSpan.start,
@@ -538,7 +577,6 @@ function inlineSequence(
   if (cursor !== void 0 && end !== void 0 && end > cursor) {
     const gapSpan = context.view.mapSpan(cursor, end);
     appendText(
-      context,
       result,
       semanticText(context.view.text.slice(cursor, end).replace(/[\r\n]/g, "")),
       gapSpan.start,
@@ -657,15 +695,20 @@ function inlineNode(
   }
 }
 
-function inlineChildren(value: MarkdownSyntaxNode, context: ProjectionContext): PhrasingContent[] {
-  const inline = context.syntax.inline(value);
+function inlineChildren(nodeId: number, context: BlockProjectionContext): PhrasingContent[] {
+  const inline = context.syntax.inlineForBlock(nodeId);
   if (!inline) {
-    if (context.syntax.rule(value) === "AtxHeading") {
+    const rule = context.block.arena.ruleNameOf(nodeId);
+    if (rule === "AtxHeading") {
       return [];
     }
-    throw new Error(`Expected ${context.syntax.rule(value)} syntax to contain InlineLines`);
+    throw new Error(`Expected ${rule} syntax to contain InlineLines`);
   }
-  const result = inlineLines(inline.root, { source: context.source, syntax: context.syntax, view: inline.view });
+  const result = inlineLines(inline.root, {
+    source: context.source,
+    syntax: context.syntax,
+    view: inline.view,
+  });
   const last = result.at(-1);
   if (last?.type === "text") {
     const end = trailingWhitespaceStart(last.value);
@@ -773,124 +816,195 @@ function htmlBlockValue(value: string): string {
   return terminator && !lower.includes(terminator) ? source : source.replace(/\n$/, "");
 }
 
-function blockContent(value: MarkdownSyntaxNode, context: ProjectionContext): BlockContent | DefinitionContent {
-  if (context.syntax.rule(value) !== "Block") {
-    throw new Error(`Expected Block syntax, received ${context.syntax.rule(value)}`);
+function blockChildren(
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: BlockProjectionContext,
+): (BlockContent | DefinitionContent)[] {
+  const arena = context.block.arena;
+  const children: (BlockContent | DefinitionContent)[] = [];
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const childId = arena.childAt(nodeId, index);
+    if (childId >= 0 && arena.ruleNameOf(childId) === "Block") {
+      children.push(blockContent(
+        childId,
+        offset + arena.childRelAt(nodeId, index),
+        tokenBase + arena.childTokRelAt(nodeId, index),
+        context,
+      ));
+    }
   }
-  const children = childNodes(value, null, context);
-  if (children.length !== 1) {
-    throw new Error(`Expected Block syntax to contain one node, received ${children.length}`);
-  }
-  return blockNode(children[0], context);
+  return children;
 }
 
-function listItem(value: MarkdownSyntaxNode, context: ProjectionContext): ListItem {
-  const rule = context.syntax.rule(value);
+function blockContent(
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: BlockProjectionContext,
+): BlockContent | DefinitionContent {
+  const arena = context.block.arena;
+  const rule = arena.ruleNameOf(nodeId);
+  if (rule !== "Block") {
+    throw new Error(`Expected Block syntax, received ${rule}`);
+  }
+  let contentId = -1;
+  let contentOffset = 0;
+  let contentTokenBase = 0;
+  let nodeCount = 0;
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const childId = arena.childAt(nodeId, index);
+    if (childId >= 0) {
+      contentId = childId;
+      contentOffset = offset + arena.childRelAt(nodeId, index);
+      contentTokenBase = tokenBase + arena.childTokRelAt(nodeId, index);
+      nodeCount++;
+    }
+  }
+  if (nodeCount !== 1) {
+    throw new Error(`Expected Block syntax to contain one node, received ${nodeCount}`);
+  }
+  return blockNode(contentId, contentOffset, contentTokenBase, context);
+}
+
+function listItem(
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: BlockProjectionContext,
+): ListItem {
+  const rule = context.block.arena.ruleNameOf(nodeId);
   if (rule !== "OrderedListItem" && rule !== "UnorderedListItem") {
     throw new Error(`Expected list item syntax, received ${rule}`);
   }
-  const marker = leaf(value, rule === "OrderedListItem" ? "OrderedItemOpen" : "UnorderedItemOpen", context);
-  const markerSpan = context.syntax.span(marker);
+  const marker = blockToken(
+    nodeId,
+    tokenBase,
+    rule === "OrderedListItem" ? "OrderedItemOpen" : "UnorderedItemOpen",
+    context,
+  );
   const result = {
     type: "listItem",
-    spread: listItemSpread(value, context),
+    spread: childrenSpread(nodeId, offset, tokenBase, "Block", true, context),
     checked: null,
-    children: childNodes(value, "Block", context).map((child) => blockContent(child, context)),
+    children: blockChildren(nodeId, offset, tokenBase, context),
   } satisfies ListItem;
-  return withSpan(result, markerSpan.start, lastChildEnd(result, blockEnd(value, context)));
+  return withSpan(result, tokenStart(marker), lastChildEnd(result, blockEnd(nodeId, offset, context)));
 }
 
-function blockNode(value: MarkdownSyntaxNode, context: ProjectionContext): BlockContent | DefinitionContent {
+function blockNode(
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: BlockProjectionContext,
+): BlockContent | DefinitionContent {
   const { source } = context;
-  const span = context.syntax.span(value);
-  const rule = context.syntax.rule(value);
+  const arena = context.block.arena;
+  const end = offset + arena.lenOf(nodeId);
+  const rule = arena.ruleNameOf(nodeId);
   switch (rule) {
     case "BlockQuote": {
       const result = {
         type: "blockquote",
-        children: childNodes(value, "Block", context).map((child) => blockContent(child, context)),
+        children: blockChildren(nodeId, offset, tokenBase, context),
       } satisfies Blockquote;
-      const marker = context.syntax.span(leaf(value, "BlockQuoteOpen", context));
-      const start = firstNonspace(source, marker.start, lineEnd(source, span.start));
-      return withSpan(result, start, blockEnd(value, context));
+      const marker = blockToken(nodeId, tokenBase, "BlockQuoteOpen", context);
+      const start = firstNonspace(source, tokenStart(marker), lineEnd(source, offset));
+      return withSpan(result, start, blockEnd(nodeId, offset, context));
     }
     case "UnorderedList":
     case "OrderedList": {
       const ordered = rule === "OrderedList";
       const itemRule = ordered ? "OrderedListItem" : "UnorderedListItem";
-      const items = childNodes(value, itemRule, context);
-      const listMarker = leaf(value, ordered ? "OrderedListOpen" : "UnorderedListOpen", context);
-      const markerSpan = context.syntax.span(listMarker);
+      const listMarker = blockToken(nodeId, tokenBase, ordered ? "OrderedListOpen" : "UnorderedListOpen", context);
+      const items: ListItem[] = [];
+      const childCount = arena.childCount(nodeId);
+      for (let index = 0; index < childCount; index++) {
+        const childId = arena.childAt(nodeId, index);
+        if (childId >= 0 && arena.ruleNameOf(childId) === itemRule) {
+          items.push(listItem(
+            childId,
+            offset + arena.childRelAt(nodeId, index),
+            tokenBase + arena.childTokRelAt(nodeId, index),
+            context,
+          ));
+        }
+      }
       const result = {
         type: "list",
         ordered,
-        start: ordered ? Number.parseInt(context.syntax.text(listMarker), 10) : null,
-        spread: listSpread(items, context),
-        children: items.map((item) => listItem(item, context)),
+        start: ordered ? Number.parseInt(listMarker.text, 10) : null,
+        spread: childrenSpread(nodeId, offset, tokenBase, itemRule, false, context),
+        children: items,
       } satisfies List;
-      return withSpan(result, markerSpan.start, lastChildEnd(result, markerSpan.end));
+      return withSpan(result, tokenStart(listMarker), lastChildEnd(result, tokenEnd(listMarker)));
     }
     case "AtxHeading": {
-      const marker = context.syntax.span(leaf(value, "AtxHeadingOpen", context));
+      const marker = blockToken(nodeId, tokenBase, "AtxHeadingOpen", context);
       return withSpan({
         type: "heading",
-        depth: marker.end - marker.start as Heading["depth"],
-        children: inlineChildren(value, context),
-      } satisfies Heading, marker.start, blockEnd(value, context));
+        depth: tokenEnd(marker) - tokenStart(marker) as Heading["depth"],
+        children: inlineChildren(nodeId, context),
+      } satisfies Heading, tokenStart(marker), blockEnd(nodeId, offset, context));
     }
     case "SetextHeading": {
-      const levelOne = directLeaf(value, "SetextHeading1Open", context);
+      const levelOne = directBlockToken(nodeId, tokenBase, "SetextHeading1Open", context);
       if (!levelOne) {
-        leaf(value, "SetextHeading2Open", context);
+        blockToken(nodeId, tokenBase, "SetextHeading2Open", context);
       }
       const result = {
         type: "heading",
         depth: levelOne ? 1 : 2,
-        children: inlineChildren(value, context),
+        children: inlineChildren(nodeId, context),
       } satisfies Heading;
       return withSpan(
         result,
         firstChildStart(result),
-        context.syntax.span(leaf(value, "HeadingClose", context)).start,
+        tokenStart(blockToken(nodeId, tokenBase, "HeadingClose", context)),
       );
     }
     case "Paragraph": {
-      const result = { type: "paragraph", children: inlineChildren(value, context) } satisfies Paragraph;
-      return withSpan(result, firstChildStart(result), blockEnd(value, context));
+      const result = { type: "paragraph", children: inlineChildren(nodeId, context) } satisfies Paragraph;
+      return withSpan(result, firstChildStart(result), blockEnd(nodeId, offset, context));
     }
     case "ThematicBreak": return withSpan(
       { type: "thematicBreak" },
-      firstNonspace(source, span.start, span.end),
-      blockEnd(value, context),
+      firstNonspace(source, offset, end),
+      blockEnd(nodeId, offset, context),
     );
     case "FencedCode": {
-      const fence = fencedCode(context.syntax.text(leaf(value, "FencedCodeBlock", context)));
+      const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
       // An unclosed fence owns the final newline only when it reaches the document's EOF.
-      const end = fence.closed || span.end < source.length ? blockEnd(value, context) : span.end;
-      return withSpan(fence.node, firstNonspace(source, span.start, lineEnd(source, span.start)), end);
+      const codeEnd = fence.closed || end < source.length ? blockEnd(nodeId, offset, context) : end;
+      return withSpan(fence.node, firstNonspace(source, offset, lineEnd(source, offset)), codeEnd);
     }
     case "IndentedCodeBlock": return withSpan(
-      indentedCode(context.syntax.text(leaf(value, "IndentedCodeBlockToken", context))),
-      span.start,
-      indentedCodeEnd(value, context),
+      indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),
+      offset,
+      indentedCodeEnd(nodeId, tokenBase, context),
     );
     case "HtmlBlock": {
-      const html = htmlBlockValue(context.syntax.text(leaf(value, "HtmlBlockToken", context)));
-      return withSpan({ type: "html", value: html } satisfies Html, span.start, html.endsWith("\n") ? span.end : blockEnd(value, context));
+      const html = htmlBlockValue(blockToken(nodeId, tokenBase, "HtmlBlockToken", context).text);
+      return withSpan({ type: "html", value: html } satisfies Html, offset, html.endsWith("\n") ? end : blockEnd(nodeId, offset, context));
     }
-    case "LinkDefinition": return definition(value, context);
+    case "LinkDefinition": return definition(nodeId, offset, context);
     default: throw new Error(`Unexpected block syntax rule: ${rule}`);
   }
 }
 
 export function projectBlock(
-  tree: MarkdownSyntaxNode,
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
   source: string,
   syntax: MarkdownSyntax,
 ): BlockFragment {
-  const context = { source, syntax };
-  const node = blockContent(tree, context);
-  return { node, origin: syntax.span(tree).start };
+  const context = { block: syntax.blockTree(), source, syntax };
+  const node = blockContent(nodeId, offset, tokenBase, context);
+  return { node, origin: offset };
 }
 
 function materializeBlock(

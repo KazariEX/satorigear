@@ -67,7 +67,6 @@ export interface SyntaxTree {
   children: (node: SyntaxTreeNode) => readonly SyntaxTreeEntry[];
   leafToken: (leaf: SyntaxTreeLeaf) => Token;
   leafTokenType: (leaf: SyntaxTreeLeaf) => string;
-  node: (id: number, offset: number, tokenBase: number) => SyntaxTreeNode;
   ruleName: (node: SyntaxTreeNode) => string;
   span: (entry: SyntaxTreeEntry) => { end: number; start: number };
   tokenAt: (index: number) => Token;
@@ -161,7 +160,6 @@ function createSyntaxTree(
     },
     leafToken: (leaf) => tokenAt(leaf.token),
     leafTokenType: (leaf) => leafTokenType(leaf.entry, tokenAt(leaf.token), tree),
-    node: (id, offset, tokenBase) => ({ id, kind: "node", offset, tokenBase, tree: result }),
     ruleName: (node) => tree.ruleNameOf(node.id),
     span: (entry) => {
       if (entry.kind === "node") {

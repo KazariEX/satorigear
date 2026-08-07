@@ -97,7 +97,7 @@ class DocumentImpl implements Document {
       const previous = this.#fragments.get(block.id);
       const fragment = previous?.version === block.version
         ? previous.fragment
-        : projectBlock(block.node, this.source, block.syntax);
+        : projectBlock(block.id, block.offset, block.tokenBase, this.source, block.syntax);
       fragments.set(block.id, { fragment, version: block.version });
       return { fragment, offset: block.offset };
     });

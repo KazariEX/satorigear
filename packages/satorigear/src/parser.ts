@@ -81,12 +81,12 @@ class InlineRegion extends InlineTokenState {
 
 interface SyntaxBlockDescriptor {
   id: number;
-  node: SyntaxTreeNode;
   offset: number;
   regionIds: readonly number[];
   regionRevisions: readonly number[];
   source: string;
   syntax: MarkdownSyntax;
+  tokenBase: number;
   version: number;
 }
 
@@ -101,12 +101,6 @@ function appendTokenSpans(spans: SourceSpan[], token: Token): void {
   else {
     spans.push({ start: token.offset, end: token.offset + token.text.length });
   }
-}
-
-function tokenSpans(token: Token): SourceSpan[] {
-  const spans: SourceSpan[] = [];
-  appendTokenSpans(spans, token);
-  return spans;
 }
 
 function inlineSpansOf(
@@ -162,12 +156,10 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
 class MarkdownSyntaxImpl implements MarkdownSyntax {
   #blocks: readonly SyntaxBlockDescriptor[] = [];
   #regions = new Map<number, InlineRegion>();
-  #source: string;
   #tree: SyntaxTree;
 
   constructor(tree: SyntaxTree, source: string) {
     this.#tree = tree;
-    this.#source = source;
     this.update(tree, source);
   }
 
@@ -235,10 +227,10 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       collect(childId, offset, tokenBase, regionIds);
       blocks.push({
         id: childId,
-        node: tree.node(childId, offset, tokenBase),
         offset,
         regionIds,
         source: source.slice(offset, offset + arena.lenOf(childId)),
+        tokenBase,
       });
     }
 
@@ -294,7 +286,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       };
     });
     this.#tree = tree;
-    this.#source = source;
     this.#blocks = nextBlocks;
     this.#regions = regions;
   }
@@ -304,12 +295,12 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return node.tree.children(node);
   }
 
-  inline(value: MarkdownSyntaxNode): MarkdownInlineSyntax | undefined {
-    const node = value as SyntaxTreeNode;
-    if (node.tree !== this.#tree) {
-      return;
-    }
-    const region = this.#regions.get(node.id);
+  blockTree(): SyntaxTree {
+    return this.#tree;
+  }
+
+  inlineForBlock(nodeId: number): MarkdownInlineSyntax | undefined {
+    const region = this.#regions.get(nodeId);
     if (!region) {
       return;
     }
@@ -323,11 +314,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return (value as SyntaxTreeEntry).kind === "leaf";
   }
 
-  spans(value: MarkdownSyntaxLeaf): readonly SourceSpan[] {
-    const leaf = value as SyntaxTreeLeaf;
-    return tokenSpans(leaf.tree.leafToken(leaf));
-  }
-
   rule(value: MarkdownSyntaxNode): string {
     const node = value as SyntaxTreeNode;
     return node.tree.ruleName(node);
@@ -338,13 +324,9 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return entry.tree.span(entry);
   }
 
-  text(value: MarkdownSyntaxChild): string {
-    const entry = value as SyntaxTreeEntry;
-    if (entry.kind === "leaf") {
-      return entry.tree.leafToken(entry).text;
-    }
-    const span = entry.tree.span(entry);
-    return this.#source.slice(span.start, span.end);
+  text(value: MarkdownSyntaxLeaf): string {
+    const leaf = value as SyntaxTreeLeaf;
+    return leaf.tree.leafToken(leaf).text;
   }
 
   tokenType(value: MarkdownSyntaxLeaf): string {
