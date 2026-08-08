@@ -1062,7 +1062,7 @@ function endsInLineEnding(source: string): boolean {
   return ending === 10 || ending === 13;
 }
 
-class MarkdownBlockTokenizerImpl {
+export class MarkdownBlockScanner {
   #checkpoints: BlockCheckpoint[];
   #lines: Line[];
   #source: string;
@@ -1178,11 +1178,6 @@ class MarkdownBlockTokenizerImpl {
   }
 }
 
-export function createMarkdownBlockTokenizer(source: string): MarkdownBlockTokenizerImpl {
-  return new MarkdownBlockTokenizerImpl(source);
-}
-
-/** Produce the balanced structural token stream consumed by the emitted block parser. */
-export function tokenizeMarkdownBlocks(source: string): Token[] {
-  return [...createMarkdownBlockTokenizer(source).tokens];
+export function createBlockScanner(source: string): MarkdownBlockScanner {
+  return new MarkdownBlockScanner(source);
 }

@@ -1,11 +1,11 @@
 import type { Root } from "mdast";
-import { createMarkdownBlockTokenizer } from "./block-tokenizer.ts";
+import { createBlockScanner, type MarkdownBlockScanner } from "./block-scanner.ts";
 import {
   type BlockFragment,
   materialize,
   projectBlock,
 } from "./mdast.ts";
-import { blockParser, createMarkdownSyntax } from "./parser.ts";
+import { blockSyntaxParser, createMarkdownSyntax } from "./parser.ts";
 import type { EmittedParserDocument } from "./emitted-parser.ts";
 import type { TextEdit } from "./text-edit.ts";
 
@@ -63,19 +63,19 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 }
 
 class DocumentImpl implements Document {
-  #blocks: EmittedParserDocument;
+  #blockScanner: MarkdownBlockScanner;
+  #blockSyntax: EmittedParserDocument;
   #syntax: ReturnType<typeof createMarkdownSyntax>;
   #fragments = new Map<number, BlockFragment>();
-  #tokenizer: ReturnType<typeof createMarkdownBlockTokenizer>;
 
   constructor(source: string) {
-    this.#tokenizer = createMarkdownBlockTokenizer(source);
-    this.#blocks = blockParser.createDocument(source, this.#tokenizer.tokens);
-    this.#syntax = createMarkdownSyntax(this.#blocks.view(this.#tokenizer.tokens), source);
+    this.#blockScanner = createBlockScanner(source);
+    this.#blockSyntax = blockSyntaxParser.createDocument(source, this.#blockScanner.tokens);
+    this.#syntax = createMarkdownSyntax(this.#blockSyntax.view(this.#blockScanner.tokens), source);
   }
 
   get source(): string {
-    return this.#tokenizer.source;
+    return this.#blockScanner.source;
   }
 
   edit(edits: readonly TextEdit[]): EditResult {
@@ -84,9 +84,9 @@ class DocumentImpl implements Document {
       return { changedSpan: { start: 0, end: 0 } };
     }
     const changedSpan = changedSpanOf(edits);
-    const update = this.#tokenizer.edit(edits);
-    this.#blocks.edit(sequentialEdits(edits), update.change);
-    this.#syntax.update(this.#blocks.view(this.#tokenizer.tokens), this.source, edits);
+    const update = this.#blockScanner.edit(edits);
+    this.#blockSyntax.edit(sequentialEdits(edits), update.change);
+    this.#syntax.update(this.#blockSyntax.view(this.#blockScanner.tokens), this.source, edits);
     return { changedSpan };
   }
 
@@ -106,7 +106,7 @@ class DocumentImpl implements Document {
   }
 
   snapshot(): Root {
-    return materialize(this.#projectBlocks(), this.source.length, this.#tokenizer.locator());
+    return materialize(this.#projectBlocks(), this.source.length, this.#blockScanner.locator());
   }
 }
 

@@ -55,7 +55,6 @@ export interface EmittedParser {
 
   createDocument: (source: string, tokens: readonly Token[], entryRule?: string) => EmittedParserDocument;
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => number;
-  tokenize: (source: string) => Token[];
 }
 
 function createEmittedParserDocument<Handle extends EmittedParserHandle>(
@@ -105,12 +104,10 @@ export function createEmittedParser<Handle extends EmittedParserHandle>(
   arena: EmittedArena,
   createParser: () => EmittedParserInstance<Handle>,
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => number,
-  tokenize: (source: string) => Token[],
 ): EmittedParser {
   return {
     arena,
     createDocument: (createEmittedParserDocument<Handle>).bind(void 0, createParser),
     parseTokens,
-    tokenize,
   };
 }

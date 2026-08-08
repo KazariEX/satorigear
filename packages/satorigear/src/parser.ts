@@ -1,5 +1,4 @@
 import type { Token } from "monogram/gen-lexer.ts";
-import { tokenizeMarkdownBlocks } from "./block-tokenizer.ts";
 import {
   createEmittedParser,
   type EmittedArena,
@@ -14,17 +13,15 @@ import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView 
 import type { MarkdownInlineSyntax, MarkdownSyntax } from "./mdast.ts";
 import type { TextEdit } from "./text-edit.ts";
 
-export const blockParser = createEmittedParser(
+export const blockSyntaxParser = createEmittedParser(
   generatedBlocks.tree,
   generatedBlocks.createParser,
   generatedBlocks.parseTokens,
-  tokenizeMarkdownBlocks,
 );
-const inlineParser = createEmittedParser(
+const inlineSyntaxParser = createEmittedParser(
   generatedInline.tree,
   generatedInline.createParser,
   generatedInline.parseTokens,
-  generatedInline.tokenize,
 );
 
 function referenceLabelText(text: string): string | null {
@@ -137,7 +134,7 @@ function updateInlineRegion(
     return region;
   }
   if (!document) {
-    region.document = inlineParser.createDocument(descriptor.view.text, region.tokens, "InlineLines");
+    region.document = inlineSyntaxParser.createDocument(descriptor.view.text, region.tokens, "InlineLines");
   }
   region.revision++;
   return region;
@@ -299,8 +296,8 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     const view = region.document?.view(region.tokens);
     const firstToken = region.tokens[0];
     return {
-      arena: view?.arena ?? inlineParser.arena,
-      rootId: view?.root.id ?? inlineParser.parseTokens(region.view.text, region.tokens, "InlineLines"),
+      arena: view?.arena ?? inlineSyntaxParser.arena,
+      rootId: view?.root.id ?? inlineSyntaxParser.parseTokens(region.view.text, region.tokens, "InlineLines"),
       rootOffset: firstToken ? firstToken.ranges?.[0]?.offset ?? firstToken.offset : 0,
       rootTokenBase: 0,
       tokens: region.tokens,
