@@ -47,6 +47,13 @@ function validateSpan(view: SourceView, start: number, end: number): void {
   }
 }
 
+function validateSourceSpan(span: SourceSpan, sourceLength: number): void {
+  if (!Number.isInteger(span.start) || !Number.isInteger(span.end)
+    || span.start < 0 || span.end < span.start || span.end > sourceLength) {
+    throw new Error(`Invalid source span [${span.start}, ${span.end}) for source length ${sourceLength}`);
+  }
+}
+
 function mapPoint(this: SourceView, offset: number): number {
   if (!Number.isInteger(offset) || offset < 0 || offset > this.text.length) {
     throw new Error(`Invalid source-view offset ${offset} for length ${this.text.length}`);
@@ -159,16 +166,29 @@ export function projectSourceEdits(
 
 // Build logical text from physical source spans while preserving original coordinates.
 export function createSourceView(source: string, spans: readonly SourceSpan[]): SourceView {
+  if (spans.length === 1) {
+    const span = spans[0];
+    validateSourceSpan(span, source.length);
+    if (span.start === span.end) {
+      return { text: "", segments: [], mapPoint, mapSpan, mapSpans };
+    }
+    const length = span.end - span.start;
+    return {
+      text: source.slice(span.start, span.end),
+      segments: [{ start: span.start, end: span.end, viewStart: 0, viewEnd: length }],
+      mapPoint,
+      mapSpan,
+      mapSpans,
+    };
+  }
+
   const segments: SourceViewSegment[] = [];
   const parts: string[] = [];
   let viewOffset = 0;
   let previousEnd = 0;
 
   for (const span of spans) {
-    if (!Number.isInteger(span.start) || !Number.isInteger(span.end)
-      || span.start < 0 || span.end < span.start || span.end > source.length) {
-      throw new Error(`Invalid source span [${span.start}, ${span.end}) for source length ${source.length}`);
-    }
+    validateSourceSpan(span, source.length);
     if (segments.length > 0 && span.start < previousEnd) {
       throw new Error(`Source spans must be ordered and non-overlapping: ${span.start} < ${previousEnd}`);
     }
