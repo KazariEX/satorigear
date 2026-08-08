@@ -1,4 +1,4 @@
-// Markdown — a line-oriented CommonMark grammar on Monogram's shared core.
+// Build-only CommonMark grammar on Monogram's shared core.
 //
 // Block parsing is executed by the dedicated structural tokenizer. This grammar remains the
 // declarative source for the inline grammar and for grammar inspection.
@@ -234,7 +234,7 @@ const newline: NewlineConfig = {
   hardBreak: { token: "HardBreak", minSpaces: 2 },
 };
 
-export default defineGrammar({
+export default /* @__PURE__ */ defineGrammar({
   name: "markdown",
   scopeName: "text.html.markdown",
   tokens: {

@@ -21,7 +21,7 @@ import type {
   Strong,
 } from "mdast";
 import type { Token } from "monogram/gen-lexer.ts";
-import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
+import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
 import type { EmittedArena, SyntaxArenaView } from "./emitted-parser.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 

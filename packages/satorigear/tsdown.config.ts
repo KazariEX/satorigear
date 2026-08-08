@@ -2,8 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { minify } from "rolldown/utils";
 import { defineConfig } from "tsdown";
-import { markdownBlockGrammar } from "./src/grammar-blocks.ts";
-import { markdownInlineGrammar } from "./src/grammar-inline.ts";
+import { markdownBlockGrammar } from "./src/grammars/blocks.ts";
+import { markdownInlineGrammar } from "./src/grammars/inline.ts";
 
 export default defineConfig({
   exports: true,

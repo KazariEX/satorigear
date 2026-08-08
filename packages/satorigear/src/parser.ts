@@ -1,4 +1,5 @@
 import type { Token } from "monogram/gen-lexer.ts";
+import { tokenizeMarkdownBlocks } from "./block-tokenizer.ts";
 import {
   createEmittedParser,
   type EmittedArena,
@@ -7,9 +8,8 @@ import {
 } from "./emitted-parser.ts";
 import * as blockRuntime from "./generated/blocks.ts";
 import * as inlineRuntime from "./generated/inline.ts";
-import { tokenizeMarkdownBlocks } from "./grammar-blocks.ts";
-import { normalizeMarkdownReferenceLabel } from "./grammar-inline.ts";
 import { InlineTokenState } from "./inline-tokenizer.ts";
+import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
 import {
   createSourceView,
   projectSourceEdits,

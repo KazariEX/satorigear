@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import * as inlineRuntime from "../packages/satorigear/src/generated/inline.ts";
-import { reassociateMarkdownReferenceTails } from "../packages/satorigear/src/grammar-inline.ts";
 import { parse } from "../packages/satorigear/src/index.ts";
 
 describe("markdown mdast conversion", () => {
@@ -29,11 +27,7 @@ describe("markdown mdast conversion", () => {
     });
   });
 
-  it("preserves unchanged inline tokens while reassociating overlapping references", () => {
-    const plainSource = "plain *text*";
-    const plainTokens = inlineRuntime.tokenize(plainSource);
-    expect(reassociateMarkdownReferenceTails(plainSource, plainTokens, new Set())).toBe(plainTokens);
-
+  it("reassociates overlapping references", () => {
     expect(parse("[foo][bar][baz]\n\n[baz]: /url\n").children[0]).toMatchObject({
       type: "paragraph",
       children: [

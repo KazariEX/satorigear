@@ -1,5 +1,5 @@
 import type { Root } from "mdast";
-import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
+import { createMarkdownBlockTokenizer } from "./block-tokenizer.ts";
 import {
   type BlockFragment,
   materialize,
