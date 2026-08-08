@@ -114,6 +114,7 @@ function characterAfter(source: string, offset: number): string {
   return offset < source.length ? String.fromCodePoint(source.codePointAt(offset)!) : "\n";
 }
 
+// A bit mask avoids allocating a { canOpen, canClose } result for every delimiter run.
 function flanking(source: string, token: Token, config: DelimiterRunConfig): number {
   const before = characterBefore(source, token.offset);
   const after = characterAfter(source, token.offset + token.text.length);

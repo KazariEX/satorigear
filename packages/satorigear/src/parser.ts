@@ -217,6 +217,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       const tokenBase = root.tokenBase + arena.childTokRelAt(root.id, index);
       const regionIds: number[] = [];
       collect(childId, offset, tokenBase, regionIds);
+      // Allocate each block record once; region revisions are filled after all regions resolve.
       blocks.push({
         id: childId,
         offset,
@@ -229,6 +230,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       });
     }
 
+    // Inline resolution starts after the full reference map is known; later definitions affect earlier uses.
     const regions = new Map<number, InlineRegion>();
     const available: InlineRegion[] = [];
     for (const region of this.#regions.values()) {
@@ -239,6 +241,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     for (const descriptor of descriptors) {
       let previous = this.#regions.get(descriptor.id);
       if (!previous) {
+        // Rebind displaced state by rule and proximity when arena surgery changes node identities.
         let nearest = -1;
         let distance = Number.POSITIVE_INFINITY;
         for (let index = 0; index < available.length; index++) {
@@ -290,6 +293,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     if (!region) {
       return;
     }
+    // Edited regions own an arena; untouched regions use the shared stateless arena synchronously.
     const view = region.document?.view(region.tokens);
     const firstToken = region.tokens[0];
     return {

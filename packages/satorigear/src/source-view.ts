@@ -167,6 +167,7 @@ export function projectSourceEdits(
 // Build logical text from physical source spans while preserving original coordinates.
 export function createSourceView(source: string, spans: readonly SourceSpan[]): SourceView {
   if (spans.length === 1) {
+    // Contiguous regions dominate; avoid the parts array and join on their hot path.
     const span = spans[0];
     validateSourceSpan(span, source.length);
     if (span.start === span.end) {

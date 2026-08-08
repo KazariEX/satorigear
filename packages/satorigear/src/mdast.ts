@@ -72,6 +72,7 @@ export interface MarkdownSyntax {
 
 export interface BlockFragment {
   node: BlockContent | DefinitionContent;
+  // Origin belongs to the cached projection; offset moves so positions can shift without rebuilding nodes.
   offset: number;
   origin: number;
   version: number;

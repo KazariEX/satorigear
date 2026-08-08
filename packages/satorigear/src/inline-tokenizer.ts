@@ -41,8 +41,10 @@ function textEdit(previous: string, next: string): readonly TextEdit[] {
 }
 
 export class InlineTokenState {
+  // Track only labels consulted by this region so unrelated definitions do not invalidate it.
   #candidates?: ReadonlySet<string>;
   #labels?: ReadonlySet<string>;
+  // Keep unresolved tokens so a reference-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: readonly Token[];
   #source?: string;
   #tokens?: readonly Token[];

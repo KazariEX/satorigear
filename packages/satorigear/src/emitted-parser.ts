@@ -56,6 +56,7 @@ export interface SyntaxArenaView {
 }
 
 export interface EmittedParser {
+  // Stateless parses expose their module arena directly because callers consume it before the next parse.
   readonly arena: EmittedArena;
 
   createDocument: (source: string, tokens: readonly Token[], entryRule?: string) => EmittedParserDocument;
