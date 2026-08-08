@@ -12,12 +12,6 @@ export interface EmittedArena {
   ruleNameOf: (id: number) => string;
 }
 
-export interface EmittedParserModule<Handle extends EmittedParserHandle> {
-  createParser: () => EmittedParserInstance<Handle>;
-  parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => number;
-  tree: EmittedArena;
-}
-
 export interface EmittedParserHandle {
   root: number;
 }
@@ -65,12 +59,12 @@ export interface EmittedParser {
 }
 
 function createEmittedParserDocument<Handle extends EmittedParserHandle>(
-  runtime: EmittedParserModule<Handle>,
+  createParser: () => EmittedParserInstance<Handle>,
   source: string,
   tokens: readonly Token[],
   entryRule?: string,
 ): EmittedParserDocument {
-  const parser = runtime.createParser();
+  const parser = createParser();
   const handle = parser.parseTokens(source, tokens, entryRule);
   const view = (currentTokens: readonly Token[]): SyntaxArenaView => createArenaView(handle.root, currentTokens, parser.tree);
   return {
@@ -108,13 +102,15 @@ function createArenaView(
 }
 
 export function createEmittedParser<Handle extends EmittedParserHandle>(
-  runtime: EmittedParserModule<Handle>,
+  arena: EmittedArena,
+  createParser: () => EmittedParserInstance<Handle>,
+  parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => number,
   tokenize: (source: string) => Token[],
 ): EmittedParser {
   return {
-    arena: runtime.tree,
-    createDocument: (source, tokens, entryRule) => createEmittedParserDocument(runtime, source, tokens, entryRule),
-    parseTokens: runtime.parseTokens,
+    arena,
+    createDocument: (createEmittedParserDocument<Handle>).bind(void 0, createParser),
+    parseTokens,
     tokenize,
   };
 }

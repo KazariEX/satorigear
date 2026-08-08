@@ -1,5 +1,5 @@
 import type { Token } from "monogram/gen-lexer.ts";
-import * as inlineRuntime from "./generated/inline.ts";
+import * as generatedInline from "./generated/inline.ts";
 import {
   createDelimitedTokenResolver,
   type DelimiterRunConfig,
@@ -241,7 +241,7 @@ export class InlineTokenState {
     const referenceState: MarkdownReferenceState = { labels };
     const rawTokens = edits.length === 0 && this.#rawTokens
       ? this.#rawTokens
-      : inlineRuntime.tokenize(source);
+      : generatedInline.tokenize(source);
     const associatedTokens = reassociateReferenceTails(source, rawTokens, labels);
     const tokens = resolver.resolve(source, associatedTokens, referenceState);
     apply?.(

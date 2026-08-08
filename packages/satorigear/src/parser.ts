@@ -6,24 +6,26 @@ import {
   type EmittedParserDocument,
   type SyntaxArenaView,
 } from "./emitted-parser.ts";
-import * as blockRuntime from "./generated/blocks.ts";
-import * as inlineRuntime from "./generated/inline.ts";
+import * as generatedBlocks from "./generated/blocks.ts";
+import * as generatedInline from "./generated/inline.ts";
 import { InlineTokenState } from "./inline-tokenizer.ts";
 import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
-import {
-  createSourceView,
-  projectSourceEdits,
-  type SourceSpan,
-  type SourceView,
-} from "./source-view.ts";
-import type {
-  MarkdownInlineSyntax,
-  MarkdownSyntax,
-} from "./mdast.ts";
+import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
+import type { MarkdownInlineSyntax, MarkdownSyntax } from "./mdast.ts";
 import type { TextEdit } from "./text-edit.ts";
 
-export const blockParser = createEmittedParser(blockRuntime, tokenizeMarkdownBlocks);
-const inlineParser = createEmittedParser(inlineRuntime, inlineRuntime.tokenize);
+export const blockParser = createEmittedParser(
+  generatedBlocks.tree,
+  generatedBlocks.createParser,
+  generatedBlocks.parseTokens,
+  tokenizeMarkdownBlocks,
+);
+const inlineParser = createEmittedParser(
+  generatedInline.tree,
+  generatedInline.createParser,
+  generatedInline.parseTokens,
+  generatedInline.tokenize,
+);
 
 function referenceLabelText(text: string): string | null {
   const open = text.indexOf("[");
