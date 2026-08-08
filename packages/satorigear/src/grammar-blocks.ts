@@ -1,6 +1,6 @@
 import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "monogram/api.ts";
 import type { Token } from "monogram/gen-lexer.ts";
-import { changedTokenRange, sameShiftedToken, shiftedToken, type TokenChange } from "./token-change.ts";
+import { createShiftedToken, createTokenChange, type TokenChange, tokenEqualsAfterShift } from "./token-change.ts";
 import type { SourceLocation } from "./source-view.ts";
 import type { TextEdit } from "./text-edit.ts";
 
@@ -1124,7 +1124,7 @@ function sameShiftedBlock(
     return false;
   }
   for (let index = 0; index < length; index++) {
-    if (!sameShiftedToken(previous[checkpoint.tokenStart + index], next[tokenStart + index], delta)) {
+    if (!tokenEqualsAfterShift(previous[checkpoint.tokenStart + index], next[tokenStart + index], delta)) {
       return false;
     }
   }
@@ -1255,7 +1255,9 @@ class MarkdownBlockTokenizerImpl {
     const oldTokenEnd = converged < 0 ? this.#tokens.length : this.#checkpoints[converged].tokenStart;
     const tokenDelta = replacement.length - (oldTokenEnd - oldTokenStart);
     const previousTokens = this.#tokens;
-    const suffix = previousTokens.slice(oldTokenEnd).map((token) => shiftedToken(token, delta));
+    const suffix = delta === 0
+      ? previousTokens.slice(oldTokenEnd)
+      : previousTokens.slice(oldTokenEnd).map((token) => createShiftedToken(token, delta));
     this.#tokens = [...previousTokens.slice(0, oldTokenStart), ...replacement, ...suffix];
     const prefixCheckpoints = this.#checkpoints.slice(0, Math.max(0, restart));
     const scannedCheckpoints = scanned.map((value) => ({
@@ -1273,7 +1275,7 @@ class MarkdownBlockTokenizerImpl {
     this.#lines = nextLines;
     this.#checkpoints = [...prefixCheckpoints, ...scannedCheckpoints, ...suffixCheckpoints];
     return {
-      change: changedTokenRange(previousTokens, this.#tokens, delta),
+      change: createTokenChange(previousTokens, this.#tokens, delta),
       scannedRange: { start: restartOffset, end: scannedEnd },
     };
   }

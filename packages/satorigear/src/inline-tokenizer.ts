@@ -6,7 +6,7 @@ import {
   reassociateMarkdownReferenceTails,
 } from "./grammar-inline.ts";
 import { createDelimitedTokenResolver } from "./inline-resolution.ts";
-import { changedTokenRange, type TokenChange } from "./token-change.ts";
+import { createTokenChange, type TokenChange } from "./token-change.ts";
 import type { TextEdit } from "./text-edit.ts";
 
 type ApplyTokenChange = (edits: readonly TextEdit[], change: TokenChange) => void;
@@ -76,7 +76,7 @@ export class InlineTokenState {
     if (apply) {
       apply(
         edits,
-        changedTokenRange(previousTokens, tokens, source.length - previousSource.length),
+        createTokenChange(previousTokens, tokens, source.length - previousSource.length),
       );
     }
 

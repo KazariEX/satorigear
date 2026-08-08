@@ -6,31 +6,51 @@ export interface TokenChange {
   tokens: readonly Token[];
 }
 
-export function shiftedToken(token: Token, delta: number): Token {
+export function createShiftedToken(token: Token, delta: number): Token {
   return {
     ...token,
     offset: token.offset + delta,
-    ...(token.ranges ? {
+    ...token.ranges ? {
       ranges: token.ranges.map((range) => ({ offset: range.offset + delta, end: range.end + delta })),
-    } : {}),
+    } : {},
   };
 }
 
-export function sameShiftedToken(previous: Token, next: Token, delta: number): boolean {
-  if (previous.type !== next.type || previous.text !== next.text
-    || previous.newlineBefore !== next.newlineBefore
-    || previous.commentBefore !== next.commentBefore
-    || previous.multilineFlowBefore !== next.multilineFlowBefore) {
+export function tokenEqualsAfterShift(previous: Token, next: Token, delta: number): boolean {
+  if (
+    previous.type !== next.type ||
+    previous.text !== next.text ||
+    previous.newlineBefore !== next.newlineBefore ||
+    previous.commentBefore !== next.commentBefore ||
+    previous.multilineFlowBefore !== next.multilineFlowBefore
+  ) {
     return false;
   }
-  const previousRanges = previous.ranges ?? [{ offset: previous.offset, end: previous.offset + previous.text.length }];
-  const nextRanges = next.ranges ?? [{ offset: next.offset, end: next.offset + next.text.length }];
-  return previousRanges.length === nextRanges.length && previousRanges.every((range, index) => (
-    range.offset + delta === nextRanges[index].offset && range.end + delta === nextRanges[index].end
-  ));
+
+  const previousLength = previous.ranges?.length ?? 1;
+  const nextLength = next.ranges?.length ?? 1;
+
+  if (previousLength !== nextLength) {
+    return false;
+  }
+
+  for (let index = 0; index < previousLength; index++) {
+    const previousRange = previous.ranges?.[index];
+    const nextRange = next.ranges?.[index];
+    const previousOffset = previousRange?.offset ?? previous.offset;
+    const previousEnd = previousRange?.end ?? previous.offset + previous.text.length;
+    const nextOffset = nextRange?.offset ?? next.offset;
+    const nextEnd = nextRange?.end ?? next.offset + next.text.length;
+
+    if (previousOffset + delta !== nextOffset || previousEnd + delta !== nextEnd) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-export function changedTokenRange(previous: readonly Token[], next: readonly Token[], delta: number): TokenChange {
+export function createTokenChange(previous: readonly Token[], next: readonly Token[], delta: number): TokenChange {
   if (previous.length === 0) {
     return { oldStart: 0, oldEnd: 0, tokens: next };
   }
@@ -40,12 +60,17 @@ export function changedTokenRange(previous: readonly Token[], next: readonly Tok
 
   const common = Math.min(previous.length, next.length);
   let start = 0;
-  while (start < common && sameShiftedToken(previous[start], next[start], 0)) {
+  while (
+    start < common &&
+    tokenEqualsAfterShift(previous[start], next[start], 0)
+  ) {
     start++;
   }
   let suffix = 0;
-  while (suffix < common - start
-    && sameShiftedToken(previous[previous.length - 1 - suffix], next[next.length - 1 - suffix], delta)) {
+  while (
+    suffix < common - start &&
+    tokenEqualsAfterShift(previous[previous.length - 1 - suffix], next[next.length - 1 - suffix], delta)
+  ) {
     suffix++;
   }
   return {
