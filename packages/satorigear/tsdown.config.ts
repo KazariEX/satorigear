@@ -38,7 +38,11 @@ export default defineConfig({
         await mkdir(generated, { recursive: true });
         await Promise.all(
           parsers.map(async ([name, grammar]) => {
-            const emitted = emitJsParser(grammar, emitJsLexer(grammar));
+            const lexer = emitJsLexer(grammar);
+            if (lexer === null) {
+              throw new Error(`Expected an emitted lexer for ${grammar.name}`);
+            }
+            const emitted = emitJsParser(grammar, lexer);
             await writeFile(join(generated, name), `// @ts-nocheck\n${emitted}`);
           }),
         );

@@ -146,15 +146,21 @@ it("matches the fallback lexer for newline and delimited spans", async () => {
   }
 });
 
-it("isolates fallback token text between emitted parser documents", async () => {
+it("isolates SOA parser documents during external token edits", async () => {
   const directory = await mkdtemp(join(tmpdir(), "satorigear-emitted-parser-"));
   try {
     // Keep the generator's wider source graph outside this project's typecheck.
     const emitter = await import("monogram/emit-parser.ts" as string) as {
-      emitJsParser: (value: typeof grammar, lexer: null) => string;
+      emitJsLexer: (value: typeof grammar) => string | null;
+      emitJsParser: (value: typeof grammar, lexer: string) => string;
     };
+    const lexer = emitter.emitJsLexer(grammar);
+    expect(lexer).not.toBeNull();
+    if (lexer === null) {
+      throw new Error("Expected the document test grammar to use the emitted lexer");
+    }
     const modulePath = join(directory, "parser.ts");
-    await writeFile(modulePath, `// @ts-nocheck\n${emitter.emitJsParser(grammar, null)}`);
+    await writeFile(modulePath, `// @ts-nocheck\n${emitter.emitJsParser(grammar, lexer)}`);
     const runtime = await import(/* @vite-ignore */ pathToFileURL(modulePath).href) as Runtime;
 
     const parserA = runtime.createParser();

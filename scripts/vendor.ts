@@ -13,8 +13,6 @@ const patches = [
   join(root, "patches/3.hard-breaks.patch"),
   join(root, "patches/4.lazy-arenas.patch"),
   join(root, "patches/5.capacity-growth.patch"),
-  join(root, "patches/6.token-text-ownership.patch"),
-  join(root, "patches/7.token-text-reuse.patch"),
   join(root, "patches/9.newline-lexer-emission.patch"),
   join(root, "patches/10.external-token-kind-dispatch.patch"),
 ];
