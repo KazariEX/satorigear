@@ -1082,30 +1082,43 @@ export function projectBlock(
   return { node, offset, origin: offset, version };
 }
 
+function cloneFragment(
+  value: FragmentValue,
+  shift: number,
+  point: (offset: number) => SourceLocation,
+): MaterializedValue {
+  const result = {} as MaterializedValue & Record<string, unknown>;
+  // Preserve start → children → end order for the tokenizer's forward source locator.
+  const start = point(shift + value.startOffset);
+  for (const key in value) {
+    if (key !== "startOffset" && key !== "endOffset" && key !== "children") {
+      result[key] = value[key];
+    }
+  }
+  const childrenTarget = value.children;
+  if (childrenTarget) {
+    const children = new Array<MaterializedValue>(childrenTarget.length);
+    for (let i = 0; i < childrenTarget.length; i++) {
+      children[i] = cloneFragment(childrenTarget[i], shift, point);
+    }
+    result.children = children;
+  }
+  result.position = {
+    start,
+    end: point(shift + value.endOffset),
+  };
+  return result;
+}
+
 function materializeBlock(
   fragment: BlockFragment,
   point: (offset: number) => SourceLocation,
 ): BlockContent | DefinitionContent {
-  const shift = fragment.offset - fragment.origin;
-  const clone = (value: FragmentValue): MaterializedValue => {
-    const result = {} as MaterializedValue & Record<string, unknown>;
-    // Preserve start → children → end order for the tokenizer's forward source locator.
-    const start = point(shift + value.startOffset);
-    for (const key in value) {
-      if (key !== "startOffset" && key !== "endOffset" && key !== "children") {
-        result[key] = value[key];
-      }
-    }
-    if (value.children) {
-      result.children = value.children.map(clone);
-    }
-    result.position = {
-      start,
-      end: point(shift + value.endOffset),
-    };
-    return result;
-  };
-  return clone(fragment.node as unknown as FragmentValue) as unknown as BlockContent | DefinitionContent;
+  return cloneFragment(
+    fragment.node as unknown as FragmentValue,
+    fragment.offset - fragment.origin,
+    point,
+  ) as unknown as BlockContent | DefinitionContent;
 }
 
 export function materialize(
