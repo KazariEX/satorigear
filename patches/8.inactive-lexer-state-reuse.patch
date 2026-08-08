@@ -1,0 +1,60 @@
+diff --git a/src/gen-lexer.ts b/src/gen-lexer.ts
+index d39825e..234b072 100644
+--- a/src/gen-lexer.ts
++++ b/src/gen-lexer.ts
+@@ -484,11 +484,15 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+-  function tokenize(source: string): Token[] {
++  const emptyStack: never[] = [];
++  const emptyHandles = new Set<string>();
++  const trackParenHeads = !!(regexCtx || templateToken);
++
++  function tokenize(source: string): Token[] {
+     const tokens: Token[] = [];
+     let pos = 0;
+-    const templateStack: number[] = [];
++    const templateStack: number[] = templateToken ? [] : emptyStack;
+     // For each open `(`, whether it heads a control group (`if`/`while`/…) so the
+     // matching `)` is a statement head, not a value. `lastCloseWasParenHead` carries
+     // that to the regex-vs-division check (consulted only when prev is `)`).
+-    const parenHeadStack: boolean[] = [];
++    const parenHeadStack: boolean[] = trackParenHeads ? [] : emptyStack;
+     let lastCloseWasParenHead = false;
+     // Whether the most-recently-emitted ambiguous postfix/prefix op (e.g. `!`) was in
+     // POSTFIX position — i.e. followed a value, so it is itself value-producing (non-null
+@@ -537,7 +541,7 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+     // must reject. Set when a line-lead `?` is emitted; cleared at a document boundary / when indentation
+     // dedents below it. (yaml-test-suite 5WE3 / KK5P — the compact `: -` edge.)
+     let lastExplicitKeyCol = -1;
+-    const indentStack: number[] = [0];
++    const indentStack: number[] = indent ? [0] : emptyStack;
+
+     // Scan an inline span delimited by matching marker runs. A marker run is indivisible: a run
+     // longer or shorter than the opener cannot close it, and scanning resumes after that whole run.
+@@ -575,8 +579,8 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+     // = handles valid in the CURRENT document body (seeded with the builtins, reset at each boundary);
+     // `pendingHandles` = handles a directive prologue has declared, awaiting the `---` that activates
+     // them for the document they head. Both reset per document — like the indent stack.
+-    const declaredHandles = new Set(tagScopeBuiltins);
+-    let pendingHandles = new Set<string>();
++    const declaredHandles = tagScope ? new Set(tagScopeBuiltins) : emptyHandles;
++    let pendingHandles = tagScope ? new Set<string>() : emptyHandles;
+     function push(t: Token): void {
+       if (pendingNl) { t.newlineBefore = true; pendingNl = false; }
+       if (pendingComment) { t.commentBefore = true; pendingComment = false; }
+@@ -1254,14 +1258,14 @@ export function createLexer(grammar: CstGrammar, intern?: LexerIntern) {
+             // The keyword must be a real keyword head, not a member name: `obj.for(x) / y`
+             // is a method call + division, so skip when the keyword is itself preceded by
+             // a member accessor (e.g. `.`/`?.`, from divisionAfterTexts) → property access.
+-            if (lit === '(') {
++            if (trackParenHeads && lit === '(') {
+               const prev = tokens[tokens.length - 1];
+               const beforePrev = tokens[tokens.length - 2];
+               const isMemberName = !!beforePrev && memberAccessTexts.has(beforePrev.text);
+               parenHeadStack.push(
+                 !isMemberName && !!prev && prev.type === identTokenName && parenHeadKeywords.has(prev.text),
+               );
+-            } else if (lit === ')') {
++            } else if (trackParenHeads && lit === ')') {
+               lastCloseWasParenHead = parenHeadStack.pop() ?? false;
+             }
+             // An ambiguous postfix/prefix op (`!`): it is the value-producing postfix form

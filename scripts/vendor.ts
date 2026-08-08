@@ -15,6 +15,7 @@ const patches = [
   join(root, "patches/5.capacity-growth.patch"),
   join(root, "patches/6.token-text-ownership.patch"),
   join(root, "patches/7.token-text-reuse.patch"),
+  join(root, "patches/8.inactive-lexer-state-reuse.patch"),
 ];
 
 function git(args: string[], allowFailure = false, index?: string): boolean {
