@@ -72,12 +72,9 @@ export interface MarkdownSyntax {
 
 export interface BlockFragment {
   node: BlockContent | DefinitionContent;
-  origin: number;
-}
-
-export interface PlacedBlockFragment {
-  fragment: BlockFragment;
   offset: number;
+  origin: number;
+  version: number;
 }
 
 interface FragmentValue {
@@ -1090,18 +1087,18 @@ export function projectBlock(
   tokenBase: number,
   source: string,
   syntax: MarkdownSyntax,
+  version: number,
 ): BlockFragment {
   const context = { source, syntax, view: syntax.blockView() };
   const node = blockContent(nodeId, offset, tokenBase, context);
-  return { node, origin: offset };
+  return { node, offset, origin: offset, version };
 }
 
 function materializeBlock(
   fragment: BlockFragment,
-  offset: number,
   point: (offset: number) => SourceLocation,
 ): BlockContent | DefinitionContent {
-  const shift = offset - fragment.origin;
+  const shift = fragment.offset - fragment.origin;
   const clone = (value: FragmentValue): MaterializedValue => {
     const result = {} as MaterializedValue & Record<string, unknown>;
     for (const key in value) {
@@ -1122,13 +1119,13 @@ function materializeBlock(
 }
 
 export function materialize(
-  fragments: readonly PlacedBlockFragment[],
+  fragments: readonly BlockFragment[],
   sourceLength: number,
   locate: (offset: number) => SourceLocation,
 ): Root {
   return {
     type: "root",
-    children: fragments.map(({ fragment, offset }) => materializeBlock(fragment, offset, locate)),
+    children: fragments.map((fragment) => materializeBlock(fragment, locate)),
     position: { start: locate(0), end: locate(sourceLength) },
   } satisfies Root;
 }

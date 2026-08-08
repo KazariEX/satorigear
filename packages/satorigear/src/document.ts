@@ -3,7 +3,6 @@ import { createMarkdownBlockTokenizer } from "./grammar-blocks.ts";
 import {
   type BlockFragment,
   materialize,
-  type PlacedBlockFragment,
   projectBlock,
 } from "./mdast.ts";
 import { blockParser, createMarkdownSyntax } from "./parser.ts";
@@ -66,7 +65,7 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 class DocumentImpl implements Document {
   #blocks: EmittedParserDocument;
   #syntax: ReturnType<typeof createMarkdownSyntax>;
-  #fragments = new Map<number, { fragment: BlockFragment; version: number }>();
+  #fragments = new Map<number, BlockFragment>();
   #tokenizer: ReturnType<typeof createMarkdownBlockTokenizer>;
 
   constructor(source: string) {
@@ -91,15 +90,16 @@ class DocumentImpl implements Document {
     return { changedSpan };
   }
 
-  #projectBlocks(): PlacedBlockFragment[] {
-    const fragments = new Map<number, { fragment: BlockFragment; version: number }>();
+  #projectBlocks(): BlockFragment[] {
+    const fragments = new Map<number, BlockFragment>();
     const blocks = this.#syntax.blocks().map((block) => {
       const previous = this.#fragments.get(block.id);
       const fragment = previous?.version === block.version
-        ? previous.fragment
-        : projectBlock(block.id, block.offset, block.tokenBase, this.source, block.syntax);
-      fragments.set(block.id, { fragment, version: block.version });
-      return { fragment, offset: block.offset };
+        ? previous
+        : projectBlock(block.id, block.offset, block.tokenBase, this.source, block.syntax, block.version);
+      fragment.offset = block.offset;
+      fragments.set(block.id, fragment);
+      return fragment;
     });
     this.#fragments = fragments;
     return blocks;
