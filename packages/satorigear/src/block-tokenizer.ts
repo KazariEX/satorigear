@@ -1028,33 +1028,33 @@ function sameShiftedBlock(
   return true;
 }
 
-function locate(
+// Mdast materialization visits nested spans in source order, so one cursor replaces a binary search per point.
+function createForwardLocator(
   lines: readonly Line[],
   sourceLength: number,
   endsInLineEnding: boolean,
-  offset: number,
-): SourceLocation {
-  if (offset < 0 || offset > sourceLength) {
-    throw new RangeError(`Source offset ${offset} is outside the document`);
-  }
+): (offset: number) => SourceLocation {
   if (lines.length === 0) {
-    return { line: 1, column: 1, offset };
+    return (offset) => {
+      if (offset < 0 || offset > sourceLength) {
+        throw new RangeError(`Source offset ${offset} is outside the document`);
+      }
+      return { line: 1, column: 1, offset };
+    };
   }
-  if (offset === sourceLength && endsInLineEnding) {
-    return { line: lines.length + 1, column: 1, offset };
-  }
-  let low = 0;
-  let high = lines.length;
-  while (low + 1 < high) {
-    const middle = (low + high) >>> 1;
-    if (lines[middle].start <= offset) {
-      low = middle;
+  let line = 0;
+  return (offset) => {
+    if (offset < 0 || offset > sourceLength) {
+      throw new RangeError(`Source offset ${offset} is outside the document`);
     }
-    else {
-      high = middle;
+    if (offset === sourceLength && endsInLineEnding) {
+      return { line: lines.length + 1, column: 1, offset };
     }
-  }
-  return { line: low + 1, column: offset - lines[low].start + 1, offset };
+    while (line + 1 < lines.length && lines[line + 1].start <= offset) {
+      line++;
+    }
+    return { line: line + 1, column: offset - lines[line].start + 1, offset };
+  };
 }
 
 function endsInLineEnding(source: string): boolean {
@@ -1088,7 +1088,7 @@ class MarkdownBlockTokenizerImpl {
     const lines = this.#lines;
     const sourceLength = this.#source.length;
     const trailingLineEnding = endsInLineEnding(this.#source);
-    return (offset) => locate(lines, sourceLength, trailingLineEnding, offset);
+    return createForwardLocator(lines, sourceLength, trailingLineEnding);
   }
 
   edit(edits: readonly TextEdit[]): BlockEditResult {

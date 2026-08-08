@@ -1102,6 +1102,8 @@ function materializeBlock(
   const shift = fragment.offset - fragment.origin;
   const clone = (value: FragmentValue): MaterializedValue => {
     const result = {} as MaterializedValue & Record<string, unknown>;
+    // Preserve start → children → end order for the tokenizer's forward source locator.
+    const start = point(shift + value.startOffset);
     for (const key in value) {
       if (key !== "startOffset" && key !== "endOffset" && key !== "children") {
         result[key] = value[key];
@@ -1111,7 +1113,7 @@ function materializeBlock(
       result.children = value.children.map(clone);
     }
     result.position = {
-      start: point(shift + value.startOffset),
+      start,
       end: point(shift + value.endOffset),
     };
     return result;
@@ -1124,9 +1126,11 @@ export function materialize(
   sourceLength: number,
   locate: (offset: number) => SourceLocation,
 ): Root {
+  const start = locate(0);
+  const children = fragments.map((fragment) => materializeBlock(fragment, locate));
   return {
     type: "root",
-    children: fragments.map((fragment) => materializeBlock(fragment, locate)),
-    position: { start: locate(0), end: locate(sourceLength) },
+    children,
+    position: { start, end: locate(sourceLength) },
   } satisfies Root;
 }
