@@ -2,7 +2,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { defineGrammar, notLeftLeaf, plus, range, rule, token } from "monogram/api.ts";
+import { alt, altPattern, defineGrammar, many, never, noneOf, notLeftLeaf, plus, range, rule, seq, star, token } from "monogram/api.ts";
+import { createLexer } from "monogram/gen-lexer.ts";
 import { expect, it } from "vitest";
 
 interface Diagnostic {
@@ -40,6 +41,10 @@ interface Runtime {
   createParser: () => Parser;
 }
 
+interface LexerRuntime {
+  tokenize: (source: string) => ExternalToken[];
+}
+
 const Word = token(plus(range("a", "z")));
 const Expr = rule((self) => [
   Word,
@@ -51,6 +56,24 @@ const grammar = defineGrammar({
   tokens: { Word },
   rules: { Expr },
   entry: Expr,
+});
+
+const LineEnd = altPattern("\r\n", "\r", "\n");
+const Newline = token(never());
+const HardBreak = token(altPattern(
+  seq("\\", LineEnd),
+  seq("  ", star(" "), LineEnd),
+));
+const CodeSpan = token("`", { delimitedSpan: { markers: ["`"], minLength: 1, multiline: true } });
+const Text = token(plus(noneOf(" ", "\t", "\n", "\r", "`", "\\")));
+const Line = rule(() => [[alt(HardBreak, CodeSpan, Text), many(alt(HardBreak, CodeSpan, Text))]]);
+const Document = rule(() => [[Line, many(Newline, Line)]]);
+const newlineGrammar = defineGrammar({
+  name: "emitted-newline",
+  tokens: { HardBreak, CodeSpan, Text, Newline },
+  rules: { Document, Line },
+  entry: Document,
+  newline: { token: "Newline", hardBreak: { token: "HardBreak", minSpaces: 2 } },
 });
 
 function externalToken(type: string, text: string, offset: number): ExternalToken {
@@ -78,6 +101,50 @@ function outcome(parser: Parser, handle: Handle): unknown {
     root: parser.tree.ruleNameOf(handle.root),
   };
 }
+
+function tokenShape(token: ExternalToken): ExternalToken {
+  return {
+    commentBefore: token.commentBefore,
+    multilineFlowBefore: token.multilineFlowBefore,
+    newlineBefore: token.newlineBefore,
+    offset: token.offset,
+    text: token.text,
+    type: token.type,
+  };
+}
+
+it("matches the fallback lexer for newline and delimited spans", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "satorigear-emitted-lexer-"));
+  try {
+    const emitter = await import("monogram/emit-parser.ts" as string) as {
+      emitJsLexer: (value: typeof newlineGrammar) => string | null;
+      emitJsParser: (value: typeof newlineGrammar, lexer: string) => string;
+    };
+    const lexer = emitter.emitJsLexer(newlineGrammar);
+    expect(lexer).not.toBeNull();
+
+    const modulePath = join(directory, "parser.ts");
+    await writeFile(modulePath, `// @ts-nocheck\n${emitter.emitJsParser(newlineGrammar, lexer!)}`);
+    const runtime = await import(/* @vite-ignore */ pathToFileURL(modulePath).href) as LexerRuntime;
+    const fallback = createLexer(newlineGrammar).tokenize;
+    const sources = [
+      "alpha\nbeta",
+      "\n \r\n\t \rword",
+      "alpha  \nbeta",
+      "alpha\\\r\nbeta",
+      "`a\nb`\nword",
+      "``a`b``\nword",
+      "alpha\u00a0beta\nword",
+    ];
+
+    for (const source of sources) {
+      expect(runtime.tokenize(source).map(tokenShape)).toEqual(fallback(source).map(tokenShape));
+    }
+  }
+  finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
 
 it("isolates fallback token text between emitted parser documents", async () => {
   const directory = await mkdtemp(join(tmpdir(), "satorigear-emitted-parser-"));
