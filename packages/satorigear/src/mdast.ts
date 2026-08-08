@@ -24,6 +24,7 @@ import type { Token } from "monogram/gen-lexer.ts";
 import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
 import type { EmittedArena, SyntaxArenaView } from "./emitted-parser.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
+import type { MarkdownSyntax } from "./syntax.ts";
 
 interface Resource {
   url: string;
@@ -54,20 +55,6 @@ interface InlineAccumulator {
   gapEnd: number;
   gapStart: number;
   target: PhrasingContent[];
-}
-
-export interface MarkdownInlineSyntax {
-  arena: EmittedArena;
-  rootId: number;
-  rootOffset: number;
-  rootTokenBase: number;
-  tokens: readonly Token[];
-  view: SourceView;
-}
-
-export interface MarkdownSyntax {
-  blockView: () => SyntaxArenaView;
-  inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
 }
 
 export interface BlockFragment {

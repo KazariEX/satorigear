@@ -5,7 +5,7 @@ import {
   materialize,
   projectBlock,
 } from "./mdast.ts";
-import { blockSyntaxParser, createMarkdownSyntax } from "./parser.ts";
+import { blockSyntaxParser, createMarkdownSyntax } from "./syntax.ts";
 import type { EmittedParserDocument } from "./emitted-parser.ts";
 import type { TextEdit } from "./text-edit.ts";
 

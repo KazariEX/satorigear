@@ -10,8 +10,21 @@ import * as generatedInline from "./generated/inline.ts";
 import { InlineTokenState } from "./inline-tokenizer.ts";
 import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
 import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
-import type { MarkdownInlineSyntax, MarkdownSyntax } from "./mdast.ts";
 import type { TextEdit } from "./text-edit.ts";
+
+export interface MarkdownInlineSyntax {
+  arena: EmittedArena;
+  rootId: number;
+  rootOffset: number;
+  rootTokenBase: number;
+  tokens: readonly Token[];
+  view: SourceView;
+}
+
+export interface MarkdownSyntax {
+  blockView: () => SyntaxArenaView;
+  inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
+}
 
 export const blockSyntaxParser = createEmittedParser(
   generatedBlocks.tree,
@@ -61,18 +74,39 @@ class InlineRegion extends InlineTokenState {
     this.rule = descriptor.rule;
     this.span = descriptor.span;
     this.view = descriptor.view;
-    this.update(descriptor.view.text, labels);
+    this.updateTokens(descriptor.view.text, labels);
   }
 
-  describe(descriptor: InlineRegionDescriptor): void {
+  #rebind(descriptor: InlineRegionDescriptor): void {
     this.id = descriptor.id;
     this.rule = descriptor.rule;
     this.span = descriptor.span;
     this.view = descriptor.view;
   }
+
+  update(
+    descriptor: InlineRegionDescriptor,
+    labels: ReadonlySet<string>,
+    edits: readonly TextEdit[] | null,
+  ): this {
+    const document = this.document;
+    const sourceEdits = edits && this.view.text !== descriptor.view.text
+      ? projectSourceEdits(this.view, descriptor.view, edits)
+      : null;
+    const changed = this.updateTokens(descriptor.view.text, labels, document?.edit, sourceEdits);
+    this.#rebind(descriptor);
+    if (!changed) {
+      return this;
+    }
+    if (!document) {
+      this.document = inlineSyntaxParser.createDocument(descriptor.view.text, this.tokens, "InlineLines");
+    }
+    this.revision++;
+    return this;
+  }
 }
 
-interface SyntaxBlockDescriptor {
+interface SyntaxBlock {
   id: number;
   offset: number;
   regionIds: readonly number[];
@@ -114,38 +148,12 @@ function inlineSpansOf(
   return spans;
 }
 
-function createInlineRegion(descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>): InlineRegion {
-  return new InlineRegion(descriptor, labels);
-}
-
-function updateInlineRegion(
-  region: InlineRegion,
-  descriptor: InlineRegionDescriptor,
-  labels: ReadonlySet<string>,
-  edits: readonly TextEdit[] | null,
-): InlineRegion {
-  const document = region.document;
-  const sourceEdits = edits && region.view.text !== descriptor.view.text
-    ? projectSourceEdits(region.view, descriptor.view, edits)
-    : null;
-  const changed = region.update(descriptor.view.text, labels, document?.edit, sourceEdits);
-  region.describe(descriptor);
-  if (!changed) {
-    return region;
-  }
-  if (!document) {
-    region.document = inlineSyntaxParser.createDocument(descriptor.view.text, region.tokens, "InlineLines");
-  }
-  region.revision++;
-  return region;
-}
-
 function sameNumbers(left: readonly number[], right: readonly number[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 class MarkdownSyntaxImpl implements MarkdownSyntax {
-  #blocks: readonly SyntaxBlockDescriptor[] = [];
+  #blocks: readonly SyntaxBlock[] = [];
   #regions = new Map<number, InlineRegion>();
   #view: SyntaxArenaView;
 
@@ -154,7 +162,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     this.update(view, source);
   }
 
-  blocks(): readonly SyntaxBlockDescriptor[] {
+  blocks(): readonly SyntaxBlock[] {
     return this.#blocks;
   }
 
@@ -163,7 +171,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
     const stableRegionIds = new Set<number>();
-    const blocks: SyntaxBlockDescriptor[] = [];
+    const blocks: SyntaxBlock[] = [];
     const collect = (
       nodeId: number,
       offset: number,
@@ -258,8 +266,8 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         }
       }
       const region = previous
-        ? updateInlineRegion(previous, descriptor, labels, edits)
-        : createInlineRegion(descriptor, labels);
+        ? previous.update(descriptor, labels, edits)
+        : new InlineRegion(descriptor, labels);
       regions.set(descriptor.id, region);
     }
     const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));

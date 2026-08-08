@@ -224,7 +224,7 @@ export class InlineTokenState {
     return this.#tokens ?? emptyTokens;
   }
 
-  update(
+  protected updateTokens(
     source: string,
     labels: ReadonlySet<string>,
     apply?: ApplyTokenChange,
