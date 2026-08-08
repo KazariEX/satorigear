@@ -84,8 +84,6 @@ interface SyntaxBlockDescriptor {
   version: number;
 }
 
-type CollectedBlock = Omit<SyntaxBlockDescriptor, "regionRevisions" | "syntax" | "version">;
-
 function appendTokenSpans(spans: SourceSpan[], token: Token): void {
   if (token.ranges?.length) {
     for (const range of token.ranges) {
@@ -166,7 +164,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
     const stableRegionIds = new Set<number>();
-    const blocks: CollectedBlock[] = [];
+    const blocks: SyntaxBlockDescriptor[] = [];
     const collect = (
       nodeId: number,
       offset: number,
@@ -223,8 +221,11 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         id: childId,
         offset,
         regionIds,
+        regionRevisions: [],
         source: source.slice(offset, offset + arena.lenOf(childId)),
+        syntax: this,
         tokenBase,
+        version: 0,
       });
     }
 
@@ -260,7 +261,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       regions.set(descriptor.id, region);
     }
     const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));
-    const nextBlocks = blocks.map((block): SyntaxBlockDescriptor => {
+    for (const block of blocks) {
       const previous = previousBlocks.get(block.id);
       const regionRevisions = block.regionIds.map((id) => {
         const region = regions.get(id);
@@ -272,15 +273,11 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       const unchanged = previous?.source === block.source
         && sameNumbers(previous.regionIds, block.regionIds)
         && sameNumbers(previous.regionRevisions, regionRevisions);
-      return {
-        ...block,
-        regionRevisions,
-        syntax: this,
-        version: unchanged ? previous.version : (previous?.version ?? -1) + 1,
-      };
-    });
+      block.regionRevisions = regionRevisions;
+      block.version = unchanged ? previous.version : (previous?.version ?? -1) + 1;
+    }
     this.#view = view;
-    this.#blocks = nextBlocks;
+    this.#blocks = blocks;
     this.#regions = regions;
   }
 
