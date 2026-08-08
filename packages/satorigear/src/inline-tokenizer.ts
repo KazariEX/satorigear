@@ -105,14 +105,15 @@ function reassociateReferenceTails(
   return result ?? tokens;
 }
 
-const activatesReference: NonNullable<PairedTokenConfig<MarkdownReferenceState>["activate"]> = ({
+const activateReference: NonNullable<PairedTokenConfig<MarkdownReferenceState>["activate"]> = ({
   closer,
   content,
   state,
 }) => {
   const explicit = closer.text.startsWith("][") ? closer.text.slice(2, -1) : "";
   const label = normalizeMarkdownReferenceLabel(explicit || content);
-  state.candidates?.add(label);
+  state.candidates ??= new Set();
+  state.candidates.add(label);
   return state.labels.has(label);
 };
 
@@ -138,7 +139,7 @@ const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[]
     close: "ReferenceClose",
     deactivateEarlier: ["BracketOpen"],
     isolateDelimiters: true,
-    activate: activatesReference,
+    activate: activateReference,
     splitUnmatchedCloser: splitReferenceTail,
   },
   {
@@ -148,7 +149,7 @@ const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[]
     close: "ReferenceClose",
     deactivateEarlier: ["BracketOpen"],
     isolateDelimiters: true,
-    activate: activatesReference,
+    activate: activateReference,
     content: {
       requireNonWhitespace: true,
       maxCharacters: 999,
@@ -161,7 +162,7 @@ const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[]
     open: "ImageReferenceOpen",
     close: "ImageReferenceClose",
     isolateDelimiters: true,
-    activate: activatesReference,
+    activate: activateReference,
     splitUnmatchedCloser: splitReferenceTail,
   },
   {
@@ -170,7 +171,7 @@ const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[]
     open: "ImageReferenceOpen",
     close: "ImageReferenceClose",
     isolateDelimiters: true,
-    activate: activatesReference,
+    activate: activateReference,
     content: {
       requireNonWhitespace: true,
       maxCharacters: 999,
@@ -180,6 +181,8 @@ const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[]
 ];
 
 const resolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
+// Most regions contain no references, so they share one immutable empty candidate set.
+const emptyReferenceCandidates: ReadonlySet<string> = new Set();
 const emptyTokens: readonly Token[] = [];
 
 function textEdit(previous: string, next: string): readonly TextEdit[] {
@@ -235,12 +238,12 @@ export class InlineTokenState {
     const previousSource = this.#source ?? "";
     const previousTokens = this.#tokens ?? emptyTokens;
     const edits = this.#rawTokens || apply ? sourceEdits ?? textEdit(previousSource, source) : [];
-    const candidates = new Set<string>();
+    const referenceState: MarkdownReferenceState = { labels };
     const rawTokens = edits.length === 0 && this.#rawTokens
       ? this.#rawTokens
       : inlineRuntime.tokenize(source);
     const associatedTokens = reassociateReferenceTails(source, rawTokens, labels);
-    const tokens = resolver.resolve(source, associatedTokens, { labels, candidates });
+    const tokens = resolver.resolve(source, associatedTokens, referenceState);
     apply?.(
       edits,
       createTokenChange(previousTokens, tokens, source.length - previousSource.length),
@@ -248,7 +251,7 @@ export class InlineTokenState {
 
     this.#source = source;
     this.#labels = labels;
-    this.#candidates = candidates;
+    this.#candidates = referenceState.candidates ?? emptyReferenceCandidates;
     this.#rawTokens = rawTokens;
     this.#tokens = tokens;
     return true;
