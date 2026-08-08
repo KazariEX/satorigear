@@ -290,15 +290,14 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     if (!region) {
       return;
     }
-    const view = region.document
-      ? region.document.view(region.tokens)
-      : inlineParser.parseView(region.view.text, region.tokens, "InlineLines");
+    const view = region.document?.view(region.tokens);
+    const firstToken = region.tokens[0];
     return {
-      arena: view.arena,
-      rootId: view.root.id,
-      rootOffset: view.root.offset,
-      rootTokenBase: view.root.tokenBase,
-      tokenAt: view.tokenAt,
+      arena: view?.arena ?? inlineParser.arena,
+      rootId: view?.root.id ?? inlineParser.parseTokens(region.view.text, region.tokens, "InlineLines"),
+      rootOffset: firstToken ? firstToken.ranges?.[0]?.offset ?? firstToken.offset : 0,
+      rootTokenBase: 0,
+      tokens: region.tokens,
       view: region.view,
     };
   }

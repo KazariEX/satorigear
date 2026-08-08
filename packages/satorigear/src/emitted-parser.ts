@@ -56,8 +56,10 @@ export interface SyntaxArenaView {
 }
 
 export interface EmittedParser {
+  readonly arena: EmittedArena;
+
   createDocument: (source: string, tokens: readonly Token[], entryRule?: string) => EmittedParserDocument;
-  parseView: (source: string, tokens: readonly Token[], entryRule?: string) => SyntaxArenaView;
+  parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => number;
   tokenize: (source: string) => Token[];
 }
 
@@ -108,13 +110,10 @@ export function createEmittedParser<Handle extends EmittedParserHandle>(
   runtime: EmittedParserModule<Handle>,
   tokenize: (source: string) => Token[],
 ): EmittedParser {
-  const parseView = (source: string, tokens: readonly Token[], entryRule?: string): SyntaxArenaView => {
-    const root = runtime.parseTokens(source, tokens, entryRule);
-    return createArenaView(root, tokens, runtime.tree);
-  };
   return {
+    arena: runtime.tree,
     createDocument: (source, tokens, entryRule) => createEmittedParserDocument(runtime, source, tokens, entryRule),
-    parseView,
+    parseTokens: runtime.parseTokens,
     tokenize,
   };
 }

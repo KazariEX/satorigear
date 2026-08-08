@@ -45,7 +45,7 @@ interface BlockProjectionContext {
 interface InlineProjectionContext {
   arena: EmittedArena;
   source: string;
-  tokenAt: (index: number) => Token;
+  tokens: readonly Token[];
   view: SourceView;
 }
 
@@ -61,7 +61,7 @@ export interface MarkdownInlineSyntax {
   rootId: number;
   rootOffset: number;
   rootTokenBase: number;
-  tokenAt: (index: number) => Token;
+  tokens: readonly Token[];
   view: SourceView;
 }
 
@@ -121,6 +121,14 @@ function tokenStart(token: Token): number {
 
 function tokenEnd(token: Token): number {
   return token.ranges?.at(-1)?.end ?? token.offset + token.text.length;
+}
+
+function inlineToken(context: InlineProjectionContext, index: number): Token {
+  const token = context.tokens[index];
+  if (!token) {
+    throw new Error("emitted parser returned a leaf outside its token stream");
+  }
+  return token;
 }
 
 function lineStart(source: string, offset: number): number {
@@ -207,7 +215,7 @@ function directLeaf(
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0 && arena.leafTokenType(entry, tokenBase) === tokenType) {
-      return context.tokenAt(arena.leafToken(entry, tokenBase));
+      return inlineToken(context, arena.leafToken(entry, tokenBase));
     }
   }
 }
@@ -231,7 +239,7 @@ function leafOfTypes(
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0 && tokenTypes.includes(arena.leafTokenType(entry, tokenBase))) {
-      return context.tokenAt(arena.leafToken(entry, tokenBase));
+      return inlineToken(context, arena.leafToken(entry, tokenBase));
     }
   }
   throw new Error(`Expected ${context.arena.ruleNameOf(nodeId)} syntax to contain one of: ${tokenTypes.join(", ")}`);
@@ -612,7 +620,7 @@ function inlineSequence(
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
-    const token = entry < 0 ? context.tokenAt(arena.leafToken(entry, tokenBase)) : void 0;
+    const token = entry < 0 ? inlineToken(context, arena.leafToken(entry, tokenBase)) : void 0;
     const childOffset = token ? tokenStart(token) : offset + arena.childRelAt(nodeId, index);
     const childEnd = token ? tokenEnd(token) : childOffset + arena.lenOf(entry);
     const childTokenBase = token ? tokenBase : tokenBase + arena.childTokRelAt(nodeId, index);
@@ -780,7 +788,7 @@ function inlineChildren(nodeId: number, context: BlockProjectionContext): Phrasi
   const inlineContext: InlineProjectionContext = {
     arena: inline.arena,
     source: context.source,
-    tokenAt: inline.tokenAt,
+    tokens: inline.tokens,
     view: inline.view,
   };
   const result: PhrasingContent[] = [];
