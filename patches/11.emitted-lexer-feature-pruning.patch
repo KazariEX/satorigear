@@ -1,0 +1,93 @@
+diff --git a/src/emit-lexer.ts b/src/emit-lexer.ts
+--- a/src/emit-lexer.ts
++++ b/src/emit-lexer.ts
+@@ -85,3 +85,4 @@
+   const regexCtx = grammar.tokens.find(t => t.regexContext)?.regexContext;
++  const tracksValueContext = templateToken !== undefined || grammar.tokens.some(t => t.flags.includes('regex'));
+   const kOf = (name: string) => st.typeKind.get(name) ?? st.KIND_NAMED_FALLBACK;
+   const kNewline = newline ? kOf(newline.token) : -1;
+@@ -333,10 +334,12 @@
+     emit(`  let emittedContent = pvK >= 0;`);
+   }
+   emit(`  let extraFl = 0;`);
+-  emit(`  let lastBangWasPostfix = false;`);
+-  emit(`  let lastCloseWasParenHead = false;`);
+-  emit(`  const templateStack: number[] = [];`);
+-  emit(`  const parenHeadStack = initParens !== undefined && initParens !== null ? initParens : [];`);
++  if (tracksValueContext) {
++    emit(`  let lastBangWasPostfix = false;`);
++    emit(`  let lastCloseWasParenHead = false;`);
++  }
++  if (templateToken) emit(`  const templateStack: number[] = [];`);
++  if (regexCtx) emit(`  const parenHeadStack = initParens !== undefined && initParens !== null ? initParens : [];`);
+   emit(`  let wndPtr = wndPtr0;`);
+   emit(`  let wndHit = -1;`);
+   emit(`  lexEmptyPops.length = 0;`);
+@@ -351,8 +354,8 @@
+   emit(`    tkK[tokN] = k; tkT[tokN] = t; tkOff[tokN] = off; tkEnd[tokN] = end;`);
+   emit(`    tkFl[tokN] = (pendingNl ? 1 : 0) | extraFl;`);
+   emit(`    extraFl = 0;`);
+-  emit(`    tkDp[tokN] = templateStack.length;`);
+-  emit(`    tkPd[tokN] = parenHeadStack.length;`);
++  emit(`    tkDp[tokN] = ${templateToken ? 'templateStack.length' : '0'};`);
++  emit(`    tkPd[tokN] = ${regexCtx ? 'parenHeadStack.length' : '0'};`);
+   emit(`    pendingNl = false;`);
+   if (newline) {
+     emit(`    if (k !== ${kNewline}) emittedContent = true;`);
+@@ -388,8 +391,8 @@
+   emit(`            // it may sit inside the edit (newline removed/added without moving any`);
+   emit(`            // token bytes), and parsers read these flags (sameLine / commentBefore)`);
+   emit(`            && altFl![wndPtr] === tkFl[tokN - 1]`);
+-  emit(`            && templateStack.length === 0 && altDp![wndPtr] === 0`);
+-  emit(`            && LX_PFXV[t] === 0 && LX_PARENKW[t] === 0`);
++  if (templateToken) emit(`            && templateStack.length === 0 && altDp![wndPtr] === 0`);
++  if (regexCtx) emit(`            && LX_PFXV[t] === 0 && LX_PARENKW[t] === 0`);
+   emit(`            && !(k === K_PUNCT && (t === ${tLParen} || t === ${tRParen}))) {`);
+   emit(`          const q = altPd![wndPtr];`);
+   emit(`          if (q < dmgMinOld) dmgMinOld = q;`);
+@@ -416,17 +419,19 @@
+   emit(`      }`);
+   emit(`    }`);
+   emit(`  }`);
+-  emit(`  // prevIsValue, baked: postfix-ambiguous op → its recorded position; an expression-`);
+-  emit(`  // head keyword or a control-head ')' is NOT a value; else division-prev type/text.`);
+-  emit(`  function prevIsValue() {`);
+-  emit(`    const k = tokN > 0 ? tkK[tokN - 1] : pvK;`);
+-  emit(`    if (k < 0) return false;`);
+-  emit(`    const t = tokN > 0 ? tkT[tokN - 1] : pvT;`);
+-  emit(`    if (LX_PFXV[t] !== 0) return lastBangWasPostfix;`);
+-  emit(`    if (k === ${kIdent} && LX_EXPRKW[t] !== 0) return false;`);
+-  emit(`    if (t === ${tRParen} && lastCloseWasParenHead) return false;`);
+-  emit(`    return LX_DIVK[k] !== 0 || LX_DIVT[t] !== 0;`);
+-  emit(`  }`);
++  if (tracksValueContext) {
++    emit(`  // prevIsValue, baked: postfix-ambiguous op → its recorded position; an expression-`);
++    emit(`  // head keyword or a control-head ')' is NOT a value; else division-prev type/text.`);
++    emit(`  function prevIsValue() {`);
++    emit(`    const k = tokN > 0 ? tkK[tokN - 1] : pvK;`);
++    emit(`    if (k < 0) return false;`);
++    emit(`    const t = tokN > 0 ? tkT[tokN - 1] : pvT;`);
++    emit(`    if (LX_PFXV[t] !== 0) return lastBangWasPostfix;`);
++    emit(`    if (k === ${kIdent} && LX_EXPRKW[t] !== 0) return false;`);
++    emit(`    if (t === ${tRParen} && lastCloseWasParenHead) return false;`);
++    emit(`    return LX_DIVK[k] !== 0 || LX_DIVT[t] !== 0;`);
++    emit(`  }`);
++  }
+   emit(`  while (pos < n) {`);
+   emit(`    // resync retracts the duplicated token push — and any lexer diagnostics
+     // emitted FOR it (the old stream's persisted entry survives via the shift;
+@@ -598,12 +603,12 @@
+   };
+   const emitPunct = (lit: string, ind: string) => {
+     // Chars 1..len-1 already known to match when this leaf is reached via the chain below.
+-    if (lit === '(') {
++    if (regexCtx && lit === '(') {
+       emit(`${ind}{ const isMemberName = tokN >= 2 && LX_MEMBER[tkT[tokN - 2]] !== 0;`);
+       emit(`${ind}  const _ph = !isMemberName && tokN >= 1 && tkK[tokN - 1] === ${kIdent} && LX_PARENKW[tkT[tokN - 1]] !== 0;`);
+       emit(`${ind}  parenHeadStack.push(_ph);`);
+       emit(`${ind}  extraFl = _ph ? 8 : 0; }`);
+-    } else if (lit === ')') {
++    } else if (regexCtx && lit === ')') {
+       emit(`${ind}if (parenHeadStack.length === 0) { lastCloseWasParenHead = false; lexEmptyPops.push(tokN); }`);
+       emit(`${ind}else lastCloseWasParenHead = parenHeadStack.pop()!;`);
+     }
