@@ -563,7 +563,23 @@ export function createDelimitedTokenResolver<State = undefined>(
 ): DelimitedTokenResolver<State> {
   const delimiterByToken = new Map(delimiterConfigs.map((config, index) => [config.token, { config, index }]));
   const pairIndex = indexPairs(pairConfigs);
+  // Plain regions dominate; resolving them would only allocate empty scratch arrays.
+  const activeTokens = new Set([
+    ...delimiterConfigs.map((config) => config.token),
+    ...pairConfigs.flatMap((config) => [config.opener, config.closer]),
+  ]);
   const resolve = (source: string, tokens: readonly Token[], state: State): readonly Token[] => {
+    let active = false;
+    for (const token of tokens) {
+      if (activeTokens.has(token.type)) {
+        active = true;
+        break;
+      }
+    }
+    if (!active) {
+      return tokens;
+    }
+
     let paired = resolvePairedTokens(source, tokens, pairIndex, state);
     let expanded: Token[] | null = null;
     for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
