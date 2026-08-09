@@ -6,7 +6,7 @@ import {
   projectInlineChildren,
   withSpan,
 } from "../../mdast.ts";
-import type { InternalSyntaxPlugin } from "../profile.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
 

@@ -19,7 +19,7 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { isThematicBreak } from "./break.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
 
 interface ListMarker {
   kind: "ordered" | "unordered";

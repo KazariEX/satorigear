@@ -14,7 +14,7 @@ import {
 } from "../../mdast.ts";
 import { normalizeReferenceLabel } from "./reference.ts";
 import { projectInlineText, semanticText } from "./text.ts";
-import type { InternalSyntaxPlugin } from "../profile.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 interface Reference {
   identifier: string;

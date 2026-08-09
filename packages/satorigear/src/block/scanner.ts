@@ -9,8 +9,8 @@ import {
 import type {
   BlockLine,
   BlockScanContext,
-  SyntaxProfile,
-} from "../plugins/profile.ts";
+} from "../plugins/plugin.ts";
+import type { SyntaxProfile } from "../plugins/profile.ts";
 import type { SourceLocation } from "../source-view.ts";
 import type { TextEdit } from "../text-edit.ts";
 

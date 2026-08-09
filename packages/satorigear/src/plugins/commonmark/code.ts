@@ -17,7 +17,7 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { semanticText } from "./text.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
 
 interface Fence {
   marker: "`" | "~";

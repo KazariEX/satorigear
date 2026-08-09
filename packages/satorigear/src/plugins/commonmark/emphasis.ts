@@ -10,7 +10,7 @@ import {
 } from "../../mdast.ts";
 import { projectInlineText } from "./text.ts";
 import type { DelimiterRunConfig } from "../../inline/resolver.ts";
-import type { InternalSyntaxPlugin } from "../profile.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 const markdownDelimiterRuns: DelimiterRunConfig[] = [
   {

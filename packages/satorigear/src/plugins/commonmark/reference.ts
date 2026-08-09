@@ -32,7 +32,7 @@ import type {
   InlineResolutionContext,
   InlineTransform,
   InternalSyntaxPlugin,
-} from "../profile.ts";
+} from "../plugin.ts";
 
 interface LinkDefinitionMatch {
   end: number;

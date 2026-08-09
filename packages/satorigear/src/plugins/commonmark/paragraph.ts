@@ -8,7 +8,7 @@ import {
 import { blockEnd, firstChildStart, inlineChildren, withSpan } from "../../mdast.ts";
 import { setextMarkerAt } from "./heading.ts";
 import type { BlockToken } from "../../block/tokens.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
 
 function emitInlineChunks(source: string, lines: readonly BlockLine[], out: BlockToken[]): void {
   lines.forEach((line, index) => {

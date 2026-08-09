@@ -9,9 +9,9 @@ import { listPlugin } from "./commonmark/list.ts";
 import { paragraphPlugin } from "./commonmark/paragraph.ts";
 import { referencePlugin } from "./commonmark/reference.ts";
 import { textPlugin } from "./commonmark/text.ts";
-import { defineSyntaxProfile } from "./profile.ts";
+import { compileSyntaxProfile } from "./profile.ts";
 
-export const commonmarkProfile = defineSyntaxProfile([
+export const commonmarkProfile = compileSyntaxProfile([
   headingPlugin,
   breakPlugin,
   blockQuotePlugin,

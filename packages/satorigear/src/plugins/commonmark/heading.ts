@@ -10,7 +10,7 @@ import {
   tokenStart,
   withSpan,
 } from "../../mdast.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
 
 function atxAt(source: string, line: BlockLine): {
   contentEnd: number;
