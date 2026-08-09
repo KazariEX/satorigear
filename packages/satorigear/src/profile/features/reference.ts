@@ -403,39 +403,34 @@ const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionContext>[
   },
 ];
 
-export function restartBeforeReferenceChange(
-  source: string,
-  lines: readonly BlockLine[],
-  changedEnd: number,
-): number | undefined {
-  let low = 0;
-  let high = lines.length;
-  const offset = Math.max(0, changedEnd - 1);
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (lines[middle].start <= offset) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-
-  let candidate: number | undefined;
-  for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
-    const line = lines[index];
-    if (isBlank(source, line)) {
-      break;
-    }
-    const indent = indentOf(source, line, 3);
-    if (source[indent.offset] === "[") {
-      candidate = line.start;
-    }
-  }
-  return candidate;
-}
-
 export const feature: SyntaxFeature = {
+  blockRestart(source, lines, changedStart, changedEnd) {
+    let low = 0;
+    let high = lines.length;
+    const offset = Math.max(0, changedEnd - 1);
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (lines[middle].start <= offset) {
+        low = middle + 1;
+      }
+      else {
+        high = middle;
+      }
+    }
+
+    let candidate: number | undefined;
+    for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
+      const line = lines[index];
+      if (isBlank(source, line)) {
+        break;
+      }
+      const indent = indentOf(source, line, 3);
+      if (source[indent.offset] === "[") {
+        candidate = line.start;
+      }
+    }
+    return candidate;
+  },
   blockRules: [
     {
       rule: "LinkDefinition",

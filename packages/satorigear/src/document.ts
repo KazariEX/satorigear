@@ -6,8 +6,9 @@ import {
   materialize,
   projectBlock,
 } from "./mdast.ts";
-import { commonmarkProfile } from "./profile/index.ts";
+import { createProfile, type SyntaxOptions } from "./profile/index.ts";
 import { createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
+import type { SyntaxProfile } from "./profile/types.ts";
 import type { TextEdit } from "./text-edit.ts";
 
 export interface EditResult {
@@ -66,13 +67,15 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 class DocumentImpl implements Document {
   #blockScanner: BlockScanner;
   #blockSyntax: BlockSyntaxDocument;
+  #profile: SyntaxProfile;
   #syntax: MarkdownSyntax;
   #fragments = new Map<number, BlockFragment>();
 
-  constructor(source: string) {
-    this.#blockScanner = new BlockScanner(source, commonmarkProfile);
+  constructor(source: string, profile: SyntaxProfile) {
+    this.#profile = profile;
+    this.#blockScanner = new BlockScanner(source, profile);
     this.#blockSyntax = createBlockSyntaxDocument(source, this.#blockScanner.tokens);
-    this.#syntax = createMarkdownSyntax(commonmarkProfile, this.#blockSyntax.view(this.#blockScanner.tokens), source);
+    this.#syntax = createMarkdownSyntax(profile, this.#blockSyntax.view(this.#blockScanner.tokens), source);
   }
 
   get source(): string {
@@ -95,19 +98,17 @@ class DocumentImpl implements Document {
     const fragments = new Map<number, BlockFragment>();
     const syntaxBlocks = this.#syntax.blocks();
     const changed = syntaxBlocks.filter((block) => this.#fragments.get(block.id)?.version !== block.version);
+    const context = {
+      profile: this.#profile,
+      source: this.source,
+      syntax: this.#syntax,
+      view: this.#syntax.blockView(),
+    };
     const forest = this.#syntax.openInlineForest(changed);
     try {
       // Consume scratch-backed roots before the later path can activate a region's document-owned arena.
       for (const block of forest.blocks) {
-        fragments.set(block.id, projectBlock(
-          block.id,
-          block.offset,
-          block.tokenBase,
-          this.source,
-          this.#syntax,
-          block.version,
-          commonmarkProfile,
-        ));
+        fragments.set(block.id, projectBlock(block, context));
       }
     }
     finally {
@@ -117,15 +118,7 @@ class DocumentImpl implements Document {
       const previous = this.#fragments.get(block.id);
       const fragment = fragments.get(block.id) ?? (previous?.version === block.version
         ? previous
-        : projectBlock(
-          block.id,
-          block.offset,
-          block.tokenBase,
-          this.source,
-          this.#syntax,
-          block.version,
-          commonmarkProfile,
-        ));
+        : projectBlock(block, context));
       fragment.offset = block.offset;
       fragments.set(block.id, fragment);
       return fragment;
@@ -139,10 +132,10 @@ class DocumentImpl implements Document {
   }
 }
 
-export function createDocument(source: string): Document {
-  return new DocumentImpl(source);
+export function createDocument(source: string, options?: SyntaxOptions): Document {
+  return new DocumentImpl(source, createProfile(options));
 }
 
-export function parse(source: string): Root {
-  return createDocument(source).snapshot();
+export function parse(source: string, options?: SyntaxOptions): Root {
+  return createDocument(source, options).snapshot();
 }

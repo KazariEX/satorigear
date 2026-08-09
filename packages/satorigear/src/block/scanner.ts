@@ -353,7 +353,7 @@ export class BlockScanner {
     let restart = this.#checkpoints[affected]?.lineStart > firstEdit.start ? -1 : Math.max(0, affected - 1);
     const initialRestartOffset = this.#checkpoints[restart]?.lineStart ?? 0;
     const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, lastEdit.end, delta);
-    const profileRestart = this.#profile.blockRestart(nextSource, nextLines, changedEnd);
+    const profileRestart = this.#profile.blockRestart(nextSource, nextLines, firstEdit.start, changedEnd);
     if (profileRestart !== void 0 && profileRestart < firstEdit.start) {
       const candidate = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineStart <= profileRestart
         && checkpoint.lineEnd > profileRestart);

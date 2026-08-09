@@ -95,7 +95,7 @@ class InlineRegion extends InlineTokenState {
   }
 }
 
-interface SyntaxBlock {
+export interface SyntaxBlock {
   id: number;
   offset: number;
   regionIds: readonly number[];

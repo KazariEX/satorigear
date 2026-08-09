@@ -17,6 +17,7 @@ const OrderedListClose = token(never());
 const OrderedItemOpen = token(never());
 const OrderedItemClose = token(never());
 const InlineChunk = token(never());
+const FrontmatterToken = token(never());
 const FencedCodeBlock = token(never());
 const IndentedCodeBlockToken = token(never());
 const ThematicBreakToken = token(never());
@@ -28,6 +29,7 @@ const LinkDefinitionClose = token(never());
 const Paragraph = rule(() => [[ParagraphOpen, many1(InlineChunk), ParagraphClose]]);
 const AtxHeading = rule(() => [[AtxHeadingOpen, many(InlineChunk), HeadingClose]]);
 const SetextHeading = rule(() => [[alt(SetextHeading1Open, SetextHeading2Open), many1(InlineChunk), HeadingClose]]);
+const Frontmatter = rule(() => [FrontmatterToken]);
 const FencedCode = rule(() => [FencedCodeBlock]);
 const IndentedCodeBlock = rule(() => [IndentedCodeBlockToken]);
 const ThematicBreak = rule(() => [ThematicBreakToken]);
@@ -40,6 +42,7 @@ const OrderedListItem = rule(() => [[OrderedItemOpen, many(Block), OrderedItemCl
 const UnorderedList = rule(() => [[UnorderedListOpen, many1(UnorderedListItem), UnorderedListClose]]);
 const OrderedList = rule(() => [[OrderedListOpen, many1(OrderedListItem), OrderedListClose]]);
 Block = rule(() => [
+  Frontmatter,
   AtxHeading,
   SetextHeading,
   ThematicBreak,
@@ -74,6 +77,7 @@ export const grammar = defineGrammar({
     OrderedItemOpen,
     OrderedItemClose,
     InlineChunk,
+    FrontmatterToken,
     FencedCodeBlock,
     IndentedCodeBlockToken,
     ThematicBreakToken,
@@ -86,6 +90,7 @@ export const grammar = defineGrammar({
     Paragraph,
     AtxHeading,
     SetextHeading,
+    Frontmatter,
     FencedCode,
     IndentedCodeBlock,
     HtmlBlock,

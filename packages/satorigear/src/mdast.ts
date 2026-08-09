@@ -3,6 +3,7 @@ import type {
   DefinitionContent,
   PhrasingContent,
   Root,
+  TopLevelContent,
 } from "mdast";
 import {
   inlineTokenCount,
@@ -16,7 +17,7 @@ import type { BlockToken } from "./block/tokens.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
-import type { MarkdownSyntax } from "./syntax.ts";
+import type { MarkdownSyntax, SyntaxBlock } from "./syntax.ts";
 
 export interface BlockProjectionContext {
   profile: SyntaxProfile;
@@ -49,7 +50,7 @@ export type BlockProjector = (
   offset: number,
   tokenBase: number,
   context: BlockProjectionContext,
-) => BlockContent | DefinitionContent;
+) => TopLevelContent;
 
 export type InlineLeafProjector = (
   tokenIndex: number,
@@ -78,7 +79,7 @@ export const projectInlineChildren: InlineRuleProjector = (
 export const projectInlineIgnore: InlineLeafProjector = () => false;
 
 export interface BlockFragment {
-  node: BlockContent | DefinitionContent;
+  node: TopLevelContent;
   // Origin belongs to the cached projection; offset moves so positions can shift without rebuilding nodes.
   offset: number;
   origin: number;
@@ -518,7 +519,7 @@ export function blockChildren(
         offset + arena.childRelAt(nodeId, index),
         tokenBase + arena.childTokRelAt(nodeId, index),
         context,
-      ));
+      ) as BlockContent | DefinitionContent);
     }
   }
   return children;
@@ -529,7 +530,7 @@ function blockContent(
   offset: number,
   tokenBase: number,
   context: BlockProjectionContext,
-): BlockContent | DefinitionContent {
+): TopLevelContent {
   const arena = context.view.arena;
   const rule = arena.ruleNameOf(nodeId);
   if (rule !== "Block") {
@@ -560,7 +561,7 @@ function blockNode(
   offset: number,
   tokenBase: number,
   context: BlockProjectionContext,
-): BlockContent | DefinitionContent {
+): TopLevelContent {
   const arena = context.view.arena;
   const rule = arena.ruleNameOf(nodeId);
   const project = context.profile.blockProjects[rule];
@@ -571,17 +572,16 @@ function blockNode(
 }
 
 export function projectBlock(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  source: string,
-  syntax: MarkdownSyntax,
-  version: number,
-  profile: SyntaxProfile,
+  block: SyntaxBlock,
+  context: BlockProjectionContext,
 ): BlockFragment {
-  const context = { profile, source, syntax, view: syntax.blockView() };
-  const node = blockContent(nodeId, offset, tokenBase, context);
-  return { node, offset, origin: offset, version };
+  const node = blockContent(block.id, block.offset, block.tokenBase, context);
+  return {
+    node,
+    offset: block.offset,
+    origin: block.offset,
+    version: block.version,
+  };
 }
 
 function cloneFragment(
@@ -615,12 +615,12 @@ function cloneFragment(
 function materializeBlock(
   fragment: BlockFragment,
   point: (offset: number) => SourceLocation,
-): BlockContent | DefinitionContent {
+): TopLevelContent {
   return cloneFragment(
     fragment.node as unknown as FragmentValue,
     fragment.offset - fragment.origin,
     point,
-  ) as unknown as BlockContent | DefinitionContent;
+  ) as unknown as TopLevelContent;
 }
 
 export function materialize(

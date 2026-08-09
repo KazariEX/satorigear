@@ -43,6 +43,7 @@ export type BlockLineUnwrapper = (source: string, line: BlockLine) => BlockLine 
 export type BlockRestart = (
   source: string,
   lines: readonly BlockLine[],
+  changedStart: number,
   changedEnd: number,
 ) => number | undefined;
 
@@ -68,6 +69,7 @@ export type InlineTransform = (
 
 export interface SyntaxFeature {
   blockFallbacks?: readonly BlockStart[];
+  blockRestart?: BlockRestart;
   blockRules?: readonly BlockRuleRegistration[];
   blockStarts?: readonly BlockStartRegistration[];
   blockUnwrappers?: readonly BlockLineUnwrapper[];
