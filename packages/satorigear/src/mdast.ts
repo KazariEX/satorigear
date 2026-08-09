@@ -24,16 +24,25 @@ import { linkDefinitionFields } from "./block/tokens.ts";
 import {
   inlineTokenCount,
   inlineTokenEnd,
+  inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
   inlineTokenText,
 } from "./inline/runtime.ts";
 import {
+  type InlineTokenProjectionOpcode,
   projectAtxHeading,
   projectBlockQuote,
   projectFencedCode,
   projectHtmlBlock,
   projectIndentedCode,
+  projectInlineAutolink,
+  projectInlineBreak,
+  projectInlineCode,
+  projectInlineHtml,
+  projectInlineIgnore,
+  projectInlineNewline,
+  projectInlineText,
   projectLinkDefinition,
   projectOrderedList,
   projectParagraph,
@@ -71,6 +80,7 @@ interface InlineProjectionContext {
   arena: SyntaxArena;
   source: string;
   tokenBase: number;
+  tokenProjects: readonly (InlineTokenProjectionOpcode | undefined)[];
   tokens: InlineTokenStream;
   view: SourceView;
 }
@@ -529,49 +539,27 @@ function appendInlineLeaf(
 ): boolean {
   const { context } = accumulator;
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  const tokenType = context.arena.leafTokenType(entry, tokenBase);
+  const projection = context.tokenProjects[inlineTokenKind(context.tokens, tokenIndex)];
   let value: PhrasingContent;
-  switch (tokenType) {
-    case "Text":
-    case "Delimiter":
-    case "Escape":
-    case "Entity":
-    case "Strikethrough":
-    case "BracketOpen":
-    case "ImageOpen":
-    case "LinkTail":
-    case "ReferenceTail":
-    case "ShortcutReferenceTail":
-    case "ReferenceSeparatorClose":
+  switch (projection) {
+    case projectInlineText:
       value = withSpan({ type: "text", value: semanticText(text) }, sourceSpan.start, sourceSpan.end);
       break;
-    case "CodeSpan":
+    case projectInlineCode:
       value = withSpan({ type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode, sourceSpan.start, sourceSpan.end);
       break;
-    case "InlineHtml":
-    case "HtmlComment":
+    case projectInlineHtml:
       value = withSpan({ type: "html", value: text } satisfies Html, sourceSpan.start, sourceSpan.end);
       break;
-    case "HardBreak":
+    case projectInlineBreak:
       value = withSpan({ type: "break" }, sourceSpan.start, sourceSpan.end);
       break;
-    case "Newline":
+    case projectInlineNewline:
       value = withSpan({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end);
       break;
-    case "EmphasisOpen":
-    case "EmphasisClose":
-    case "StrongOpen":
-    case "StrongClose":
-    case "LinkOpen":
-    case "LinkClose":
-    case "ReferenceOpen":
-    case "ReferenceClose":
-    case "ImageLinkOpen":
-    case "ImageLinkClose":
-    case "ImageReferenceOpen":
-    case "ImageReferenceClose":
+    case projectInlineIgnore:
       return false;
-    case "Autolink": {
+    case projectInlineAutolink: {
       const label = text.slice(1, -1);
       value = withSpan({
         type: "link",
@@ -581,7 +569,7 @@ function appendInlineLeaf(
       } satisfies Link, sourceSpan.start, sourceSpan.end);
       break;
     }
-    default: throw new Error(`Unexpected inline token: ${tokenType}`);
+    default: throw new Error(`Unexpected inline token: ${context.arena.leafTokenType(entry, tokenBase)}`);
   }
   appendInline(accumulator, value, sourceSpan.start);
   return true;
@@ -797,6 +785,7 @@ function inlineChildren(nodeId: number, context: BlockProjectionContext): Phrasi
     arena: inline.arena,
     source: context.source,
     tokenBase: inline.rootTokenBase,
+    tokenProjects: context.profile.inlineTokenProjects,
     tokens: inline.tokens,
     view: inline.view,
   };

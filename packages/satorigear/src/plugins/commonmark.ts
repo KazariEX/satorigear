@@ -28,6 +28,13 @@ import {
   projectFencedCode,
   projectHtmlBlock,
   projectIndentedCode,
+  projectInlineAutolink,
+  projectInlineBreak,
+  projectInlineCode,
+  projectInlineHtml,
+  projectInlineIgnore,
+  projectInlineNewline,
+  projectInlineText,
   projectLinkDefinition,
   projectOrderedList,
   projectParagraph,
@@ -106,8 +113,49 @@ const fallbackBlocks = {
   blockFallbacks: [indentedCodeStart, paragraphStart],
 } satisfies InternalSyntaxPlugin;
 
-const inlineSyntax = {
+const inlineAtoms = {
+  inlineTokens: [
+    { token: "Text", project: projectInlineText },
+    { token: "Escape", project: projectInlineText },
+    { token: "Entity", project: projectInlineText },
+    { token: "CodeSpan", project: projectInlineCode },
+    { token: "InlineHtml", project: projectInlineHtml },
+    { token: "HtmlComment", project: projectInlineHtml },
+    { token: "HardBreak", project: projectInlineBreak },
+    { token: "Newline", project: projectInlineNewline },
+    { token: "Autolink", project: projectInlineAutolink },
+  ],
+} satisfies InternalSyntaxPlugin;
+
+const inlineFormatting = {
   delimiterRuns: markdownDelimiterRuns,
+  inlineTokens: [
+    { token: "Delimiter", project: projectInlineText },
+    { token: "Strikethrough", project: projectInlineText },
+    { token: "EmphasisOpen", project: projectInlineIgnore },
+    { token: "EmphasisClose", project: projectInlineIgnore },
+    { token: "StrongOpen", project: projectInlineIgnore },
+    { token: "StrongClose", project: projectInlineIgnore },
+  ],
+} satisfies InternalSyntaxPlugin;
+
+const inlineLinks = {
+  inlineTokens: [
+    { token: "BracketOpen", project: projectInlineText },
+    { token: "ImageOpen", project: projectInlineText },
+    { token: "LinkTail", project: projectInlineText },
+    { token: "ReferenceTail", project: projectInlineText },
+    { token: "ShortcutReferenceTail", project: projectInlineText },
+    { token: "ReferenceSeparatorClose", project: projectInlineText },
+    { token: "LinkOpen", project: projectInlineIgnore },
+    { token: "LinkClose", project: projectInlineIgnore },
+    { token: "ReferenceOpen", project: projectInlineIgnore },
+    { token: "ReferenceClose", project: projectInlineIgnore },
+    { token: "ImageLinkOpen", project: projectInlineIgnore },
+    { token: "ImageLinkClose", project: projectInlineIgnore },
+    { token: "ImageReferenceOpen", project: projectInlineIgnore },
+    { token: "ImageReferenceClose", project: projectInlineIgnore },
+  ],
   inlineTransforms: [reassociateReferenceTails],
   tokenPairs: markdownBracketPairs,
 } satisfies InternalSyntaxPlugin;
@@ -118,5 +166,7 @@ export const commonmarkProfile = defineSyntaxProfile([
   literalBlocks,
   referenceBlocks,
   fallbackBlocks,
-  inlineSyntax,
+  inlineAtoms,
+  inlineFormatting,
+  inlineLinks,
 ]);

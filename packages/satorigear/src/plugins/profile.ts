@@ -3,8 +3,8 @@ import {
   type DelimiterRunConfig,
   type PairedTokenConfig,
 } from "../inline/resolver.ts";
+import { inlineKind, type InlineTokenStream } from "../inline/runtime.ts";
 import type { BlockToken } from "../block/tokens.ts";
-import type { InlineTokenStream } from "../inline/runtime.ts";
 
 export interface BlockLine {
   end: number;
@@ -72,6 +72,28 @@ export interface InlineResolutionState {
   labels: ReadonlySet<string>;
 }
 
+// Profiles compile token semantics to numeric dispatch; projection never calls plugin callbacks per leaf.
+export const projectInlineText = 1;
+export const projectInlineCode = 2;
+export const projectInlineHtml = 3;
+export const projectInlineBreak = 4;
+export const projectInlineNewline = 5;
+export const projectInlineIgnore = 6;
+export const projectInlineAutolink = 7;
+export type InlineTokenProjectionOpcode =
+  | typeof projectInlineAutolink
+  | typeof projectInlineBreak
+  | typeof projectInlineCode
+  | typeof projectInlineHtml
+  | typeof projectInlineIgnore
+  | typeof projectInlineNewline
+  | typeof projectInlineText;
+
+export interface InlineTokenRegistration {
+  project: InlineTokenProjectionOpcode;
+  token: string;
+}
+
 export type InlineTransform = (
   source: string,
   tokens: InlineTokenStream,
@@ -83,6 +105,7 @@ export interface InternalSyntaxPlugin {
   blockRules?: readonly BlockRuleRegistration[];
   blockStarts?: readonly BlockStartRegistration[];
   delimiterRuns?: readonly DelimiterRunConfig[];
+  inlineTokens?: readonly InlineTokenRegistration[];
   inlineTransforms?: readonly InlineTransform[];
   tokenPairs?: readonly PairedTokenConfig<InlineResolutionState>[];
 }
@@ -92,6 +115,7 @@ export interface SyntaxProfile {
   blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
   blockProjects: Readonly<Record<string, BlockProjectionOpcode>>;
   blockStarts: readonly (BlockStartDispatch | undefined)[];
+  inlineTokenProjects: readonly (InlineTokenProjectionOpcode | undefined)[];
   resolveInline: InlineTransform;
 }
 
@@ -103,6 +127,7 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
   const delimiterRuns: DelimiterRunConfig[] = [];
   const inlineTransforms: InlineTransform[] = [];
+  const inlineTokenProjects: (InlineTokenProjectionOpcode | undefined)[] = [];
   const tokenPairs: PairedTokenConfig<InlineResolutionState>[] = [];
   for (const plugin of plugins) {
     blockFallbacks.push(...plugin.blockFallbacks ?? []);
@@ -128,6 +153,9 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
       blockProjects[registration.rule] = registration.project;
     }
     delimiterRuns.push(...plugin.delimiterRuns ?? []);
+    for (const registration of plugin.inlineTokens ?? []) {
+      inlineTokenProjects[inlineKind(registration.token)] = registration.project;
+    }
     inlineTransforms.push(...plugin.inlineTransforms ?? []);
     tokenPairs.push(...plugin.tokenPairs ?? []);
   }
@@ -149,5 +177,12 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
       return resolver.resolve(source, transformed, state);
     };
   }
-  return { blockFallbacks, blockInterrupts, blockProjects, blockStarts, resolveInline };
+  return {
+    blockFallbacks,
+    blockInterrupts,
+    blockProjects,
+    blockStarts,
+    inlineTokenProjects,
+    resolveInline,
+  };
 }
