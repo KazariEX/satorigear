@@ -1,4 +1,5 @@
 import type { Token } from "monogram/gen-lexer.ts";
+import { linkDefinitionFields } from "./block-scanner.ts";
 import {
   createEmittedParser,
   type EmittedArena,
@@ -8,7 +9,6 @@ import {
 import * as generatedBlocks from "./generated/blocks.ts";
 import * as generatedInline from "./generated/inline.ts";
 import { InlineTokenState } from "./inline-tokenizer.ts";
-import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
 import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { TextEdit } from "./text-edit.ts";
 
@@ -39,22 +39,6 @@ const inlineSyntaxParser = createEmittedParser(
   generatedInline.createParser,
   generatedInline.parseTokens,
 );
-
-function referenceLabelText(text: string): string | null {
-  const open = text.indexOf("[");
-  if (open < 0) {
-    return null;
-  }
-  for (let offset = open + 1; offset < text.length; offset++) {
-    if (text[offset] === "\\") {
-      offset++;
-    }
-    else if (text[offset] === "]") {
-      return normalizeMarkdownReferenceLabel(text.slice(open + 1, offset));
-    }
-  }
-  return null;
-}
 
 interface InlineRegionDescriptor {
   id: number;
@@ -192,10 +176,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     ): void => {
       const rule = arena.ruleNameOf(nodeId);
       if (rule === "LinkDefinition") {
-        const label = referenceLabelText(source.slice(offset, offset + arena.lenOf(nodeId)));
-        if (label) {
-          labels.add(label);
-        }
+        labels.add(linkDefinitionFields(view.tokenAt(tokenBase)).normalizedLabel);
         return;
       }
       if (rule === "Paragraph" || rule === "AtxHeading" || rule === "SetextHeading") {

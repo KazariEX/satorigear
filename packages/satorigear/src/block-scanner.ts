@@ -1,4 +1,5 @@
 import type { Token } from "monogram/gen-lexer.ts";
+import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
 import { createShiftedToken, createTokenChange, type TokenChange, tokenEqualsAfterShift } from "./token-change.ts";
 import type { SourceLocation } from "./source-view.ts";
 import type { TextEdit } from "./text-edit.ts";
@@ -43,6 +44,23 @@ interface HtmlStart {
 interface BlockQuoteMarker {
   offset: number;
   prefixColumns: number;
+}
+
+export interface LinkDefinitionFields {
+  destination: string;
+  label: string;
+  markerOffset: number;
+  normalizedLabel: string;
+  title: string | null;
+}
+
+interface LinkDefinitionMatch {
+  end: number;
+  fields: LinkDefinitionFields;
+}
+
+interface LinkDefinitionOpenToken extends Token {
+  linkDefinition: LinkDefinitionFields;
 }
 
 const htmlBlockTags = new Set([
@@ -187,6 +205,18 @@ function structural(type: string, offset: number, text = ""): Token {
   return named(type, text, offset);
 }
 
+function linkDefinitionOpen(offset: number, fields: LinkDefinitionFields): LinkDefinitionOpenToken {
+  return { ...structural("LinkDefinitionOpen", offset), linkDefinition: fields };
+}
+
+export function linkDefinitionFields(token: Token): LinkDefinitionFields {
+  const fields = (token as Partial<LinkDefinitionOpenToken>).linkDefinition;
+  if (token.type !== "LinkDefinitionOpen" || !fields) {
+    throw new Error("Expected LinkDefinitionOpen token to contain parsed fields");
+  }
+  return fields;
+}
+
 function logicalToken(type: string, source: string, lines: readonly Line[], start: number, end: number): Token {
   const ranges = lines.slice(start, end).map((line) => ({ offset: line.start, end: line.next }));
   return named(
@@ -276,15 +306,17 @@ function htmlStartAt(source: string, line: Line): HtmlStart | null {
   return null;
 }
 
-function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: number): number | null {
+function linkDefinitionAt(source: string, lines: readonly Line[], startIndex: number): LinkDefinitionMatch | null {
   const indent = lineIndent(source, lines[startIndex]);
   if (!indent || source[indent.offset] !== "[") {
     return null;
   }
   let lineIndex = startIndex;
   let offset = indent.offset + 1;
+  let label = "";
   let labelLength = 0;
   let labelHasContent = false;
+  let labelStart = offset;
 
   for (;;) {
     const line = lines[lineIndex];
@@ -295,8 +327,10 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
       if (++labelLength > 999) {
         return null;
       }
+      label += source.slice(labelStart, line.next);
       lineIndex++;
       offset = lines[lineIndex].start;
+      labelStart = offset;
       continue;
     }
     if (source[offset] === "\\" && offset + 1 < line.end) {
@@ -319,6 +353,7 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
     }
     offset++;
   }
+  label += source.slice(labelStart, offset);
   if (!labelHasContent) {
     return null;
   }
@@ -339,8 +374,10 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
     skipSpaces();
   }
 
+  let destination: string;
   if (source[offset] === "<") {
     offset++;
+    const destinationStart = offset;
     while (offset < lines[lineIndex].end && source[offset] !== ">") {
       if (source[offset] === "<") {
         return null;
@@ -355,6 +392,7 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
     if (source[offset] !== ">") {
       return null;
     }
+    destination = source.slice(destinationStart, offset);
     offset++;
   }
   else {
@@ -378,6 +416,7 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
     if (offset === destinationStart || depth !== 0) {
       return null;
     }
+    destination = source.slice(destinationStart, offset);
   }
 
   const destinationLine = lineIndex;
@@ -394,10 +433,19 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
   }
 
   const closer = source[offset] === "(" ? ")" : source[offset] === "\"" || source[offset] === "'" ? source[offset] : null;
+  const fields: LinkDefinitionFields = {
+    destination,
+    label,
+    markerOffset: indent.offset - lines[startIndex].start,
+    normalizedLabel: normalizeMarkdownReferenceLabel(label),
+    title: null,
+  };
   if (!closer) {
-    return destinationLine + 1;
+    return { end: destinationLine + 1, fields };
   }
   offset++;
+  let title = "";
+  let titleStart = offset;
   let closed = false;
   while (lineIndex < lines.length) {
     const line = lines[lineIndex];
@@ -407,6 +455,7 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
         continue;
       }
       if (source[offset] === closer) {
+        title += source.slice(titleStart, offset);
         offset++;
         closed = true;
         break;
@@ -419,17 +468,20 @@ function linkDefinitionEnd(source: string, lines: readonly Line[], startIndex: n
     if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
       break;
     }
+    title += source.slice(titleStart, line.next);
     lineIndex++;
     offset = lines[lineIndex].start;
+    titleStart = offset;
   }
   if (!closed) {
-    return titleOnNextLine ? destinationLine + 1 : null;
+    return titleOnNextLine ? { end: destinationLine + 1, fields } : null;
   }
   skipSpaces();
   if (offset !== lines[lineIndex].end) {
-    return titleOnNextLine ? destinationLine + 1 : null;
+    return titleOnNextLine ? { end: destinationLine + 1, fields } : null;
   }
-  return lineIndex + 1;
+  fields.title = title;
+  return { end: lineIndex + 1, fields };
 }
 
 function fenceAt(source: string, line: Line): Fence | null {
@@ -724,16 +776,16 @@ function resolveParagraph(source: string, lines: readonly Line[], start: number,
 
 function resolveBlock(source: string, lines: readonly Line[], start: number, out: Token[]): number {
   const line = lines[start];
-  const definitionEnd = linkDefinitionEnd(source, lines, start);
-  if (definitionEnd !== null) {
-    out.push(structural("LinkDefinitionOpen", line.start));
-    for (let definitionLine = start; definitionLine < definitionEnd; definitionLine++) {
+  const definition = linkDefinitionAt(source, lines, start);
+  if (definition) {
+    out.push(linkDefinitionOpen(line.start, definition.fields));
+    for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
       const current = lines[definitionLine];
-      const end = definitionLine + 1 < definitionEnd ? current.next : current.end;
+      const end = definitionLine + 1 < definition.end ? current.next : current.end;
       out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
     }
-    out.push(structural("LinkDefinitionClose", lines[definitionEnd - 1].end));
-    return definitionEnd;
+    out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
+    return definition.end;
   }
 
   const atx = atxAt(source, line);

@@ -21,6 +21,7 @@ import type {
   Strong,
 } from "mdast";
 import type { Token } from "monogram/gen-lexer.ts";
+import { linkDefinitionFields } from "./block-scanner.ts";
 import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
 import type { EmittedArena, SyntaxArenaView } from "./emitted-parser.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
@@ -392,28 +393,21 @@ function destinationTitle(bodySource: string): Resource {
   };
 }
 
-function definition(nodeId: number, offset: number, context: BlockProjectionContext): Definition {
-  const text = context.source.slice(offset, offset + context.view.arena.lenOf(nodeId));
-  const open = text.indexOf("[");
-  let close = open + 1;
-  while (close < text.length) {
-    if (text[close] === "\\") {
-      close += 2;
-    }
-    else if (text[close] === "]" && text[close + 1] === ":") {
-      break;
-    }
-    else {
-      close++;
-    }
-  }
-  const labelSource = text.slice(open + 1, close);
+function definition(
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: BlockProjectionContext,
+): Definition {
+  const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
+  const fields = linkDefinitionFields(token);
   return withSpan({
     type: "definition",
-    identifier: identifier(labelSource),
-    label: semanticText(labelSource),
-    ...destinationTitle(text.slice(close + 2)),
-  }, offset + open, blockEnd(nodeId, offset, context));
+    identifier: fields.normalizedLabel.toLowerCase(),
+    label: semanticText(fields.label),
+    url: semanticText(fields.destination),
+    title: fields.title === null ? null : semanticText(fields.title),
+  }, token.offset + fields.markerOffset, blockEnd(nodeId, offset, context));
 }
 
 function codeSpanValue(value: string): string {
@@ -1066,7 +1060,7 @@ function blockNode(
       const html = htmlBlockValue(blockToken(nodeId, tokenBase, "HtmlBlockToken", context).text);
       return withSpan({ type: "html", value: html } satisfies Html, offset, html.endsWith("\n") ? end : blockEnd(nodeId, offset, context));
     }
-    case "LinkDefinition": return definition(nodeId, offset, context);
+    case "LinkDefinition": return definition(nodeId, offset, tokenBase, context);
     default: throw new Error(`Unexpected block syntax rule: ${rule}`);
   }
 }
