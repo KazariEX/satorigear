@@ -1,0 +1,181 @@
+import type { Image, ImageReference, Link, LinkReference, PhrasingContent } from "mdast";
+import { inlineTokenText } from "../../inline/runtime.ts";
+import {
+  appendInline,
+  contentBounds,
+  createInlineAccumulator,
+  type InlineAccumulator,
+  type InlineLeafProjector,
+  type InlineRuleProjector,
+  inlineSequence,
+  leaf,
+  withSpan,
+} from "../../mdast.ts";
+import { normalizeMarkdownReferenceLabel } from "../../reference-label.ts";
+import { semanticText } from "./text.ts";
+
+interface Reference {
+  identifier: string;
+  label: string;
+  referenceType: "collapsed" | "full" | "shortcut";
+}
+
+interface Resource {
+  title: string | null;
+  url: string;
+}
+
+function trimLinkWhitespace(value: string): string {
+  return value.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+}
+
+function destinationTitle(bodySource: string): Resource {
+  const body = trimLinkWhitespace(bodySource);
+  if (!body) {
+    return { url: "", title: null };
+  }
+  let offset = 0;
+  let destination = "";
+  if (body[0] === "<") {
+    offset = 1;
+    while (offset < body.length) {
+      if (body[offset] === "\\") {
+        offset += 2;
+      }
+      else if (body[offset] === ">") {
+        break;
+      }
+      else {
+        offset++;
+      }
+    }
+    destination = body.slice(1, offset++);
+  }
+  else {
+    let depth = 0;
+    while (offset < body.length) {
+      if (body[offset] === "\\") {
+        offset += 2;
+      }
+      else if (body[offset] === "(") {
+        depth++;
+        offset++;
+      }
+      else if (body[offset] === ")") {
+        depth--;
+        offset++;
+      }
+      else if (/[ \t\r\n]/.test(body[offset]) && depth === 0) {
+        break;
+      }
+      else {
+        offset++;
+      }
+    }
+    destination = body.slice(0, offset);
+  }
+  const titleSource = trimLinkWhitespace(body.slice(offset));
+  return {
+    url: semanticText(destination),
+    title: titleSource ? semanticText(titleSource.slice(1, -1)) : null,
+  };
+}
+
+function reference(
+  nodeId: number,
+  tokenBase: number,
+  syntaxStart: number,
+  syntaxEnd: number,
+  context: InlineAccumulator["context"],
+  image: boolean,
+): Reference {
+  const close = leaf(nodeId, tokenBase, image ? "ImageReferenceClose" : "ReferenceClose", context);
+  const closeText = inlineTokenText(context.view.text, context.tokens, close);
+  const text = context.view.text.slice(syntaxStart, syntaxEnd);
+  const content = text.slice(image ? 2 : 1, text.length - closeText.length);
+  const full = closeText.startsWith("][") && closeText !== "][]";
+  const labelSource = full ? closeText.slice(2, -1) : content;
+  return {
+    identifier: normalizeMarkdownReferenceLabel(labelSource).toLowerCase(),
+    label: semanticText(labelSource),
+    referenceType: full ? "full" : closeText === "][]" ? "collapsed" : "shortcut",
+  };
+}
+
+function phrasingText(children: readonly PhrasingContent[]): string {
+  let result = "";
+  for (const child of children) {
+    if (child.type === "text" || child.type === "inlineCode" || child.type === "html") {
+      result += child.value;
+    }
+    else if (child.type === "break") {
+      result += "\n";
+    }
+    else if ("children" in child) {
+      result += phrasingText(child.children);
+    }
+    else if (child.type === "image" || child.type === "imageReference") {
+      result += child.alt ?? "";
+    }
+  }
+  return result;
+}
+
+function linkOrImage(
+  nodeId: number,
+  offset: number,
+  endOffset: number,
+  tokenBase: number,
+  sourceSpan: { end: number; start: number },
+  context: InlineAccumulator["context"],
+  media: "image" | "link",
+  resourceKind: "direct" | "reference",
+): Image | ImageReference | Link | LinkReference {
+  const image = media === "image";
+  const referenceNode = resourceKind === "reference";
+  const prefix = image ? "Image" : "";
+  const resourcePrefix = referenceNode ? "Reference" : "Link";
+  const [start, end] = contentBounds(nodeId, tokenBase, [`${prefix}${resourcePrefix}Open`], [`${prefix}${resourcePrefix}Close`], context);
+  const children: PhrasingContent[] = [];
+  inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
+  if (referenceNode) {
+    const association = reference(nodeId, tokenBase, offset, endOffset, context, image);
+    return image
+      ? withSpan({ type: "imageReference", alt: phrasingText(children), ...association } satisfies ImageReference, sourceSpan.start, sourceSpan.end)
+      : withSpan({ type: "linkReference", children, ...association } satisfies LinkReference, sourceSpan.start, sourceSpan.end);
+  }
+  const closeIndex = leaf(nodeId, tokenBase, `${prefix}LinkClose`, context);
+  const resource = destinationTitle(inlineTokenText(context.view.text, context.tokens, closeIndex).slice(2, -1));
+  return image
+    ? withSpan({ type: "image", alt: phrasingText(children), ...resource } satisfies Image, sourceSpan.start, sourceSpan.end)
+    : withSpan({ type: "link", children, ...resource } satisfies Link, sourceSpan.start, sourceSpan.end);
+}
+
+function projectMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineRuleProjector {
+  return (nodeId, offset, endOffset, tokenBase, sourceSpan, accumulator) => {
+    appendInline(
+      accumulator,
+      linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, accumulator.context, media, resourceKind),
+      sourceSpan.start,
+    );
+    return true;
+  };
+}
+
+export const projectInlineAutolink: InlineLeafProjector = (tokenIndex, sourceSpan, accumulator) => {
+  const { context } = accumulator;
+  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
+  const label = text.slice(1, -1);
+  appendInline(accumulator, withSpan({
+    type: "link",
+    url: label.includes(":") ? label : `mailto:${label}`,
+    title: null,
+    children: [withSpan({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1)],
+  } satisfies Link, sourceSpan.start, sourceSpan.end), sourceSpan.start);
+  return true;
+};
+
+export const projectInlineImage = projectMedia("image", "direct");
+export const projectInlineReferenceImage = projectMedia("image", "reference");
+export const projectInlineLink = projectMedia("link", "direct");
+export const projectInlineReferenceLink = projectMedia("link", "reference");

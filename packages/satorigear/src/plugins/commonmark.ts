@@ -15,33 +15,32 @@ import {
   thematicBreakInterrupt,
   thematicBreakStart,
 } from "../block/scanner.ts";
+import { linkDefinitionFields } from "../block/tokens.ts";
 import {
   markdownBracketPairs,
   markdownDelimiterRuns,
   reassociateReferenceTails,
 } from "../inline/tokenizer.ts";
+import { projectInlineChildren, projectInlineIgnore } from "../mdast.ts";
+import { projectBlockQuote } from "./commonmark/blockquote.ts";
+import { projectInlineBreak, projectInlineNewline } from "./commonmark/break.ts";
+import { projectFencedCode, projectIndentedCode, projectInlineCode } from "./commonmark/code.ts";
+import { projectLinkDefinition } from "./commonmark/definition.ts";
+import { projectInlineEmphasis, projectInlineStrong } from "./commonmark/emphasis.ts";
+import { projectAtxHeading, projectSetextHeading } from "./commonmark/heading.ts";
+import { projectHtmlBlock, projectInlineHtml } from "./commonmark/html.ts";
 import {
-  defineSyntaxProfile,
-  type InternalSyntaxPlugin,
-  projectAtxHeading,
-  projectBlockQuote,
-  projectFencedCode,
-  projectHtmlBlock,
-  projectIndentedCode,
   projectInlineAutolink,
-  projectInlineBreak,
-  projectInlineCode,
-  projectInlineHtml,
-  projectInlineIgnore,
-  projectInlineNewline,
-  projectInlineText,
-  projectLinkDefinition,
-  projectOrderedList,
-  projectParagraph,
-  projectSetextHeading,
-  projectThematicBreak,
-  projectUnorderedList,
-} from "./profile.ts";
+  projectInlineImage,
+  projectInlineLink,
+  projectInlineReferenceImage,
+  projectInlineReferenceLink,
+} from "./commonmark/link.ts";
+import { projectOrderedList, projectUnorderedList } from "./commonmark/list.ts";
+import { projectParagraph } from "./commonmark/paragraph.ts";
+import { projectInlineText, semanticText } from "./commonmark/text.ts";
+import { projectThematicBreak } from "./commonmark/thematic-break.ts";
+import { defineSyntaxProfile, type InternalSyntaxPlugin } from "./profile.ts";
 
 const flowBlocks = {
   blockRules: [
@@ -108,7 +107,7 @@ const referenceBlocks = {
   blockRules: [{
     rule: "LinkDefinition",
     project: projectLinkDefinition,
-    referenceDefinition: true,
+    referenceLabel: (token) => linkDefinitionFields(token).normalizedLabel,
   }],
   blockStarts: [{ codes: [91], start: linkDefinitionStart }],
 } satisfies InternalSyntaxPlugin;
@@ -118,6 +117,12 @@ const fallbackBlocks = {
 } satisfies InternalSyntaxPlugin;
 
 const inlineAtoms = {
+  decodeText: semanticText,
+  inlineRules: [
+    { rule: "InlineLines", project: projectInlineChildren },
+    { rule: "InlineLine", project: projectInlineChildren },
+    { rule: "Inline", project: projectInlineChildren },
+  ],
   inlineTokens: [
     { token: "Text", project: projectInlineText },
     { token: "Escape", project: projectInlineText },
@@ -133,6 +138,12 @@ const inlineAtoms = {
 
 const inlineFormatting = {
   delimiterRuns: markdownDelimiterRuns,
+  inlineRules: [
+    { rule: "Emphasis", project: projectInlineEmphasis },
+    { rule: "LinkEmphasis", project: projectInlineEmphasis },
+    { rule: "Strong", project: projectInlineStrong },
+    { rule: "LinkStrong", project: projectInlineStrong },
+  ],
   inlineTokens: [
     { token: "Delimiter", project: projectInlineText },
     { token: "Strikethrough", project: projectInlineText },
@@ -144,6 +155,16 @@ const inlineFormatting = {
 } satisfies InternalSyntaxPlugin;
 
 const inlineLinks = {
+  inlineRules: [
+    { rule: "LinkContent", project: projectInlineChildren },
+    { rule: "BracketFallback", project: projectInlineChildren },
+    { rule: "Image", project: projectInlineImage },
+    { rule: "LinkImage", project: projectInlineImage },
+    { rule: "ReferenceImage", project: projectInlineReferenceImage },
+    { rule: "LinkReferenceImage", project: projectInlineReferenceImage },
+    { rule: "Link", project: projectInlineLink },
+    { rule: "ReferenceLink", project: projectInlineReferenceLink },
+  ],
   inlineTokens: [
     { token: "BracketOpen", project: projectInlineText },
     { token: "ImageOpen", project: projectInlineText },

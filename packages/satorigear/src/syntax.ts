@@ -1,4 +1,3 @@
-import { linkDefinitionFields } from "./block/tokens.ts";
 import {
   createInlineSyntaxDocument,
   inlineSyntaxArena,
@@ -10,14 +9,10 @@ import {
   parseInlineForest,
 } from "./inline/runtime.ts";
 import { InlineTokenState } from "./inline/tokenizer.ts";
-import {
-  blockInlineContent,
-  blockReferenceDefinition,
-  type SyntaxProfile,
-} from "./plugins/profile.ts";
 import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { BlockSyntaxView } from "./block/runtime.ts";
 import type { BlockToken } from "./block/tokens.ts";
+import type { SyntaxProfile } from "./plugins/profile.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
 import type { TextEdit } from "./text-edit.ts";
 
@@ -181,24 +176,24 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       regionIds: number[],
     ): void => {
       const rule = arena.ruleNameOf(nodeId);
-      switch (this.#profile.blockContents[rule]) {
-        case blockReferenceDefinition:
-          labels.add(linkDefinitionFields(view.tokenAt(tokenBase)).normalizedLabel);
-          return;
-        case blockInlineContent: {
-          const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
-          if (spans.length > 0) {
-            descriptors.push({
-              id: nodeId,
-              rule,
-              span: { start: offset, end: offset + arena.lenOf(nodeId) },
-              view: createSourceView(source, spans),
-            });
-            stableRegionIds.add(nodeId);
-            regionIds.push(nodeId);
-          }
-          return;
+      const referenceLabel = this.#profile.blockReferenceLabels[rule];
+      if (referenceLabel) {
+        labels.add(referenceLabel(view.tokenAt(tokenBase)));
+        return;
+      }
+      if (this.#profile.blockInlineContents[rule]) {
+        const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
+        if (spans.length > 0) {
+          descriptors.push({
+            id: nodeId,
+            rule,
+            span: { start: offset, end: offset + arena.lenOf(nodeId) },
+            view: createSourceView(source, spans),
+          });
+          stableRegionIds.add(nodeId);
+          regionIds.push(nodeId);
         }
+        return;
       }
       const childCount = arena.childCount(nodeId);
       for (let index = 0; index < childCount; index++) {

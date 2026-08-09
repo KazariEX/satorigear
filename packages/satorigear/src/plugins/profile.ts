@@ -5,6 +5,7 @@ import {
 } from "../inline/resolver.ts";
 import { inlineKind, type InlineTokenStream } from "../inline/runtime.ts";
 import type { BlockToken } from "../block/tokens.ts";
+import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 
 export interface BlockLine {
   end: number;
@@ -38,39 +39,10 @@ export interface BlockStartRegistration {
   start: BlockStart;
 }
 
-// Collection roles keep inline/reference discovery out of the grammar-name traversal.
-export const blockInlineContent = 1;
-export const blockReferenceDefinition = 2;
-export type BlockContentOpcode = typeof blockInlineContent | typeof blockReferenceDefinition;
-
-export const projectBlockQuote = 1;
-export const projectUnorderedList = 2;
-export const projectOrderedList = 3;
-export const projectAtxHeading = 4;
-export const projectSetextHeading = 5;
-export const projectParagraph = 6;
-export const projectThematicBreak = 7;
-export const projectFencedCode = 8;
-export const projectIndentedCode = 9;
-export const projectHtmlBlock = 10;
-export const projectLinkDefinition = 11;
-export type BlockProjectionOpcode =
-  | typeof projectAtxHeading
-  | typeof projectBlockQuote
-  | typeof projectFencedCode
-  | typeof projectHtmlBlock
-  | typeof projectIndentedCode
-  | typeof projectLinkDefinition
-  | typeof projectOrderedList
-  | typeof projectParagraph
-  | typeof projectSetextHeading
-  | typeof projectThematicBreak
-  | typeof projectUnorderedList;
-
 export interface BlockRuleRegistration {
   inlineContent?: true;
-  project: BlockProjectionOpcode;
-  referenceDefinition?: true;
+  project: BlockProjector;
+  referenceLabel?: (token: BlockToken) => string;
   rule: string;
 }
 
@@ -79,26 +51,14 @@ export interface InlineResolutionState {
   labels: ReadonlySet<string>;
 }
 
-// Profiles compile token semantics to numeric dispatch; projection never calls plugin callbacks per leaf.
-export const projectInlineText = 1;
-export const projectInlineCode = 2;
-export const projectInlineHtml = 3;
-export const projectInlineBreak = 4;
-export const projectInlineNewline = 5;
-export const projectInlineIgnore = 6;
-export const projectInlineAutolink = 7;
-export type InlineTokenProjectionOpcode =
-  | typeof projectInlineAutolink
-  | typeof projectInlineBreak
-  | typeof projectInlineCode
-  | typeof projectInlineHtml
-  | typeof projectInlineIgnore
-  | typeof projectInlineNewline
-  | typeof projectInlineText;
-
 export interface InlineTokenRegistration {
-  project: InlineTokenProjectionOpcode;
+  project: InlineLeafProjector;
   token: string;
+}
+
+export interface InlineRuleRegistration {
+  project: InlineRuleProjector;
+  rule: string;
 }
 
 export type InlineTransform = (
@@ -112,31 +72,39 @@ export interface InternalSyntaxPlugin {
   blockRules?: readonly BlockRuleRegistration[];
   blockStarts?: readonly BlockStartRegistration[];
   delimiterRuns?: readonly DelimiterRunConfig[];
+  decodeText?: (value: string) => string;
+  inlineRules?: readonly InlineRuleRegistration[];
   inlineTokens?: readonly InlineTokenRegistration[];
   inlineTransforms?: readonly InlineTransform[];
   tokenPairs?: readonly PairedTokenConfig<InlineResolutionState>[];
 }
 
 export interface SyntaxProfile {
-  blockContents: Readonly<Record<string, BlockContentOpcode>>;
   blockFallbacks: readonly BlockStart[];
+  blockInlineContents: Readonly<Record<string, true>>;
   blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
-  blockProjects: Readonly<Record<string, BlockProjectionOpcode>>;
+  blockProjects: Readonly<Record<string, BlockProjector>>;
+  blockReferenceLabels: Readonly<Record<string, (token: BlockToken) => string>>;
   blockStarts: readonly (BlockStartDispatch | undefined)[];
-  inlineTokenProjects: readonly (InlineTokenProjectionOpcode | undefined)[];
+  decodeText: (value: string) => string;
+  inlineRuleProjects: Readonly<Record<string, InlineRuleProjector>>;
+  inlineTokenProjects: readonly (InlineLeafProjector | undefined)[];
   resolveInline: InlineTransform;
 }
 
 // Profiles bind runtime semantics to the static generated grammar without owning document state.
 export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): SyntaxProfile {
-  const blockContents: Record<string, BlockContentOpcode> = Object.create(null);
   const blockFallbacks: BlockStart[] = [];
+  const blockInlineContents: Record<string, true> = Object.create(null);
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
-  const blockProjects: Record<string, BlockProjectionOpcode> = Object.create(null);
+  const blockProjects: Record<string, BlockProjector> = Object.create(null);
+  const blockReferenceLabels: Record<string, (token: BlockToken) => string> = Object.create(null);
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
   const delimiterRuns: DelimiterRunConfig[] = [];
+  let decodeText = (value: string): string => value;
+  const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
   const inlineTransforms: InlineTransform[] = [];
-  const inlineTokenProjects: (InlineTokenProjectionOpcode | undefined)[] = [];
+  const inlineTokenProjects: (InlineLeafProjector | undefined)[] = [];
   const tokenPairs: PairedTokenConfig<InlineResolutionState>[] = [];
   for (const plugin of plugins) {
     blockFallbacks.push(...plugin.blockFallbacks ?? []);
@@ -161,13 +129,17 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
     for (const registration of plugin.blockRules ?? []) {
       blockProjects[registration.rule] = registration.project;
       if (registration.inlineContent) {
-        blockContents[registration.rule] = blockInlineContent;
+        blockInlineContents[registration.rule] = true;
       }
-      if (registration.referenceDefinition) {
-        blockContents[registration.rule] = blockReferenceDefinition;
+      if (registration.referenceLabel) {
+        blockReferenceLabels[registration.rule] = registration.referenceLabel;
       }
     }
     delimiterRuns.push(...plugin.delimiterRuns ?? []);
+    decodeText = plugin.decodeText ?? decodeText;
+    for (const registration of plugin.inlineRules ?? []) {
+      inlineRuleProjects[registration.rule] = registration.project;
+    }
     for (const registration of plugin.inlineTokens ?? []) {
       inlineTokenProjects[inlineKind(registration.token)] = registration.project;
     }
@@ -193,11 +165,14 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
     };
   }
   return {
-    blockContents,
     blockFallbacks,
+    blockInlineContents,
     blockInterrupts,
     blockProjects,
+    blockReferenceLabels,
     blockStarts,
+    decodeText,
+    inlineRuleProjects,
     inlineTokenProjects,
     resolveInline,
   };
