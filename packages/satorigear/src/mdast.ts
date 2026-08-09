@@ -105,7 +105,7 @@ export function withSpan<const T extends object>(value: T, start: number, end: n
   return value;
 }
 
-function extendSpan(value: object, end: number): void {
+export function extendSpan(value: object, end: number): void {
   const fragment = value as FragmentValue;
   fragment.endOffset = Math.max(fragment.endOffset, end);
 }
@@ -292,7 +292,7 @@ function appendText(target: PhrasingContent[], value: string, start: number, end
     return;
   }
   const previous = target.at(-1);
-  if (previous?.type === "text") {
+  if (previous?.type === "text" && !("attributes" in previous)) {
     previous.value += value;
     extendSpan(previous, end);
   }

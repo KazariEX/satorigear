@@ -74,6 +74,10 @@ export function inlineTokenFlags(tokens: InlineTokenStream, index: number): numb
   return tokens[index * inlineTokenStride + 3];
 }
 
+export function setInlineTokenFlags(tokens: number[], index: number, flags: number): void {
+  tokens[index * inlineTokenStride + 3] = flags;
+}
+
 export function inlineTokenText(source: string, tokens: InlineTokenStream, index: number): string {
   return source.slice(
     inlineTokenStart(tokens, index),

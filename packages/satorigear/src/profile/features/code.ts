@@ -20,12 +20,12 @@ import {
 import { semanticText } from "./text.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-interface Fence {
+export interface CodeFence {
   marker: "`" | "~";
   length: number;
 }
 
-function fenceAt(source: string, line: BlockLine): Fence | null {
+export function codeFenceAt(source: string, line: BlockLine): CodeFence | null {
   const indent = lineIndent(source, line);
   if (!indent) {
     return null;
@@ -45,7 +45,7 @@ function fenceAt(source: string, line: BlockLine): Fence | null {
   return { marker, length };
 }
 
-function closesFence(source: string, line: BlockLine, fence: Fence): boolean {
+export function closesCodeFence(source: string, line: BlockLine, fence: CodeFence): boolean {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== fence.marker) {
     return false;
@@ -200,15 +200,15 @@ export const feature: SyntaxFeature = {
     {
       codes: [96, 126],
       interrupt(source, line) {
-        return !!fenceAt(source, line);
+        return !!codeFenceAt(source, line);
       },
       start(source, lines, start, out) {
-        const fence = fenceAt(source, lines[start]);
+        const fence = codeFenceAt(source, lines[start]);
         if (!fence) {
           return void 0;
         }
         let end = start + 1;
-        while (end < lines.length && !closesFence(source, lines[end], fence)) {
+        while (end < lines.length && !closesCodeFence(source, lines[end], fence)) {
           end++;
         }
         if (end < lines.length) {

@@ -209,6 +209,12 @@ const ReferenceOpen = token(never());
 const ReferenceClose = token(never());
 const ImageReferenceOpen = token(never());
 const ImageReferenceClose = token(never());
+const InlineComponentOpen = token(never());
+const InlineComponentLabelOpen = token(never());
+const InlineComponentLabelClose = token(never());
+const Attributes = token(never());
+const InlineSpanOpen = token(never());
+const InlineSpanClose = token(never());
 const Delimiter = token(oneOf("\\", "`", "*", "_", "[", "]", "<", ">", "!", "&", "~"), {
   scope: "punctuation.definition.markdown",
 });
@@ -236,6 +242,34 @@ const LinkReferenceImage = rule(() => [[
   many(not(ImageReferenceClose), LinkContent),
   ImageReferenceClose,
 ]]);
+const InlineComponent = rule(() => [
+  [InlineComponentOpen],
+  [
+    InlineComponentOpen,
+    InlineComponentLabelOpen,
+    many(alt(Inline, Newline)),
+    InlineComponentLabelClose,
+  ],
+]);
+const InlineSpan = rule(() => [[
+  InlineSpanOpen,
+  many(alt(Inline, Newline)),
+  InlineSpanClose,
+]]);
+const LinkComponent = rule(() => [
+  [InlineComponentOpen],
+  [
+    InlineComponentOpen,
+    InlineComponentLabelOpen,
+    many(alt(LinkContent, Newline)),
+    InlineComponentLabelClose,
+  ],
+]);
+const LinkSpan = rule(() => [[
+  InlineSpanOpen,
+  many(alt(LinkContent, Newline)),
+  InlineSpanClose,
+]]);
 const BracketFallback = rule(() => [
   ImageOpen,
   BracketOpen,
@@ -259,6 +293,8 @@ Inline = rule(() => [
   Image,
   Link,
   ReferenceLink,
+  InlineComponent,
+  InlineSpan,
   Autolink,
   InlineHtml,
   Entity,
@@ -267,6 +303,7 @@ Inline = rule(() => [
   Strong,
   Strikethrough,
   Emphasis,
+  Attributes,
   Text,
   Delimiter,
   ReferenceImage,
@@ -276,6 +313,8 @@ LinkContent = rule(() => [
   HtmlComment,
   CodeSpan,
   LinkImage,
+  LinkComponent,
+  LinkSpan,
   InlineHtml,
   Entity,
   HardBreak,
@@ -283,6 +322,7 @@ LinkContent = rule(() => [
   LinkStrong,
   Strikethrough,
   LinkEmphasis,
+  Attributes,
   Text,
   Delimiter,
   LinkReferenceImage,
@@ -321,6 +361,12 @@ export const grammar = defineGrammar({
     ReferenceClose,
     ImageReferenceOpen,
     ImageReferenceClose,
+    InlineComponentOpen,
+    InlineComponentLabelOpen,
+    InlineComponentLabelClose,
+    Attributes,
+    InlineSpanOpen,
+    InlineSpanClose,
     Delimiter,
     Newline,
     InlineBoundary,
@@ -340,6 +386,10 @@ export const grammar = defineGrammar({
     ReferenceImage,
     LinkImage,
     LinkReferenceImage,
+    InlineComponent,
+    InlineSpan,
+    LinkComponent,
+    LinkSpan,
     LinkContent,
     BracketFallback,
   },

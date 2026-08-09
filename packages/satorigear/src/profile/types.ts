@@ -38,6 +38,13 @@ export interface BlockRuleRegistration {
   rule: string;
 }
 
+export type BlockProjectorDecorator = (project: BlockProjector) => BlockProjector;
+
+export interface BlockDecoratorRegistration {
+  decorate: BlockProjectorDecorator;
+  rule: string;
+}
+
 export type BlockLineUnwrapper = (source: string, line: BlockLine) => BlockLine | undefined;
 
 export type BlockRestart = (
@@ -68,6 +75,7 @@ export type InlineTransform = (
 ) => InlineTokenStream;
 
 export interface SyntaxFeature {
+  blockDecorators?: readonly BlockDecoratorRegistration[];
   blockFallbacks?: readonly BlockStart[];
   blockRestart?: BlockRestart;
   blockRules?: readonly BlockRuleRegistration[];

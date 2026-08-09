@@ -1,4 +1,4 @@
-import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "monogram/api.ts";
+import { alt, defineGrammar, many, many1, never, opt, rule, type RuleRef, token } from "monogram/api.ts";
 
 const ParagraphOpen = token(never());
 const ParagraphClose = token(never());
@@ -25,6 +25,11 @@ const HtmlBlockToken = token(never());
 const LinkDefinitionOpen = token(never());
 const LinkDefinitionChunk = token(never());
 const LinkDefinitionClose = token(never());
+const BlockComponentOpen = token(never());
+const BlockComponentLabelOpen = token(never());
+const BlockComponentLabelClose = token(never());
+const BlockComponentAttributes = token(never());
+const BlockComponentClose = token(never());
 
 const Paragraph = rule(() => [[ParagraphOpen, many1(InlineChunk), ParagraphClose]]);
 const AtxHeading = rule(() => [[AtxHeadingOpen, many(InlineChunk), HeadingClose]]);
@@ -36,6 +41,18 @@ const ThematicBreak = rule(() => [ThematicBreakToken]);
 const HtmlBlock = rule(() => [HtmlBlockToken]);
 const LinkDefinition = rule(() => [[LinkDefinitionOpen, many1(LinkDefinitionChunk), LinkDefinitionClose]]);
 let Block: RuleRef;
+const BlockComponentLabel = rule(() => [[
+  BlockComponentLabelOpen,
+  many(InlineChunk),
+  BlockComponentLabelClose,
+]]);
+const BlockComponent = rule(() => [[
+  BlockComponentOpen,
+  opt(BlockComponentLabel),
+  opt(BlockComponentAttributes),
+  many(Block),
+  BlockComponentClose,
+]]);
 const BlockQuote = rule(() => [[BlockQuoteOpen, many(Block), BlockQuoteClose]]);
 const UnorderedListItem = rule(() => [[UnorderedItemOpen, many(Block), UnorderedItemClose]]);
 const OrderedListItem = rule(() => [[OrderedItemOpen, many(Block), OrderedItemClose]]);
@@ -50,6 +67,7 @@ Block = rule(() => [
   IndentedCodeBlock,
   HtmlBlock,
   LinkDefinition,
+  BlockComponent,
   BlockQuote,
   UnorderedList,
   OrderedList,
@@ -85,6 +103,11 @@ export const grammar = defineGrammar({
     LinkDefinitionOpen,
     LinkDefinitionChunk,
     LinkDefinitionClose,
+    BlockComponentOpen,
+    BlockComponentLabelOpen,
+    BlockComponentLabelClose,
+    BlockComponentAttributes,
+    BlockComponentClose,
   },
   rules: {
     Paragraph,
@@ -95,6 +118,8 @@ export const grammar = defineGrammar({
     IndentedCodeBlock,
     HtmlBlock,
     LinkDefinition,
+    BlockComponentLabel,
+    BlockComponent,
     ThematicBreak,
     BlockQuote,
     UnorderedListItem,

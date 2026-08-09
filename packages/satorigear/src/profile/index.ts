@@ -4,9 +4,15 @@ import {
   type PairedTokenConfig,
 } from "../inline/resolver.ts";
 import { inlineKind } from "../inline/runtime.ts";
+import {
+  feature as featureAttributes,
+  transformInlineAttributes,
+} from "./features/attributes/index.ts";
 import { feature as featureBlockQuote } from "./features/blockquote.ts";
 import { feature as featureBreak } from "./features/break.ts";
 import { feature as featureCode } from "./features/code.ts";
+import { feature as featureComponent } from "./features/component/index.ts";
+import { transformInlineCarrier } from "./features/component/inline.ts";
 import { feature as featureEmphasis } from "./features/emphasis.ts";
 import { feature as frontmatterFeature, type FrontmatterOptions } from "./features/frontmatter.ts";
 import { feature as featureHeading } from "./features/heading.ts";
@@ -22,12 +28,14 @@ import { feature as featureText, semanticText } from "./features/text.ts";
 import type { BlockToken } from "../block/tokens.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 import type {
+  BlockDecoratorRegistration,
   BlockInterruptDispatch,
   BlockLineUnwrapper,
   BlockRestart,
   BlockStart,
   BlockStartDispatch,
   InlineResolutionContext,
+  InlineTransform,
   SyntaxFeature,
   SyntaxProfile,
 } from "./types.ts";
@@ -47,6 +55,8 @@ const defaultFeatures = [
 ] as const;
 
 export interface SyntaxOptions {
+  attributes?: boolean;
+  component?: boolean;
   frontmatter?: boolean | FrontmatterOptions;
 }
 
@@ -54,12 +64,22 @@ export interface SyntaxOptions {
 const profiles = Object.create(null);
 const defaultOptions: SyntaxOptions = {};
 
+function profileKey(options: SyntaxOptions): string {
+  let frontmatter = "";
+  if (options.frontmatter) {
+    frontmatter = typeof options.frontmatter === "object" ? options.frontmatter.marker : "-";
+  }
+  return `${options.attributes ? "a" : ""}${options.component ? "c" : ""}${frontmatter && `f${frontmatter}`}` || "{}";
+}
+
 export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxProfile {
-  const key = options === defaultOptions ? "{}" : JSON.stringify(options);
+  const key = options === defaultOptions ? "{}" : profileKey(options);
   if (key in profiles) {
     return profiles[key];
   }
 
+  const component = Boolean(options.component);
+  const attributes = Boolean(options.attributes);
   const features = [...defaultFeatures];
 
   if (options.frontmatter) {
@@ -72,12 +92,26 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
     );
   }
 
-  profiles[key] = compileProfile(features);
+  if (component) {
+    features.push(featureComponent(attributes));
+  }
+  if (attributes) {
+    features.push(featureAttributes);
+  }
+
+  const inlineCarrier: InlineTransform | undefined = component || attributes
+    ? (source, tokens) => {
+      const carried = component ? transformInlineCarrier(source, tokens, attributes) : tokens;
+      return attributes ? transformInlineAttributes(source, carried) : carried;
+    }
+    : void 0;
+  profiles[key] = compileProfile(features, inlineCarrier);
   return profiles[key];
 }
 
 // Compilation builds the hot dispatch tables once; documents only retain the immutable result.
-function compileProfile(features: readonly SyntaxFeature[]): SyntaxProfile {
+function compileProfile(features: readonly SyntaxFeature[], transformInline?: InlineTransform): SyntaxProfile {
+  const blockDecorators: BlockDecoratorRegistration[] = [];
   const blockFallbacks: BlockStart[] = [];
   const blockInlineContents: Record<string, true> = Object.create(null);
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
@@ -91,6 +125,9 @@ function compileProfile(features: readonly SyntaxFeature[]): SyntaxProfile {
   const inlineTokenProjects: (InlineLeafProjector | undefined)[] = [];
   const tokenPairs: PairedTokenConfig<InlineResolutionContext>[] = [];
   for (const feature of features) {
+    if (feature.blockDecorators) {
+      blockDecorators.push(...feature.blockDecorators);
+    }
     if (feature.blockFallbacks) {
       blockFallbacks.push(...feature.blockFallbacks);
     }
@@ -149,7 +186,27 @@ function compileProfile(features: readonly SyntaxFeature[]): SyntaxProfile {
     }
   }
 
+  for (const registration of blockDecorators) {
+    const project = blockProjects[registration.rule];
+    if (!project) {
+      throw new Error(`Cannot decorate unknown block rule ${registration.rule}`);
+    }
+    blockProjects[registration.rule] = registration.decorate(project);
+  }
+
   const resolver = createDelimitedTokenResolver(delimiterRuns, tokenPairs);
+  // Generated lexer tokens become optional syntax carriers before reference and delimiter resolution.
+  const resolveInline: SyntaxProfile["resolveInline"] = transformInline === void 0
+    ? (source, tokens, state) => resolver.resolve(
+      source,
+      reassociateReferenceTails(source, tokens, state),
+      state,
+    )
+    : (source, tokens, state) => resolver.resolve(
+      source,
+      reassociateReferenceTails(source, transformInline(source, tokens, state), state),
+      state,
+    );
 
   return {
     blockFallbacks,
@@ -172,12 +229,6 @@ function compileProfile(features: readonly SyntaxFeature[]): SyntaxProfile {
     decodeText: semanticText,
     inlineRuleProjects,
     inlineTokenProjects,
-    resolveInline(source, tokens, state) {
-      return resolver.resolve(
-        source,
-        reassociateReferenceTails(source, tokens, state),
-        state,
-      );
-    },
+    resolveInline,
   };
 }
