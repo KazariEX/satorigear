@@ -5,7 +5,7 @@ import {
   materialize,
   projectBlock,
 } from "./mdast.ts";
-import { blockSyntaxParser, createMarkdownSyntax } from "./syntax.ts";
+import { blockSyntaxParser, createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
 import type { EmittedParserDocument } from "./emitted-parser.ts";
 import type { TextEdit } from "./text-edit.ts";
 
@@ -65,7 +65,7 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 class DocumentImpl implements Document {
   #blockScanner: MarkdownBlockScanner;
   #blockSyntax: EmittedParserDocument;
-  #syntax: ReturnType<typeof createMarkdownSyntax>;
+  #syntax: MarkdownSyntax;
   #fragments = new Map<number, BlockFragment>();
 
   constructor(source: string) {
@@ -101,7 +101,7 @@ class DocumentImpl implements Document {
         block.offset,
         block.tokenBase,
         this.source,
-        block.syntax,
+        this.#syntax,
         block.version,
       ));
     }
@@ -109,7 +109,7 @@ class DocumentImpl implements Document {
       const previous = this.#fragments.get(block.id);
       const fragment = fragments.get(block.id) ?? (previous?.version === block.version
         ? previous
-        : projectBlock(block.id, block.offset, block.tokenBase, this.source, block.syntax, block.version));
+        : projectBlock(block.id, block.offset, block.tokenBase, this.source, this.#syntax, block.version));
       fragment.offset = block.offset;
       fragments.set(block.id, fragment);
       return fragment;

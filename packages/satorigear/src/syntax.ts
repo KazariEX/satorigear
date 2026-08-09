@@ -22,8 +22,11 @@ export interface MarkdownInlineSyntax {
 }
 
 export interface MarkdownSyntax {
+  blocks: () => readonly SyntaxBlock[];
   blockView: () => SyntaxArenaView;
   inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
+  prepareInline: (blocks: readonly SyntaxBlock[]) => readonly SyntaxBlock[];
+  update: (view: SyntaxArenaView, source: string, edits?: readonly TextEdit[]) => void;
 }
 
 export const blockSyntaxParser = createEmittedParser(
@@ -116,7 +119,6 @@ interface SyntaxBlock {
   regionIds: readonly number[];
   regionRevisions: readonly number[];
   source: string;
-  syntax: MarkdownSyntax;
   tokenBase: number;
   version: number;
 }
@@ -241,7 +243,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         regionIds,
         regionRevisions: [],
         source: source.slice(offset, offset + arena.lenOf(childId)),
-        syntax: this,
         tokenBase,
         version: 0,
       });
@@ -366,6 +367,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   }
 }
 
-export function createMarkdownSyntax(view: SyntaxArenaView, source: string): MarkdownSyntaxImpl {
+export function createMarkdownSyntax(view: SyntaxArenaView, source: string): MarkdownSyntax {
   return new MarkdownSyntaxImpl(view, source);
 }
