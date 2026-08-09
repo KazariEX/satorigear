@@ -38,6 +38,11 @@ export interface BlockStartRegistration {
   start: BlockStart;
 }
 
+// Collection roles keep inline/reference discovery out of the grammar-name traversal.
+export const blockInlineContent = 1;
+export const blockReferenceDefinition = 2;
+export type BlockContentOpcode = typeof blockInlineContent | typeof blockReferenceDefinition;
+
 export const projectBlockQuote = 1;
 export const projectUnorderedList = 2;
 export const projectOrderedList = 3;
@@ -63,7 +68,9 @@ export type BlockProjectionOpcode =
   | typeof projectUnorderedList;
 
 export interface BlockRuleRegistration {
+  inlineContent?: true;
   project: BlockProjectionOpcode;
+  referenceDefinition?: true;
   rule: string;
 }
 
@@ -111,6 +118,7 @@ export interface InternalSyntaxPlugin {
 }
 
 export interface SyntaxProfile {
+  blockContents: Readonly<Record<string, BlockContentOpcode>>;
   blockFallbacks: readonly BlockStart[];
   blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
   blockProjects: Readonly<Record<string, BlockProjectionOpcode>>;
@@ -121,6 +129,7 @@ export interface SyntaxProfile {
 
 // Profiles bind runtime semantics to the static generated grammar without owning document state.
 export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): SyntaxProfile {
+  const blockContents: Record<string, BlockContentOpcode> = Object.create(null);
   const blockFallbacks: BlockStart[] = [];
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
   const blockProjects: Record<string, BlockProjectionOpcode> = Object.create(null);
@@ -151,6 +160,12 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
     }
     for (const registration of plugin.blockRules ?? []) {
       blockProjects[registration.rule] = registration.project;
+      if (registration.inlineContent) {
+        blockContents[registration.rule] = blockInlineContent;
+      }
+      if (registration.referenceDefinition) {
+        blockContents[registration.rule] = blockReferenceDefinition;
+      }
     }
     delimiterRuns.push(...plugin.delimiterRuns ?? []);
     for (const registration of plugin.inlineTokens ?? []) {
@@ -178,6 +193,7 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
     };
   }
   return {
+    blockContents,
     blockFallbacks,
     blockInterrupts,
     blockProjects,

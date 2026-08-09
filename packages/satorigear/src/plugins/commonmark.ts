@@ -45,9 +45,9 @@ import {
 
 const flowBlocks = {
   blockRules: [
-    { rule: "AtxHeading", project: projectAtxHeading },
-    { rule: "SetextHeading", project: projectSetextHeading },
-    { rule: "Paragraph", project: projectParagraph },
+    { rule: "AtxHeading", inlineContent: true, project: projectAtxHeading },
+    { rule: "SetextHeading", inlineContent: true, project: projectSetextHeading },
+    { rule: "Paragraph", inlineContent: true, project: projectParagraph },
     { rule: "ThematicBreak", project: projectThematicBreak },
   ],
   blockStarts: [
@@ -105,7 +105,11 @@ const literalBlocks = {
 } satisfies InternalSyntaxPlugin;
 
 const referenceBlocks = {
-  blockRules: [{ rule: "LinkDefinition", project: projectLinkDefinition }],
+  blockRules: [{
+    rule: "LinkDefinition",
+    project: projectLinkDefinition,
+    referenceDefinition: true,
+  }],
   blockStarts: [{ codes: [91], start: linkDefinitionStart }],
 } satisfies InternalSyntaxPlugin;
 
