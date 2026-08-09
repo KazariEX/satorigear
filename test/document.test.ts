@@ -54,6 +54,18 @@ describe("markdown document", () => {
     });
   });
 
+  it("reassociates adjacent references when a definition becomes available", () => {
+    const document = createDocument("[foo][bar][baz]\n\n[baz]: /baz\n");
+    document.snapshot();
+    document.edit([{
+      start: document.source.length,
+      end: document.source.length,
+      text: "\n[bar]: /bar\n",
+    }]);
+
+    expect(document.snapshot()).toEqual(parse(document.source));
+  });
+
   it("restarts an earlier multiline definition candidate", () => {
     const document = createDocument("[foo]\n>\nxxxbar\n");
     document.edit([{ start: 11, end: 14, text: "foo&]:&rl" }]);

@@ -11,7 +11,7 @@ import {
   leaf,
   withSpan,
 } from "../../mdast.ts";
-import { normalizeMarkdownReferenceLabel } from "../../reference-label.ts";
+import { normalizeReferenceLabel } from "./reference.ts";
 import { semanticText } from "./text.ts";
 
 interface Reference {
@@ -96,7 +96,7 @@ function reference(
   const full = closeText.startsWith("][") && closeText !== "][]";
   const labelSource = full ? closeText.slice(2, -1) : content;
   return {
-    identifier: normalizeMarkdownReferenceLabel(labelSource).toLowerCase(),
+    identifier: normalizeReferenceLabel(labelSource).toLowerCase(),
     label: semanticText(labelSource),
     referenceType: full ? "full" : closeText === "][]" ? "collapsed" : "shortcut",
   };

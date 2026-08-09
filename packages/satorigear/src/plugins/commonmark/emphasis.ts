@@ -7,6 +7,27 @@ import {
   inlineSequence,
   withSpan,
 } from "../../mdast.ts";
+import type { DelimiterRunConfig } from "../../inline/resolver.ts";
+
+export const markdownDelimiterRuns: DelimiterRunConfig[] = [
+  {
+    token: "AsteriskRun",
+    marker: "*",
+    fallbackToken: "Delimiter",
+    single: { open: "EmphasisOpen", close: "EmphasisClose" },
+    double: { open: "StrongOpen", close: "StrongClose" },
+    ruleOfThree: true,
+  },
+  {
+    token: "UnderscoreRun",
+    marker: "_",
+    fallbackToken: "Delimiter",
+    single: { open: "EmphasisOpen", close: "EmphasisClose" },
+    double: { open: "StrongOpen", close: "StrongClose" },
+    intraword: false,
+    ruleOfThree: true,
+  },
+];
 
 export const projectInlineEmphasis: InlineRuleProjector = (
   nodeId,

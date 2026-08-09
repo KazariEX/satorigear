@@ -1,4 +1,3 @@
-import { normalizeMarkdownReferenceLabel } from "../reference-label.ts";
 import {
   type BlockToken,
   type BlockTokenChange,
@@ -289,7 +288,12 @@ function htmlStartAt(source: string, line: BlockLine): HtmlStart | null {
   return null;
 }
 
-function linkDefinitionAt(source: string, lines: readonly BlockLine[], startIndex: number): LinkDefinitionMatch | null {
+function linkDefinitionAt(
+  source: string,
+  lines: readonly BlockLine[],
+  startIndex: number,
+  normalizeLabel: (label: string) => string,
+): LinkDefinitionMatch | null {
   const indent = lineIndent(source, lines[startIndex]);
   if (!indent || source[indent.offset] !== "[") {
     return null;
@@ -420,7 +424,7 @@ function linkDefinitionAt(source: string, lines: readonly BlockLine[], startInde
     destination,
     label,
     markerOffset: indent.offset - lines[startIndex].start,
-    normalizedLabel: normalizeMarkdownReferenceLabel(label),
+    normalizedLabel: normalizeLabel(label),
     title: null,
   };
   if (!closer) {
@@ -570,21 +574,23 @@ export const thematicBreakStart: BlockStart = (source, lines, start, out, conten
   return start + 1;
 };
 
-export const linkDefinitionStart: BlockStart = (source, lines, start, out) => {
-  const definition = linkDefinitionAt(source, lines, start);
-  if (!definition) {
-    return void 0;
-  }
-  const line = lines[start];
-  out.push(linkDefinitionOpen(line.start, definition.fields));
-  for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
-    const current = lines[definitionLine];
-    const end = definitionLine + 1 < definition.end ? current.next : current.end;
-    out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
-  }
-  out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
-  return definition.end;
-};
+export function createLinkDefinitionStart(normalizeLabel: (label: string) => string): BlockStart {
+  return (source, lines, start, out) => {
+    const definition = linkDefinitionAt(source, lines, start, normalizeLabel);
+    if (!definition) {
+      return void 0;
+    }
+    const line = lines[start];
+    out.push(linkDefinitionOpen(line.start, definition.fields));
+    for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
+      const current = lines[definitionLine];
+      const end = definitionLine + 1 < definition.end ? current.next : current.end;
+      out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+    }
+    out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
+    return definition.end;
+  };
+}
 
 export function atxHeadingInterrupt(source: string, line: BlockLine): boolean {
   return !!atxAt(source, line);

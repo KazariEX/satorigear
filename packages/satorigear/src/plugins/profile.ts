@@ -46,9 +46,8 @@ export interface BlockRuleRegistration {
   rule: string;
 }
 
-export interface InlineResolutionState {
-  candidates?: Set<string>;
-  labels: ReadonlySet<string>;
+export interface InlineResolutionContext {
+  hasReference: (label: string) => boolean;
 }
 
 export interface InlineTokenRegistration {
@@ -64,7 +63,7 @@ export interface InlineRuleRegistration {
 export type InlineTransform = (
   source: string,
   tokens: InlineTokenStream,
-  state: InlineResolutionState,
+  context: InlineResolutionContext,
 ) => InlineTokenStream;
 
 export interface InternalSyntaxPlugin {
@@ -76,7 +75,7 @@ export interface InternalSyntaxPlugin {
   inlineRules?: readonly InlineRuleRegistration[];
   inlineTokens?: readonly InlineTokenRegistration[];
   inlineTransforms?: readonly InlineTransform[];
-  tokenPairs?: readonly PairedTokenConfig<InlineResolutionState>[];
+  tokenPairs?: readonly PairedTokenConfig<InlineResolutionContext>[];
 }
 
 export interface SyntaxProfile {
@@ -105,7 +104,7 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
   const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
   const inlineTransforms: InlineTransform[] = [];
   const inlineTokenProjects: (InlineLeafProjector | undefined)[] = [];
-  const tokenPairs: PairedTokenConfig<InlineResolutionState>[] = [];
+  const tokenPairs: PairedTokenConfig<InlineResolutionContext>[] = [];
   for (const plugin of plugins) {
     blockFallbacks.push(...plugin.blockFallbacks ?? []);
     for (const registration of plugin.blockStarts ?? []) {

@@ -8,7 +8,6 @@ import {
   htmlBlockInterrupt,
   htmlBlockStart,
   indentedCodeStart,
-  linkDefinitionStart,
   listInterrupt,
   listStart,
   paragraphStart,
@@ -16,17 +15,16 @@ import {
   thematicBreakStart,
 } from "../block/scanner.ts";
 import { linkDefinitionFields } from "../block/tokens.ts";
-import {
-  markdownBracketPairs,
-  markdownDelimiterRuns,
-  reassociateReferenceTails,
-} from "../inline/tokenizer.ts";
 import { projectInlineChildren, projectInlineIgnore } from "../mdast.ts";
 import { projectBlockQuote } from "./commonmark/blockquote.ts";
 import { projectInlineBreak, projectInlineNewline } from "./commonmark/break.ts";
 import { projectFencedCode, projectIndentedCode, projectInlineCode } from "./commonmark/code.ts";
 import { projectLinkDefinition } from "./commonmark/definition.ts";
-import { projectInlineEmphasis, projectInlineStrong } from "./commonmark/emphasis.ts";
+import {
+  markdownDelimiterRuns,
+  projectInlineEmphasis,
+  projectInlineStrong,
+} from "./commonmark/emphasis.ts";
 import { projectAtxHeading, projectSetextHeading } from "./commonmark/heading.ts";
 import { projectHtmlBlock, projectInlineHtml } from "./commonmark/html.ts";
 import {
@@ -38,6 +36,11 @@ import {
 } from "./commonmark/link.ts";
 import { projectOrderedList, projectUnorderedList } from "./commonmark/list.ts";
 import { projectParagraph } from "./commonmark/paragraph.ts";
+import {
+  linkDefinitionStart,
+  markdownBracketPairs,
+  reassociateReferenceTails,
+} from "./commonmark/reference.ts";
 import { projectInlineText, semanticText } from "./commonmark/text.ts";
 import { projectThematicBreak } from "./commonmark/thematic-break.ts";
 import { defineSyntaxProfile, type InternalSyntaxPlugin } from "./profile.ts";
