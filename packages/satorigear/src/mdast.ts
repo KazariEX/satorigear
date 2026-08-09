@@ -13,7 +13,7 @@ import {
 } from "./inline/runtime.ts";
 import type { BlockSyntaxView } from "./block/runtime.ts";
 import type { BlockToken } from "./block/tokens.ts";
-import type { SyntaxProfile } from "./plugins/profile.ts";
+import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
 import type { MarkdownSyntax } from "./syntax.ts";

@@ -289,7 +289,7 @@ LinkContent = rule(() => [
   BracketFallback,
 ]);
 
-export const markdownInlineGrammar = defineGrammar({
+export const grammar = defineGrammar({
   name: "markdown-inline",
   tokens: {
     HtmlComment,

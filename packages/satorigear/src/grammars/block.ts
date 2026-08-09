@@ -54,7 +54,7 @@ Block = rule(() => [
 ]);
 const Document = rule(() => [[many(Block)]]);
 
-export const markdownBlockGrammar = defineGrammar({
+export const grammar = defineGrammar({
   name: "markdown-blocks",
   tokens: {
     ParagraphOpen,

@@ -4,55 +4,50 @@ import {
   type PairedTokenConfig,
 } from "../inline/resolver.ts";
 import { inlineKind } from "../inline/runtime.ts";
+import { feature as featureBlockQuote } from "./features/blockquote.ts";
+import { feature as featureBreak } from "./features/break.ts";
+import { feature as featureCode } from "./features/code.ts";
+import { feature as featureEmphasis } from "./features/emphasis.ts";
+import { feature as featureHeading } from "./features/heading.ts";
+import { feature as featureHtml } from "./features/html.ts";
+import { feature as featureLink } from "./features/link.ts";
+import { feature as featureList } from "./features/list.ts";
+import { feature as featureParagraph } from "./features/paragraph.ts";
+import {
+  feature as featureReference,
+  reassociateReferenceTails,
+  restartBeforeReferenceChange,
+} from "./features/reference.ts";
+import { feature as featureText, semanticText } from "./features/text.ts";
 import type { BlockToken } from "../block/tokens.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 import type {
-  BlockInterrupt,
+  BlockInterruptDispatch,
   BlockLineUnwrapper,
-  BlockRestart,
   BlockStart,
+  BlockStartDispatch,
   InlineResolutionContext,
   InlineTransform,
-  InternalSyntaxPlugin,
-} from "./plugin.ts";
+  SyntaxFeature,
+  SyntaxProfile,
+} from "./types.ts";
 
-export type BlockInterruptDispatch = BlockInterrupt | readonly BlockInterrupt[];
-export type BlockStartDispatch = BlockStart | readonly BlockStart[];
-
-export interface SyntaxProfile {
-  blockFallbacks: readonly BlockStart[];
-  blockInlineContents: Readonly<Record<string, true>>;
-  blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
-  blockProjects: Readonly<Record<string, BlockProjector>>;
-  blockReferenceLabels: Readonly<Record<string, (token: BlockToken) => string>>;
-  blockRestarts: readonly BlockRestart[];
-  blockStarts: readonly (BlockStartDispatch | undefined)[];
-  blockUnwrappers: readonly BlockLineUnwrapper[];
-  decodeText: (value: string) => string;
-  inlineRuleProjects: Readonly<Record<string, InlineRuleProjector>>;
-  inlineTokenProjects: readonly (InlineLeafProjector | undefined)[];
-  resolveInline: InlineTransform;
-}
-
-// Profiles bind runtime semantics to the static generated grammar without owning document state.
-export function compileSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): SyntaxProfile {
+// Compilation builds the hot dispatch tables once; documents only retain the immutable result.
+function compileProfile(features: readonly SyntaxFeature[]): SyntaxProfile {
   const blockFallbacks: BlockStart[] = [];
   const blockInlineContents: Record<string, true> = Object.create(null);
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
   const blockProjects: Record<string, BlockProjector> = Object.create(null);
   const blockReferenceLabels: Record<string, (token: BlockToken) => string> = Object.create(null);
-  const blockRestarts: BlockRestart[] = [];
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
   const blockUnwrappers: BlockLineUnwrapper[] = [];
   const delimiterRuns: DelimiterRunConfig[] = [];
-  let decodeText = (value: string): string => value;
   const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
-  const inlineTransforms: InlineTransform[] = [];
   const inlineTokenProjects: (InlineLeafProjector | undefined)[] = [];
   const tokenPairs: PairedTokenConfig<InlineResolutionContext>[] = [];
-  for (const plugin of plugins) {
-    blockFallbacks.push(...plugin.blockFallbacks ?? []);
-    for (const registration of plugin.blockStarts ?? []) {
+  for (const feature of features) {
+    blockFallbacks.push(...feature.blockFallbacks ?? []);
+    for (const registration of feature.blockStarts ?? []) {
       for (const code of registration.codes) {
         const starts = blockStarts[code];
         blockStarts[code] = !starts
@@ -70,7 +65,7 @@ export function compileSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): 
         }
       }
     }
-    for (const registration of plugin.blockRules ?? []) {
+    for (const registration of feature.blockRules ?? []) {
       blockProjects[registration.rule] = registration.project;
       if (registration.inlineContent) {
         blockInlineContents[registration.rule] = true;
@@ -79,49 +74,48 @@ export function compileSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): 
         blockReferenceLabels[registration.rule] = registration.referenceLabel;
       }
     }
-    blockRestarts.push(...plugin.blockRestarts ?? []);
-    blockUnwrappers.push(...plugin.blockUnwrappers ?? []);
-    delimiterRuns.push(...plugin.delimiterRuns ?? []);
-    decodeText = plugin.decodeText ?? decodeText;
-    for (const registration of plugin.inlineRules ?? []) {
+    blockUnwrappers.push(...feature.blockUnwrappers ?? []);
+    delimiterRuns.push(...feature.delimiterRuns ?? []);
+    for (const registration of feature.inlineRules ?? []) {
       inlineRuleProjects[registration.rule] = registration.project;
     }
-    for (const registration of plugin.inlineTokens ?? []) {
+    for (const registration of feature.inlineTokens ?? []) {
       inlineTokenProjects[inlineKind(registration.token)] = registration.project;
     }
-    inlineTransforms.push(...plugin.inlineTransforms ?? []);
-    tokenPairs.push(...plugin.tokenPairs ?? []);
+    tokenPairs.push(...feature.tokenPairs ?? []);
   }
   const resolver = createDelimitedTokenResolver(delimiterRuns, tokenPairs);
-  let resolveInline: InlineTransform;
-  if (inlineTransforms.length === 0) {
-    resolveInline = resolver.resolve;
-  }
-  else if (inlineTransforms.length === 1) {
-    const transform = inlineTransforms[0];
-    resolveInline = (source, tokens, state) => resolver.resolve(source, transform(source, tokens, state), state);
-  }
-  else {
-    resolveInline = (source, tokens, state) => {
-      let transformed = tokens;
-      for (const transform of inlineTransforms) {
-        transformed = transform(source, transformed, state);
-      }
-      return resolver.resolve(source, transformed, state);
-    };
-  }
+  const resolveInline: InlineTransform = (source, tokens, state) => resolver.resolve(
+    source,
+    reassociateReferenceTails(source, tokens, state),
+    state,
+  );
   return {
     blockFallbacks,
     blockInlineContents,
     blockInterrupts,
     blockProjects,
     blockReferenceLabels,
-    blockRestarts,
+    blockRestart: restartBeforeReferenceChange,
     blockStarts,
     blockUnwrappers,
-    decodeText,
+    decodeText: semanticText,
     inlineRuleProjects,
     inlineTokenProjects,
     resolveInline,
   };
 }
+
+export const commonmarkProfile = compileProfile([
+  featureHeading,
+  featureBreak,
+  featureBlockQuote,
+  featureList,
+  featureCode,
+  featureHtml,
+  featureReference,
+  featureParagraph,
+  featureText,
+  featureEmphasis,
+  featureLink,
+]);

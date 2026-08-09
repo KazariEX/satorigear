@@ -14,7 +14,7 @@ import {
 } from "../../mdast.ts";
 import { normalizeReferenceLabel } from "./reference.ts";
 import { projectInlineText, semanticText } from "./text.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 interface Reference {
   identifier: string;
@@ -167,7 +167,7 @@ function projectMedia(media: "image" | "link", resourceKind: "direct" | "referen
 const projectInlineImage = projectMedia("image", "direct");
 const projectInlineReferenceImage = projectMedia("image", "reference");
 
-export const linkPlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   inlineRules: [
     { rule: "LinkContent", project: projectInlineChildren },
     { rule: "BracketFallback", project: projectInlineChildren },

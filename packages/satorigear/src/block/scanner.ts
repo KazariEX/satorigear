@@ -6,10 +6,7 @@ import {
   createTokenChange,
   tokenEqualsAfterShift,
 } from "./tokens.ts";
-import type {
-  BlockScanContext,
-} from "../plugins/plugin.ts";
-import type { SyntaxProfile } from "../plugins/profile.ts";
+import type { BlockScanContext, SyntaxProfile } from "../profile/types.ts";
 import type { SourceLocation } from "../source-view.ts";
 import type { TextEdit } from "../text-edit.ts";
 
@@ -119,9 +116,9 @@ function resolveBlock(
   start: number,
   out: BlockToken[],
 ): number {
-  const pluginEnd = profileStarts(profile, context, source, lines, start, out);
-  if (pluginEnd !== void 0) {
-    return pluginEnd;
+  const matchedEnd = profileStarts(profile, context, source, lines, start, out);
+  if (matchedEnd !== void 0) {
+    return matchedEnd;
   }
   for (const fallback of profile.blockFallbacks) {
     const fallbackEnd = fallback(source, lines, start, out, lines[start].start, context);
@@ -141,7 +138,7 @@ interface BlockCheckpoint {
   tokenStart: number;
 }
 
-export interface BlockEditResult {
+interface BlockEditResult {
   change: BlockTokenChange;
   scannedRange: {
     end: number;
@@ -213,22 +210,6 @@ function applyBlockEdits(source: string, edits: readonly TextEdit[]): string {
   }
   parts.push(source.slice(cursor));
   return parts.join("");
-}
-
-function profileRestartBefore(
-  profile: SyntaxProfile,
-  source: string,
-  lines: readonly BlockLine[],
-  changedEnd: number,
-): number | undefined {
-  let earliest: number | undefined;
-  for (const restartBefore of profile.blockRestarts) {
-    const candidate = restartBefore(source, lines, changedEnd);
-    if (candidate !== void 0 && (earliest === void 0 || candidate < earliest)) {
-      earliest = candidate;
-    }
-  }
-  return earliest;
 }
 
 function shiftedLine(line: BlockLine, delta: number): BlockLine {
@@ -315,7 +296,7 @@ function endsInLineEnding(source: string): boolean {
   return ending === 10 || ending === 13;
 }
 
-export class MarkdownBlockScanner {
+export class BlockScanner {
   #checkpoints: BlockCheckpoint[];
   #context: BlockScanContext;
   #lines: BlockLine[];
@@ -372,7 +353,7 @@ export class MarkdownBlockScanner {
     let restart = this.#checkpoints[affected]?.lineStart > firstEdit.start ? -1 : Math.max(0, affected - 1);
     const initialRestartOffset = this.#checkpoints[restart]?.lineStart ?? 0;
     const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, lastEdit.end, delta);
-    const profileRestart = profileRestartBefore(this.#profile, nextSource, nextLines, changedEnd);
+    const profileRestart = this.#profile.blockRestart(nextSource, nextLines, changedEnd);
     if (profileRestart !== void 0 && profileRestart < firstEdit.start) {
       const candidate = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineStart <= profileRestart
         && checkpoint.lineEnd > profileRestart);
@@ -434,8 +415,4 @@ export class MarkdownBlockScanner {
       scannedRange: { start: restartOffset, end: scannedEnd },
     };
   }
-}
-
-export function createBlockScanner(source: string, profile: SyntaxProfile): MarkdownBlockScanner {
-  return new MarkdownBlockScanner(source, profile);
 }

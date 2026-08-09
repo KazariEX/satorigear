@@ -27,8 +27,8 @@ import type { PairedTokenConfig } from "../../inline/resolver.ts";
 import type {
   InlineResolutionContext,
   InlineTransform,
-  InternalSyntaxPlugin,
-} from "../plugin.ts";
+  SyntaxFeature,
+} from "../types.ts";
 
 interface LinkDefinitionFields {
   destination: string;
@@ -260,7 +260,7 @@ function splitReferenceTail(source: string, tokens: InlineTokenStream, index: nu
 }
 
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
-const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
+export const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
   const referenceTail = inlineKind("ReferenceTail");
   const bracketOpen = inlineKind("BracketOpen");
   const shortcutTail = inlineKind("ShortcutReferenceTail");
@@ -403,36 +403,39 @@ const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionContext>[
   },
 ];
 
-export const referencePlugin: InternalSyntaxPlugin = {
-  blockRestarts: [
-    (source, lines, changedEnd) => {
-      let low = 0;
-      let high = lines.length;
-      const offset = Math.max(0, changedEnd - 1);
-      while (low < high) {
-        const middle = (low + high) >>> 1;
-        if (lines[middle].start <= offset) {
-          low = middle + 1;
-        }
-        else {
-          high = middle;
-        }
-      }
+export function restartBeforeReferenceChange(
+  source: string,
+  lines: readonly BlockLine[],
+  changedEnd: number,
+): number | undefined {
+  let low = 0;
+  let high = lines.length;
+  const offset = Math.max(0, changedEnd - 1);
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (lines[middle].start <= offset) {
+      low = middle + 1;
+    }
+    else {
+      high = middle;
+    }
+  }
 
-      let candidate: number | undefined;
-      for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
-        const line = lines[index];
-        if (isBlank(source, line)) {
-          break;
-        }
-        const indent = indentOf(source, line, 3);
-        if (source[indent.offset] === "[") {
-          candidate = line.start;
-        }
-      }
-      return candidate;
-    },
-  ],
+  let candidate: number | undefined;
+  for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
+    const line = lines[index];
+    if (isBlank(source, line)) {
+      break;
+    }
+    const indent = indentOf(source, line, 3);
+    if (source[indent.offset] === "[") {
+      candidate = line.start;
+    }
+  }
+  return candidate;
+}
+
+export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "LinkDefinition",
@@ -470,6 +473,5 @@ export const referencePlugin: InternalSyntaxPlugin = {
       },
     },
   ],
-  inlineTransforms: [reassociateReferenceTails],
   tokenPairs: markdownBracketPairs,
 };

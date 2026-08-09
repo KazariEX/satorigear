@@ -10,7 +10,7 @@ import {
   tokenStart,
   withSpan,
 } from "../../mdast.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 function atxAt(source: string, line: BlockLine): {
   contentEnd: number;
@@ -56,7 +56,7 @@ export function setextMarkerAt(source: string, line: BlockLine): "=" | "-" | nul
   return match ? match[1][0] as "=" | "-" : null;
 }
 
-export const headingPlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "AtxHeading",

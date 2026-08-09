@@ -20,7 +20,7 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { isThematicBreak } from "./break.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 interface ListMarker {
   kind: "ordered" | "unordered";
@@ -231,7 +231,7 @@ function projectList(ordered: boolean): BlockProjector {
   };
 }
 
-export const listPlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   blockRules: [
     { rule: "UnorderedList", project: projectList(false) },
     { rule: "OrderedList", project: projectList(true) },

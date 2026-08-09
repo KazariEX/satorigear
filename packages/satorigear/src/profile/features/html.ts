@@ -9,7 +9,7 @@ import {
   normalizeLines,
   withSpan,
 } from "../../mdast.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 interface HtmlStart {
   interruptParagraph: boolean;
@@ -155,7 +155,7 @@ const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, accumula
   return true;
 };
 
-export const htmlPlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "HtmlBlock",

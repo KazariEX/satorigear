@@ -1,14 +1,13 @@
 import type { Root } from "mdast";
-import { type BlockSyntaxDocument, blockSyntaxParser } from "./block/runtime.ts";
-import { createBlockScanner, type MarkdownBlockScanner } from "./block/scanner.ts";
+import { type BlockSyntaxDocument, createBlockSyntaxDocument } from "./block/runtime.ts";
+import { BlockScanner } from "./block/scanner.ts";
 import {
   type BlockFragment,
   materialize,
   projectBlock,
 } from "./mdast.ts";
-import { commonmarkProfile } from "./plugins/commonmark.ts";
+import { commonmarkProfile } from "./profile/index.ts";
 import { createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
-import type { SyntaxProfile } from "./plugins/profile.ts";
 import type { TextEdit } from "./text-edit.ts";
 
 export interface EditResult {
@@ -65,17 +64,15 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 }
 
 class DocumentImpl implements Document {
-  #blockScanner: MarkdownBlockScanner;
+  #blockScanner: BlockScanner;
   #blockSyntax: BlockSyntaxDocument;
-  #profile: SyntaxProfile;
   #syntax: MarkdownSyntax;
   #fragments = new Map<number, BlockFragment>();
 
-  constructor(source: string, profile: SyntaxProfile) {
-    this.#profile = profile;
-    this.#blockScanner = createBlockScanner(source, profile);
-    this.#blockSyntax = blockSyntaxParser.createDocument(source, this.#blockScanner.tokens);
-    this.#syntax = createMarkdownSyntax(profile, this.#blockSyntax.view(this.#blockScanner.tokens), source);
+  constructor(source: string) {
+    this.#blockScanner = new BlockScanner(source, commonmarkProfile);
+    this.#blockSyntax = createBlockSyntaxDocument(source, this.#blockScanner.tokens);
+    this.#syntax = createMarkdownSyntax(commonmarkProfile, this.#blockSyntax.view(this.#blockScanner.tokens), source);
   }
 
   get source(): string {
@@ -109,7 +106,7 @@ class DocumentImpl implements Document {
           this.source,
           this.#syntax,
           block.version,
-          this.#profile,
+          commonmarkProfile,
         ));
       }
     }
@@ -127,7 +124,7 @@ class DocumentImpl implements Document {
           this.source,
           this.#syntax,
           block.version,
-          this.#profile,
+          commonmarkProfile,
         ));
       fragment.offset = block.offset;
       fragments.set(block.id, fragment);
@@ -143,7 +140,7 @@ class DocumentImpl implements Document {
 }
 
 export function createDocument(source: string): Document {
-  return new DocumentImpl(source, commonmarkProfile);
+  return new DocumentImpl(source);
 }
 
 export function parse(source: string): Root {

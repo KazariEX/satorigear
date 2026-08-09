@@ -18,7 +18,7 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { semanticText } from "./text.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 interface Fence {
   marker: "`" | "~";
@@ -157,7 +157,7 @@ function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockProjec
   throw new Error("IndentedCodeBlockToken has no source content");
 }
 
-export const codePlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   blockFallbacks: [
     (source, lines, start, out) => {
       if (indentOf(source, lines[start]).columns < 4) {

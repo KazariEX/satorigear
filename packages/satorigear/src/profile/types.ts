@@ -4,7 +4,6 @@ import type { DelimiterRunConfig, PairedTokenConfig } from "../inline/resolver.t
 import type { InlineTokenStream } from "../inline/runtime.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 
-// Container plugins recurse through the document scanner without owning its control flow.
 export interface BlockScanContext {
   endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
   startsInterruptingBlock: (source: string, line: BlockLine) => boolean;
@@ -67,16 +66,31 @@ export type InlineTransform = (
   context: InlineResolutionContext,
 ) => InlineTokenStream;
 
-export interface InternalSyntaxPlugin {
+export interface SyntaxFeature {
   blockFallbacks?: readonly BlockStart[];
   blockRules?: readonly BlockRuleRegistration[];
-  blockRestarts?: readonly BlockRestart[];
   blockStarts?: readonly BlockStartRegistration[];
   blockUnwrappers?: readonly BlockLineUnwrapper[];
   delimiterRuns?: readonly DelimiterRunConfig[];
-  decodeText?: (value: string) => string;
   inlineRules?: readonly InlineRuleRegistration[];
   inlineTokens?: readonly InlineTokenRegistration[];
-  inlineTransforms?: readonly InlineTransform[];
   tokenPairs?: readonly PairedTokenConfig<InlineResolutionContext>[];
+}
+
+export type BlockInterruptDispatch = BlockInterrupt | readonly BlockInterrupt[];
+export type BlockStartDispatch = BlockStart | readonly BlockStart[];
+
+export interface SyntaxProfile {
+  blockFallbacks: readonly BlockStart[];
+  blockInlineContents: Readonly<Record<string, true>>;
+  blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
+  blockProjects: Readonly<Record<string, BlockProjector>>;
+  blockReferenceLabels: Readonly<Record<string, (token: BlockToken) => string>>;
+  blockRestart: BlockRestart;
+  blockStarts: readonly (BlockStartDispatch | undefined)[];
+  blockUnwrappers: readonly BlockLineUnwrapper[];
+  decodeText: (value: string) => string;
+  inlineRuleProjects: Readonly<Record<string, InlineRuleProjector>>;
+  inlineTokenProjects: readonly (InlineLeafProjector | undefined)[];
+  resolveInline: InlineTransform;
 }

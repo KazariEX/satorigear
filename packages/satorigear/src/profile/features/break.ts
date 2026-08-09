@@ -1,6 +1,6 @@
 import { type BlockLine, named } from "../../block/primitives.ts";
 import { appendInline, blockEnd, firstNonspace, withSpan } from "../../mdast.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 export function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {
   const marker = source[contentOffset];
@@ -20,7 +20,7 @@ export function isThematicBreak(source: string, line: BlockLine, contentOffset: 
   return count >= 3;
 }
 
-export const breakPlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "ThematicBreak",

@@ -2,8 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { minify } from "rolldown/utils";
 import { defineConfig } from "tsdown";
-import { markdownBlockGrammar } from "./src/grammars/blocks.ts";
-import { markdownInlineGrammar } from "./src/grammars/inline.ts";
+import { grammar as grammarBlock } from "./src/grammars/block.ts";
+import { grammar as grammarInline } from "./src/grammars/inline.ts";
 
 export default defineConfig({
   exports: true,
@@ -31,8 +31,8 @@ export default defineConfig({
 
         const generated = join(import.meta.dirname, "src/generated");
         const parsers = [
-          { name: "blocks.ts", grammar: markdownBlockGrammar, packedTokens: false },
-          { name: "inline.ts", grammar: markdownInlineGrammar, packedTokens: true },
+          { name: "blocks.ts", grammar: grammarBlock, packedTokens: false },
+          { name: "inline.ts", grammar: grammarInline, packedTokens: true },
         ] as const;
 
         await mkdir(generated, { recursive: true });

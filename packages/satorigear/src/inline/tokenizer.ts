@@ -4,8 +4,7 @@ import {
   type InlineTokenStream,
   tokenizeInline,
 } from "./runtime.ts";
-import type { InlineResolutionContext } from "../plugins/plugin.ts";
-import type { SyntaxProfile } from "../plugins/profile.ts";
+import type { InlineResolutionContext, SyntaxProfile } from "../profile/types.ts";
 import type { TextEdit } from "../text-edit.ts";
 
 type ApplyTokenChange = (edits: readonly TextEdit[], change: InlineTokenChange) => void;

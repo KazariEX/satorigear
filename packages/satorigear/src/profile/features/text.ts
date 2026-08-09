@@ -6,7 +6,7 @@ import {
   projectInlineChildren,
   withSpan,
 } from "../../mdast.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
 
@@ -28,8 +28,7 @@ export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, a
   return true;
 };
 
-export const textPlugin: InternalSyntaxPlugin = {
-  decodeText: semanticText,
+export const feature: SyntaxFeature = {
   inlineRules: [
     { rule: "InlineLines", project: projectInlineChildren },
     { rule: "InlineLine", project: projectInlineChildren },

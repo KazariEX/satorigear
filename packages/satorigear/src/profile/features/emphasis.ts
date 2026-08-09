@@ -10,7 +10,7 @@ import {
 } from "../../mdast.ts";
 import { projectInlineText } from "./text.ts";
 import type { DelimiterRunConfig } from "../../inline/resolver.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 const markdownDelimiterRuns: DelimiterRunConfig[] = [
   {
@@ -72,7 +72,7 @@ const projectInlineStrong: InlineRuleProjector = (
   return true;
 };
 
-export const emphasisPlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   delimiterRuns: markdownDelimiterRuns,
   inlineRules: [
     { rule: "Emphasis", project: projectInlineEmphasis },

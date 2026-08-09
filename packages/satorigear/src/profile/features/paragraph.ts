@@ -9,7 +9,7 @@ import {
 import { blockEnd, firstChildStart, inlineChildren, withSpan } from "../../mdast.ts";
 import { setextMarkerAt } from "./heading.ts";
 import type { BlockToken } from "../../block/tokens.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 function emitInlineChunks(source: string, lines: readonly BlockLine[], out: BlockToken[]): void {
   lines.forEach((line, index) => {
@@ -30,7 +30,7 @@ function emitParagraph(source: string, lines: readonly BlockLine[], out: BlockTo
   out.push(structural("ParagraphClose", lines[lines.length - 1].end));
 }
 
-export const paragraphPlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   blockFallbacks: [
     (source, lines, start, out, _contentOffset, context) => {
       const paragraph: BlockLine[] = [];

@@ -15,7 +15,7 @@ import {
   tokenStart,
   withSpan,
 } from "../../mdast.ts";
-import type { InternalSyntaxPlugin } from "../plugin.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 interface BlockQuoteMarker {
   offset: number;
@@ -44,7 +44,7 @@ function unwrapBlockQuote(source: string, line: BlockLine): BlockLine | undefine
   return marker ? { ...line, start: marker.offset, prefixColumns: marker.prefixColumns } : void 0;
 }
 
-export const blockQuotePlugin: InternalSyntaxPlugin = {
+export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "BlockQuote",
