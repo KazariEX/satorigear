@@ -1,11 +1,17 @@
 import {
   atxHeadingInterrupt,
   atxHeadingStart,
+  blockQuoteInterrupt,
+  blockQuoteStart,
   fencedCodeInterrupt,
   fencedCodeStart,
   htmlBlockInterrupt,
   htmlBlockStart,
+  indentedCodeStart,
   linkDefinitionStart,
+  listInterrupt,
+  listStart,
+  paragraphStart,
   thematicBreakInterrupt,
   thematicBreakStart,
 } from "../block/scanner.ts";
@@ -52,6 +58,18 @@ const containerBlocks = {
     { rule: "UnorderedList", project: projectUnorderedList },
     { rule: "OrderedList", project: projectOrderedList },
   ],
+  blockStarts: [
+    {
+      codes: [62],
+      interrupt: blockQuoteInterrupt,
+      start: blockQuoteStart,
+    },
+    {
+      codes: [42, 43, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57],
+      interrupt: listInterrupt,
+      start: listStart,
+    },
+  ],
 } satisfies InternalSyntaxPlugin;
 
 const literalBlocks = {
@@ -79,9 +97,14 @@ const referenceBlocks = {
   blockStarts: [{ codes: [91], start: linkDefinitionStart }],
 } satisfies InternalSyntaxPlugin;
 
+const fallbackBlocks = {
+  blockFallbacks: [indentedCodeStart, paragraphStart],
+} satisfies InternalSyntaxPlugin;
+
 export const commonmarkProfile = defineSyntaxProfile([
   flowBlocks,
   containerBlocks,
   literalBlocks,
   referenceBlocks,
+  fallbackBlocks,
 ]);

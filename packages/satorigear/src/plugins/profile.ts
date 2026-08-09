@@ -14,6 +14,7 @@ export type BlockStart = (
   start: number,
   tokens: BlockToken[],
   contentOffset: number,
+  profile: SyntaxProfile,
 ) => number | undefined;
 
 export type BlockInterrupt = (
@@ -61,11 +62,13 @@ export interface BlockRuleRegistration {
 }
 
 export interface InternalSyntaxPlugin {
+  blockFallbacks?: readonly BlockStart[];
   blockRules?: readonly BlockRuleRegistration[];
   blockStarts?: readonly BlockStartRegistration[];
 }
 
 export interface SyntaxProfile {
+  blockFallbacks: readonly BlockStart[];
   blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
   blockProjects: Readonly<Record<string, BlockProjectionOpcode>>;
   blockStarts: readonly (BlockStartDispatch | undefined)[];
@@ -73,10 +76,12 @@ export interface SyntaxProfile {
 
 // Profiles bind runtime semantics to the static generated grammar without owning document state.
 export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): SyntaxProfile {
+  const blockFallbacks: BlockStart[] = [];
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
   const blockProjects: Record<string, BlockProjectionOpcode> = Object.create(null);
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
   for (const plugin of plugins) {
+    blockFallbacks.push(...plugin.blockFallbacks ?? []);
     for (const registration of plugin.blockStarts ?? []) {
       for (const code of registration.codes) {
         const starts = blockStarts[code];
@@ -99,5 +104,5 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
       blockProjects[registration.rule] = registration.project;
     }
   }
-  return { blockInterrupts, blockProjects, blockStarts };
+  return { blockFallbacks, blockInterrupts, blockProjects, blockStarts };
 }

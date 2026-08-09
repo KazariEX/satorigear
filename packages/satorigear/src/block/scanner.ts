@@ -781,10 +781,10 @@ function profileStarts(
     return void 0;
   }
   if (typeof starts === "function") {
-    return starts(source, lines, start, out, indent.offset);
+    return starts(source, lines, start, out, indent.offset, profile);
   }
   for (const resolve of starts) {
-    const end = resolve(source, lines, start, out, indent.offset);
+    const end = resolve(source, lines, start, out, indent.offset, profile);
     if (end !== void 0) {
       return end;
     }
@@ -813,11 +813,7 @@ function profileInterrupts(profile: SyntaxProfile, source: string, line: BlockLi
 }
 
 function interruptsParagraphAt(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
-  const listMarker = listMarkerAt(source, line);
-  return blockQuoteOffset(source, line) !== null
-    || profileInterrupts(profile, source, line)
-    || (hasListContent(source, line, listMarker)
-      && (listMarker?.kind === "unordered" || (listMarker?.kind === "ordered" && listMarker.startNumber === 1)));
+  return profileInterrupts(profile, source, line);
 }
 
 function hasListContent(source: string, line: BlockLine, marker: ListMarker | null): boolean {
@@ -902,6 +898,132 @@ function resolveParagraph(
   return index;
 }
 
+export function blockQuoteInterrupt(source: string, line: BlockLine): boolean {
+  return blockQuoteOffset(source, line) !== null;
+}
+
+export const blockQuoteStart: BlockStart = (source, lines, start, out, _contentOffset, profile) => {
+  const line = lines[start];
+  if (blockQuoteOffset(source, line) === null) {
+    return void 0;
+  }
+  const quoteLines: BlockLine[] = [];
+  let index = start;
+  let lazyParagraph = false;
+  while (index < lines.length) {
+    const content = blockQuoteOffset(source, lines[index]);
+    if (content !== null) {
+      const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
+      quoteLines.push(contentLine);
+      lazyParagraph = endsWithParagraphLeaf(profile, source, contentLine);
+      index++;
+      continue;
+    }
+    if (!lazyParagraph || isBlank(source, lines[index])
+      || (!lines[index].lazy && interruptsParagraphAt(profile, source, lines[index]))) {
+      break;
+    }
+    quoteLines.push({ ...lines[index], lazy: true });
+    index++;
+  }
+  out.push(structural("BlockQuoteOpen", line.start, ">"));
+  resolveLines(profile, source, quoteLines, out);
+  out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
+  return index;
+};
+
+export function listInterrupt(source: string, line: BlockLine): boolean {
+  const marker = listMarkerAt(source, line);
+  return hasListContent(source, line, marker)
+    && (marker?.kind === "unordered" || (marker?.kind === "ordered" && marker.startNumber === 1));
+}
+
+export const listStart: BlockStart = (source, lines, start, out, _contentOffset, profile) => {
+  const listMarker = listMarkerAt(source, lines[start]);
+  if (!listMarker) {
+    return void 0;
+  }
+  const kind = listMarker.kind;
+  const listOpen = kind === "ordered" ? "OrderedListOpen" : "UnorderedListOpen";
+  const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
+  const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
+  const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
+  out.push(structural(listOpen, listMarker.offset, listMarker.text));
+  let index = start;
+  let listEnd = listMarker.offset + listMarker.text.length;
+  while (index < lines.length) {
+    const marker = listMarkerAt(source, lines[index]);
+    if (!marker || !sameList(marker, listMarker)) {
+      break;
+    }
+    out.push(structural(itemOpen, marker.offset, marker.text));
+    const itemLines: BlockLine[] = [{
+      ...lines[index],
+      start: marker.contentOffset,
+      prefixColumns: marker.contentPrefixColumns,
+    }];
+    let hasContent = !isBlank(source, itemLines[0]);
+    let lazyParagraph = endsWithParagraphLeaf(profile, source, itemLines[0]);
+    index++;
+    while (index < lines.length) {
+      const candidate = listMarkerAt(source, lines[index]);
+      if (candidate && candidate.indent < marker.contentIndent) {
+        break;
+      }
+      if (isBlank(source, lines[index])) {
+        if (!hasContent) {
+          index++;
+          break;
+        }
+        itemLines.push(lines[index]);
+        lazyParagraph = false;
+        index++;
+        continue;
+      }
+      const indent = indentOf(source, lines[index]);
+      if (indent.columns >= marker.contentIndent) {
+        const content = contentAfterColumns(source, lines[index], marker.contentIndent);
+        const contentLine = {
+          ...lines[index],
+          start: content.offset,
+          prefixColumns: content.prefixColumns,
+        };
+        itemLines.push(contentLine);
+        hasContent = true;
+        lazyParagraph = endsWithParagraphLeaf(profile, source, contentLine);
+        index++;
+        continue;
+      }
+      if (!lazyParagraph || interruptsParagraphAt(profile, source, lines[index])) {
+        break;
+      }
+      itemLines.push({ ...lines[index], lazy: true });
+      index++;
+    }
+    resolveLines(profile, source, itemLines, out);
+    listEnd = itemLines.at(-1)?.next ?? marker.offset;
+    out.push(structural(itemClose, listEnd));
+  }
+  out.push(structural(listClose, listEnd));
+  return index;
+};
+
+export const indentedCodeStart: BlockStart = (source, lines, start, out) => {
+  if (indentOf(source, lines[start]).columns < 4) {
+    return void 0;
+  }
+  let end = start + 1;
+  while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
+    end++;
+  }
+  out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
+  return end;
+};
+
+export const paragraphStart: BlockStart = (source, lines, start, out, _contentOffset, profile) => {
+  return resolveParagraph(profile, source, lines, start, out);
+};
+
 function resolveBlock(
   profile: SyntaxProfile,
   source: string,
@@ -913,108 +1035,13 @@ function resolveBlock(
   if (pluginEnd !== void 0) {
     return pluginEnd;
   }
-
-  const line = lines[start];
-  const quote = blockQuoteOffset(source, line);
-  if (quote !== null) {
-    const quoteLines: BlockLine[] = [];
-    let index = start;
-    let lazyParagraph = false;
-    while (index < lines.length) {
-      const content = blockQuoteOffset(source, lines[index]);
-      if (content !== null) {
-        const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
-        quoteLines.push(contentLine);
-        lazyParagraph = endsWithParagraphLeaf(profile, source, contentLine);
-        index++;
-        continue;
-      }
-      if (!lazyParagraph || isBlank(source, lines[index])
-        || (!lines[index].lazy && interruptsParagraphAt(profile, source, lines[index]))) {
-        break;
-      }
-      quoteLines.push({ ...lines[index], lazy: true });
-      index++;
+  for (const fallback of profile.blockFallbacks) {
+    const fallbackEnd = fallback(source, lines, start, out, lines[start].start, profile);
+    if (fallbackEnd !== void 0) {
+      return fallbackEnd;
     }
-    out.push(structural("BlockQuoteOpen", line.start, ">"));
-    resolveLines(profile, source, quoteLines, out);
-    out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
-    return index;
   }
-
-  const listMarker = listMarkerAt(source, line);
-  if (listMarker) {
-    const kind = listMarker.kind;
-    const listOpen = kind === "ordered" ? "OrderedListOpen" : "UnorderedListOpen";
-    const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
-    const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
-    const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
-    out.push(structural(listOpen, listMarker.offset, listMarker.text));
-    let index = start;
-    let listEnd = listMarker.offset + listMarker.text.length;
-    while (index < lines.length) {
-      const marker = listMarkerAt(source, lines[index]);
-      if (!marker || !sameList(marker, listMarker)) {
-        break;
-      }
-      out.push(structural(itemOpen, marker.offset, marker.text));
-      const itemLines: BlockLine[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns }];
-      let hasContent = !isBlank(source, itemLines[0]);
-      let lazyParagraph = endsWithParagraphLeaf(profile, source, itemLines[0]);
-      index++;
-      while (index < lines.length) {
-        const candidate = listMarkerAt(source, lines[index]);
-        if (candidate && candidate.indent < marker.contentIndent) {
-          break;
-        }
-        if (isBlank(source, lines[index])) {
-          if (!hasContent) {
-            index++;
-            break;
-          }
-          itemLines.push(lines[index]);
-          lazyParagraph = false;
-          index++;
-          continue;
-        }
-        const indent = indentOf(source, lines[index]);
-        if (indent.columns >= marker.contentIndent) {
-          const content = contentAfterColumns(source, lines[index], marker.contentIndent);
-          const contentLine = {
-            ...lines[index],
-            start: content.offset,
-            prefixColumns: content.prefixColumns,
-          };
-          itemLines.push(contentLine);
-          hasContent = true;
-          lazyParagraph = endsWithParagraphLeaf(profile, source, contentLine);
-          index++;
-          continue;
-        }
-        if (!lazyParagraph || interruptsParagraphAt(profile, source, lines[index])) {
-          break;
-        }
-        itemLines.push({ ...lines[index], lazy: true });
-        index++;
-      }
-      resolveLines(profile, source, itemLines, out);
-      listEnd = itemLines.at(-1)?.next ?? marker.offset;
-      out.push(structural(itemClose, listEnd));
-    }
-    out.push(structural(listClose, listEnd));
-    return index;
-  }
-
-  if (indentOf(source, line).columns >= 4) {
-    let end = start + 1;
-    while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
-      end++;
-    }
-    out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
-    return end;
-  }
-
-  return resolveParagraph(profile, source, lines, start, out);
+  throw new Error("Syntax profile did not provide a block fallback");
 }
 
 type BlockVisitor = (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => boolean;
