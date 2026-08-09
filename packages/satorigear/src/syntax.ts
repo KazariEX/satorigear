@@ -21,11 +21,16 @@ export interface MarkdownInlineSyntax {
   view: SourceView;
 }
 
+export interface InlineForestLease {
+  blocks: readonly SyntaxBlock[];
+  close: () => void;
+}
+
 export interface MarkdownSyntax {
   blocks: () => readonly SyntaxBlock[];
   blockView: () => SyntaxArenaView;
   inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
-  prepareInline: (blocks: readonly SyntaxBlock[]) => readonly SyntaxBlock[];
+  openInlineForest: (blocks: readonly SyntaxBlock[]) => InlineForestLease;
   update: (view: SyntaxArenaView, source: string, edits?: readonly TextEdit[]) => void;
 }
 
@@ -107,8 +112,8 @@ interface SyntaxBlock {
   version: number;
 }
 
-interface PreparedInlineRegion {
-  rootId: number;
+interface InlineForestRoot {
+  id: number;
   tokenBase: number;
 }
 
@@ -149,7 +154,8 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
 
 class MarkdownSyntaxImpl implements MarkdownSyntax {
   #blocks: readonly SyntaxBlock[] = [];
-  #prepared = new Map<number, PreparedInlineRegion>();
+  // Root IDs point into generated scratch storage and exist only while an inline forest lease is open.
+  #forestRoots = new Map<number, InlineForestRoot>();
   #regions = new Map<number, InlineRegion>();
   #view: SyntaxArenaView;
 
@@ -287,9 +293,10 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return this.#view;
   }
 
-  prepareInline(blocks: readonly SyntaxBlock[]): readonly SyntaxBlock[] {
+  openInlineForest(blocks: readonly SyntaxBlock[]): InlineForestLease {
     const regions: InlineRegion[] = [];
-    const preparedBlocks: SyntaxBlock[] = [];
+    const forestBlocks: SyntaxBlock[] = [];
+    // A leased block must stay entirely on the scratch arena; one private region would switch arenas mid-projection.
     for (const block of blocks) {
       const start = regions.length;
       for (const id of block.regionIds) {
@@ -301,31 +308,38 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         regions.push(region);
       }
       if (regions.length > start) {
-        preparedBlocks.push(block);
+        forestBlocks.push(block);
       }
     }
-    this.#prepared.clear();
-    if (regions.length < 2) {
-      return [];
-    }
-
-    const arena = inlineSyntaxParser.arena;
-    const rootId = generatedInline.parseTokenSegments(regions, "InlineBoundary", "InlineForest");
-    const childCount = arena.childCount(rootId);
-    let regionIndex = 0;
-    for (let index = 0; index < childCount; index++) {
-      const childId = arena.childAt(rootId, index);
-      if (childId >= 0 && arena.ruleNameOf(childId) === "InlineLines") {
-        this.#prepared.set(regions[regionIndex++].id, {
-          rootId: childId,
-          tokenBase: arena.childTokRelAt(rootId, index),
-        });
+    this.#forestRoots.clear();
+    try {
+      if (regions.length < 2) {
+        forestBlocks.length = 0;
       }
+      else {
+        const arena = inlineSyntaxParser.arena;
+        const rootId = generatedInline.parseTokenSegments(regions, "InlineBoundary", "InlineForest");
+        const childCount = arena.childCount(rootId);
+        let regionIndex = 0;
+        for (let index = 0; index < childCount; index++) {
+          const childId = arena.childAt(rootId, index);
+          if (childId >= 0 && arena.ruleNameOf(childId) === "InlineLines") {
+            this.#forestRoots.set(regions[regionIndex++].id, {
+              id: childId,
+              tokenBase: arena.childTokRelAt(rootId, index),
+            });
+          }
+        }
+        if (regionIndex !== regions.length) {
+          throw new Error("Inline forest did not preserve its region boundaries");
+        }
+      }
+      return { blocks: forestBlocks, close: () => this.#forestRoots.clear() };
     }
-    if (regionIndex !== regions.length) {
-      throw new Error("Inline forest did not preserve its region boundaries");
+    catch (error) {
+      this.#forestRoots.clear();
+      throw error;
     }
-    return preparedBlocks;
   }
 
   inlineForBlock(nodeId: number): MarkdownInlineSyntax | undefined {
@@ -333,15 +347,15 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     if (!region) {
       return;
     }
-    // Edited regions own an arena; untouched regions use the shared stateless arena synchronously.
+    // Document views own their arena; forest and one-shot roots borrow the generated scratch arena synchronously.
     const view = region.document?.view(region.tokens);
-    const prepared = this.#prepared.get(nodeId);
+    const forestRoot = this.#forestRoots.get(nodeId);
     const firstToken = region.tokens[0];
     return {
       arena: view?.arena ?? inlineSyntaxParser.arena,
-      rootId: view?.root.id ?? prepared?.rootId ?? inlineSyntaxParser.parseTokens(region.view.text, region.tokens, "InlineLines"),
+      rootId: view?.root.id ?? forestRoot?.id ?? inlineSyntaxParser.parseTokens(region.view.text, region.tokens, "InlineLines"),
       rootOffset: firstToken ? firstToken.ranges?.[0]?.offset ?? firstToken.offset : 0,
-      rootTokenBase: prepared?.tokenBase ?? 0,
+      rootTokenBase: forestRoot?.tokenBase ?? 0,
       tokens: region.tokens,
       view: region.view,
     };

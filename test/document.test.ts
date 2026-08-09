@@ -62,6 +62,20 @@ describe("markdown document", () => {
     expect(document.snapshot().children[0]).toMatchObject({ type: "definition", identifier: "foo] > xxxfoo&" });
   });
 
+  it("scopes batched inline forests around edited region arenas", () => {
+    const document = createDocument("one *a*\n\ntwo **b**\n");
+    document.snapshot();
+    document.edit([
+      { start: 5, end: 6, text: "A" },
+      { start: document.source.length, end: document.source.length, text: "\nthree [c](/c)\n\nfour `d`\n" },
+    ]);
+
+    expect(document.snapshot()).toEqual(parse(document.source));
+    const start = document.source.indexOf("three");
+    document.edit([{ start, end: start + 5, text: "THREE" }]);
+    expect(document.snapshot()).toEqual(parse(document.source));
+  });
+
   it("does not mutate an earlier mdast snapshot after edits", () => {
     const document = createDocument("first\n\nsecond\n");
     const before = document.snapshot();

@@ -94,16 +94,22 @@ class DocumentImpl implements Document {
     const fragments = new Map<number, BlockFragment>();
     const syntaxBlocks = this.#syntax.blocks();
     const changed = syntaxBlocks.filter((block) => this.#fragments.get(block.id)?.version !== block.version);
-    // Consume the shared forest before a private edited-region document activates another arena.
-    for (const block of this.#syntax.prepareInline(changed)) {
-      fragments.set(block.id, projectBlock(
-        block.id,
-        block.offset,
-        block.tokenBase,
-        this.source,
-        this.#syntax,
-        block.version,
-      ));
+    const forest = this.#syntax.openInlineForest(changed);
+    try {
+      // Consume scratch-backed roots before the later path can activate a region's document-owned arena.
+      for (const block of forest.blocks) {
+        fragments.set(block.id, projectBlock(
+          block.id,
+          block.offset,
+          block.tokenBase,
+          this.source,
+          this.#syntax,
+          block.version,
+        ));
+      }
+    }
+    finally {
+      forest.close();
     }
     const blocks = syntaxBlocks.map((block) => {
       const previous = this.#fragments.get(block.id);
