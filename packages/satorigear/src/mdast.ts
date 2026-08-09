@@ -46,6 +46,7 @@ interface BlockProjectionContext {
 interface InlineProjectionContext {
   arena: EmittedArena;
   source: string;
+  tokenBase: number;
   tokens: readonly Token[];
   view: SourceView;
 }
@@ -109,7 +110,7 @@ function tokenEnd(token: Token): number {
 }
 
 function inlineToken(context: InlineProjectionContext, index: number): Token {
-  const token = context.tokens[index];
+  const token = context.tokens[index - context.tokenBase];
   if (!token) {
     throw new Error("emitted parser returned a leaf outside its token stream");
   }
@@ -773,6 +774,7 @@ function inlineChildren(nodeId: number, context: BlockProjectionContext): Phrasi
   const inlineContext: InlineProjectionContext = {
     arena: inline.arena,
     source: context.source,
+    tokenBase: inline.rootTokenBase,
     tokens: inline.tokens,
     view: inline.view,
   };

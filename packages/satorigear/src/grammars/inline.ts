@@ -23,6 +23,8 @@ const inlineTokens = new Set([
 
 const inlineRules = new Set(["Inline", "InlineLine", "InlineLines"]);
 const engineToken = (name: string, pattern: TokenDecl["pattern"] = { type: "never" }): TokenDecl => ({ name, pattern, flags: [] });
+// A zero-width structural token keeps batched regions independent without changing their spans.
+const inlineBoundary = engineToken("InlineBoundary");
 const ruleReference = (name: string): RuleExpr => ({ type: "ref", name });
 const delimiterRule = (name: string, open: string, close: string, content = "Inline"): RuleDecl => ({
   name,
@@ -283,8 +285,27 @@ export const markdownInlineGrammar: CstGrammar = {
         engineToken("ImageReferenceClose"),
         token,
       ];
-    }),
+    })
+    .concat(inlineBoundary),
   rules: baseInlineRules.concat([
+    {
+      name: "InlineForest",
+      flags: [],
+      body: {
+        type: "seq",
+        items: [
+          ruleReference("InlineLines"),
+          {
+            type: "quantifier",
+            kind: "*",
+            body: {
+              type: "seq",
+              items: [ruleReference("InlineBoundary"), ruleReference("InlineLines")],
+            },
+          },
+        ],
+      },
+    },
     delimiterRule("Emphasis", "EmphasisOpen", "EmphasisClose"),
     delimiterRule("Strong", "StrongOpen", "StrongClose"),
     delimiterRule("LinkEmphasis", "EmphasisOpen", "EmphasisClose", "LinkContent"),

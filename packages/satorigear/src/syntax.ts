@@ -68,6 +68,10 @@ class InlineRegion extends InlineTokenState {
   span: { end: number; start: number };
   view: SourceView;
 
+  get source(): string {
+    return this.view.text;
+  }
+
   constructor(descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>) {
     super();
     this.id = descriptor.id;
@@ -117,6 +121,11 @@ interface SyntaxBlock {
   version: number;
 }
 
+interface PreparedInlineRegion {
+  rootId: number;
+  tokenBase: number;
+}
+
 function appendTokenSpans(spans: SourceSpan[], token: Token): void {
   if (token.ranges?.length) {
     for (const range of token.ranges) {
@@ -154,6 +163,7 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
 
 class MarkdownSyntaxImpl implements MarkdownSyntax {
   #blocks: readonly SyntaxBlock[] = [];
+  #prepared = new Map<number, PreparedInlineRegion>();
   #regions = new Map<number, InlineRegion>();
   #view: SyntaxArenaView;
 
@@ -295,6 +305,47 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return this.#view;
   }
 
+  prepareInline(blocks: readonly SyntaxBlock[]): readonly SyntaxBlock[] {
+    const regions: InlineRegion[] = [];
+    const preparedBlocks: SyntaxBlock[] = [];
+    for (const block of blocks) {
+      const start = regions.length;
+      for (const id of block.regionIds) {
+        const region = this.#regions.get(id);
+        if (!region || region.document) {
+          regions.length = start;
+          break;
+        }
+        regions.push(region);
+      }
+      if (regions.length > start) {
+        preparedBlocks.push(block);
+      }
+    }
+    this.#prepared.clear();
+    if (regions.length < 2) {
+      return [];
+    }
+
+    const arena = inlineSyntaxParser.arena;
+    const rootId = generatedInline.parseTokenSegments(regions, "InlineBoundary", "InlineForest");
+    const childCount = arena.childCount(rootId);
+    let regionIndex = 0;
+    for (let index = 0; index < childCount; index++) {
+      const childId = arena.childAt(rootId, index);
+      if (childId >= 0 && arena.ruleNameOf(childId) === "InlineLines") {
+        this.#prepared.set(regions[regionIndex++].id, {
+          rootId: childId,
+          tokenBase: arena.childTokRelAt(rootId, index),
+        });
+      }
+    }
+    if (regionIndex !== regions.length) {
+      throw new Error("Inline forest did not preserve its region boundaries");
+    }
+    return preparedBlocks;
+  }
+
   inlineForBlock(nodeId: number): MarkdownInlineSyntax | undefined {
     const region = this.#regions.get(nodeId);
     if (!region) {
@@ -302,12 +353,13 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     }
     // Edited regions own an arena; untouched regions use the shared stateless arena synchronously.
     const view = region.document?.view(region.tokens);
+    const prepared = this.#prepared.get(nodeId);
     const firstToken = region.tokens[0];
     return {
       arena: view?.arena ?? inlineSyntaxParser.arena,
-      rootId: view?.root.id ?? inlineSyntaxParser.parseTokens(region.view.text, region.tokens, "InlineLines"),
+      rootId: view?.root.id ?? prepared?.rootId ?? inlineSyntaxParser.parseTokens(region.view.text, region.tokens, "InlineLines"),
       rootOffset: firstToken ? firstToken.ranges?.[0]?.offset ?? firstToken.offset : 0,
-      rootTokenBase: 0,
+      rootTokenBase: prepared?.tokenBase ?? 0,
       tokens: region.tokens,
       view: region.view,
     };

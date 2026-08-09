@@ -16,6 +16,7 @@ const patches = [
   join(root, "patches/9.newline-lexer-emission.patch"),
   join(root, "patches/10.external-token-kind-dispatch.patch"),
   join(root, "patches/11.emitted-lexer-feature-pruning.patch"),
+  join(root, "patches/12.segmented-token-input.patch"),
 ];
 
 function git(args: string[], allowFailure = false, index?: string): boolean {

@@ -1,0 +1,80 @@
+diff --git a/src/emit-parser.ts b/src/emit-parser.ts
+--- a/src/emit-parser.ts
++++ b/src/emit-parser.ts
+@@ -2655,4 +2655,5 @@
++type ExternalTokenSegment = { source: string; tokens: readonly ExternalToken[] };
+ type ExternalToken = {
+   type: string;
+   text: string;
+   offset: number;
+@@ -2691,7 +2692,50 @@
+ ${e.soa ? '' : '  tkText.length = 0;'}
+   for (let i = 0; i < n; i++) {
+     writeExternalToken(i, tokens[i]);
++  }
++  tokN = n;
++  docEmptyPops = [];
++}
++
++function tokenSegmentsInto(segments: readonly ExternalTokenSegment[], boundaryType: string) {
++  if (segments.length === 0) throw new RangeError('parseTokenSegments() requires at least one segment');
++  let n = segments.length - 1;
++  for (const segment of segments) {
++    n += segment.tokens.length;
++  }
++  if (tkCap < n + 1) growTok(n + 1);
++${e.soa ? '' : '  tkText.length = 0;'}
++  const pieces = new Array<string>(segments.length);
++  const pieceOffsets = new Array<number>(segments.length);
++  const boundary: ExternalToken = {
++    type: boundaryType, text: '', offset: 0,
++    newlineBefore: false, commentBefore: false, multilineFlowBefore: false,
++  };
++  let tokenIndex = 0;
++  let sourceBase = 0;
++  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
++    const segment = segments[segmentIndex];
++    if (segmentIndex > 0) {
++      boundary.offset = sourceBase;
++      writeExternalToken(tokenIndex++, boundary);
++    }
++    pieces[segmentIndex] = segment.source;
++    pieceOffsets[segmentIndex] = sourceBase;
++    for (const token of segment.tokens) {
++      writeExternalToken(tokenIndex, token);
++      tkOff[tokenIndex] += sourceBase;
++      tkEnd[tokenIndex] += sourceBase;
++      tokenIndex++;
++    }
++    sourceBase += segment.source.length;
+   }
++  docPieces = pieces;
++  docPieceOff = pieceOffsets;
++  docLen = sourceBase;
++  docFlat = segments.length === 1 ? pieces[0] : null;
++  docCur = 0;
++  srcLenP1 = sourceBase + 1;
++  negFrom = 0x7fffffff;
+   tokN = n;
+   docEmptyPops = [];
+ }
+@@ -3690,4 +3734,11 @@
++function parseTokenSegmentsCore(segments: readonly ExternalTokenSegment[], boundaryType: string, entryRule?: string) {
++  adoptRoot = -1;
++  adoptRunPos = -1;
++  tokenSegmentsInto(segments, boundaryType);
++  return parsePrepared(entryRule);
++}
++
+ function parseTokensCore(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
+   adoptRoot = -1;
+   adoptRunPos = -1;
+   tokensInto(source, tokens);
+@@ -4201,6 +4252,7 @@
+ // raw tree/tokenAt views read the ACTIVE doc — they are gate/debug surfaces) ──
+ export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }
+ export function parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) { activate(docDefault); return parseTokensCore(source, tokens, entryRule); }
++export function parseTokenSegments(segments: readonly ExternalTokenSegment[], boundaryType: string, entryRule?: string) { activate(docDefault); return parseTokenSegmentsCore(segments, boundaryType, entryRule); }
+ export function parseEdited(entryRule?: string, edits?: readonly Edit[]) { activate(docDefault); return editCore(entryRule, edits, null); }
+ // Arena reclamation introspection + budget override — TEST HOOKS (issue #45 C1). __arenaStats
+ // reports the live arena, the compacted-size baseline, and how many edits re-parsed to reclaim;
