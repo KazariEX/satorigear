@@ -17,7 +17,11 @@ import {
 import { linkDefinitionFields } from "../block/tokens.ts";
 import { projectInlineChildren, projectInlineIgnore } from "../mdast.ts";
 import { projectBlockQuote } from "./commonmark/blockquote.ts";
-import { projectInlineBreak, projectInlineNewline } from "./commonmark/break.ts";
+import {
+  projectInlineBreak,
+  projectInlineNewline,
+  projectThematicBreak,
+} from "./commonmark/break.ts";
 import { projectFencedCode, projectIndentedCode, projectInlineCode } from "./commonmark/code.ts";
 import { projectLinkDefinition } from "./commonmark/definition.ts";
 import {
@@ -42,7 +46,6 @@ import {
   reassociateReferenceTails,
 } from "./commonmark/reference.ts";
 import { projectInlineText, semanticText } from "./commonmark/text.ts";
-import { projectThematicBreak } from "./commonmark/thematic-break.ts";
 import { defineSyntaxProfile, type InternalSyntaxPlugin } from "./profile.ts";
 
 const flowBlocks = {
