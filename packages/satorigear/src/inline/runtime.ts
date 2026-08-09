@@ -1,13 +1,12 @@
 import * as generatedInline from "../generated/inline.ts";
-import type { EmittedArena } from "../emitted-parser.ts";
+import type { SyntaxArena, TokenChange } from "../syntax-protocol.ts";
 import type { TextEdit } from "../text-edit.ts";
-import type { TokenChange } from "../token-change.ts";
 
 export type InlineTokenStream = readonly number[];
 export type InlineTokenChange = TokenChange<InlineTokenStream>;
 
 export interface InlineSyntaxDocument {
-  readonly arena: EmittedArena;
+  readonly arena: SyntaxArena;
   readonly rootId: number;
 
   edit: (edits: readonly TextEdit[], change: InlineTokenChange) => void;
@@ -21,7 +20,7 @@ interface InlineTokenSegment {
 // The generated lexer, resolver, incremental parser, and projector share this one
 // region-local record layout. Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = generatedInline.packedTokenStride;
-export const inlineSyntaxArena: EmittedArena = generatedInline.tree;
+export const inlineSyntaxArena: SyntaxArena = generatedInline.tree;
 const inlineBoundaryKind = generatedInline.tokenKind("InlineBoundary");
 
 export function inlineKind(type: string): number {

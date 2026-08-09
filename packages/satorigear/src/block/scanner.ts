@@ -1,10 +1,14 @@
-import type { Token } from "monogram/gen-lexer.ts";
-import { normalizeMarkdownReferenceLabel } from "./reference-label.ts";
-import { createShiftedToken, createTokenChange, type TokenChange, tokenEqualsAfterShift } from "./token-change.ts";
-import type { SourceLocation } from "./source-view.ts";
-import type { TextEdit } from "./text-edit.ts";
-
-type TokenRange = NonNullable<Token["ranges"]>[number];
+import { normalizeMarkdownReferenceLabel } from "../reference-label.ts";
+import {
+  type BlockToken,
+  type BlockTokenChange,
+  type BlockTokenRange,
+  createShiftedToken,
+  createTokenChange,
+  tokenEqualsAfterShift,
+} from "./tokens.ts";
+import type { SourceLocation } from "../source-view.ts";
+import type { TextEdit } from "../text-edit.ts";
 
 interface Line {
   start: number;
@@ -59,7 +63,7 @@ interface LinkDefinitionMatch {
   fields: LinkDefinitionFields;
 }
 
-interface LinkDefinitionOpenToken extends Token {
+interface LinkDefinitionOpenToken extends BlockToken {
   linkDefinition: LinkDefinitionFields;
 }
 
@@ -187,7 +191,7 @@ function isBlank(source: string, line: Line): boolean {
   return true;
 }
 
-function named(type: string, text: string, offset: number, ranges?: TokenRange[]): Token {
+function named(type: string, text: string, offset: number, ranges?: BlockTokenRange[]): BlockToken {
   return {
     type,
     text,
@@ -201,7 +205,7 @@ function named(type: string, text: string, offset: number, ranges?: TokenRange[]
   };
 }
 
-function structural(type: string, offset: number, text = ""): Token {
+function structural(type: string, offset: number, text = ""): BlockToken {
   return named(type, text, offset);
 }
 
@@ -209,7 +213,7 @@ function linkDefinitionOpen(offset: number, fields: LinkDefinitionFields): LinkD
   return { ...structural("LinkDefinitionOpen", offset), linkDefinition: fields };
 }
 
-export function linkDefinitionFields(token: Token): LinkDefinitionFields {
+export function linkDefinitionFields(token: BlockToken): LinkDefinitionFields {
   const fields = (token as Partial<LinkDefinitionOpenToken>).linkDefinition;
   if (token.type !== "LinkDefinitionOpen" || !fields) {
     throw new Error("Expected LinkDefinitionOpen token to contain parsed fields");
@@ -217,7 +221,7 @@ export function linkDefinitionFields(token: Token): LinkDefinitionFields {
   return fields;
 }
 
-function logicalToken(type: string, source: string, lines: readonly Line[], start: number, end: number): Token {
+function logicalToken(type: string, source: string, lines: readonly Line[], start: number, end: number): BlockToken {
   const ranges = lines.slice(start, end).map((line) => ({ offset: line.start, end: line.next }));
   return named(
     type,
@@ -725,7 +729,7 @@ function endsWithParagraphLeaf(source: string, line: Line): boolean {
   }
 }
 
-function emitInlineChunks(source: string, lines: readonly Line[], out: Token[]): void {
+function emitInlineChunks(source: string, lines: readonly Line[], out: BlockToken[]): void {
   lines.forEach((line, index) => {
     const offset = paragraphContentStart(source, line);
     const end = index < lines.length - 1 ? line.next : line.end;
@@ -735,7 +739,7 @@ function emitInlineChunks(source: string, lines: readonly Line[], out: Token[]):
   });
 }
 
-function emitParagraph(source: string, lines: readonly Line[], out: Token[]): void {
+function emitParagraph(source: string, lines: readonly Line[], out: BlockToken[]): void {
   if (lines.length === 0) {
     return;
   }
@@ -744,7 +748,7 @@ function emitParagraph(source: string, lines: readonly Line[], out: Token[]): vo
   out.push(structural("ParagraphClose", lines[lines.length - 1].end));
 }
 
-function resolveParagraph(source: string, lines: readonly Line[], start: number, out: Token[]): number {
+function resolveParagraph(source: string, lines: readonly Line[], start: number, out: BlockToken[]): number {
   const paragraph: Line[] = [];
   let index = start;
   while (index < lines.length) {
@@ -774,7 +778,7 @@ function resolveParagraph(source: string, lines: readonly Line[], start: number,
   return index;
 }
 
-function resolveBlock(source: string, lines: readonly Line[], start: number, out: Token[]): number {
+function resolveBlock(source: string, lines: readonly Line[], start: number, out: BlockToken[]): number {
   const line = lines[start];
   const definition = linkDefinitionAt(source, lines, start);
   if (definition) {
@@ -949,14 +953,14 @@ interface BlockCheckpoint {
 }
 
 export interface BlockEditResult {
-  change: TokenChange;
+  change: BlockTokenChange;
   scannedRange: {
     end: number;
     start: number;
   };
 }
 
-function resolveLines(source: string, lines: readonly Line[], out: Token[], visit?: BlockVisitor): void {
+function resolveLines(source: string, lines: readonly Line[], out: BlockToken[], visit?: BlockVisitor): void {
   for (let index = 0; index < lines.length;) {
     if (isBlank(source, lines[index])) {
       index++;
@@ -971,9 +975,9 @@ function resolveLines(source: string, lines: readonly Line[], out: Token[], visi
   }
 }
 
-function scanBlocks(source: string): { checkpoints: BlockCheckpoint[]; lines: Line[]; tokens: Token[] } {
+function scanBlocks(source: string): { checkpoints: BlockCheckpoint[]; lines: Line[]; tokens: BlockToken[] } {
   const lines = linesOf(source);
-  const tokens: Token[] = [];
+  const tokens: BlockToken[] = [];
   const checkpoints: BlockCheckpoint[] = [];
   resolveLines(source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
     checkpoints.push({
@@ -1061,9 +1065,9 @@ function updatePhysicalLines(
 }
 
 function sameShiftedBlock(
-  previous: readonly Token[],
+  previous: readonly BlockToken[],
   checkpoint: BlockCheckpoint,
-  next: readonly Token[],
+  next: readonly BlockToken[],
   tokenStart: number,
   tokenEnd: number,
   delta: number,
@@ -1118,7 +1122,7 @@ export class MarkdownBlockScanner {
   #checkpoints: BlockCheckpoint[];
   #lines: Line[];
   #source: string;
-  #tokens: Token[];
+  #tokens: BlockToken[];
 
   constructor(source: string) {
     const initial = scanBlocks(source);
@@ -1132,7 +1136,7 @@ export class MarkdownBlockScanner {
     return this.#source;
   }
 
-  get tokens(): readonly Token[] {
+  get tokens(): readonly BlockToken[] {
     return this.#tokens;
   }
 
@@ -1179,7 +1183,7 @@ export class MarkdownBlockScanner {
     const oldTokenStart = checkpoint?.tokenStart ?? 0;
     const restartLine = nextLines.findIndex((line) => line.start >= restartOffset);
     const scanLines = restartLine < 0 ? [] : nextLines.slice(restartLine);
-    const replacement: Token[] = [];
+    const replacement: BlockToken[] = [];
     const scanned: BlockCheckpoint[] = [];
     let converged = -1;
     let scannedEnd = nextSource.length;

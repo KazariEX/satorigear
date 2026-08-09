@@ -20,8 +20,7 @@ import type {
   Root,
   Strong,
 } from "mdast";
-import type { Token } from "monogram/gen-lexer.ts";
-import { linkDefinitionFields } from "./block-scanner.ts";
+import { linkDefinitionFields } from "./block/scanner.ts";
 import {
   inlineTokenCount,
   inlineTokenEnd,
@@ -30,8 +29,10 @@ import {
   inlineTokenText,
 } from "./inline/runtime.ts";
 import { normalizeMarkdownReferenceLabel } from "./reference-label.ts";
-import type { EmittedArena, SyntaxArenaView } from "./emitted-parser.ts";
+import type { BlockSyntaxView } from "./block/runtime.ts";
+import type { BlockToken } from "./block/tokens.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
+import type { SyntaxArena } from "./syntax-protocol.ts";
 import type { MarkdownSyntax } from "./syntax.ts";
 
 interface Resource {
@@ -46,13 +47,13 @@ interface Reference {
 }
 
 interface BlockProjectionContext {
-  view: SyntaxArenaView;
+  view: BlockSyntaxView;
   source: string;
   syntax: MarkdownSyntax;
 }
 
 interface InlineProjectionContext {
-  arena: EmittedArena;
+  arena: SyntaxArena;
   source: string;
   tokenBase: number;
   tokens: InlineTokenStream;
@@ -109,11 +110,11 @@ function blockEnd(nodeId: number, offset: number, context: BlockProjectionContex
   return end;
 }
 
-function tokenStart(token: Token): number {
+function tokenStart(token: BlockToken): number {
   return token.ranges?.[0]?.offset ?? token.offset;
 }
 
-function tokenEnd(token: Token): number {
+function tokenEnd(token: BlockToken): number {
   return token.ranges?.at(-1)?.end ?? token.offset + token.text.length;
 }
 
@@ -244,7 +245,7 @@ function directBlockToken(
   tokenBase: number,
   tokenType: string,
   context: BlockProjectionContext,
-): Token | undefined {
+): BlockToken | undefined {
   const arena = context.view.arena;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
@@ -263,7 +264,7 @@ function blockToken(
   tokenBase: number,
   tokenType: string,
   context: BlockProjectionContext,
-): Token {
+): BlockToken {
   const token = directBlockToken(nodeId, tokenBase, tokenType, context);
   if (!token) {
     throw new Error(`Expected ${context.view.arena.ruleNameOf(nodeId)} syntax to contain ${tokenType}`);

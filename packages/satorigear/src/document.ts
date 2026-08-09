@@ -1,12 +1,12 @@
 import type { Root } from "mdast";
-import { createBlockScanner, type MarkdownBlockScanner } from "./block-scanner.ts";
+import { type BlockSyntaxDocument, blockSyntaxParser } from "./block/runtime.ts";
+import { createBlockScanner, type MarkdownBlockScanner } from "./block/scanner.ts";
 import {
   type BlockFragment,
   materialize,
   projectBlock,
 } from "./mdast.ts";
-import { blockSyntaxParser, createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
-import type { EmittedParserDocument } from "./emitted-parser.ts";
+import { createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
 import type { TextEdit } from "./text-edit.ts";
 
 export interface EditResult {
@@ -64,7 +64,7 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 
 class DocumentImpl implements Document {
   #blockScanner: MarkdownBlockScanner;
-  #blockSyntax: EmittedParserDocument;
+  #blockSyntax: BlockSyntaxDocument;
   #syntax: MarkdownSyntax;
   #fragments = new Map<number, BlockFragment>();
 

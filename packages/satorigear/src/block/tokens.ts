@@ -1,12 +1,25 @@
-import type { Token } from "monogram/gen-lexer.ts";
+import type { TokenChange } from "../syntax-protocol.ts";
 
-export interface TokenChange<Tokens = readonly Token[]> {
-  oldEnd: number;
-  oldStart: number;
-  tokens: Tokens;
+export interface BlockTokenRange {
+  end: number;
+  offset: number;
 }
 
-export function createShiftedToken(token: Token, delta: number): Token {
+export interface BlockToken {
+  commentBefore: boolean;
+  k: number;
+  multilineFlowBefore: boolean;
+  newlineBefore: boolean;
+  offset: number;
+  ranges?: BlockTokenRange[];
+  t: number;
+  text: string;
+  type: string;
+}
+
+export type BlockTokenChange = TokenChange<readonly BlockToken[]>;
+
+export function createShiftedToken(token: BlockToken, delta: number): BlockToken {
   return {
     ...token,
     offset: token.offset + delta,
@@ -16,7 +29,7 @@ export function createShiftedToken(token: Token, delta: number): Token {
   };
 }
 
-export function tokenEqualsAfterShift(previous: Token, next: Token, delta: number): boolean {
+export function tokenEqualsAfterShift(previous: BlockToken, next: BlockToken, delta: number): boolean {
   if (
     previous.type !== next.type ||
     previous.text !== next.text ||
@@ -50,7 +63,11 @@ export function tokenEqualsAfterShift(previous: Token, next: Token, delta: numbe
   return true;
 }
 
-export function createTokenChange(previous: readonly Token[], next: readonly Token[], delta: number): TokenChange {
+export function createTokenChange(
+  previous: readonly BlockToken[],
+  next: readonly BlockToken[],
+  delta: number,
+): BlockTokenChange {
   if (previous.length === 0) {
     return { oldStart: 0, oldEnd: 0, tokens: next };
   }

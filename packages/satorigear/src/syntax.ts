@@ -1,11 +1,4 @@
-import type { Token } from "monogram/gen-lexer.ts";
-import { linkDefinitionFields } from "./block-scanner.ts";
-import {
-  createEmittedParser,
-  type EmittedArena,
-  type SyntaxArenaView,
-} from "./emitted-parser.ts";
-import * as generatedBlocks from "./generated/blocks.ts";
+import { linkDefinitionFields } from "./block/scanner.ts";
 import {
   createInlineSyntaxDocument,
   inlineSyntaxArena,
@@ -18,10 +11,13 @@ import {
 } from "./inline/runtime.ts";
 import { InlineTokenState } from "./inline/tokenizer.ts";
 import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
+import type { BlockSyntaxView } from "./block/runtime.ts";
+import type { BlockToken } from "./block/tokens.ts";
+import type { SyntaxArena } from "./syntax-protocol.ts";
 import type { TextEdit } from "./text-edit.ts";
 
 export interface MarkdownInlineSyntax {
-  arena: EmittedArena;
+  arena: SyntaxArena;
   rootId: number;
   rootOffset: number;
   rootTokenBase: number;
@@ -36,17 +32,12 @@ export interface InlineForestLease {
 
 export interface MarkdownSyntax {
   blocks: () => readonly SyntaxBlock[];
-  blockView: () => SyntaxArenaView;
+  blockView: () => BlockSyntaxView;
   inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
   openInlineForest: (blocks: readonly SyntaxBlock[]) => InlineForestLease;
-  update: (view: SyntaxArenaView, source: string, edits?: readonly TextEdit[]) => void;
+  update: (view: BlockSyntaxView, source: string, edits?: readonly TextEdit[]) => void;
 }
 
-export const blockSyntaxParser = createEmittedParser(
-  generatedBlocks.tree,
-  generatedBlocks.createParser,
-  generatedBlocks.parseTokens,
-);
 interface InlineRegionDescriptor {
   id: number;
   rule: string;
@@ -119,7 +110,7 @@ interface InlineForestRoot {
   tokenBase: number;
 }
 
-function appendTokenSpans(spans: SourceSpan[], token: Token): void {
+function appendTokenSpans(spans: SourceSpan[], token: BlockToken): void {
   if (token.ranges?.length) {
     for (const range of token.ranges) {
       spans.push({ start: range.offset, end: range.end });
@@ -131,8 +122,8 @@ function appendTokenSpans(spans: SourceSpan[], token: Token): void {
 }
 
 function inlineSpansOf(
-  view: SyntaxArenaView,
-  arena: EmittedArena,
+  view: BlockSyntaxView,
+  arena: SyntaxArena,
   nodeId: number,
   tokenBase: number,
 ): SourceSpan[] {
@@ -159,9 +150,9 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   // Root IDs point into generated scratch storage and exist only while an inline forest lease is open.
   #forestRoots = new Map<number, InlineForestRoot>();
   #regions = new Map<number, InlineRegion>();
-  #view: SyntaxArenaView;
+  #view: BlockSyntaxView;
 
-  constructor(view: SyntaxArenaView, source: string) {
+  constructor(view: BlockSyntaxView, source: string) {
     this.#view = view;
     this.update(view, source);
   }
@@ -170,7 +161,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     return this.#blocks;
   }
 
-  update(view: SyntaxArenaView, source: string, edits: readonly TextEdit[] = []): void {
+  update(view: BlockSyntaxView, source: string, edits: readonly TextEdit[] = []): void {
     const arena = view.arena;
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
@@ -291,7 +282,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     this.#regions = regions;
   }
 
-  blockView(): SyntaxArenaView {
+  blockView(): BlockSyntaxView {
     return this.#view;
   }
 
@@ -366,6 +357,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   }
 }
 
-export function createMarkdownSyntax(view: SyntaxArenaView, source: string): MarkdownSyntax {
+export function createMarkdownSyntax(view: BlockSyntaxView, source: string): MarkdownSyntax {
   return new MarkdownSyntaxImpl(view, source);
 }
