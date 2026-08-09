@@ -1,66 +1,28 @@
-import { altPattern, anyChar, end, followedBy, noneOf, notFollowedBy, oneOf, optPattern, plus, range, repeat, seq, star } from "monogram/api.ts";
-import type { CstGrammar, RuleDecl, RuleExpr, TokenDecl } from "monogram/types.ts";
-import markdown from "./markdown.ts";
+import {
+  alt,
+  altPattern,
+  anyChar,
+  defineGrammar,
+  end,
+  followedBy,
+  many,
+  many1,
+  never,
+  noneOf,
+  not,
+  notFollowedBy,
+  oneOf,
+  optPattern,
+  plus,
+  range,
+  repeat,
+  rule,
+  type RuleRef,
+  seq,
+  star,
+  token,
+} from "monogram/api.ts";
 
-const inlineTokens = new Set([
-  "HtmlComment",
-  "CodeSpan",
-  "Image",
-  "Link",
-  "ReferenceLink",
-  "Autolink",
-  "InlineHtml",
-  "Entity",
-  "HardBreak",
-  "Escape",
-  "Strong",
-  "Strikethrough",
-  "Emphasis",
-  "Text",
-  "Delimiter",
-  "Newline",
-]);
-
-const inlineRules = new Set(["Inline", "InlineLine", "InlineLines"]);
-const engineToken = (name: string, pattern: TokenDecl["pattern"] = { type: "never" }): TokenDecl => ({ name, pattern, flags: [] });
-// A zero-width structural token keeps batched regions independent without changing their spans.
-const inlineBoundary = engineToken("InlineBoundary");
-const ruleReference = (name: string): RuleExpr => ({ type: "ref", name });
-const delimiterRule = (name: string, open: string, close: string, content = "Inline"): RuleDecl => ({
-  name,
-  flags: [],
-  body: {
-    type: "seq",
-    items: [
-      ruleReference(open),
-      {
-        type: "quantifier",
-        kind: "+",
-        body: { type: "alt", items: [ruleReference(content), ruleReference("Newline")] },
-      },
-      ruleReference(close),
-    ],
-  },
-});
-const bracketRule = (name: string, open: string, close: string, content = "Inline"): RuleDecl => ({
-  name,
-  flags: [],
-  body: {
-    type: "seq",
-    items: [
-      ruleReference(open),
-      {
-        type: "quantifier",
-        kind: "*",
-        body: {
-          type: "seq",
-          items: [{ type: "not", body: ruleReference(close) }, ruleReference(content)],
-        },
-      },
-      ruleReference(close),
-    ],
-  },
-});
 const asciiLetter = oneOf(range("A", "Z"), range("a", "z"));
 const asciiAlphanumeric = oneOf(asciiLetter, range("0", "9"));
 const schemeCharacter = oneOf(asciiAlphanumeric, "+", ".", "-");
@@ -119,6 +81,7 @@ const inlineHtmlPattern = altPattern(
   seq("<!", oneOf(range("A", "Z")), star(anyChar(), { greedy: false }), ">"),
   seq("<![CDATA[", star(anyChar(), { greedy: false }), "]]>"),
 );
+
 const escapedInlineCharacter = seq("\\", anyChar());
 const linkWhitespace = oneOf(" ", "\t", "\n", "\r");
 const bareDestination = (depth: number): ReturnType<typeof altPattern> => {
@@ -163,186 +126,226 @@ const inlineTextPattern = plus(altPattern(
   seq(" ", notFollowedBy(seq(" ", star(" "), physicalLineEnd))),
 ));
 
-function bracketFallbacks(rule: RuleDecl): RuleDecl {
-  if (rule.name !== "Inline" || rule.body.type !== "alt") {
-    return rule;
-  }
-  return {
-    ...rule,
-    body: {
-      ...rule.body,
-      items: rule.body.items.concat([
-        ruleReference("ReferenceImage"),
-        ruleReference("BracketFallback"),
-      ]),
-    },
-  };
-}
+const HtmlComment = token(altPattern(
+  "<!-->",
+  "<!--->",
+  seq("<!--", star(anyChar(), { greedy: false }), altPattern("-->", end())),
+), { scope: "comment.block.html" });
+const CodeSpan = token(altPattern(
+  seq("```", plus(noneOf("\n", "\r"), { greedy: false }), "```"),
+  seq("``", plus(noneOf("\n", "\r"), { greedy: false }), "``"),
+  seq("`", plus(noneOf("`", "\n", "\r")), "`"),
+), {
+  scope: "markup.raw.inline",
+  delimitedSpan: { markers: ["`"], minLength: 1, multiline: true },
+});
+const Autolink = token(autolinkPattern, { scope: "markup.underline.link" });
+const InlineHtml = token(inlineHtmlPattern, { scope: "meta.tag.inline.html" });
+const Entity = token(seq("&", altPattern(
+  seq("#", oneOf("x", "X"), repeat(oneOf(range("0", "9"), range("A", "F"), range("a", "f")), 1, 6)),
+  seq("#", repeat(range("0", "9"), 1, 7)),
+  seq(asciiLetter, repeat(asciiAlphanumeric, 0, 30)),
+), ";"), { scope: "constant.character.entity" });
+const HardBreak = token(altPattern(
+  seq("\\", followedBy(altPattern("\r", "\n"))),
+  seq("  ", star(" "), followedBy(altPattern("\r", "\n"))),
+), { scope: "punctuation.definition.hard-break" });
+const Escape = token(seq("\\", oneOf(
+  "!",
+  "\"",
+  "#",
+  "$",
+  "%",
+  "&",
+  "'",
+  "(",
+  ")",
+  "*",
+  "+",
+  ",",
+  "-",
+  ".",
+  "/",
+  ":",
+  ";",
+  "<",
+  "=",
+  ">",
+  "?",
+  "@",
+  "[",
+  "\\",
+  "]",
+  "^",
+  "_",
+  "`",
+  "{",
+  "|",
+  "}",
+  "~",
+)), { scope: "constant.character.escape" });
+const Strikethrough = token(seq("~~", plus(noneOf("\n", "\r"), { greedy: false }), "~~"), {
+  scope: "markup.strikethrough",
+});
+const Text = token(inlineTextPattern, { scope: "meta.paragraph" });
 
-function linkContentReferences(expression: RuleExpr): RuleExpr {
-  if (expression.type === "alt") {
-    return {
-      ...expression,
-      items: expression.items
-        .filter((item) => item.type !== "ref"
-          || (item.name !== "Link" && item.name !== "ReferenceLink" && item.name !== "Autolink"))
-        .map(linkContentReferences),
-    };
-  }
-  if (expression.type === "ref") {
-    const variants: Record<string, string> = {
-      Emphasis: "LinkEmphasis",
-      Strong: "LinkStrong",
-      Image: "LinkImage",
-      ReferenceImage: "LinkReferenceImage",
-    };
-    return variants[expression.name] ? { ...expression, name: variants[expression.name] } : expression;
-  }
-  if (expression.type === "seq") {
-    return { ...expression, items: expression.items.map(linkContentReferences) };
-  }
-  if (expression.type === "quantifier" || expression.type === "not") {
-    return { ...expression, body: linkContentReferences(expression.body) };
-  }
-  if (expression.type === "group") {
-    return {
-      ...expression,
-      body: linkContentReferences(expression.body),
-      ...(expression.tsRelaxed ? { tsRelaxed: linkContentReferences(expression.tsRelaxed) } : {}),
-    };
-  }
-  if (expression.type === "sep") {
-    return { ...expression, element: linkContentReferences(expression.element) };
-  }
-  return expression;
-}
+const AsteriskRun = token(plus("*"));
+const UnderscoreRun = token(plus("_"));
+const EmphasisOpen = token(never());
+const EmphasisClose = token(never());
+const StrongOpen = token(never());
+const StrongClose = token(never());
+const ImageOpen = token("![");
+const BracketOpen = token("[");
+const LinkTail = token(linkTailPattern);
+const ReferenceTail = token(referenceTailPattern);
+const ShortcutReferenceTail = token("]");
+const ReferenceSeparatorClose = token(never());
+const LinkOpen = token(never());
+const LinkClose = token(never());
+const ImageLinkOpen = token(never());
+const ImageLinkClose = token(never());
+const ReferenceOpen = token(never());
+const ReferenceClose = token(never());
+const ImageReferenceOpen = token(never());
+const ImageReferenceClose = token(never());
+const Delimiter = token(oneOf("\\", "`", "*", "_", "[", "]", "<", ">", "!", "&", "~"), {
+  scope: "punctuation.definition.markdown",
+});
+const Newline = token(never());
+// A zero-width structural token keeps batched regions independent without changing their spans.
+const InlineBoundary = token(never());
 
-const baseInlineRules = markdown.rules
-  .filter((rule) => inlineRules.has(rule.name))
-  .map((rule) => bracketFallbacks(rule));
-const linkContentBody = linkContentReferences(baseInlineRules.find((rule) => rule.name === "Inline")!.body);
+let Inline: RuleRef;
+let LinkContent: RuleRef;
 
-/**
- * Inline-only view of the Markdown grammar. Block tokens are absent, so line-start syntax remains
- * ordinary inline content after the block phase has assigned the region to a paragraph or heading.
- */
-export const markdownInlineGrammar: CstGrammar = {
-  ...markdown,
+const InlineLine = rule(() => [[many1(Inline)]]);
+const InlineLines = rule(($) => [InlineLine, [$, Newline, InlineLine]]);
+const InlineForest = rule(() => [[InlineLines, many(InlineBoundary, InlineLines)]]);
+const Emphasis = rule(() => [[EmphasisOpen, many1(alt(Inline, Newline)), EmphasisClose]]);
+const Strong = rule(() => [[StrongOpen, many1(alt(Inline, Newline)), StrongClose]]);
+const LinkEmphasis = rule(() => [[EmphasisOpen, many1(alt(LinkContent, Newline)), EmphasisClose]]);
+const LinkStrong = rule(() => [[StrongOpen, many1(alt(LinkContent, Newline)), StrongClose]]);
+const Image = rule(() => [[ImageLinkOpen, many(not(ImageLinkClose), Inline), ImageLinkClose]]);
+const Link = rule(() => [[LinkOpen, many(not(LinkClose), LinkContent), LinkClose]]);
+const ReferenceLink = rule(() => [[ReferenceOpen, many(not(ReferenceClose), Inline), ReferenceClose]]);
+const ReferenceImage = rule(() => [[ImageReferenceOpen, many(not(ImageReferenceClose), Inline), ImageReferenceClose]]);
+const LinkImage = rule(() => [[ImageLinkOpen, many(not(ImageLinkClose), LinkContent), ImageLinkClose]]);
+const LinkReferenceImage = rule(() => [[
+  ImageReferenceOpen,
+  many(not(ImageReferenceClose), LinkContent),
+  ImageReferenceClose,
+]]);
+const BracketFallback = rule(() => [
+  ImageOpen,
+  BracketOpen,
+  LinkTail,
+  ReferenceTail,
+  ShortcutReferenceTail,
+  ReferenceSeparatorClose,
+  LinkOpen,
+  LinkClose,
+  ImageLinkOpen,
+  ImageLinkClose,
+  ReferenceOpen,
+  ReferenceClose,
+  ImageReferenceOpen,
+  ImageReferenceClose,
+]);
+
+Inline = rule(() => [
+  HtmlComment,
+  CodeSpan,
+  Image,
+  Link,
+  ReferenceLink,
+  Autolink,
+  InlineHtml,
+  Entity,
+  HardBreak,
+  Escape,
+  Strong,
+  Strikethrough,
+  Emphasis,
+  Text,
+  Delimiter,
+  ReferenceImage,
+  BracketFallback,
+]);
+LinkContent = rule(() => [
+  HtmlComment,
+  CodeSpan,
+  LinkImage,
+  InlineHtml,
+  Entity,
+  HardBreak,
+  Escape,
+  LinkStrong,
+  Strikethrough,
+  LinkEmphasis,
+  Text,
+  Delimiter,
+  LinkReferenceImage,
+  BracketFallback,
+]);
+
+export const markdownInlineGrammar = defineGrammar({
   name: "markdown-inline",
-  tokens: markdown.tokens
-    .filter((token) => inlineTokens.has(token.name))
-    .flatMap((token) => {
-      if (["Emphasis", "Strong", "Image", "Link", "ReferenceLink"].includes(token.name)) {
-        return [];
-      }
-      if (token.name === "Autolink") {
-        return { ...token, pattern: autolinkPattern };
-      }
-      if (token.name === "InlineHtml") {
-        return { ...token, pattern: inlineHtmlPattern };
-      }
-      if (token.name === "Text") {
-        return { ...token, pattern: inlineTextPattern };
-      }
-      if (token.name === "HtmlComment") {
-        return {
-          ...token,
-          pattern: altPattern("<!-->", "<!--->", token.pattern),
-        };
-      }
-      if (token.name !== "CodeSpan") {
-        return token;
-      }
-      return {
-        ...token,
-        delimitedSpan: token.delimitedSpan && { ...token.delimitedSpan, multiline: true },
-      };
-    })
-    .flatMap((token) => {
-      if (token.name !== "Delimiter") {
-        return [token];
-      }
-      return [
-        engineToken("AsteriskRun", plus("*")),
-        engineToken("UnderscoreRun", plus("_")),
-        engineToken("EmphasisOpen"),
-        engineToken("EmphasisClose"),
-        engineToken("StrongOpen"),
-        engineToken("StrongClose"),
-        engineToken("ImageOpen", "!["),
-        engineToken("BracketOpen", "["),
-        engineToken("LinkTail", linkTailPattern),
-        engineToken("ReferenceTail", referenceTailPattern),
-        engineToken("ShortcutReferenceTail", "]"),
-        engineToken("ReferenceSeparatorClose"),
-        engineToken("LinkOpen"),
-        engineToken("LinkClose"),
-        engineToken("ImageLinkOpen"),
-        engineToken("ImageLinkClose"),
-        engineToken("ReferenceOpen"),
-        engineToken("ReferenceClose"),
-        engineToken("ImageReferenceOpen"),
-        engineToken("ImageReferenceClose"),
-        token,
-      ];
-    })
-    .concat(inlineBoundary),
-  rules: baseInlineRules.concat([
-    {
-      name: "InlineForest",
-      flags: [],
-      body: {
-        type: "seq",
-        items: [
-          ruleReference("InlineLines"),
-          {
-            type: "quantifier",
-            kind: "*",
-            body: {
-              type: "seq",
-              items: [ruleReference("InlineBoundary"), ruleReference("InlineLines")],
-            },
-          },
-        ],
-      },
-    },
-    delimiterRule("Emphasis", "EmphasisOpen", "EmphasisClose"),
-    delimiterRule("Strong", "StrongOpen", "StrongClose"),
-    delimiterRule("LinkEmphasis", "EmphasisOpen", "EmphasisClose", "LinkContent"),
-    delimiterRule("LinkStrong", "StrongOpen", "StrongClose", "LinkContent"),
-    bracketRule("Image", "ImageLinkOpen", "ImageLinkClose"),
-    bracketRule("Link", "LinkOpen", "LinkClose", "LinkContent"),
-    bracketRule("ReferenceLink", "ReferenceOpen", "ReferenceClose"),
-    bracketRule("ReferenceImage", "ImageReferenceOpen", "ImageReferenceClose"),
-    bracketRule("LinkImage", "ImageLinkOpen", "ImageLinkClose", "LinkContent"),
-    bracketRule("LinkReferenceImage", "ImageReferenceOpen", "ImageReferenceClose", "LinkContent"),
-    { name: "LinkContent", flags: [], body: linkContentBody },
-    {
-      name: "BracketFallback",
-      flags: [],
-      body: {
-        type: "alt",
-        items: [
-          "ImageOpen",
-          "BracketOpen",
-          "LinkTail",
-          "ReferenceTail",
-          "ShortcutReferenceTail",
-          "ReferenceSeparatorClose",
-          "LinkOpen",
-          "LinkClose",
-          "ImageLinkOpen",
-          "ImageLinkClose",
-          "ReferenceOpen",
-          "ReferenceClose",
-          "ImageReferenceOpen",
-          "ImageReferenceClose",
-        ].map(ruleReference),
-      },
-    },
-  ]),
+  tokens: {
+    HtmlComment,
+    CodeSpan,
+    Autolink,
+    InlineHtml,
+    Entity,
+    HardBreak,
+    Escape,
+    Strikethrough,
+    Text,
+    AsteriskRun,
+    UnderscoreRun,
+    EmphasisOpen,
+    EmphasisClose,
+    StrongOpen,
+    StrongClose,
+    ImageOpen,
+    BracketOpen,
+    LinkTail,
+    ReferenceTail,
+    ShortcutReferenceTail,
+    ReferenceSeparatorClose,
+    LinkOpen,
+    LinkClose,
+    ImageLinkOpen,
+    ImageLinkClose,
+    ReferenceOpen,
+    ReferenceClose,
+    ImageReferenceOpen,
+    ImageReferenceClose,
+    Delimiter,
+    Newline,
+    InlineBoundary,
+  },
+  rules: {
+    Inline,
+    InlineLine,
+    InlineLines,
+    InlineForest,
+    Emphasis,
+    Strong,
+    LinkEmphasis,
+    LinkStrong,
+    Image,
+    Link,
+    ReferenceLink,
+    ReferenceImage,
+    LinkImage,
+    LinkReferenceImage,
+    LinkContent,
+    BracketFallback,
+  },
+  entry: BracketFallback,
   newline: {
     token: "Newline",
     hardBreak: { token: "HardBreak", minSpaces: 2 },
   },
-};
+});
