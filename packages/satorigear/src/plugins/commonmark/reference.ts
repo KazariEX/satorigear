@@ -1,4 +1,10 @@
-import { createLinkDefinitionStart } from "../../block/scanner.ts";
+import {
+  indentOf,
+  isBlank,
+  lineIndent,
+  named,
+  structural,
+} from "../../block/scanner.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -12,14 +18,257 @@ import {
   inlineTokenStride,
   inlineTokenText,
 } from "../../inline/runtime.ts";
+import type {
+  LinkDefinitionFields,
+  LinkDefinitionOpenToken,
+} from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/resolver.ts";
-import type { InlineResolutionContext, InlineTransform } from "../profile.ts";
+import type {
+  BlockLine,
+  BlockRestart,
+  BlockStart,
+  InlineResolutionContext,
+  InlineTransform,
+} from "../profile.ts";
+
+interface LinkDefinitionMatch {
+  end: number;
+  fields: LinkDefinitionFields;
+}
 
 export function normalizeReferenceLabel(label: string): string {
   return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();
 }
 
-export const linkDefinitionStart = createLinkDefinitionStart(normalizeReferenceLabel);
+function linkDefinitionOpen(offset: number, fields: LinkDefinitionFields): LinkDefinitionOpenToken {
+  return { ...structural("LinkDefinitionOpen", offset), linkDefinition: fields };
+}
+
+function linkDefinitionAt(
+  source: string,
+  lines: readonly BlockLine[],
+  startIndex: number,
+): LinkDefinitionMatch | null {
+  const indent = lineIndent(source, lines[startIndex]);
+  if (!indent || source[indent.offset] !== "[") {
+    return null;
+  }
+  let lineIndex = startIndex;
+  let offset = indent.offset + 1;
+  let label = "";
+  let labelLength = 0;
+  let labelHasContent = false;
+  let labelStart = offset;
+
+  for (;;) {
+    const line = lines[lineIndex];
+    if (!line || offset >= line.end) {
+      if (!line || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
+        return null;
+      }
+      if (++labelLength > 999) {
+        return null;
+      }
+      label += source.slice(labelStart, line.next);
+      lineIndex++;
+      offset = lines[lineIndex].start;
+      labelStart = offset;
+      continue;
+    }
+    if (source[offset] === "\\" && offset + 1 < line.end) {
+      labelHasContent = true;
+      labelLength += 2;
+      offset += 2;
+      continue;
+    }
+    if (source[offset] === "[") {
+      return null;
+    }
+    if (source[offset] === "]" && source[offset + 1] === ":") {
+      break;
+    }
+    if (!/[ \t]/.test(source[offset])) {
+      labelHasContent = true;
+    }
+    if (++labelLength > 999) {
+      return null;
+    }
+    offset++;
+  }
+  label += source.slice(labelStart, offset);
+  if (!labelHasContent) {
+    return null;
+  }
+  offset += 2;
+
+  const skipSpaces = (): void => {
+    while (offset < lines[lineIndex].end && (source[offset] === " " || source[offset] === "\t")) {
+      offset++;
+    }
+  };
+  skipSpaces();
+  if (offset === lines[lineIndex].end) {
+    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
+      return null;
+    }
+    lineIndex++;
+    offset = lines[lineIndex].start;
+    skipSpaces();
+  }
+
+  let destination: string;
+  if (source[offset] === "<") {
+    offset++;
+    const destinationStart = offset;
+    while (offset < lines[lineIndex].end && source[offset] !== ">") {
+      if (source[offset] === "<") {
+        return null;
+      }
+      if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
+        offset += 2;
+      }
+      else {
+        offset++;
+      }
+    }
+    if (source[offset] !== ">") {
+      return null;
+    }
+    destination = source.slice(destinationStart, offset);
+    offset++;
+  }
+  else {
+    let depth = 0;
+    const destinationStart = offset;
+    while (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
+      if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
+        offset += 2;
+        continue;
+      }
+      if (source[offset] === "(") {
+        if (++depth > 32) {
+          return null;
+        }
+      }
+      else if (source[offset] === ")" && --depth < 0) {
+        return null;
+      }
+      offset++;
+    }
+    if (offset === destinationStart || depth !== 0) {
+      return null;
+    }
+    destination = source.slice(destinationStart, offset);
+  }
+
+  const destinationLine = lineIndex;
+  if (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
+    return null;
+  }
+  skipSpaces();
+  let titleOnNextLine = false;
+  if (offset === lines[lineIndex].end && lineIndex + 1 < lines.length && !isBlank(source, lines[lineIndex + 1])) {
+    lineIndex++;
+    offset = lines[lineIndex].start;
+    skipSpaces();
+    titleOnNextLine = true;
+  }
+
+  const closer = source[offset] === "(" ? ")" : source[offset] === "\"" || source[offset] === "'" ? source[offset] : null;
+  const fields: LinkDefinitionFields = {
+    destination,
+    label,
+    markerOffset: indent.offset - lines[startIndex].start,
+    normalizedLabel: normalizeReferenceLabel(label),
+    title: null,
+  };
+  if (!closer) {
+    return { end: destinationLine + 1, fields };
+  }
+  offset++;
+  let title = "";
+  let titleStart = offset;
+  let closed = false;
+  while (lineIndex < lines.length) {
+    const line = lines[lineIndex];
+    while (offset < line.end) {
+      if (source[offset] === "\\" && offset + 1 < line.end) {
+        offset += 2;
+        continue;
+      }
+      if (source[offset] === closer) {
+        title += source.slice(titleStart, offset);
+        offset++;
+        closed = true;
+        break;
+      }
+      offset++;
+    }
+    if (closed) {
+      break;
+    }
+    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
+      break;
+    }
+    title += source.slice(titleStart, line.next);
+    lineIndex++;
+    offset = lines[lineIndex].start;
+    titleStart = offset;
+  }
+  if (!closed) {
+    return titleOnNextLine ? { end: destinationLine + 1, fields } : null;
+  }
+  skipSpaces();
+  if (offset !== lines[lineIndex].end) {
+    return titleOnNextLine ? { end: destinationLine + 1, fields } : null;
+  }
+  fields.title = title;
+  return { end: lineIndex + 1, fields };
+}
+
+export const linkDefinitionStart: BlockStart = (source, lines, start, out) => {
+  const definition = linkDefinitionAt(source, lines, start);
+  if (!definition) {
+    return void 0;
+  }
+  const line = lines[start];
+  out.push(linkDefinitionOpen(line.start, definition.fields));
+  for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
+    const current = lines[definitionLine];
+    const end = definitionLine + 1 < definition.end ? current.next : current.end;
+    out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+  }
+  out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
+  return definition.end;
+};
+
+export const restartBeforeLinkDefinition: BlockRestart = (source, lines, changedEnd) => {
+  let low = 0;
+  let high = lines.length;
+  const offset = Math.max(0, changedEnd - 1);
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (lines[middle].start <= offset) {
+      low = middle + 1;
+    }
+    else {
+      high = middle;
+    }
+  }
+
+  let candidate: number | undefined;
+  for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
+    const line = lines[index];
+    if (isBlank(source, line)) {
+      break;
+    }
+    const indent = indentOf(source, line, 3);
+    if (source[indent.offset] === "[") {
+      candidate = line.start;
+    }
+  }
+  return candidate;
+};
 
 function splitReferenceTail(source: string, tokens: InlineTokenStream, index: number): InlineTokenStream {
   const start = inlineTokenStart(tokens, index);

@@ -15,13 +15,20 @@ export interface BlockLine {
   start: number;
 }
 
+// Container plugins recurse through the document scanner without owning its control flow.
+export interface BlockScanContext {
+  endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
+  interruptsParagraph: (source: string, line: BlockLine) => boolean;
+  resolveLines: (source: string, lines: readonly BlockLine[], tokens: BlockToken[]) => void;
+}
+
 export type BlockStart = (
   source: string,
   lines: readonly BlockLine[],
   start: number,
   tokens: BlockToken[],
   contentOffset: number,
-  profile: SyntaxProfile,
+  context: BlockScanContext,
 ) => number | undefined;
 
 export type BlockInterrupt = (
@@ -46,6 +53,14 @@ export interface BlockRuleRegistration {
   rule: string;
 }
 
+export type BlockLineUnwrapper = (source: string, line: BlockLine) => BlockLine | undefined;
+
+export type BlockRestart = (
+  source: string,
+  lines: readonly BlockLine[],
+  changedEnd: number,
+) => number | undefined;
+
 export interface InlineResolutionContext {
   hasReference: (label: string) => boolean;
 }
@@ -69,7 +84,9 @@ export type InlineTransform = (
 export interface InternalSyntaxPlugin {
   blockFallbacks?: readonly BlockStart[];
   blockRules?: readonly BlockRuleRegistration[];
+  blockRestarts?: readonly BlockRestart[];
   blockStarts?: readonly BlockStartRegistration[];
+  blockUnwrappers?: readonly BlockLineUnwrapper[];
   delimiterRuns?: readonly DelimiterRunConfig[];
   decodeText?: (value: string) => string;
   inlineRules?: readonly InlineRuleRegistration[];
@@ -84,7 +101,9 @@ export interface SyntaxProfile {
   blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
   blockProjects: Readonly<Record<string, BlockProjector>>;
   blockReferenceLabels: Readonly<Record<string, (token: BlockToken) => string>>;
+  blockRestarts: readonly BlockRestart[];
   blockStarts: readonly (BlockStartDispatch | undefined)[];
+  blockUnwrappers: readonly BlockLineUnwrapper[];
   decodeText: (value: string) => string;
   inlineRuleProjects: Readonly<Record<string, InlineRuleProjector>>;
   inlineTokenProjects: readonly (InlineLeafProjector | undefined)[];
@@ -98,7 +117,9 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
   const blockProjects: Record<string, BlockProjector> = Object.create(null);
   const blockReferenceLabels: Record<string, (token: BlockToken) => string> = Object.create(null);
+  const blockRestarts: BlockRestart[] = [];
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
+  const blockUnwrappers: BlockLineUnwrapper[] = [];
   const delimiterRuns: DelimiterRunConfig[] = [];
   let decodeText = (value: string): string => value;
   const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
@@ -134,6 +155,8 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
         blockReferenceLabels[registration.rule] = registration.referenceLabel;
       }
     }
+    blockRestarts.push(...plugin.blockRestarts ?? []);
+    blockUnwrappers.push(...plugin.blockUnwrappers ?? []);
     delimiterRuns.push(...plugin.delimiterRuns ?? []);
     decodeText = plugin.decodeText ?? decodeText;
     for (const registration of plugin.inlineRules ?? []) {
@@ -169,7 +192,9 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
     blockInterrupts,
     blockProjects,
     blockReferenceLabels,
+    blockRestarts,
     blockStarts,
+    blockUnwrappers,
     decodeText,
     inlineRuleProjects,
     inlineTokenProjects,

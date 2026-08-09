@@ -1,4 +1,10 @@
 import type { Code, InlineCode } from "mdast";
+import {
+  indentOf,
+  isBlank,
+  lineIndent,
+  logicalToken,
+} from "../../block/scanner.ts";
 import { inlineTokenText } from "../../inline/runtime.ts";
 import {
   appendInline,
@@ -13,6 +19,77 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { semanticText } from "./text.ts";
+import type { BlockLine, BlockStart } from "../profile.ts";
+
+interface Fence {
+  marker: "`" | "~";
+  length: number;
+}
+
+function fenceAt(source: string, line: BlockLine): Fence | null {
+  const indent = lineIndent(source, line);
+  if (!indent) {
+    return null;
+  }
+  const marker = source[indent.offset];
+  if (marker !== "`" && marker !== "~") {
+    return null;
+  }
+  const body = source.slice(indent.offset, line.end);
+  let length = 0;
+  while (body[length] === marker) {
+    length++;
+  }
+  if (length < 3 || (marker === "`" && body.slice(length).includes("`"))) {
+    return null;
+  }
+  return { marker, length };
+}
+
+function closesFence(source: string, line: BlockLine, fence: Fence): boolean {
+  const indent = lineIndent(source, line);
+  if (!indent || source[indent.offset] !== fence.marker) {
+    return false;
+  }
+  const body = source.slice(indent.offset, line.end);
+  let length = 0;
+  while (body[length] === fence.marker) {
+    length++;
+  }
+  return length >= fence.length && /^[ \t]*$/.test(body.slice(length));
+}
+
+export function fencedCodeInterrupt(source: string, line: BlockLine): boolean {
+  return !!fenceAt(source, line);
+}
+
+export const fencedCodeStart: BlockStart = (source, lines, start, out) => {
+  const fence = fenceAt(source, lines[start]);
+  if (!fence) {
+    return void 0;
+  }
+  let end = start + 1;
+  while (end < lines.length && !closesFence(source, lines[end], fence)) {
+    end++;
+  }
+  if (end < lines.length) {
+    end++;
+  }
+  out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
+  return end;
+};
+
+export const indentedCodeStart: BlockStart = (source, lines, start, out) => {
+  if (indentOf(source, lines[start]).columns < 4) {
+    return void 0;
+  }
+  let end = start + 1;
+  while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
+    end++;
+  }
+  out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
+  return end;
+};
 
 function codeSpanValue(value: string): string {
   const markerLength = /^`+/.exec(value)?.[0].length;

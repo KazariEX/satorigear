@@ -1,36 +1,44 @@
-import {
-  atxHeadingInterrupt,
-  atxHeadingStart,
-  blockQuoteInterrupt,
-  blockQuoteStart,
-  fencedCodeInterrupt,
-  fencedCodeStart,
-  htmlBlockInterrupt,
-  htmlBlockStart,
-  indentedCodeStart,
-  listInterrupt,
-  listStart,
-  paragraphStart,
-  thematicBreakInterrupt,
-  thematicBreakStart,
-} from "../block/scanner.ts";
 import { linkDefinitionFields } from "../block/tokens.ts";
 import { projectInlineChildren, projectInlineIgnore } from "../mdast.ts";
-import { projectBlockQuote } from "./commonmark/blockquote.ts";
+import {
+  blockQuoteInterrupt,
+  blockQuoteStart,
+  projectBlockQuote,
+  unwrapBlockQuote,
+} from "./commonmark/blockquote.ts";
 import {
   projectInlineBreak,
   projectInlineNewline,
   projectThematicBreak,
+  thematicBreakInterrupt,
+  thematicBreakStart,
 } from "./commonmark/break.ts";
-import { projectFencedCode, projectIndentedCode, projectInlineCode } from "./commonmark/code.ts";
+import {
+  fencedCodeInterrupt,
+  fencedCodeStart,
+  indentedCodeStart,
+  projectFencedCode,
+  projectIndentedCode,
+  projectInlineCode,
+} from "./commonmark/code.ts";
 import { projectLinkDefinition } from "./commonmark/definition.ts";
 import {
   markdownDelimiterRuns,
   projectInlineEmphasis,
   projectInlineStrong,
 } from "./commonmark/emphasis.ts";
-import { projectAtxHeading, projectSetextHeading } from "./commonmark/heading.ts";
-import { projectHtmlBlock, projectInlineHtml } from "./commonmark/html.ts";
+import {
+  atxHeadingInterrupt,
+  atxHeadingStart,
+  projectAtxHeading,
+  projectSetextHeading,
+} from "./commonmark/heading.ts";
+import {
+  htmlBlockInterrupt,
+  htmlBlockStart,
+  projectHtmlBlock,
+  projectInlineHtml,
+} from "./commonmark/html.ts";
 import {
   projectInlineAutolink,
   projectInlineImage,
@@ -38,12 +46,19 @@ import {
   projectInlineReferenceImage,
   projectInlineReferenceLink,
 } from "./commonmark/link.ts";
-import { projectOrderedList, projectUnorderedList } from "./commonmark/list.ts";
-import { projectParagraph } from "./commonmark/paragraph.ts";
+import {
+  listInterrupt,
+  listStart,
+  projectOrderedList,
+  projectUnorderedList,
+  unwrapListItem,
+} from "./commonmark/list.ts";
+import { paragraphStart, projectParagraph } from "./commonmark/paragraph.ts";
 import {
   linkDefinitionStart,
   markdownBracketPairs,
   reassociateReferenceTails,
+  restartBeforeLinkDefinition,
 } from "./commonmark/reference.ts";
 import { projectInlineText, semanticText } from "./commonmark/text.ts";
 import { defineSyntaxProfile, type InternalSyntaxPlugin } from "./profile.ts";
@@ -70,6 +85,7 @@ const flowBlocks = {
 } satisfies InternalSyntaxPlugin;
 
 const containerBlocks = {
+  blockUnwrappers: [unwrapBlockQuote, unwrapListItem],
   blockRules: [
     { rule: "BlockQuote", project: projectBlockQuote },
     { rule: "UnorderedList", project: projectUnorderedList },
@@ -110,6 +126,7 @@ const literalBlocks = {
 } satisfies InternalSyntaxPlugin;
 
 const referenceBlocks = {
+  blockRestarts: [restartBeforeLinkDefinition],
   blockRules: [{
     rule: "LinkDefinition",
     project: projectLinkDefinition,
