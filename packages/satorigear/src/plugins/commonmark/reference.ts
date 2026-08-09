@@ -8,11 +8,6 @@ import {
   structural,
 } from "../../block/primitives.ts";
 import {
-  linkDefinitionFields,
-  type LinkDefinitionFields,
-  type LinkDefinitionOpenToken,
-} from "../../block/tokens.ts";
-import {
   appendInlineToken,
   copyInlineToken,
   inlineKind,
@@ -27,12 +22,25 @@ import {
 } from "../../inline/runtime.ts";
 import { blockEnd, blockToken, withSpan } from "../../mdast.ts";
 import { semanticText } from "./text.ts";
+import type { BlockToken } from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/resolver.ts";
 import type {
   InlineResolutionContext,
   InlineTransform,
   InternalSyntaxPlugin,
 } from "../plugin.ts";
+
+interface LinkDefinitionFields {
+  destination: string;
+  label: string;
+  markerOffset: number;
+  normalizedLabel: string;
+  title: string | null;
+}
+
+interface LinkDefinitionOpenToken extends BlockToken {
+  linkDefinition: LinkDefinitionFields;
+}
 
 interface LinkDefinitionMatch {
   end: number;
@@ -45,6 +53,14 @@ export function normalizeReferenceLabel(label: string): string {
 
 function linkDefinitionOpen(offset: number, fields: LinkDefinitionFields): LinkDefinitionOpenToken {
   return { ...structural("LinkDefinitionOpen", offset), linkDefinition: fields };
+}
+
+function linkDefinitionFields(token: BlockToken): LinkDefinitionFields {
+  const fields = (token as Partial<LinkDefinitionOpenToken>).linkDefinition;
+  if (token.type !== "LinkDefinitionOpen" || !fields) {
+    throw new Error("Expected LinkDefinitionOpen token to contain parsed fields");
+  }
+  return fields;
 }
 
 function linkDefinitionAt(

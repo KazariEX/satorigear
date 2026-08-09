@@ -17,27 +17,7 @@ export interface BlockToken {
   type: string;
 }
 
-export interface LinkDefinitionFields {
-  destination: string;
-  label: string;
-  markerOffset: number;
-  normalizedLabel: string;
-  title: string | null;
-}
-
-export interface LinkDefinitionOpenToken extends BlockToken {
-  linkDefinition: LinkDefinitionFields;
-}
-
 export type BlockTokenChange = TokenChange<readonly BlockToken[]>;
-
-export function linkDefinitionFields(token: BlockToken): LinkDefinitionFields {
-  const fields = (token as Partial<LinkDefinitionOpenToken>).linkDefinition;
-  if (token.type !== "LinkDefinitionOpen" || !fields) {
-    throw new Error("Expected LinkDefinitionOpen token to contain parsed fields");
-  }
-  return fields;
-}
 
 export function createShiftedToken(token: BlockToken, delta: number): BlockToken {
   return {
