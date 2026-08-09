@@ -62,7 +62,7 @@ function profileStarts(
   return void 0;
 }
 
-function profileInterrupts(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
+function startsInterruptingBlock(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
   const indent = lineIndent(source, line);
   if (!indent) {
     return false;
@@ -84,7 +84,7 @@ function profileInterrupts(profile: SyntaxProfile, source: string, line: BlockLi
 
 function startsParagraphAt(context: BlockScanContext, source: string, line: BlockLine): boolean {
   return !isBlank(source, line)
-    && !context.interruptsParagraph(source, line)
+    && !context.startsInterruptingBlock(source, line)
     && indentOf(source, line).columns < 4;
 }
 
@@ -174,7 +174,7 @@ function resolveLines(
 function createBlockScanContext(profile: SyntaxProfile): BlockScanContext {
   const context: BlockScanContext = {
     endsWithParagraphLeaf: (source, line) => endsWithParagraphLeaf(profile, context, source, line),
-    interruptsParagraph: (source, line) => profileInterrupts(profile, source, line),
+    startsInterruptingBlock: (source, line) => startsInterruptingBlock(profile, source, line),
     resolveLines: (source, lines, tokens) => resolveLines(profile, context, source, lines, tokens),
   };
   return context;

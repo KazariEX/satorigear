@@ -52,7 +52,7 @@ export const paragraphPlugin: InternalSyntaxPlugin = {
           out.push(structural("HeadingClose", line.end));
           return index + 1;
         }
-        if (paragraph.length > 0 && context.interruptsParagraph(source, line)) {
+        if (paragraph.length > 0 && context.startsInterruptingBlock(source, line)) {
           break;
         }
         paragraph.push(line);

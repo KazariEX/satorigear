@@ -7,7 +7,7 @@ import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from ".
 // Container plugins recurse through the document scanner without owning its control flow.
 export interface BlockScanContext {
   endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
-  interruptsParagraph: (source: string, line: BlockLine) => boolean;
+  startsInterruptingBlock: (source: string, line: BlockLine) => boolean;
   resolveLines: (source: string, lines: readonly BlockLine[], tokens: BlockToken[]) => void;
 }
 

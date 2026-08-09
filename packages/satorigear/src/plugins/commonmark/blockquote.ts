@@ -82,7 +82,7 @@ export const blockQuotePlugin: InternalSyntaxPlugin = {
             continue;
           }
           if (!lazyParagraph || isBlank(source, lines[index])
-            || (!lines[index].lazy && context.interruptsParagraph(source, lines[index]))) {
+            || (!lines[index].lazy && context.startsInterruptingBlock(source, lines[index]))) {
             break;
           }
           quoteLines.push({ ...lines[index], lazy: true });

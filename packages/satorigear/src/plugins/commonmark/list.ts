@@ -296,7 +296,7 @@ export const listPlugin: InternalSyntaxPlugin = {
               index++;
               continue;
             }
-            if (!lazyParagraph || context.interruptsParagraph(source, lines[index])) {
+            if (!lazyParagraph || context.startsInterruptingBlock(source, lines[index])) {
               break;
             }
             itemLines.push({ ...lines[index], lazy: true });
