@@ -1,10 +1,5 @@
 import { normalizeMarkdownReferenceLabel } from "../reference-label.ts";
 import {
-  createDelimitedTokenResolver,
-  type DelimiterRunConfig,
-  type PairedTokenConfig,
-} from "./resolver.ts";
-import {
   appendInlineToken,
   copyInlineToken,
   createInlineTokenChange,
@@ -20,16 +15,13 @@ import {
   inlineTokenText,
   tokenizeInline,
 } from "./runtime.ts";
+import type { InlineResolutionState, InlineTransform, SyntaxProfile } from "../plugins/profile.ts";
 import type { TextEdit } from "../text-edit.ts";
+import type { DelimiterRunConfig, PairedTokenConfig } from "./resolver.ts";
 
 type ApplyTokenChange = (edits: readonly TextEdit[], change: InlineTokenChange) => void;
 
-interface MarkdownReferenceState {
-  candidates?: Set<string>;
-  labels: ReadonlySet<string>;
-}
-
-const markdownDelimiterRuns: DelimiterRunConfig[] = [
+export const markdownDelimiterRuns: DelimiterRunConfig[] = [
   {
     token: "AsteriskRun",
     marker: "*",
@@ -64,11 +56,8 @@ function splitReferenceTail(source: string, tokens: InlineTokenStream, index: nu
 }
 
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
-function reassociateReferenceTails(
-  source: string,
-  tokens: InlineTokenStream,
-  referenceLabels: ReadonlySet<string>,
-): InlineTokenStream {
+export const reassociateReferenceTails: InlineTransform = (source, tokens, state) => {
+  const referenceLabels = state.labels;
   const referenceTail = inlineKind("ReferenceTail");
   const bracketOpen = inlineKind("BracketOpen");
   const shortcutTail = inlineKind("ShortcutReferenceTail");
@@ -134,9 +123,9 @@ function reassociateReferenceTails(
     index = closerIndex;
   }
   return result ?? tokens;
-}
+};
 
-const activateReference: NonNullable<PairedTokenConfig<MarkdownReferenceState>["activate"]> = ({
+const activateReference: NonNullable<PairedTokenConfig<InlineResolutionState>["activate"]> = ({
   source,
   tokens,
   closerIndex,
@@ -151,7 +140,7 @@ const activateReference: NonNullable<PairedTokenConfig<MarkdownReferenceState>["
   return state.labels.has(label);
 };
 
-const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[] = [
+export const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionState>[] = [
   {
     opener: "BracketOpen",
     closer: "LinkTail",
@@ -214,7 +203,6 @@ const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[]
   },
 ];
 
-const resolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
 // Most regions contain no references, so they share one immutable empty candidate set.
 const emptyReferenceCandidates: ReadonlySet<string> = new Set();
 const emptyTokens: InlineTokenStream = [];
@@ -249,10 +237,15 @@ export class InlineTokenState {
   // Track only labels consulted by this region so unrelated definitions do not invalidate it.
   #candidates?: ReadonlySet<string>;
   #labels?: ReadonlySet<string>;
+  #profile: SyntaxProfile;
   // Keep unresolved tokens so a reference-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
   #source?: string;
   #tokens?: InlineTokenStream;
+
+  constructor(profile: SyntaxProfile) {
+    this.#profile = profile;
+  }
 
   get tokens(): InlineTokenStream {
     return this.#tokens ?? emptyTokens;
@@ -272,12 +265,11 @@ export class InlineTokenState {
     const previousSource = this.#source ?? "";
     const previousTokens = this.#tokens ?? emptyTokens;
     const edits = this.#rawTokens || apply ? sourceEdits ?? textEdit(previousSource, source) : [];
-    const referenceState: MarkdownReferenceState = { labels };
+    const referenceState: InlineResolutionState = { labels };
     const rawTokens = edits.length === 0 && this.#rawTokens
       ? this.#rawTokens
       : tokenizeInline(source);
-    const associatedTokens = reassociateReferenceTails(source, rawTokens, labels);
-    const tokens = resolver.resolve(source, associatedTokens, referenceState);
+    const tokens = this.#profile.resolveInline(source, rawTokens, referenceState);
     apply?.(
       edits,
       createInlineTokenChange(

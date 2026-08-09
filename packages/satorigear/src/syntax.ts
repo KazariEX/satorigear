@@ -13,6 +13,7 @@ import { InlineTokenState } from "./inline/tokenizer.ts";
 import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { BlockSyntaxView } from "./block/runtime.ts";
 import type { BlockToken } from "./block/tokens.ts";
+import type { SyntaxProfile } from "./plugins/profile.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
 import type { TextEdit } from "./text-edit.ts";
 
@@ -57,8 +58,8 @@ class InlineRegion extends InlineTokenState {
     return this.view.text;
   }
 
-  constructor(descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>) {
-    super();
+  constructor(profile: SyntaxProfile, descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>) {
+    super(profile);
     this.id = descriptor.id;
     this.rule = descriptor.rule;
     this.span = descriptor.span;
@@ -149,10 +150,12 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   #blocks: readonly SyntaxBlock[] = [];
   // Root IDs point into generated scratch storage and exist only while an inline forest lease is open.
   #forestRoots = new Map<number, InlineForestRoot>();
+  #profile: SyntaxProfile;
   #regions = new Map<number, InlineRegion>();
   #view: BlockSyntaxView;
 
-  constructor(view: BlockSyntaxView, source: string) {
+  constructor(profile: SyntaxProfile, view: BlockSyntaxView, source: string) {
+    this.#profile = profile;
     this.#view = view;
     this.update(view, source);
   }
@@ -258,7 +261,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       }
       const region = previous
         ? previous.update(descriptor, labels, edits)
-        : new InlineRegion(descriptor, labels);
+        : new InlineRegion(this.#profile, descriptor, labels);
       regions.set(descriptor.id, region);
     }
     const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));
@@ -357,6 +360,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   }
 }
 
-export function createMarkdownSyntax(view: BlockSyntaxView, source: string): MarkdownSyntax {
-  return new MarkdownSyntaxImpl(view, source);
+export function createMarkdownSyntax(profile: SyntaxProfile, view: BlockSyntaxView, source: string): MarkdownSyntax {
+  return new MarkdownSyntaxImpl(profile, view, source);
 }

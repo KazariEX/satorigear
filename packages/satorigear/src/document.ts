@@ -75,7 +75,7 @@ class DocumentImpl implements Document {
     this.#profile = profile;
     this.#blockScanner = createBlockScanner(source, profile);
     this.#blockSyntax = blockSyntaxParser.createDocument(source, this.#blockScanner.tokens);
-    this.#syntax = createMarkdownSyntax(this.#blockSyntax.view(this.#blockScanner.tokens), source);
+    this.#syntax = createMarkdownSyntax(profile, this.#blockSyntax.view(this.#blockScanner.tokens), source);
   }
 
   get source(): string {

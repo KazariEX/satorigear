@@ -16,6 +16,11 @@ import {
   thematicBreakStart,
 } from "../block/scanner.ts";
 import {
+  markdownBracketPairs,
+  markdownDelimiterRuns,
+  reassociateReferenceTails,
+} from "../inline/tokenizer.ts";
+import {
   defineSyntaxProfile,
   type InternalSyntaxPlugin,
   projectAtxHeading,
@@ -101,10 +106,17 @@ const fallbackBlocks = {
   blockFallbacks: [indentedCodeStart, paragraphStart],
 } satisfies InternalSyntaxPlugin;
 
+const inlineSyntax = {
+  delimiterRuns: markdownDelimiterRuns,
+  inlineTransforms: [reassociateReferenceTails],
+  tokenPairs: markdownBracketPairs,
+} satisfies InternalSyntaxPlugin;
+
 export const commonmarkProfile = defineSyntaxProfile([
   flowBlocks,
   containerBlocks,
   literalBlocks,
   referenceBlocks,
   fallbackBlocks,
+  inlineSyntax,
 ]);

@@ -1,4 +1,10 @@
+import {
+  createDelimitedTokenResolver,
+  type DelimiterRunConfig,
+  type PairedTokenConfig,
+} from "../inline/resolver.ts";
 import type { BlockToken } from "../block/tokens.ts";
+import type { InlineTokenStream } from "../inline/runtime.ts";
 
 export interface BlockLine {
   end: number;
@@ -61,10 +67,24 @@ export interface BlockRuleRegistration {
   rule: string;
 }
 
+export interface InlineResolutionState {
+  candidates?: Set<string>;
+  labels: ReadonlySet<string>;
+}
+
+export type InlineTransform = (
+  source: string,
+  tokens: InlineTokenStream,
+  state: InlineResolutionState,
+) => InlineTokenStream;
+
 export interface InternalSyntaxPlugin {
   blockFallbacks?: readonly BlockStart[];
   blockRules?: readonly BlockRuleRegistration[];
   blockStarts?: readonly BlockStartRegistration[];
+  delimiterRuns?: readonly DelimiterRunConfig[];
+  inlineTransforms?: readonly InlineTransform[];
+  tokenPairs?: readonly PairedTokenConfig<InlineResolutionState>[];
 }
 
 export interface SyntaxProfile {
@@ -72,6 +92,7 @@ export interface SyntaxProfile {
   blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
   blockProjects: Readonly<Record<string, BlockProjectionOpcode>>;
   blockStarts: readonly (BlockStartDispatch | undefined)[];
+  resolveInline: InlineTransform;
 }
 
 // Profiles bind runtime semantics to the static generated grammar without owning document state.
@@ -80,6 +101,9 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
   const blockProjects: Record<string, BlockProjectionOpcode> = Object.create(null);
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
+  const delimiterRuns: DelimiterRunConfig[] = [];
+  const inlineTransforms: InlineTransform[] = [];
+  const tokenPairs: PairedTokenConfig<InlineResolutionState>[] = [];
   for (const plugin of plugins) {
     blockFallbacks.push(...plugin.blockFallbacks ?? []);
     for (const registration of plugin.blockStarts ?? []) {
@@ -103,6 +127,27 @@ export function defineSyntaxProfile(plugins: readonly InternalSyntaxPlugin[]): S
     for (const registration of plugin.blockRules ?? []) {
       blockProjects[registration.rule] = registration.project;
     }
+    delimiterRuns.push(...plugin.delimiterRuns ?? []);
+    inlineTransforms.push(...plugin.inlineTransforms ?? []);
+    tokenPairs.push(...plugin.tokenPairs ?? []);
   }
-  return { blockFallbacks, blockInterrupts, blockProjects, blockStarts };
+  const resolver = createDelimitedTokenResolver(delimiterRuns, tokenPairs);
+  let resolveInline: InlineTransform;
+  if (inlineTransforms.length === 0) {
+    resolveInline = resolver.resolve;
+  }
+  else if (inlineTransforms.length === 1) {
+    const transform = inlineTransforms[0];
+    resolveInline = (source, tokens, state) => resolver.resolve(source, transform(source, tokens, state), state);
+  }
+  else {
+    resolveInline = (source, tokens, state) => {
+      let transformed = tokens;
+      for (const transform of inlineTransforms) {
+        transformed = transform(source, transformed, state);
+      }
+      return resolver.resolve(source, transformed, state);
+    };
+  }
+  return { blockFallbacks, blockInterrupts, blockProjects, blockStarts, resolveInline };
 }
