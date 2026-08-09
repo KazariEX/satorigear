@@ -1,13 +1,6 @@
 import { named } from "../../block/scanner.ts";
-import {
-  appendInline,
-  blockEnd,
-  type BlockProjector,
-  firstNonspace,
-  type InlineLeafProjector,
-  withSpan,
-} from "../../mdast.ts";
-import type { BlockLine, BlockStart } from "../profile.ts";
+import { appendInline, blockEnd, firstNonspace, withSpan } from "../../mdast.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
 
 export function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {
   const marker = source[contentOffset];
@@ -27,38 +20,58 @@ export function isThematicBreak(source: string, line: BlockLine, contentOffset: 
   return count >= 3;
 }
 
-export function thematicBreakInterrupt(source: string, line: BlockLine, contentOffset: number): boolean {
-  return isThematicBreak(source, line, contentOffset);
-}
-
-export const thematicBreakStart: BlockStart = (source, lines, start, out, contentOffset) => {
-  const line = lines[start];
-  if (!isThematicBreak(source, line, contentOffset)) {
-    return void 0;
-  }
-  out.push(named("ThematicBreakToken", source.slice(line.start, line.end), line.start));
-  return start + 1;
-};
-
-export const projectThematicBreak: BlockProjector = (nodeId, offset, _tokenBase, context) => {
-  const end = offset + context.view.arena.lenOf(nodeId);
-  return withSpan(
-    { type: "thematicBreak" },
-    firstNonspace(context.source, offset, end),
-    blockEnd(nodeId, offset, context),
-  );
-};
-
-export const projectInlineBreak: InlineLeafProjector = (_tokenIndex, sourceSpan, accumulator) => {
-  appendInline(accumulator, withSpan({ type: "break" }, sourceSpan.start, sourceSpan.end), sourceSpan.start);
-  return true;
-};
-
-export const projectInlineNewline: InlineLeafProjector = (_tokenIndex, sourceSpan, accumulator) => {
-  appendInline(
-    accumulator,
-    withSpan({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
-  );
-  return true;
+export const breakPlugin: InternalSyntaxPlugin = {
+  blockRules: [
+    {
+      rule: "ThematicBreak",
+      project(nodeId, offset, tokenBase, context) {
+        const end = offset + context.view.arena.lenOf(nodeId);
+        return withSpan(
+          { type: "thematicBreak" },
+          firstNonspace(context.source, offset, end),
+          blockEnd(nodeId, offset, context),
+        );
+      },
+    },
+  ],
+  blockStarts: [
+    {
+      codes: [42, 45, 95],
+      interrupt(source, line, contentOffset) {
+        return isThematicBreak(source, line, contentOffset);
+      },
+      start(source, lines, start, out, contentOffset) {
+        const line = lines[start];
+        if (!isThematicBreak(source, line, contentOffset)) {
+          return void 0;
+        }
+        out.push(named("ThematicBreakToken", source.slice(line.start, line.end), line.start));
+        return start + 1;
+      },
+    },
+  ],
+  inlineTokens: [
+    {
+      token: "HardBreak",
+      project(tokenIndex, sourceSpan, accumulator) {
+        appendInline(
+          accumulator,
+          withSpan({ type: "break" }, sourceSpan.start, sourceSpan.end),
+          sourceSpan.start,
+        );
+        return true;
+      },
+    },
+    {
+      token: "Newline",
+      project(tokenIndex, sourceSpan, accumulator) {
+        appendInline(
+          accumulator,
+          withSpan({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end),
+          sourceSpan.start,
+        );
+        return true;
+      },
+    },
+  ],
 };

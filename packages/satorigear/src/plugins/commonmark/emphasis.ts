@@ -5,11 +5,14 @@ import {
   createInlineAccumulator,
   type InlineRuleProjector,
   inlineSequence,
+  projectInlineIgnore,
   withSpan,
 } from "../../mdast.ts";
+import { projectInlineText } from "./text.ts";
 import type { DelimiterRunConfig } from "../../inline/resolver.ts";
+import type { InternalSyntaxPlugin } from "../profile.ts";
 
-export const markdownDelimiterRuns: DelimiterRunConfig[] = [
+const markdownDelimiterRuns: DelimiterRunConfig[] = [
   {
     token: "AsteriskRun",
     marker: "*",
@@ -29,7 +32,7 @@ export const markdownDelimiterRuns: DelimiterRunConfig[] = [
   },
 ];
 
-export const projectInlineEmphasis: InlineRuleProjector = (
+const projectInlineEmphasis: InlineRuleProjector = (
   nodeId,
   offset,
   _endOffset,
@@ -49,7 +52,7 @@ export const projectInlineEmphasis: InlineRuleProjector = (
   return true;
 };
 
-export const projectInlineStrong: InlineRuleProjector = (
+const projectInlineStrong: InlineRuleProjector = (
   nodeId,
   offset,
   _endOffset,
@@ -67,4 +70,22 @@ export const projectInlineStrong: InlineRuleProjector = (
     sourceSpan.start,
   );
   return true;
+};
+
+export const emphasisPlugin: InternalSyntaxPlugin = {
+  delimiterRuns: markdownDelimiterRuns,
+  inlineRules: [
+    { rule: "Emphasis", project: projectInlineEmphasis },
+    { rule: "LinkEmphasis", project: projectInlineEmphasis },
+    { rule: "Strong", project: projectInlineStrong },
+    { rule: "LinkStrong", project: projectInlineStrong },
+  ],
+  inlineTokens: [
+    { token: "Delimiter", project: projectInlineText },
+    { token: "Strikethrough", project: projectInlineText },
+    { token: "EmphasisOpen", project: projectInlineIgnore },
+    { token: "EmphasisClose", project: projectInlineIgnore },
+    { token: "StrongOpen", project: projectInlineIgnore },
+    { token: "StrongClose", project: projectInlineIgnore },
+  ],
 };

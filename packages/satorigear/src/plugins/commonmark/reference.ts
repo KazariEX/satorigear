@@ -1,3 +1,4 @@
+import type { Definition } from "mdast";
 import {
   indentOf,
   isBlank,
@@ -5,6 +6,11 @@ import {
   named,
   structural,
 } from "../../block/scanner.ts";
+import {
+  linkDefinitionFields,
+  type LinkDefinitionFields,
+  type LinkDefinitionOpenToken,
+} from "../../block/tokens.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -18,17 +24,14 @@ import {
   inlineTokenStride,
   inlineTokenText,
 } from "../../inline/runtime.ts";
-import type {
-  LinkDefinitionFields,
-  LinkDefinitionOpenToken,
-} from "../../block/tokens.ts";
+import { blockEnd, blockToken, withSpan } from "../../mdast.ts";
+import { semanticText } from "./text.ts";
 import type { PairedTokenConfig } from "../../inline/resolver.ts";
 import type {
   BlockLine,
-  BlockRestart,
-  BlockStart,
   InlineResolutionContext,
   InlineTransform,
+  InternalSyntaxPlugin,
 } from "../profile.ts";
 
 interface LinkDefinitionMatch {
@@ -226,50 +229,6 @@ function linkDefinitionAt(
   return { end: lineIndex + 1, fields };
 }
 
-export const linkDefinitionStart: BlockStart = (source, lines, start, out) => {
-  const definition = linkDefinitionAt(source, lines, start);
-  if (!definition) {
-    return void 0;
-  }
-  const line = lines[start];
-  out.push(linkDefinitionOpen(line.start, definition.fields));
-  for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
-    const current = lines[definitionLine];
-    const end = definitionLine + 1 < definition.end ? current.next : current.end;
-    out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
-  }
-  out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
-  return definition.end;
-};
-
-export const restartBeforeLinkDefinition: BlockRestart = (source, lines, changedEnd) => {
-  let low = 0;
-  let high = lines.length;
-  const offset = Math.max(0, changedEnd - 1);
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (lines[middle].start <= offset) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-
-  let candidate: number | undefined;
-  for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
-    const line = lines[index];
-    if (isBlank(source, line)) {
-      break;
-    }
-    const indent = indentOf(source, line, 3);
-    if (source[indent.offset] === "[") {
-      candidate = line.start;
-    }
-  }
-  return candidate;
-};
-
 function splitReferenceTail(source: string, tokens: InlineTokenStream, index: number): InlineTokenStream {
   const start = inlineTokenStart(tokens, index);
   const end = inlineTokenEnd(tokens, index);
@@ -285,7 +244,7 @@ function splitReferenceTail(source: string, tokens: InlineTokenStream, index: nu
 }
 
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
-export const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
+const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
   const referenceTail = inlineKind("ReferenceTail");
   const bracketOpen = inlineKind("BracketOpen");
   const shortcutTail = inlineKind("ShortcutReferenceTail");
@@ -365,7 +324,7 @@ const activateReference: NonNullable<PairedTokenConfig<InlineResolutionContext>[
   return state.hasReference(normalizeReferenceLabel(explicit || content));
 };
 
-export const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionContext>[] = [
+const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionContext>[] = [
   {
     opener: "BracketOpen",
     closer: "LinkTail",
@@ -427,3 +386,74 @@ export const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionCo
     },
   },
 ];
+
+export const referencePlugin: InternalSyntaxPlugin = {
+  blockRestarts: [
+    (source, lines, changedEnd) => {
+      let low = 0;
+      let high = lines.length;
+      const offset = Math.max(0, changedEnd - 1);
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if (lines[middle].start <= offset) {
+          low = middle + 1;
+        }
+        else {
+          high = middle;
+        }
+      }
+
+      let candidate: number | undefined;
+      for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
+        const line = lines[index];
+        if (isBlank(source, line)) {
+          break;
+        }
+        const indent = indentOf(source, line, 3);
+        if (source[indent.offset] === "[") {
+          candidate = line.start;
+        }
+      }
+      return candidate;
+    },
+  ],
+  blockRules: [
+    {
+      rule: "LinkDefinition",
+      project(nodeId, offset, tokenBase, context): Definition {
+        const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
+        const fields = linkDefinitionFields(token);
+        return withSpan({
+          type: "definition",
+          identifier: fields.normalizedLabel.toLowerCase(),
+          label: semanticText(fields.label),
+          url: semanticText(fields.destination),
+          title: fields.title === null ? null : semanticText(fields.title),
+        }, token.offset + fields.markerOffset, blockEnd(nodeId, offset, context));
+      },
+      referenceLabel: (token) => linkDefinitionFields(token).normalizedLabel,
+    },
+  ],
+  blockStarts: [
+    {
+      codes: [91],
+      start(source, lines, start, out) {
+        const definition = linkDefinitionAt(source, lines, start);
+        if (!definition) {
+          return void 0;
+        }
+        const line = lines[start];
+        out.push(linkDefinitionOpen(line.start, definition.fields));
+        for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
+          const current = lines[definitionLine];
+          const end = definitionLine + 1 < definition.end ? current.next : current.end;
+          out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+        }
+        out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
+        return definition.end;
+      },
+    },
+  ],
+  inlineTransforms: [reassociateReferenceTails],
+  tokenPairs: markdownBracketPairs,
+};

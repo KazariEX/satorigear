@@ -10,16 +10,14 @@ import {
   appendInline,
   blockEnd,
   type BlockProjectionContext,
-  type BlockProjector,
   blockToken,
   firstNonspace,
-  type InlineLeafProjector,
   lineEnd,
   normalizeLines,
   withSpan,
 } from "../../mdast.ts";
 import { semanticText } from "./text.ts";
-import type { BlockLine, BlockStart } from "../profile.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
 
 interface Fence {
   marker: "`" | "~";
@@ -58,38 +56,6 @@ function closesFence(source: string, line: BlockLine, fence: Fence): boolean {
   }
   return length >= fence.length && /^[ \t]*$/.test(body.slice(length));
 }
-
-export function fencedCodeInterrupt(source: string, line: BlockLine): boolean {
-  return !!fenceAt(source, line);
-}
-
-export const fencedCodeStart: BlockStart = (source, lines, start, out) => {
-  const fence = fenceAt(source, lines[start]);
-  if (!fence) {
-    return void 0;
-  }
-  let end = start + 1;
-  while (end < lines.length && !closesFence(source, lines[end], fence)) {
-    end++;
-  }
-  if (end < lines.length) {
-    end++;
-  }
-  out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
-  return end;
-};
-
-export const indentedCodeStart: BlockStart = (source, lines, start, out) => {
-  if (indentOf(source, lines[start]).columns < 4) {
-    return void 0;
-  }
-  let end = start + 1;
-  while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
-    end++;
-  }
-  out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
-  return end;
-};
 
 function codeSpanValue(value: string): string {
   const markerLength = /^`+/.exec(value)?.[0].length;
@@ -190,30 +156,85 @@ function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockProjec
   throw new Error("IndentedCodeBlockToken has no source content");
 }
 
-export const projectInlineCode: InlineLeafProjector = (tokenIndex, sourceSpan, accumulator) => {
-  const { context } = accumulator;
-  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  appendInline(
-    accumulator,
-    withSpan({ type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
-  );
-  return true;
+export const codePlugin: InternalSyntaxPlugin = {
+  blockFallbacks: [
+    (source, lines, start, out) => {
+      if (indentOf(source, lines[start]).columns < 4) {
+        return void 0;
+      }
+      let end = start + 1;
+      while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
+        end++;
+      }
+      out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
+      return end;
+    },
+  ],
+  blockRules: [
+    {
+      rule: "FencedCode",
+      project(nodeId, offset, tokenBase, context) {
+        const end = offset + context.view.arena.lenOf(nodeId);
+        const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
+        const codeEnd = fence.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end;
+        return withSpan(
+          fence.node,
+          firstNonspace(context.source, offset, lineEnd(context.source, offset)),
+          codeEnd,
+        );
+      },
+    },
+    {
+      rule: "IndentedCodeBlock",
+      project(nodeId, offset, tokenBase, context) {
+        return withSpan(
+          indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),
+          offset,
+          indentedCodeEnd(nodeId, tokenBase, context),
+        );
+      },
+    },
+  ],
+  blockStarts: [
+    {
+      codes: [96, 126],
+      interrupt(source, line) {
+        return !!fenceAt(source, line);
+      },
+      start(source, lines, start, out) {
+        const fence = fenceAt(source, lines[start]);
+        if (!fence) {
+          return void 0;
+        }
+        let end = start + 1;
+        while (end < lines.length && !closesFence(source, lines[end], fence)) {
+          end++;
+        }
+        if (end < lines.length) {
+          end++;
+        }
+        out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
+        return end;
+      },
+    },
+  ],
+  inlineTokens: [
+    {
+      token: "CodeSpan",
+      project(tokenIndex, sourceSpan, accumulator) {
+        const { context } = accumulator;
+        const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
+        appendInline(
+          accumulator,
+          withSpan(
+            { type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode,
+            sourceSpan.start,
+            sourceSpan.end,
+          ),
+          sourceSpan.start,
+        );
+        return true;
+      },
+    },
+  ],
 };
-
-export const projectFencedCode: BlockProjector = (nodeId, offset, tokenBase, context) => {
-  const end = offset + context.view.arena.lenOf(nodeId);
-  const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
-  const codeEnd = fence.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end;
-  return withSpan(
-    fence.node,
-    firstNonspace(context.source, offset, lineEnd(context.source, offset)),
-    codeEnd,
-  );
-};
-
-export const projectIndentedCode: BlockProjector = (nodeId, offset, tokenBase, context) => withSpan(
-  indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),
-  offset,
-  indentedCodeEnd(nodeId, tokenBase, context),
-);

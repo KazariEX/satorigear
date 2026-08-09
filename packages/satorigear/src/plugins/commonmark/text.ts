@@ -1,6 +1,12 @@
 import { decodeHTMLStrict } from "entities";
 import { inlineTokenText } from "../../inline/runtime.ts";
-import { appendInline, type InlineLeafProjector, withSpan } from "../../mdast.ts";
+import {
+  appendInline,
+  type InlineLeafProjector,
+  projectInlineChildren,
+  withSpan,
+} from "../../mdast.ts";
+import type { InternalSyntaxPlugin } from "../profile.ts";
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
 
@@ -20,4 +26,18 @@ export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, a
     sourceSpan.start,
   );
   return true;
+};
+
+export const textPlugin: InternalSyntaxPlugin = {
+  decodeText: semanticText,
+  inlineRules: [
+    { rule: "InlineLines", project: projectInlineChildren },
+    { rule: "InlineLine", project: projectInlineChildren },
+    { rule: "Inline", project: projectInlineChildren },
+  ],
+  inlineTokens: [
+    { token: "Text", project: projectInlineText },
+    { token: "Escape", project: projectInlineText },
+    { token: "Entity", project: projectInlineText },
+  ],
 };

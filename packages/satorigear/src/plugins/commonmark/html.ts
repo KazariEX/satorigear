@@ -4,13 +4,12 @@ import { inlineTokenText } from "../../inline/runtime.ts";
 import {
   appendInline,
   blockEnd,
-  type BlockProjector,
   blockToken,
   type InlineLeafProjector,
   normalizeLines,
   withSpan,
 } from "../../mdast.ts";
-import type { BlockLine, BlockStart } from "../profile.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
 
 interface HtmlStart {
   interruptParagraph: boolean;
@@ -122,35 +121,6 @@ function htmlStartAt(source: string, line: BlockLine): HtmlStart | null {
   return null;
 }
 
-export function htmlBlockInterrupt(source: string, line: BlockLine): boolean {
-  return !!htmlStartAt(source, line)?.interruptParagraph;
-}
-
-export const htmlBlockStart: BlockStart = (source, lines, start, out) => {
-  const line = lines[start];
-  const htmlStart = htmlStartAt(source, line);
-  if (!htmlStart) {
-    return void 0;
-  }
-  let end = start + 1;
-  if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
-    while (end < lines.length
-      && !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)) {
-      end++;
-    }
-    if (end < lines.length) {
-      end++;
-    }
-  }
-  else if (!htmlStart.terminator) {
-    while (end < lines.length && !isBlank(source, lines[end])) {
-      end++;
-    }
-  }
-  out.push(logicalToken("HtmlBlockToken", source, lines, start, end));
-  return end;
-};
-
 function htmlBlockValue(value: string): string {
   const source = normalizeLines(value);
   const lower = source.toLowerCase();
@@ -174,7 +144,7 @@ function htmlBlockValue(value: string): string {
   return terminator && !lower.includes(terminator) ? source : source.replace(/\n$/, "");
 }
 
-export const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, accumulator) => {
+const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, accumulator) => {
   const { context } = accumulator;
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   appendInline(
@@ -185,12 +155,55 @@ export const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, a
   return true;
 };
 
-export const projectHtmlBlock: BlockProjector = (nodeId, offset, tokenBase, context) => {
-  const end = offset + context.view.arena.lenOf(nodeId);
-  const html = htmlBlockValue(blockToken(nodeId, tokenBase, "HtmlBlockToken", context).text);
-  return withSpan(
-    { type: "html", value: html } satisfies Html,
-    offset,
-    html.endsWith("\n") ? end : blockEnd(nodeId, offset, context),
-  );
+export const htmlPlugin: InternalSyntaxPlugin = {
+  blockRules: [
+    {
+      rule: "HtmlBlock",
+      project(nodeId, offset, tokenBase, context) {
+        const end = offset + context.view.arena.lenOf(nodeId);
+        const html = htmlBlockValue(blockToken(nodeId, tokenBase, "HtmlBlockToken", context).text);
+        return withSpan(
+          { type: "html", value: html } satisfies Html,
+          offset,
+          html.endsWith("\n") ? end : blockEnd(nodeId, offset, context),
+        );
+      },
+    },
+  ],
+  blockStarts: [
+    {
+      codes: [60],
+      interrupt(source, line) {
+        return !!htmlStartAt(source, line)?.interruptParagraph;
+      },
+      start(source, lines, start, out) {
+        const line = lines[start];
+        const htmlStart = htmlStartAt(source, line);
+        if (!htmlStart) {
+          return void 0;
+        }
+        let end = start + 1;
+        if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
+          while (end < lines.length
+            && !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)) {
+            end++;
+          }
+          if (end < lines.length) {
+            end++;
+          }
+        }
+        else if (!htmlStart.terminator) {
+          while (end < lines.length && !isBlank(source, lines[end])) {
+            end++;
+          }
+        }
+        out.push(logicalToken("HtmlBlockToken", source, lines, start, end));
+        return end;
+      },
+    },
+  ],
+  inlineTokens: [
+    { token: "InlineHtml", project: projectInlineHtml },
+    { token: "HtmlComment", project: projectInlineHtml },
+  ],
 };

@@ -5,14 +5,16 @@ import {
   contentBounds,
   createInlineAccumulator,
   type InlineAccumulator,
-  type InlineLeafProjector,
   type InlineRuleProjector,
   inlineSequence,
   leaf,
+  projectInlineChildren,
+  projectInlineIgnore,
   withSpan,
 } from "../../mdast.ts";
 import { normalizeReferenceLabel } from "./reference.ts";
-import { semanticText } from "./text.ts";
+import { projectInlineText, semanticText } from "./text.ts";
+import type { InternalSyntaxPlugin } from "../profile.ts";
 
 interface Reference {
   identifier: string;
@@ -162,20 +164,49 @@ function projectMedia(media: "image" | "link", resourceKind: "direct" | "referen
   };
 }
 
-export const projectInlineAutolink: InlineLeafProjector = (tokenIndex, sourceSpan, accumulator) => {
-  const { context } = accumulator;
-  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  const label = text.slice(1, -1);
-  appendInline(accumulator, withSpan({
-    type: "link",
-    url: label.includes(":") ? label : `mailto:${label}`,
-    title: null,
-    children: [withSpan({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1)],
-  } satisfies Link, sourceSpan.start, sourceSpan.end), sourceSpan.start);
-  return true;
-};
+const projectInlineImage = projectMedia("image", "direct");
+const projectInlineReferenceImage = projectMedia("image", "reference");
 
-export const projectInlineImage = projectMedia("image", "direct");
-export const projectInlineReferenceImage = projectMedia("image", "reference");
-export const projectInlineLink = projectMedia("link", "direct");
-export const projectInlineReferenceLink = projectMedia("link", "reference");
+export const linkPlugin: InternalSyntaxPlugin = {
+  inlineRules: [
+    { rule: "LinkContent", project: projectInlineChildren },
+    { rule: "BracketFallback", project: projectInlineChildren },
+    { rule: "Image", project: projectInlineImage },
+    { rule: "LinkImage", project: projectInlineImage },
+    { rule: "ReferenceImage", project: projectInlineReferenceImage },
+    { rule: "LinkReferenceImage", project: projectInlineReferenceImage },
+    { rule: "Link", project: projectMedia("link", "direct") },
+    { rule: "ReferenceLink", project: projectMedia("link", "reference") },
+  ],
+  inlineTokens: [
+    {
+      token: "Autolink",
+      project(tokenIndex, sourceSpan, accumulator) {
+        const { context } = accumulator;
+        const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
+        const label = text.slice(1, -1);
+        appendInline(accumulator, withSpan({
+          type: "link",
+          url: label.includes(":") ? label : `mailto:${label}`,
+          title: null,
+          children: [withSpan({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1)],
+        } satisfies Link, sourceSpan.start, sourceSpan.end), sourceSpan.start);
+        return true;
+      },
+    },
+    { token: "BracketOpen", project: projectInlineText },
+    { token: "ImageOpen", project: projectInlineText },
+    { token: "LinkTail", project: projectInlineText },
+    { token: "ReferenceTail", project: projectInlineText },
+    { token: "ShortcutReferenceTail", project: projectInlineText },
+    { token: "ReferenceSeparatorClose", project: projectInlineText },
+    { token: "LinkOpen", project: projectInlineIgnore },
+    { token: "LinkClose", project: projectInlineIgnore },
+    { token: "ReferenceOpen", project: projectInlineIgnore },
+    { token: "ReferenceClose", project: projectInlineIgnore },
+    { token: "ImageLinkOpen", project: projectInlineIgnore },
+    { token: "ImageLinkClose", project: projectInlineIgnore },
+    { token: "ImageReferenceOpen", project: projectInlineIgnore },
+    { token: "ImageReferenceClose", project: projectInlineIgnore },
+  ],
+};

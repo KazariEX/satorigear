@@ -8,14 +8,13 @@ import {
 import {
   blockChildren,
   blockEnd,
-  type BlockProjector,
   blockToken,
   firstNonspace,
   lineEnd,
   tokenStart,
   withSpan,
 } from "../../mdast.ts";
-import type { BlockLine, BlockStart } from "../profile.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
 
 interface BlockQuoteMarker {
   offset: number;
@@ -39,50 +38,61 @@ function blockQuoteOffset(source: string, line: BlockLine): BlockQuoteMarker | n
   return { offset, prefixColumns };
 }
 
-export function unwrapBlockQuote(source: string, line: BlockLine): BlockLine | undefined {
+function unwrapBlockQuote(source: string, line: BlockLine): BlockLine | undefined {
   const marker = blockQuoteOffset(source, line);
   return marker ? { ...line, start: marker.offset, prefixColumns: marker.prefixColumns } : void 0;
 }
 
-export function blockQuoteInterrupt(source: string, line: BlockLine): boolean {
-  return blockQuoteOffset(source, line) !== null;
-}
-
-export const blockQuoteStart: BlockStart = (source, lines, start, out, _contentOffset, context) => {
-  const line = lines[start];
-  if (blockQuoteOffset(source, line) === null) {
-    return void 0;
-  }
-  const quoteLines: BlockLine[] = [];
-  let index = start;
-  let lazyParagraph = false;
-  while (index < lines.length) {
-    const contentLine = unwrapBlockQuote(source, lines[index]);
-    if (contentLine) {
-      quoteLines.push(contentLine);
-      lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
-      index++;
-      continue;
-    }
-    if (!lazyParagraph || isBlank(source, lines[index])
-      || (!lines[index].lazy && context.interruptsParagraph(source, lines[index]))) {
-      break;
-    }
-    quoteLines.push({ ...lines[index], lazy: true });
-    index++;
-  }
-  out.push(structural("BlockQuoteOpen", line.start, ">"));
-  context.resolveLines(source, quoteLines, out);
-  out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
-  return index;
-};
-
-export const projectBlockQuote: BlockProjector = (nodeId, offset, tokenBase, context) => {
-  const result = {
-    type: "blockquote",
-    children: blockChildren(nodeId, offset, tokenBase, context),
-  } satisfies Blockquote;
-  const marker = blockToken(nodeId, tokenBase, "BlockQuoteOpen", context);
-  const start = firstNonspace(context.source, tokenStart(marker), lineEnd(context.source, offset));
-  return withSpan(result, start, blockEnd(nodeId, offset, context));
+export const blockQuotePlugin: InternalSyntaxPlugin = {
+  blockRules: [
+    {
+      rule: "BlockQuote",
+      project(nodeId, offset, tokenBase, context) {
+        const result = {
+          type: "blockquote",
+          children: blockChildren(nodeId, offset, tokenBase, context),
+        } satisfies Blockquote;
+        const marker = blockToken(nodeId, tokenBase, "BlockQuoteOpen", context);
+        const start = firstNonspace(context.source, tokenStart(marker), lineEnd(context.source, offset));
+        return withSpan(result, start, blockEnd(nodeId, offset, context));
+      },
+    },
+  ],
+  blockStarts: [
+    {
+      codes: [62],
+      interrupt(source, line) {
+        return blockQuoteOffset(source, line) !== null;
+      },
+      start(source, lines, start, out, _contentOffset, context) {
+        const line = lines[start];
+        if (blockQuoteOffset(source, line) === null) {
+          return void 0;
+        }
+        const quoteLines: BlockLine[] = [];
+        let index = start;
+        let lazyParagraph = false;
+        while (index < lines.length) {
+          const contentLine = unwrapBlockQuote(source, lines[index]);
+          if (contentLine) {
+            quoteLines.push(contentLine);
+            lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
+            index++;
+            continue;
+          }
+          if (!lazyParagraph || isBlank(source, lines[index])
+            || (!lines[index].lazy && context.interruptsParagraph(source, lines[index]))) {
+            break;
+          }
+          quoteLines.push({ ...lines[index], lazy: true });
+          index++;
+        }
+        out.push(structural("BlockQuoteOpen", line.start, ">"));
+        context.resolveLines(source, quoteLines, out);
+        out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
+        return index;
+      },
+    },
+  ],
+  blockUnwrappers: [unwrapBlockQuote],
 };

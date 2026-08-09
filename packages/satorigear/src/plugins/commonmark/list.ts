@@ -19,7 +19,7 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { isThematicBreak } from "./break.ts";
-import type { BlockLine, BlockStart } from "../profile.ts";
+import type { BlockLine, InternalSyntaxPlugin } from "../profile.ts";
 
 interface ListMarker {
   kind: "ordered" | "unordered";
@@ -137,83 +137,6 @@ function hasListContent(source: string, line: BlockLine, marker: ListMarker | nu
   return !!marker && /\S/.test(source.slice(marker.contentOffset, line.end));
 }
 
-export function unwrapListItem(source: string, line: BlockLine): BlockLine | undefined {
-  const marker = listMarkerAt(source, line);
-  return marker ? { ...line, start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns } : void 0;
-}
-
-export function listInterrupt(source: string, line: BlockLine): boolean {
-  const marker = listMarkerAt(source, line);
-  return hasListContent(source, line, marker)
-    && (marker?.kind === "unordered" || (marker?.kind === "ordered" && marker.startNumber === 1));
-}
-
-export const listStart: BlockStart = (source, lines, start, out, _contentOffset, context) => {
-  const listMarker = listMarkerAt(source, lines[start]);
-  if (!listMarker) {
-    return void 0;
-  }
-  const kind = listMarker.kind;
-  const listOpen = kind === "ordered" ? "OrderedListOpen" : "UnorderedListOpen";
-  const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
-  const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
-  const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
-  out.push(structural(listOpen, listMarker.offset, listMarker.text));
-  let index = start;
-  let listEnd = listMarker.offset + listMarker.text.length;
-  while (index < lines.length) {
-    const marker = listMarkerAt(source, lines[index]);
-    if (!marker || !sameList(marker, listMarker)) {
-      break;
-    }
-    out.push(structural(itemOpen, marker.offset, marker.text));
-    const itemLines: BlockLine[] = [{
-      ...lines[index],
-      start: marker.contentOffset,
-      prefixColumns: marker.contentPrefixColumns,
-    }];
-    let hasContent = !isBlank(source, itemLines[0]);
-    let lazyParagraph = context.endsWithParagraphLeaf(source, itemLines[0]);
-    index++;
-    while (index < lines.length) {
-      const candidate = listMarkerAt(source, lines[index]);
-      if (candidate && candidate.indent < marker.contentIndent) {
-        break;
-      }
-      if (isBlank(source, lines[index])) {
-        if (!hasContent) {
-          index++;
-          break;
-        }
-        itemLines.push(lines[index]);
-        lazyParagraph = false;
-        index++;
-        continue;
-      }
-      const indent = indentOf(source, lines[index]);
-      if (indent.columns >= marker.contentIndent) {
-        const content = contentAfterColumns(source, lines[index], marker.contentIndent);
-        const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
-        itemLines.push(contentLine);
-        hasContent = true;
-        lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
-        index++;
-        continue;
-      }
-      if (!lazyParagraph || context.interruptsParagraph(source, lines[index])) {
-        break;
-      }
-      itemLines.push({ ...lines[index], lazy: true });
-      index++;
-    }
-    context.resolveLines(source, itemLines, out);
-    listEnd = itemLines.at(-1)?.next ?? marker.offset;
-    out.push(structural(itemClose, listEnd));
-  }
-  out.push(structural(listClose, listEnd));
-  return index;
-};
-
 function hasBlankLineBetween(source: string, start: number, end: number, stripBlockQuotes: boolean): boolean {
   const lines = normalizeLines(source.slice(Math.max(0, start - 1), end)).split("\n");
   return lines.slice(1, -1).some((line) => {
@@ -307,5 +230,90 @@ function projectList(ordered: boolean): BlockProjector {
   };
 }
 
-export const projectUnorderedList = projectList(false);
-export const projectOrderedList = projectList(true);
+export const listPlugin: InternalSyntaxPlugin = {
+  blockRules: [
+    { rule: "UnorderedList", project: projectList(false) },
+    { rule: "OrderedList", project: projectList(true) },
+  ],
+  blockStarts: [
+    {
+      codes: [42, 43, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57],
+      interrupt(source, line) {
+        const marker = listMarkerAt(source, line);
+        return hasListContent(source, line, marker)
+          && (marker?.kind === "unordered" || (marker?.kind === "ordered" && marker.startNumber === 1));
+      },
+      start(source, lines, start, out, _contentOffset, context) {
+        const listMarker = listMarkerAt(source, lines[start]);
+        if (!listMarker) {
+          return void 0;
+        }
+        const kind = listMarker.kind;
+        const listOpen = kind === "ordered" ? "OrderedListOpen" : "UnorderedListOpen";
+        const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
+        const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
+        const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
+        out.push(structural(listOpen, listMarker.offset, listMarker.text));
+        let index = start;
+        let listEnd = listMarker.offset + listMarker.text.length;
+        while (index < lines.length) {
+          const marker = listMarkerAt(source, lines[index]);
+          if (!marker || !sameList(marker, listMarker)) {
+            break;
+          }
+          out.push(structural(itemOpen, marker.offset, marker.text));
+          const itemLines: BlockLine[] = [{
+            ...lines[index],
+            start: marker.contentOffset,
+            prefixColumns: marker.contentPrefixColumns,
+          }];
+          let hasContent = !isBlank(source, itemLines[0]);
+          let lazyParagraph = context.endsWithParagraphLeaf(source, itemLines[0]);
+          index++;
+          while (index < lines.length) {
+            const candidate = listMarkerAt(source, lines[index]);
+            if (candidate && candidate.indent < marker.contentIndent) {
+              break;
+            }
+            if (isBlank(source, lines[index])) {
+              if (!hasContent) {
+                index++;
+                break;
+              }
+              itemLines.push(lines[index]);
+              lazyParagraph = false;
+              index++;
+              continue;
+            }
+            const indent = indentOf(source, lines[index]);
+            if (indent.columns >= marker.contentIndent) {
+              const content = contentAfterColumns(source, lines[index], marker.contentIndent);
+              const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
+              itemLines.push(contentLine);
+              hasContent = true;
+              lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
+              index++;
+              continue;
+            }
+            if (!lazyParagraph || context.interruptsParagraph(source, lines[index])) {
+              break;
+            }
+            itemLines.push({ ...lines[index], lazy: true });
+            index++;
+          }
+          context.resolveLines(source, itemLines, out);
+          listEnd = itemLines.at(-1)?.next ?? marker.offset;
+          out.push(structural(itemClose, listEnd));
+        }
+        out.push(structural(listClose, listEnd));
+        return index;
+      },
+    },
+  ],
+  blockUnwrappers: [
+    (source, line) => {
+      const marker = listMarkerAt(source, line);
+      return marker ? { ...line, start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns } : void 0;
+    },
+  ],
+};
