@@ -1,11 +1,12 @@
 import type { Definition } from "mdast";
 import {
+  type BlockLine,
   indentOf,
   isBlank,
   lineIndent,
   named,
   structural,
-} from "../../block/scanner.ts";
+} from "../../block/primitives.ts";
 import {
   linkDefinitionFields,
   type LinkDefinitionFields,
@@ -28,7 +29,6 @@ import { blockEnd, blockToken, withSpan } from "../../mdast.ts";
 import { semanticText } from "./text.ts";
 import type { PairedTokenConfig } from "../../inline/resolver.ts";
 import type {
-  BlockLine,
   InlineResolutionContext,
   InlineTransform,
   InternalSyntaxPlugin,

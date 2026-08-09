@@ -1,10 +1,11 @@
 import type { Blockquote } from "mdast";
 import {
+  type BlockLine,
   isBlank,
   lineIndent,
   physicalColumnAt,
   structural,
-} from "../../block/scanner.ts";
+} from "../../block/primitives.ts";
 import {
   blockChildren,
   blockEnd,
@@ -14,7 +15,7 @@ import {
   tokenStart,
   withSpan,
 } from "../../mdast.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 interface BlockQuoteMarker {
   offset: number;

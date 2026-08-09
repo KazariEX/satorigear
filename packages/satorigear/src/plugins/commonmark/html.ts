@@ -1,5 +1,5 @@
 import type { Html } from "mdast";
-import { isBlank, lineIndent, logicalToken } from "../../block/scanner.ts";
+import { type BlockLine, isBlank, lineIndent, logicalToken } from "../../block/primitives.ts";
 import { inlineTokenText } from "../../inline/runtime.ts";
 import {
   appendInline,
@@ -9,7 +9,7 @@ import {
   normalizeLines,
   withSpan,
 } from "../../mdast.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 interface HtmlStart {
   interruptParagraph: boolean;

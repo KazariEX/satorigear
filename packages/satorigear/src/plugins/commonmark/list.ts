@@ -1,10 +1,11 @@
 import type { List, ListItem } from "mdast";
 import {
+  type BlockLine,
   indentOf,
   isBlank,
   lineIndent,
   structural,
-} from "../../block/scanner.ts";
+} from "../../block/primitives.ts";
 import {
   blockChildren,
   blockEnd,
@@ -19,7 +20,7 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { isThematicBreak } from "./break.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 interface ListMarker {
   kind: "ordered" | "unordered";

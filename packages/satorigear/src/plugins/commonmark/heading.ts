@@ -1,5 +1,5 @@
 import type { Heading } from "mdast";
-import { lineIndent, named, structural } from "../../block/scanner.ts";
+import { type BlockLine, lineIndent, named, structural } from "../../block/primitives.ts";
 import {
   blockEnd,
   blockToken,
@@ -10,7 +10,7 @@ import {
   tokenStart,
   withSpan,
 } from "../../mdast.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 function atxAt(source: string, line: BlockLine): {
   contentEnd: number;

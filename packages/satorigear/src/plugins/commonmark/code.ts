@@ -1,10 +1,11 @@
 import type { Code, InlineCode } from "mdast";
 import {
+  type BlockLine,
   indentOf,
   isBlank,
   lineIndent,
   logicalToken,
-} from "../../block/scanner.ts";
+} from "../../block/primitives.ts";
 import { inlineTokenText } from "../../inline/runtime.ts";
 import {
   appendInline,
@@ -17,7 +18,7 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { semanticText } from "./text.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 interface Fence {
   marker: "`" | "~";

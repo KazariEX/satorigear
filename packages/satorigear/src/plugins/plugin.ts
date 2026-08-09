@@ -1,15 +1,8 @@
+import type { BlockLine } from "../block/primitives.ts";
 import type { BlockToken } from "../block/tokens.ts";
 import type { DelimiterRunConfig, PairedTokenConfig } from "../inline/resolver.ts";
 import type { InlineTokenStream } from "../inline/runtime.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
-
-export interface BlockLine {
-  end: number;
-  lazy?: boolean;
-  next: number;
-  prefixColumns?: number;
-  start: number;
-}
 
 // Container plugins recurse through the document scanner without owning its control flow.
 export interface BlockScanContext {

@@ -1,6 +1,6 @@
-import { named } from "../../block/scanner.ts";
+import { type BlockLine, named } from "../../block/primitives.ts";
 import { appendInline, blockEnd, firstNonspace, withSpan } from "../../mdast.ts";
-import type { BlockLine, InternalSyntaxPlugin } from "../plugin.ts";
+import type { InternalSyntaxPlugin } from "../plugin.ts";
 
 export function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {
   const marker = source[contentOffset];
