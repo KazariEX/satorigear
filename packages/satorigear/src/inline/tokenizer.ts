@@ -1,8 +1,9 @@
+import { normalizeMarkdownReferenceLabel } from "../reference-label.ts";
 import {
   createDelimitedTokenResolver,
   type DelimiterRunConfig,
   type PairedTokenConfig,
-} from "./inline-resolver.ts";
+} from "./resolver.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -18,9 +19,8 @@ import {
   inlineTokenStride,
   inlineTokenText,
   tokenizeInline,
-} from "./inline-syntax-runtime.ts";
-import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
-import type { TextEdit } from "./text-edit.ts";
+} from "./runtime.ts";
+import type { TextEdit } from "../text-edit.ts";
 
 type ApplyTokenChange = (edits: readonly TextEdit[], change: InlineTokenChange) => void;
 

@@ -1,7 +1,7 @@
-import * as generatedInline from "./generated/inline.ts";
-import type { EmittedArena } from "./emitted-parser.ts";
-import type { TextEdit } from "./text-edit.ts";
-import type { TokenChange } from "./token-change.ts";
+import * as generatedInline from "../generated/inline.ts";
+import type { EmittedArena } from "../emitted-parser.ts";
+import type { TextEdit } from "../text-edit.ts";
+import type { TokenChange } from "../token-change.ts";
 
 export type InlineTokenStream = readonly number[];
 export type InlineTokenChange = TokenChange<InlineTokenStream>;

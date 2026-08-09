@@ -15,8 +15,8 @@ import {
   type InlineTokenStream,
   parseInline,
   parseInlineForest,
-} from "./inline-syntax-runtime.ts";
-import { InlineTokenState } from "./inline-tokenizer.ts";
+} from "./inline/runtime.ts";
+import { InlineTokenState } from "./inline/tokenizer.ts";
 import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { TextEdit } from "./text-edit.ts";
 

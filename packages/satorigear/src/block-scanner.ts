@@ -1,5 +1,5 @@
 import type { Token } from "monogram/gen-lexer.ts";
-import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
+import { normalizeMarkdownReferenceLabel } from "./reference-label.ts";
 import { createShiftedToken, createTokenChange, type TokenChange, tokenEqualsAfterShift } from "./token-change.ts";
 import type { SourceLocation } from "./source-view.ts";
 import type { TextEdit } from "./text-edit.ts";

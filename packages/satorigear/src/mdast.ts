@@ -28,8 +28,8 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
   inlineTokenText,
-} from "./inline-syntax-runtime.ts";
-import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
+} from "./inline/runtime.ts";
+import { normalizeMarkdownReferenceLabel } from "./reference-label.ts";
 import type { EmittedArena, SyntaxArenaView } from "./emitted-parser.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 import type { MarkdownSyntax } from "./syntax.ts";

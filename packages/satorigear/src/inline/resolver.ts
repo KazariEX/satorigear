@@ -9,7 +9,7 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
   inlineTokenStride,
-} from "./inline-syntax-runtime.ts";
+} from "./runtime.ts";
 
 export interface DelimiterRunConfig {
   token: string;
