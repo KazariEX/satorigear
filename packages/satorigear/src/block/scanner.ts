@@ -570,6 +570,89 @@ export const thematicBreakStart: BlockStart = (source, lines, start, out, conten
   return start + 1;
 };
 
+export const linkDefinitionStart: BlockStart = (source, lines, start, out) => {
+  const definition = linkDefinitionAt(source, lines, start);
+  if (!definition) {
+    return void 0;
+  }
+  const line = lines[start];
+  out.push(linkDefinitionOpen(line.start, definition.fields));
+  for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
+    const current = lines[definitionLine];
+    const end = definitionLine + 1 < definition.end ? current.next : current.end;
+    out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+  }
+  out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
+  return definition.end;
+};
+
+export function atxHeadingInterrupt(source: string, line: BlockLine): boolean {
+  return !!atxAt(source, line);
+}
+
+export const atxHeadingStart: BlockStart = (source, lines, start, out) => {
+  const line = lines[start];
+  const atx = atxAt(source, line);
+  if (!atx) {
+    return void 0;
+  }
+  out.push(structural("AtxHeadingOpen", atx.markerOffset, atx.marker));
+  if (atx.contentEnd > atx.contentOffset) {
+    out.push(named("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
+  }
+  out.push(structural("HeadingClose", line.end));
+  return start + 1;
+};
+
+export function fencedCodeInterrupt(source: string, line: BlockLine): boolean {
+  return !!fenceAt(source, line);
+}
+
+export const fencedCodeStart: BlockStart = (source, lines, start, out) => {
+  const fence = fenceAt(source, lines[start]);
+  if (!fence) {
+    return void 0;
+  }
+  let end = start + 1;
+  while (end < lines.length && !closesFence(source, lines[end], fence)) {
+    end++;
+  }
+  if (end < lines.length) {
+    end++;
+  }
+  out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
+  return end;
+};
+
+export function htmlBlockInterrupt(source: string, line: BlockLine): boolean {
+  return !!htmlStartAt(source, line)?.interruptParagraph;
+}
+
+export const htmlBlockStart: BlockStart = (source, lines, start, out) => {
+  const line = lines[start];
+  const htmlStart = htmlStartAt(source, line);
+  if (!htmlStart) {
+    return void 0;
+  }
+  let end = start + 1;
+  if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
+    while (end < lines.length
+      && !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)) {
+      end++;
+    }
+    if (end < lines.length) {
+      end++;
+    }
+  }
+  else if (!htmlStart.terminator) {
+    while (end < lines.length && !isBlank(source, lines[end])) {
+      end++;
+    }
+  }
+  out.push(logicalToken("HtmlBlockToken", source, lines, start, end));
+  return end;
+};
+
 function blockQuoteOffset(source: string, line: BlockLine): BlockQuoteMarker | null {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== ">") {
@@ -731,11 +814,8 @@ function profileInterrupts(profile: SyntaxProfile, source: string, line: BlockLi
 
 function interruptsParagraphAt(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
   const listMarker = listMarkerAt(source, line);
-  return !!atxAt(source, line)
-    || !!fenceAt(source, line)
-    || blockQuoteOffset(source, line) !== null
+  return blockQuoteOffset(source, line) !== null
     || profileInterrupts(profile, source, line)
-    || !!htmlStartAt(source, line)?.interruptParagraph
     || (hasListContent(source, line, listMarker)
       && (listMarker?.kind === "unordered" || (listMarker?.kind === "ordered" && listMarker.startNumber === 1)));
 }
@@ -829,68 +909,12 @@ function resolveBlock(
   start: number,
   out: BlockToken[],
 ): number {
-  const line = lines[start];
-  const definition = linkDefinitionAt(source, lines, start);
-  if (definition) {
-    out.push(linkDefinitionOpen(line.start, definition.fields));
-    for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
-      const current = lines[definitionLine];
-      const end = definitionLine + 1 < definition.end ? current.next : current.end;
-      out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
-    }
-    out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
-    return definition.end;
-  }
-
-  const atx = atxAt(source, line);
-  if (atx) {
-    out.push(structural("AtxHeadingOpen", atx.markerOffset, atx.marker));
-    if (atx.contentEnd > atx.contentOffset) {
-      out.push(named("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
-    }
-    out.push(structural("HeadingClose", line.end));
-    return start + 1;
-  }
-
-  const fence = fenceAt(source, line);
-  if (fence) {
-    let end = start + 1;
-    while (end < lines.length && !closesFence(source, lines[end], fence)) {
-      end++;
-    }
-    if (end < lines.length) {
-      end++;
-    }
-    out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
-    return end;
-  }
-
   const pluginEnd = profileStarts(profile, source, lines, start, out);
   if (pluginEnd !== void 0) {
     return pluginEnd;
   }
 
-  const htmlStart = htmlStartAt(source, line);
-  if (htmlStart) {
-    let end = start + 1;
-    if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
-      while (end < lines.length
-        && !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)) {
-        end++;
-      }
-      if (end < lines.length) {
-        end++;
-      }
-    }
-    else if (!htmlStart.terminator) {
-      while (end < lines.length && !isBlank(source, lines[end])) {
-        end++;
-      }
-    }
-    out.push(logicalToken("HtmlBlockToken", source, lines, start, end));
-    return end;
-  }
-
+  const line = lines[start];
   const quote = blockQuoteOffset(source, line);
   if (quote !== null) {
     const quoteLines: BlockLine[] = [];
