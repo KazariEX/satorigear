@@ -5,18 +5,17 @@ import {
   type BlockTokenRange,
   createShiftedToken,
   createTokenChange,
+  type LinkDefinitionFields,
+  type LinkDefinitionOpenToken,
   tokenEqualsAfterShift,
 } from "./tokens.ts";
+import type {
+  BlockLine,
+  BlockStart,
+  SyntaxProfile,
+} from "../plugins/profile.ts";
 import type { SourceLocation } from "../source-view.ts";
 import type { TextEdit } from "../text-edit.ts";
-
-interface Line {
-  start: number;
-  end: number;
-  next: number;
-  lazy?: boolean;
-  prefixColumns?: number;
-}
 
 interface Indent {
   offset: number;
@@ -50,21 +49,9 @@ interface BlockQuoteMarker {
   prefixColumns: number;
 }
 
-export interface LinkDefinitionFields {
-  destination: string;
-  label: string;
-  markerOffset: number;
-  normalizedLabel: string;
-  title: string | null;
-}
-
 interface LinkDefinitionMatch {
   end: number;
   fields: LinkDefinitionFields;
-}
-
-interface LinkDefinitionOpenToken extends BlockToken {
-  linkDefinition: LinkDefinitionFields;
 }
 
 const htmlBlockTags = new Set([
@@ -138,8 +125,8 @@ const htmlAttributeValue = `(?:${htmlUnquotedValue}|'[^']*'|"[^"]*")`;
 const htmlAttribute = `\\s+${htmlAttributeName}(?:\\s*=\\s*${htmlAttributeValue})?`;
 const completeHtmlTag = new RegExp(`^(?:<${htmlTagName}(?:${htmlAttribute})*\\s*/?>|</${htmlTagName}\\s*>)[ \\t]*$`, "i");
 
-function linesOf(source: string): Line[] {
-  const lines: Line[] = [];
+function linesOf(source: string): BlockLine[] {
+  const lines: BlockLine[] = [];
   let start = 0;
   while (start < source.length) {
     let end = start;
@@ -159,7 +146,7 @@ function linesOf(source: string): Line[] {
   return lines;
 }
 
-function indentOf(source: string, line: Line, limit = Number.POSITIVE_INFINITY): Indent {
+function indentOf(source: string, line: BlockLine, limit = Number.POSITIVE_INFINITY): Indent {
   let offset = line.start;
   let columns = line.prefixColumns ?? 0;
   while (offset < line.end && columns < limit) {
@@ -182,7 +169,7 @@ function indentOf(source: string, line: Line, limit = Number.POSITIVE_INFINITY):
   return { offset, columns };
 }
 
-function isBlank(source: string, line: Line): boolean {
+function isBlank(source: string, line: BlockLine): boolean {
   for (let offset = line.start; offset < line.end; offset++) {
     if (source[offset] !== " " && source[offset] !== "\t") {
       return false;
@@ -213,15 +200,7 @@ function linkDefinitionOpen(offset: number, fields: LinkDefinitionFields): LinkD
   return { ...structural("LinkDefinitionOpen", offset), linkDefinition: fields };
 }
 
-export function linkDefinitionFields(token: BlockToken): LinkDefinitionFields {
-  const fields = (token as Partial<LinkDefinitionOpenToken>).linkDefinition;
-  if (token.type !== "LinkDefinitionOpen" || !fields) {
-    throw new Error("Expected LinkDefinitionOpen token to contain parsed fields");
-  }
-  return fields;
-}
-
-function logicalToken(type: string, source: string, lines: readonly Line[], start: number, end: number): BlockToken {
+function logicalToken(type: string, source: string, lines: readonly BlockLine[], start: number, end: number): BlockToken {
   const ranges = lines.slice(start, end).map((line) => ({ offset: line.start, end: line.next }));
   return named(
     type,
@@ -244,7 +223,7 @@ function physicalColumnAt(source: string, offset: number): number {
   return column;
 }
 
-function logicalLine(source: string, line: Line): string {
+function logicalLine(source: string, line: BlockLine): string {
   let result = " ".repeat(line.prefixColumns ?? 0);
   let offset = line.start;
   let logicalColumn = line.prefixColumns ?? 0;
@@ -267,7 +246,7 @@ function logicalLine(source: string, line: Line): string {
   return result + source.slice(offset, line.next);
 }
 
-function lineIndent(source: string, line: Line): Indent | null {
+function lineIndent(source: string, line: BlockLine): Indent | null {
   const indent = indentOf(source, line, 3);
   if (source[indent.offset] === " " || source[indent.offset] === "\t") {
     return null;
@@ -275,7 +254,7 @@ function lineIndent(source: string, line: Line): Indent | null {
   return indent;
 }
 
-function htmlStartAt(source: string, line: Line): HtmlStart | null {
+function htmlStartAt(source: string, line: BlockLine): HtmlStart | null {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== "<") {
     return null;
@@ -310,7 +289,7 @@ function htmlStartAt(source: string, line: Line): HtmlStart | null {
   return null;
 }
 
-function linkDefinitionAt(source: string, lines: readonly Line[], startIndex: number): LinkDefinitionMatch | null {
+function linkDefinitionAt(source: string, lines: readonly BlockLine[], startIndex: number): LinkDefinitionMatch | null {
   const indent = lineIndent(source, lines[startIndex]);
   if (!indent || source[indent.offset] !== "[") {
     return null;
@@ -488,7 +467,7 @@ function linkDefinitionAt(source: string, lines: readonly Line[], startIndex: nu
   return { end: lineIndex + 1, fields };
 }
 
-function fenceAt(source: string, line: Line): Fence | null {
+function fenceAt(source: string, line: BlockLine): Fence | null {
   const indent = lineIndent(source, line);
   if (!indent) {
     return null;
@@ -508,7 +487,7 @@ function fenceAt(source: string, line: Line): Fence | null {
   return { marker, length };
 }
 
-function closesFence(source: string, line: Line, fence: Fence): boolean {
+function closesFence(source: string, line: BlockLine, fence: Fence): boolean {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== fence.marker) {
     return false;
@@ -521,7 +500,7 @@ function closesFence(source: string, line: Line, fence: Fence): boolean {
   return length >= fence.length && /^[ \t]*$/.test(body.slice(length));
 }
 
-function atxAt(source: string, line: Line): { markerOffset: number; marker: string; contentOffset: number; contentEnd: number } | null {
+function atxAt(source: string, line: BlockLine): { markerOffset: number; marker: string; contentOffset: number; contentEnd: number } | null {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== "#") {
     return null;
@@ -548,7 +527,7 @@ function atxAt(source: string, line: Line): { markerOffset: number; marker: stri
   return { markerOffset: indent.offset, marker: match[1], contentOffset, contentEnd };
 }
 
-function setextAt(source: string, line: Line): "=" | "-" | null {
+function setextAt(source: string, line: BlockLine): "=" | "-" | null {
   const indent = lineIndent(source, line);
   if (!indent) {
     return null;
@@ -560,14 +539,13 @@ function setextAt(source: string, line: Line): "=" | "-" | null {
   return match ? match[1][0] as "=" | "-" : null;
 }
 
-function isThematicBreak(source: string, line: Line): boolean {
-  const indent = indentOf(source, line, 3);
-  const marker = source[indent.offset];
+function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {
+  const marker = source[contentOffset];
   if (marker !== "*" && marker !== "-" && marker !== "_") {
     return false;
   }
   let count = 0;
-  for (let offset = indent.offset; offset < line.end; offset++) {
+  for (let offset = contentOffset; offset < line.end; offset++) {
     const character = source[offset];
     if (character === marker) {
       count++;
@@ -579,7 +557,20 @@ function isThematicBreak(source: string, line: Line): boolean {
   return count >= 3;
 }
 
-function blockQuoteOffset(source: string, line: Line): BlockQuoteMarker | null {
+export function thematicBreakInterrupt(source: string, line: BlockLine, contentOffset: number): boolean {
+  return isThematicBreak(source, line, contentOffset);
+}
+
+export const thematicBreakStart: BlockStart = (source, lines, start, out, contentOffset) => {
+  const line = lines[start];
+  if (!isThematicBreak(source, line, contentOffset)) {
+    return void 0;
+  }
+  out.push(named("ThematicBreakToken", source.slice(line.start, line.end), line.start));
+  return start + 1;
+};
+
+function blockQuoteOffset(source: string, line: BlockLine): BlockQuoteMarker | null {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== ">") {
     return null;
@@ -596,7 +587,7 @@ function blockQuoteOffset(source: string, line: Line): BlockQuoteMarker | null {
   return { offset, prefixColumns };
 }
 
-function listMarkerAt(source: string, line: Line): ListMarker | null {
+function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
   const indent = lineIndent(source, line);
   if (!indent) {
     return null;
@@ -605,7 +596,7 @@ function listMarkerAt(source: string, line: Line): ListMarker | null {
   const markerEnd = indent.offset + 1;
   if ((marker === "-" || marker === "+" || marker === "*")
     && (markerEnd === line.end || source[markerEnd] === " " || source[markerEnd] === "\t")
-    && !isThematicBreak(source, line)) {
+    && !isThematicBreak(source, line, indent.offset)) {
     const padding = listMarkerPadding(source, line, markerEnd, indent.columns + 1);
     return {
       kind: "unordered",
@@ -643,7 +634,7 @@ function listMarkerAt(source: string, line: Line): ListMarker | null {
   };
 }
 
-function listMarkerPadding(source: string, line: Line, markerEnd: number, markerColumn: number): { offset: number; columns: number; prefixColumns: number } {
+function listMarkerPadding(source: string, line: BlockLine, markerEnd: number, markerColumn: number): { offset: number; columns: number; prefixColumns: number } {
   if (markerEnd === line.end) {
     return { offset: markerEnd, columns: 1, prefixColumns: 0 };
   }
@@ -665,7 +656,7 @@ function sameList(a: ListMarker, b: ListMarker): boolean {
   return a.kind === b.kind && a.delimiter === b.delimiter;
 }
 
-function contentAfterColumns(source: string, line: Line, columns: number): { offset: number; prefixColumns: number } {
+function contentAfterColumns(source: string, line: BlockLine, columns: number): { offset: number; prefixColumns: number } {
   let offset = line.start;
   let consumed = line.prefixColumns ?? 0;
   if (consumed >= columns) {
@@ -687,32 +678,79 @@ function contentAfterColumns(source: string, line: Line, columns: number): { off
   return { offset, prefixColumns: Math.max(0, consumed - columns) };
 }
 
-function paragraphContentStart(source: string, line: Line): number {
+function paragraphContentStart(source: string, line: BlockLine): number {
   return indentOf(source, line, 3).offset;
 }
 
-function interruptsParagraphAt(source: string, line: Line): boolean {
+function profileStarts(
+  profile: SyntaxProfile,
+  source: string,
+  lines: readonly BlockLine[],
+  start: number,
+  out: BlockToken[],
+): number | undefined {
+  const indent = lineIndent(source, lines[start]);
+  if (!indent) {
+    return void 0;
+  }
+  const starts = profile.blockStarts[source.charCodeAt(indent.offset)];
+  if (!starts) {
+    return void 0;
+  }
+  if (typeof starts === "function") {
+    return starts(source, lines, start, out, indent.offset);
+  }
+  for (const resolve of starts) {
+    const end = resolve(source, lines, start, out, indent.offset);
+    if (end !== void 0) {
+      return end;
+    }
+  }
+  return void 0;
+}
+
+function profileInterrupts(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
+  const indent = lineIndent(source, line);
+  if (!indent) {
+    return false;
+  }
+  const interrupts = profile.blockInterrupts[source.charCodeAt(indent.offset)];
+  if (!interrupts) {
+    return false;
+  }
+  if (typeof interrupts === "function") {
+    return interrupts(source, line, indent.offset);
+  }
+  for (const interrupt of interrupts) {
+    if (interrupt(source, line, indent.offset)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function interruptsParagraphAt(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
   const listMarker = listMarkerAt(source, line);
   return !!atxAt(source, line)
     || !!fenceAt(source, line)
     || blockQuoteOffset(source, line) !== null
-    || isThematicBreak(source, line)
+    || profileInterrupts(profile, source, line)
     || !!htmlStartAt(source, line)?.interruptParagraph
     || (hasListContent(source, line, listMarker)
       && (listMarker?.kind === "unordered" || (listMarker?.kind === "ordered" && listMarker.startNumber === 1)));
 }
 
-function hasListContent(source: string, line: Line, marker: ListMarker | null): boolean {
+function hasListContent(source: string, line: BlockLine, marker: ListMarker | null): boolean {
   return !!marker && /\S/.test(source.slice(marker.contentOffset, line.end));
 }
 
-function startsParagraphAt(source: string, line: Line): boolean {
+function startsParagraphAt(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
   return !isBlank(source, line)
-    && !interruptsParagraphAt(source, line)
+    && !interruptsParagraphAt(profile, source, line)
     && indentOf(source, line).columns < 4;
 }
 
-function endsWithParagraphLeaf(source: string, line: Line): boolean {
+function endsWithParagraphLeaf(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
   let contentLine = line;
   for (;;) {
     const quote = blockQuoteOffset(source, contentLine);
@@ -725,11 +763,11 @@ function endsWithParagraphLeaf(source: string, line: Line): boolean {
       contentLine = { ...contentLine, start: marker.contentOffset };
       continue;
     }
-    return startsParagraphAt(source, contentLine);
+    return startsParagraphAt(profile, source, contentLine);
   }
 }
 
-function emitInlineChunks(source: string, lines: readonly Line[], out: BlockToken[]): void {
+function emitInlineChunks(source: string, lines: readonly BlockLine[], out: BlockToken[]): void {
   lines.forEach((line, index) => {
     const offset = paragraphContentStart(source, line);
     const end = index < lines.length - 1 ? line.next : line.end;
@@ -739,7 +777,7 @@ function emitInlineChunks(source: string, lines: readonly Line[], out: BlockToke
   });
 }
 
-function emitParagraph(source: string, lines: readonly Line[], out: BlockToken[]): void {
+function emitParagraph(source: string, lines: readonly BlockLine[], out: BlockToken[]): void {
   if (lines.length === 0) {
     return;
   }
@@ -748,8 +786,14 @@ function emitParagraph(source: string, lines: readonly Line[], out: BlockToken[]
   out.push(structural("ParagraphClose", lines[lines.length - 1].end));
 }
 
-function resolveParagraph(source: string, lines: readonly Line[], start: number, out: BlockToken[]): number {
-  const paragraph: Line[] = [];
+function resolveParagraph(
+  profile: SyntaxProfile,
+  source: string,
+  lines: readonly BlockLine[],
+  start: number,
+  out: BlockToken[],
+): number {
+  const paragraph: BlockLine[] = [];
   let index = start;
   while (index < lines.length) {
     const line = lines[index];
@@ -768,7 +812,7 @@ function resolveParagraph(source: string, lines: readonly Line[], start: number,
       out.push(structural("HeadingClose", line.end));
       return index + 1;
     }
-    if (paragraph.length > 0 && interruptsParagraphAt(source, line)) {
+    if (paragraph.length > 0 && interruptsParagraphAt(profile, source, line)) {
       break;
     }
     paragraph.push(line);
@@ -778,7 +822,13 @@ function resolveParagraph(source: string, lines: readonly Line[], start: number,
   return index;
 }
 
-function resolveBlock(source: string, lines: readonly Line[], start: number, out: BlockToken[]): number {
+function resolveBlock(
+  profile: SyntaxProfile,
+  source: string,
+  lines: readonly BlockLine[],
+  start: number,
+  out: BlockToken[],
+): number {
   const line = lines[start];
   const definition = linkDefinitionAt(source, lines, start);
   if (definition) {
@@ -815,9 +865,9 @@ function resolveBlock(source: string, lines: readonly Line[], start: number, out
     return end;
   }
 
-  if (isThematicBreak(source, line)) {
-    out.push(named("ThematicBreakToken", source.slice(line.start, line.end), line.start));
-    return start + 1;
+  const pluginEnd = profileStarts(profile, source, lines, start, out);
+  if (pluginEnd !== void 0) {
+    return pluginEnd;
   }
 
   const htmlStart = htmlStartAt(source, line);
@@ -843,7 +893,7 @@ function resolveBlock(source: string, lines: readonly Line[], start: number, out
 
   const quote = blockQuoteOffset(source, line);
   if (quote !== null) {
-    const quoteLines: Line[] = [];
+    const quoteLines: BlockLine[] = [];
     let index = start;
     let lazyParagraph = false;
     while (index < lines.length) {
@@ -851,19 +901,19 @@ function resolveBlock(source: string, lines: readonly Line[], start: number, out
       if (content !== null) {
         const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
         quoteLines.push(contentLine);
-        lazyParagraph = endsWithParagraphLeaf(source, contentLine);
+        lazyParagraph = endsWithParagraphLeaf(profile, source, contentLine);
         index++;
         continue;
       }
       if (!lazyParagraph || isBlank(source, lines[index])
-        || (!lines[index].lazy && interruptsParagraphAt(source, lines[index]))) {
+        || (!lines[index].lazy && interruptsParagraphAt(profile, source, lines[index]))) {
         break;
       }
       quoteLines.push({ ...lines[index], lazy: true });
       index++;
     }
     out.push(structural("BlockQuoteOpen", line.start, ">"));
-    resolveLines(source, quoteLines, out);
+    resolveLines(profile, source, quoteLines, out);
     out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
     return index;
   }
@@ -884,9 +934,9 @@ function resolveBlock(source: string, lines: readonly Line[], start: number, out
         break;
       }
       out.push(structural(itemOpen, marker.offset, marker.text));
-      const itemLines: Line[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns }];
+      const itemLines: BlockLine[] = [{ ...lines[index], start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns }];
       let hasContent = !isBlank(source, itemLines[0]);
-      let lazyParagraph = endsWithParagraphLeaf(source, itemLines[0]);
+      let lazyParagraph = endsWithParagraphLeaf(profile, source, itemLines[0]);
       index++;
       while (index < lines.length) {
         const candidate = listMarkerAt(source, lines[index]);
@@ -913,17 +963,17 @@ function resolveBlock(source: string, lines: readonly Line[], start: number, out
           };
           itemLines.push(contentLine);
           hasContent = true;
-          lazyParagraph = endsWithParagraphLeaf(source, contentLine);
+          lazyParagraph = endsWithParagraphLeaf(profile, source, contentLine);
           index++;
           continue;
         }
-        if (!lazyParagraph || interruptsParagraphAt(source, lines[index])) {
+        if (!lazyParagraph || interruptsParagraphAt(profile, source, lines[index])) {
           break;
         }
         itemLines.push({ ...lines[index], lazy: true });
         index++;
       }
-      resolveLines(source, itemLines, out);
+      resolveLines(profile, source, itemLines, out);
       listEnd = itemLines.at(-1)?.next ?? marker.offset;
       out.push(structural(itemClose, listEnd));
     }
@@ -940,7 +990,7 @@ function resolveBlock(source: string, lines: readonly Line[], start: number, out
     return end;
   }
 
-  return resolveParagraph(source, lines, start, out);
+  return resolveParagraph(profile, source, lines, start, out);
 }
 
 type BlockVisitor = (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => boolean;
@@ -960,7 +1010,13 @@ export interface BlockEditResult {
   };
 }
 
-function resolveLines(source: string, lines: readonly Line[], out: BlockToken[], visit?: BlockVisitor): void {
+function resolveLines(
+  profile: SyntaxProfile,
+  source: string,
+  lines: readonly BlockLine[],
+  out: BlockToken[],
+  visit?: BlockVisitor,
+): void {
   for (let index = 0; index < lines.length;) {
     if (isBlank(source, lines[index])) {
       index++;
@@ -968,18 +1024,21 @@ function resolveLines(source: string, lines: readonly Line[], out: BlockToken[],
     }
     const lineStart = index;
     const tokenStart = out.length;
-    index = resolveBlock(source, lines, index, out);
+    index = resolveBlock(profile, source, lines, index, out);
     if (visit?.(lineStart, index, tokenStart, out.length)) {
       return;
     }
   }
 }
 
-function scanBlocks(source: string): { checkpoints: BlockCheckpoint[]; lines: Line[]; tokens: BlockToken[] } {
+function scanBlocks(
+  profile: SyntaxProfile,
+  source: string,
+): { checkpoints: BlockCheckpoint[]; lines: BlockLine[]; tokens: BlockToken[] } {
   const lines = linesOf(source);
   const tokens: BlockToken[] = [];
   const checkpoints: BlockCheckpoint[] = [];
-  resolveLines(source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+  resolveLines(profile, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
     checkpoints.push({
       lineStart: lines[lineStart].start,
       lineEnd: lines[lineEnd - 1].next,
@@ -1006,7 +1065,7 @@ function applyBlockEdits(source: string, edits: readonly TextEdit[]): string {
   return parts.join("");
 }
 
-function definitionRestartBefore(source: string, lines: readonly Line[], changedEnd: number): number | null {
+function definitionRestartBefore(source: string, lines: readonly BlockLine[], changedEnd: number): number | null {
   let low = 0;
   let high = lines.length;
   const offset = Math.max(0, changedEnd - 1);
@@ -1034,21 +1093,21 @@ function definitionRestartBefore(source: string, lines: readonly Line[], changed
   return candidate;
 }
 
-function shiftedLine(line: Line, delta: number): Line {
+function shiftedLine(line: BlockLine, delta: number): BlockLine {
   return { start: line.start + delta, end: line.end + delta, next: line.next + delta };
 }
 
-function shiftedLines(source: string, offset: number): Line[] {
+function shiftedLines(source: string, offset: number): BlockLine[] {
   return linesOf(source).map((line) => shiftedLine(line, offset));
 }
 
 function updatePhysicalLines(
-  previous: readonly Line[],
+  previous: readonly BlockLine[],
   nextSource: string,
   restartOffset: number,
   oldDamageEnd: number,
   delta: number,
-): Line[] {
+): BlockLine[] {
   let suffix = previous.findIndex((line) => line.start > oldDamageEnd);
   if (suffix >= 0) {
     suffix = Math.min(previous.length, suffix + 1);
@@ -1086,7 +1145,7 @@ function sameShiftedBlock(
 
 // Mdast materialization visits nested spans in source order, so one cursor replaces a binary search per point.
 function createForwardLocator(
-  lines: readonly Line[],
+  lines: readonly BlockLine[],
   sourceLength: number,
   endsInLineEnding: boolean,
 ): (offset: number) => SourceLocation {
@@ -1120,12 +1179,14 @@ function endsInLineEnding(source: string): boolean {
 
 export class MarkdownBlockScanner {
   #checkpoints: BlockCheckpoint[];
-  #lines: Line[];
+  #lines: BlockLine[];
+  #profile: SyntaxProfile;
   #source: string;
   #tokens: BlockToken[];
 
-  constructor(source: string) {
-    const initial = scanBlocks(source);
+  constructor(source: string, profile: SyntaxProfile) {
+    const initial = scanBlocks(profile, source);
+    this.#profile = profile;
     this.#source = source;
     this.#lines = initial.lines;
     this.#tokens = initial.tokens;
@@ -1187,7 +1248,7 @@ export class MarkdownBlockScanner {
     const scanned: BlockCheckpoint[] = [];
     let converged = -1;
     let scannedEnd = nextSource.length;
-    resolveLines(nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+    resolveLines(this.#profile, nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
       const blockStart = scanLines[lineStart].start;
       const blockEnd = scanLines[lineEnd - 1].next;
       if (blockEnd >= changedEnd) {
@@ -1234,6 +1295,6 @@ export class MarkdownBlockScanner {
   }
 }
 
-export function createBlockScanner(source: string): MarkdownBlockScanner {
-  return new MarkdownBlockScanner(source);
+export function createBlockScanner(source: string, profile: SyntaxProfile): MarkdownBlockScanner {
+  return new MarkdownBlockScanner(source, profile);
 }

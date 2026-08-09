@@ -1,4 +1,4 @@
-import { linkDefinitionFields } from "./block/scanner.ts";
+import { linkDefinitionFields } from "./block/tokens.ts";
 import {
   createInlineSyntaxDocument,
   inlineSyntaxArena,

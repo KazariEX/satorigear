@@ -135,6 +135,20 @@ describe("markdown document", () => {
   });
 
   it.each([
+    { source: "***\n", shape: { type: "thematicBreak" } },
+    { source: "- item\n", shape: { type: "list" } },
+    { source: "heading\n---\n", shape: { type: "heading", depth: 2 } },
+    { source: "> ___\n", shape: { type: "blockquote", children: [{ type: "thematicBreak" }] } },
+  ])("updates thematic break conflicts as $shape.type", ({ source, shape }) => {
+    const document = createDocument("paragraph\n");
+    document.edit([{ start: 0, end: document.source.length, text: source }]);
+
+    const tree = document.snapshot();
+    expect(tree).toEqual(parse(source));
+    expect(tree.children[0]).toMatchObject(shape);
+  });
+
+  it.each([
     { name: "equal-length content", before: "item", after: "ITEM", omegaLine: 6 },
     { name: "inserted line ending", before: "lazy continuation\r\n", after: "lazy continuation\r\n\n", omegaLine: 7 },
     { name: "shortened line ending", before: "lazy continuation\r\n", after: "lazy continuation\r", omegaLine: 6 },

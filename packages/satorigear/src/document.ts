@@ -6,7 +6,9 @@ import {
   materialize,
   projectBlock,
 } from "./mdast.ts";
+import { commonmarkProfile } from "./plugins/commonmark.ts";
 import { createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
+import type { SyntaxProfile } from "./plugins/profile.ts";
 import type { TextEdit } from "./text-edit.ts";
 
 export interface EditResult {
@@ -65,11 +67,13 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 class DocumentImpl implements Document {
   #blockScanner: MarkdownBlockScanner;
   #blockSyntax: BlockSyntaxDocument;
+  #profile: SyntaxProfile;
   #syntax: MarkdownSyntax;
   #fragments = new Map<number, BlockFragment>();
 
-  constructor(source: string) {
-    this.#blockScanner = createBlockScanner(source);
+  constructor(source: string, profile: SyntaxProfile) {
+    this.#profile = profile;
+    this.#blockScanner = createBlockScanner(source, profile);
     this.#blockSyntax = blockSyntaxParser.createDocument(source, this.#blockScanner.tokens);
     this.#syntax = createMarkdownSyntax(this.#blockSyntax.view(this.#blockScanner.tokens), source);
   }
@@ -105,6 +109,7 @@ class DocumentImpl implements Document {
           this.source,
           this.#syntax,
           block.version,
+          this.#profile,
         ));
       }
     }
@@ -115,7 +120,15 @@ class DocumentImpl implements Document {
       const previous = this.#fragments.get(block.id);
       const fragment = fragments.get(block.id) ?? (previous?.version === block.version
         ? previous
-        : projectBlock(block.id, block.offset, block.tokenBase, this.source, this.#syntax, block.version));
+        : projectBlock(
+          block.id,
+          block.offset,
+          block.tokenBase,
+          this.source,
+          this.#syntax,
+          block.version,
+          this.#profile,
+        ));
       fragment.offset = block.offset;
       fragments.set(block.id, fragment);
       return fragment;
@@ -130,7 +143,7 @@ class DocumentImpl implements Document {
 }
 
 export function createDocument(source: string): Document {
-  return new DocumentImpl(source);
+  return new DocumentImpl(source, commonmarkProfile);
 }
 
 export function parse(source: string): Root {

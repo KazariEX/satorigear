@@ -20,7 +20,7 @@ import type {
   Root,
   Strong,
 } from "mdast";
-import { linkDefinitionFields } from "./block/scanner.ts";
+import { linkDefinitionFields } from "./block/tokens.ts";
 import {
   inlineTokenCount,
   inlineTokenEnd,
@@ -28,6 +28,20 @@ import {
   type InlineTokenStream,
   inlineTokenText,
 } from "./inline/runtime.ts";
+import {
+  projectAtxHeading,
+  projectBlockQuote,
+  projectFencedCode,
+  projectHtmlBlock,
+  projectIndentedCode,
+  projectLinkDefinition,
+  projectOrderedList,
+  projectParagraph,
+  projectSetextHeading,
+  projectThematicBreak,
+  projectUnorderedList,
+  type SyntaxProfile,
+} from "./plugins/profile.ts";
 import { normalizeMarkdownReferenceLabel } from "./reference-label.ts";
 import type { BlockSyntaxView } from "./block/runtime.ts";
 import type { BlockToken } from "./block/tokens.ts";
@@ -47,6 +61,7 @@ interface Reference {
 }
 
 interface BlockProjectionContext {
+  profile: SyntaxProfile;
   view: BlockSyntaxView;
   source: string;
   syntax: MarkdownSyntax;
@@ -988,8 +1003,9 @@ function blockNode(
   const arena = context.view.arena;
   const end = offset + arena.lenOf(nodeId);
   const rule = arena.ruleNameOf(nodeId);
-  switch (rule) {
-    case "BlockQuote": {
+  const project = context.profile.blockProjects[rule];
+  switch (project) {
+    case projectBlockQuote: {
       const result = {
         type: "blockquote",
         children: blockChildren(nodeId, offset, tokenBase, context),
@@ -998,9 +1014,9 @@ function blockNode(
       const start = firstNonspace(source, tokenStart(marker), lineEnd(source, offset));
       return withSpan(result, start, blockEnd(nodeId, offset, context));
     }
-    case "UnorderedList":
-    case "OrderedList": {
-      const ordered = rule === "OrderedList";
+    case projectUnorderedList:
+    case projectOrderedList: {
+      const ordered = project === projectOrderedList;
       const itemRule = ordered ? "OrderedListItem" : "UnorderedListItem";
       const listMarker = blockToken(nodeId, tokenBase, ordered ? "OrderedListOpen" : "UnorderedListOpen", context);
       const items: ListItem[] = [];
@@ -1025,7 +1041,7 @@ function blockNode(
       } satisfies List;
       return withSpan(result, tokenStart(listMarker), lastChildEnd(result, tokenEnd(listMarker)));
     }
-    case "AtxHeading": {
+    case projectAtxHeading: {
       const marker = blockToken(nodeId, tokenBase, "AtxHeadingOpen", context);
       return withSpan({
         type: "heading",
@@ -1033,7 +1049,7 @@ function blockNode(
         children: inlineChildren(nodeId, context),
       } satisfies Heading, tokenStart(marker), blockEnd(nodeId, offset, context));
     }
-    case "SetextHeading": {
+    case projectSetextHeading: {
       const levelOne = directBlockToken(nodeId, tokenBase, "SetextHeading1Open", context);
       if (!levelOne) {
         blockToken(nodeId, tokenBase, "SetextHeading2Open", context);
@@ -1049,31 +1065,31 @@ function blockNode(
         tokenStart(blockToken(nodeId, tokenBase, "HeadingClose", context)),
       );
     }
-    case "Paragraph": {
+    case projectParagraph: {
       const result = { type: "paragraph", children: inlineChildren(nodeId, context) } satisfies Paragraph;
       return withSpan(result, firstChildStart(result), blockEnd(nodeId, offset, context));
     }
-    case "ThematicBreak": return withSpan(
+    case projectThematicBreak: return withSpan(
       { type: "thematicBreak" },
       firstNonspace(source, offset, end),
       blockEnd(nodeId, offset, context),
     );
-    case "FencedCode": {
+    case projectFencedCode: {
       const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
       // An unclosed fence owns the final newline only when it reaches the document's EOF.
       const codeEnd = fence.closed || end < source.length ? blockEnd(nodeId, offset, context) : end;
       return withSpan(fence.node, firstNonspace(source, offset, lineEnd(source, offset)), codeEnd);
     }
-    case "IndentedCodeBlock": return withSpan(
+    case projectIndentedCode: return withSpan(
       indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),
       offset,
       indentedCodeEnd(nodeId, tokenBase, context),
     );
-    case "HtmlBlock": {
+    case projectHtmlBlock: {
       const html = htmlBlockValue(blockToken(nodeId, tokenBase, "HtmlBlockToken", context).text);
       return withSpan({ type: "html", value: html } satisfies Html, offset, html.endsWith("\n") ? end : blockEnd(nodeId, offset, context));
     }
-    case "LinkDefinition": return definition(nodeId, offset, tokenBase, context);
+    case projectLinkDefinition: return definition(nodeId, offset, tokenBase, context);
     default: throw new Error(`Unexpected block syntax rule: ${rule}`);
   }
 }
@@ -1085,8 +1101,9 @@ export function projectBlock(
   source: string,
   syntax: MarkdownSyntax,
   version: number,
+  profile: SyntaxProfile,
 ): BlockFragment {
-  const context = { source, syntax, view: syntax.blockView() };
+  const context = { profile, source, syntax, view: syntax.blockView() };
   const node = blockContent(nodeId, offset, tokenBase, context);
   return { node, offset, origin: offset, version };
 }
