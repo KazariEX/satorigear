@@ -1,9 +1,9 @@
 import type { Token } from "monogram/gen-lexer.ts";
 
-export interface TokenChange {
+export interface TokenChange<Tokens = readonly Token[]> {
   oldEnd: number;
   oldStart: number;
-  tokens: readonly Token[];
+  tokens: Tokens;
 }
 
 export function createShiftedToken(token: Token, delta: number): Token {

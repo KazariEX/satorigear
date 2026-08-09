@@ -16,7 +16,7 @@ export interface SourceViewSegment extends SourceSpan {
   viewEnd: number;
 }
 
-// Shared functions remain own methods because prototype dispatch measurably slows small-document parsing.
+// Shared functions remain own methods because prototype dispatch measurably slows parsing.
 export interface SourceView {
   readonly text: string;
   readonly segments: readonly SourceViewSegment[];

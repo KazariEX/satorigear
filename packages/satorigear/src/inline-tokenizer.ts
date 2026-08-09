@@ -1,15 +1,28 @@
-import type { Token } from "monogram/gen-lexer.ts";
-import * as generatedInline from "./generated/inline.ts";
 import {
   createDelimitedTokenResolver,
   type DelimiterRunConfig,
   type PairedTokenConfig,
 } from "./inline-resolver.ts";
+import {
+  appendInlineToken,
+  copyInlineToken,
+  createInlineTokenChange,
+  inlineKind,
+  type InlineTokenChange,
+  inlineTokenCount,
+  inlineTokenEnd,
+  inlineTokenFlags,
+  inlineTokenKind,
+  inlineTokenStart,
+  type InlineTokenStream,
+  inlineTokenStride,
+  inlineTokenText,
+  tokenizeInline,
+} from "./inline-syntax-runtime.ts";
 import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
-import { createTokenChange, type TokenChange } from "./token-change.ts";
 import type { TextEdit } from "./text-edit.ts";
 
-type ApplyTokenChange = (edits: readonly TextEdit[], change: TokenChange) => void;
+type ApplyTokenChange = (edits: readonly TextEdit[], change: InlineTokenChange) => void;
 
 interface MarkdownReferenceState {
   candidates?: Set<string>;
@@ -36,81 +49,102 @@ const markdownDelimiterRuns: DelimiterRunConfig[] = [
   },
 ];
 
-function tokenFragment(token: Token, type: string, text: string, offset: number, first = false): Token {
-  return {
-    ...token,
-    type,
-    text,
-    offset,
-    k: 0,
-    t: 0,
-    newlineBefore: first && token.newlineBefore,
-    commentBefore: first && token.commentBefore,
-    multilineFlowBefore: first && token.multilineFlowBefore,
-  };
-}
-
-function splitReferenceTail(token: Token): Token[] {
-  const label = token.text.slice(2, -1);
-  return [
-    tokenFragment(token, "ReferenceSeparatorClose", "]", token.offset, true),
-    tokenFragment(token, "BracketOpen", "[", token.offset + 1),
-    ...(label ? [tokenFragment(token, "Text", label, token.offset + 2)] : []),
-    tokenFragment(token, "ShortcutReferenceTail", "]", token.offset + token.text.length - 1),
-  ];
+function splitReferenceTail(source: string, tokens: InlineTokenStream, index: number): InlineTokenStream {
+  const start = inlineTokenStart(tokens, index);
+  const end = inlineTokenEnd(tokens, index);
+  const flags = inlineTokenFlags(tokens, index);
+  const result: number[] = [];
+  appendInlineToken(result, inlineKind("ReferenceSeparatorClose"), start, start + 1, flags);
+  appendInlineToken(result, inlineKind("BracketOpen"), start + 1, start + 2);
+  if (end > start + 3) {
+    appendInlineToken(result, inlineKind("Text"), start + 2, end - 1);
+  }
+  appendInlineToken(result, inlineKind("ShortcutReferenceTail"), end - 1, end);
+  return result;
 }
 
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
 function reassociateReferenceTails(
   source: string,
-  tokens: readonly Token[],
+  tokens: InlineTokenStream,
   referenceLabels: ReadonlySet<string>,
-): readonly Token[] {
-  let result: Token[] | undefined;
-  for (let index = 0; index < tokens.length; index++) {
-    const tail = tokens[index];
-    const label = tail.type === "ReferenceTail" ? tail.text.slice(2, -1) : "";
-    if (tail.type !== "ReferenceTail" || referenceLabels.has(normalizeMarkdownReferenceLabel(label))) {
-      result?.push(tail);
+): InlineTokenStream {
+  const referenceTail = inlineKind("ReferenceTail");
+  const bracketOpen = inlineKind("BracketOpen");
+  const shortcutTail = inlineKind("ShortcutReferenceTail");
+  const imageOpen = inlineKind("ImageOpen");
+  const count = inlineTokenCount(tokens);
+  let result: number[] | undefined;
+  for (let index = 0; index < count; index++) {
+    const kind = inlineTokenKind(tokens, index);
+    const label = kind === referenceTail ? inlineTokenText(source, tokens, index).slice(2, -1) : "";
+    if (kind !== referenceTail || referenceLabels.has(normalizeMarkdownReferenceLabel(label))) {
+      if (result) {
+        copyInlineToken(result, tokens, index);
+      }
       continue;
     }
-    const opener = tokens[index + 1];
-    if (opener?.type !== "BracketOpen" || opener.offset !== tail.offset + tail.text.length) {
-      result?.push(tail);
+    const openerIndex = index + 1;
+    if (
+      openerIndex >= count ||
+      inlineTokenKind(tokens, openerIndex) !== bracketOpen ||
+      inlineTokenStart(tokens, openerIndex) !== inlineTokenEnd(tokens, index)
+    ) {
+      if (result) {
+        copyInlineToken(result, tokens, index);
+      }
       continue;
     }
     let closerIndex = index + 2;
     let nested = false;
-    while (closerIndex < tokens.length && tokens[closerIndex].type !== "ShortcutReferenceTail") {
-      const type = tokens[closerIndex].type;
-      nested ||= type === "BracketOpen" || type === "ImageOpen";
+    while (closerIndex < count && inlineTokenKind(tokens, closerIndex) !== shortcutTail) {
+      const closerKind = inlineTokenKind(tokens, closerIndex);
+      nested ||= closerKind === bracketOpen || closerKind === imageOpen;
       closerIndex++;
     }
-    const closer = tokens[closerIndex];
-    if (!closer || nested) {
-      result?.push(tail);
+    if (closerIndex === count || nested) {
+      if (result) {
+        copyInlineToken(result, tokens, index);
+      }
       continue;
     }
-    const nextLabel = source.slice(opener.offset + opener.text.length, closer.offset);
+    const nextLabel = source.slice(inlineTokenEnd(tokens, openerIndex), inlineTokenStart(tokens, closerIndex));
     if (!referenceLabels.has(normalizeMarkdownReferenceLabel(nextLabel))) {
-      result?.push(tail);
+      if (result) {
+        copyInlineToken(result, tokens, index);
+      }
       continue;
     }
-    result ??= tokens.slice(0, index);
-    result.push(...splitReferenceTail(tail).slice(0, -1));
-    const offset = tail.offset + tail.text.length - 1;
-    result.push(tokenFragment(tail, "ReferenceTail", source.slice(offset, closer.offset + closer.text.length), offset));
+    if (!result) {
+      result = [];
+      for (let prefix = 0; prefix < index; prefix++) {
+        copyInlineToken(result, tokens, prefix);
+      }
+    }
+    const split = splitReferenceTail(source, tokens, index);
+    result.push(...split.slice(0, -inlineTokenStride));
+    const offset = inlineTokenEnd(tokens, index) - 1;
+    appendInlineToken(
+      result,
+      referenceTail,
+      offset,
+      inlineTokenEnd(tokens, closerIndex),
+      inlineTokenFlags(tokens, index),
+    );
     index = closerIndex;
   }
   return result ?? tokens;
 }
 
 const activateReference: NonNullable<PairedTokenConfig<MarkdownReferenceState>["activate"]> = ({
-  closer,
+  source,
+  tokens,
+  closerIndex,
   content,
   state,
 }) => {
-  const explicit = closer.text.startsWith("][") ? closer.text.slice(2, -1) : "";
+  const closer = inlineTokenText(source, tokens, closerIndex);
+  const explicit = closer.startsWith("][") ? closer.slice(2, -1) : "";
   const label = normalizeMarkdownReferenceLabel(explicit || content);
   state.candidates ??= new Set();
   state.candidates.add(label);
@@ -183,7 +217,7 @@ const markdownBracketPairs: readonly PairedTokenConfig<MarkdownReferenceState>[]
 const resolver = createDelimitedTokenResolver(markdownDelimiterRuns, markdownBracketPairs);
 // Most regions contain no references, so they share one immutable empty candidate set.
 const emptyReferenceCandidates: ReadonlySet<string> = new Set();
-const emptyTokens: readonly Token[] = [];
+const emptyTokens: InlineTokenStream = [];
 
 function textEdit(previous: string, next: string): readonly TextEdit[] {
   if (previous.length === 0) {
@@ -216,11 +250,11 @@ export class InlineTokenState {
   #candidates?: ReadonlySet<string>;
   #labels?: ReadonlySet<string>;
   // Keep unresolved tokens so a reference-map change can re-resolve without re-lexing unchanged text.
-  #rawTokens?: readonly Token[];
+  #rawTokens?: InlineTokenStream;
   #source?: string;
-  #tokens?: readonly Token[];
+  #tokens?: InlineTokenStream;
 
-  get tokens(): readonly Token[] {
+  get tokens(): InlineTokenStream {
     return this.#tokens ?? emptyTokens;
   }
 
@@ -241,12 +275,18 @@ export class InlineTokenState {
     const referenceState: MarkdownReferenceState = { labels };
     const rawTokens = edits.length === 0 && this.#rawTokens
       ? this.#rawTokens
-      : generatedInline.tokenize(source);
+      : tokenizeInline(source);
     const associatedTokens = reassociateReferenceTails(source, rawTokens, labels);
     const tokens = resolver.resolve(source, associatedTokens, referenceState);
     apply?.(
       edits,
-      createTokenChange(previousTokens, tokens, source.length - previousSource.length),
+      createInlineTokenChange(
+        previousSource,
+        previousTokens,
+        source,
+        tokens,
+        source.length - previousSource.length,
+      ),
     );
 
     this.#source = source;

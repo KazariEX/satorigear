@@ -3,11 +3,19 @@ import { linkDefinitionFields } from "./block-scanner.ts";
 import {
   createEmittedParser,
   type EmittedArena,
-  type EmittedParserDocument,
   type SyntaxArenaView,
 } from "./emitted-parser.ts";
 import * as generatedBlocks from "./generated/blocks.ts";
-import * as generatedInline from "./generated/inline.ts";
+import {
+  createInlineSyntaxDocument,
+  inlineSyntaxArena,
+  type InlineSyntaxDocument,
+  inlineTokenCount,
+  inlineTokenStart,
+  type InlineTokenStream,
+  parseInline,
+  parseInlineForest,
+} from "./inline-syntax-runtime.ts";
 import { InlineTokenState } from "./inline-tokenizer.ts";
 import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { TextEdit } from "./text-edit.ts";
@@ -17,7 +25,7 @@ export interface MarkdownInlineSyntax {
   rootId: number;
   rootOffset: number;
   rootTokenBase: number;
-  tokens: readonly Token[];
+  tokens: InlineTokenStream;
   view: SourceView;
 }
 
@@ -39,12 +47,6 @@ export const blockSyntaxParser = createEmittedParser(
   generatedBlocks.createParser,
   generatedBlocks.parseTokens,
 );
-const inlineSyntaxParser = createEmittedParser(
-  generatedInline.tree,
-  generatedInline.createParser,
-  generatedInline.parseTokens,
-);
-
 interface InlineRegionDescriptor {
   id: number;
   rule: string;
@@ -53,7 +55,7 @@ interface InlineRegionDescriptor {
 }
 
 class InlineRegion extends InlineTokenState {
-  document?: EmittedParserDocument;
+  document?: InlineSyntaxDocument;
   id: number;
   revision = 0;
   rule: string;
@@ -95,7 +97,7 @@ class InlineRegion extends InlineTokenState {
       return this;
     }
     if (!document) {
-      this.document = inlineSyntaxParser.createDocument(descriptor.view.text, this.tokens, "InlineLines");
+      this.document = createInlineSyntaxDocument(descriptor.view.text, this.tokens);
     }
     this.revision++;
     return this;
@@ -317,8 +319,8 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         forestBlocks.length = 0;
       }
       else {
-        const arena = inlineSyntaxParser.arena;
-        const rootId = generatedInline.parseTokenSegments(regions, "InlineBoundary", "InlineForest");
+        const arena = inlineSyntaxArena;
+        const rootId = parseInlineForest(regions);
         const childCount = arena.childCount(rootId);
         let regionIndex = 0;
         for (let index = 0; index < childCount; index++) {
@@ -348,13 +350,15 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       return;
     }
     // Document views own their arena; forest and one-shot roots borrow the generated scratch arena synchronously.
-    const view = region.document?.view(region.tokens);
+    const document = region.document;
     const forestRoot = this.#forestRoots.get(nodeId);
-    const firstToken = region.tokens[0];
     return {
-      arena: view?.arena ?? inlineSyntaxParser.arena,
-      rootId: view?.root.id ?? forestRoot?.id ?? inlineSyntaxParser.parseTokens(region.view.text, region.tokens, "InlineLines"),
-      rootOffset: firstToken ? firstToken.ranges?.[0]?.offset ?? firstToken.offset : 0,
+      arena: document?.arena ?? inlineSyntaxArena,
+      rootId: document?.rootId ?? forestRoot?.id ?? parseInline(
+        region.view.text,
+        region.tokens,
+      ),
+      rootOffset: inlineTokenCount(region.tokens) > 0 ? inlineTokenStart(region.tokens, 0) : 0,
       rootTokenBase: forestRoot?.tokenBase ?? 0,
       tokens: region.tokens,
       view: region.view,

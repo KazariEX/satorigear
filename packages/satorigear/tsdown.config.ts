@@ -31,18 +31,14 @@ export default defineConfig({
 
         const generated = join(import.meta.dirname, "src/generated");
         const parsers = [
-          ["blocks.ts", markdownBlockGrammar],
-          ["inline.ts", markdownInlineGrammar],
+          { name: "blocks.ts", grammar: markdownBlockGrammar, packedTokens: false },
+          { name: "inline.ts", grammar: markdownInlineGrammar, packedTokens: true },
         ] as const;
 
         await mkdir(generated, { recursive: true });
         await Promise.all(
-          parsers.map(async ([name, grammar]) => {
-            const lexer = emitJsLexer(grammar);
-            if (lexer === null) {
-              throw new Error(`Expected an emitted lexer for ${grammar.name}`);
-            }
-            const emitted = emitJsParser(grammar, lexer);
+          parsers.map(async ({ name, grammar, packedTokens }) => {
+            const emitted = emitJsParser(grammar, emitJsLexer(grammar), { packedTokens });
             await writeFile(join(generated, name), `// @ts-nocheck\n${emitted}`);
           }),
         );
@@ -53,13 +49,13 @@ export default defineConfig({
           await Promise.all(
             Object.values(bundle).map(async (chunk) => {
               if (
-                chunk.type !== "chunk" ||
-                chunk.moduleIds.every((id) => !/[\\/]src[\\/]generated[\\/]/.test(id))
+                chunk.type === "chunk" &&
+                chunk.moduleIds.some((id) => /[\\/]src[\\/]generated[\\/]/.test(id))
               ) {
-                return;
+                // Keep the public entry readable while compacting generated parser payloads.
+                const result = await minify(chunk.fileName, chunk.code);
+                chunk.code = result.code;
               }
-              // Keep the public entry readable while compacting generated parser payloads.
-              chunk.code = (await minify(chunk.fileName, chunk.code)).code;
             }),
           );
         },

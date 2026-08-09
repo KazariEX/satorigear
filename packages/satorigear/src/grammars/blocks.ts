@@ -1,4 +1,3 @@
-// Build-only block grammar consumed by the parser emitter.
 import { alt, defineGrammar, many, many1, never, rule, type RuleRef, token } from "monogram/api.ts";
 
 const ParagraphOpen = token(never());

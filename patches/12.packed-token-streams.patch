@@ -1,0 +1,266 @@
+diff --git a/src/emit-parser.ts b/src/emit-parser.ts
+index 20df7c3..897d002 100644
+--- a/src/emit-parser.ts
++++ b/src/emit-parser.ts
+@@ -409,2 +409,3 @@ class Emitter {
+   soa = false;
++  packedTokens = false;
+   textAt(idx: string): string {
+@@ -1117,3 +1118,7 @@ export function emitJsLexer(grammar: CstGrammar): string | null {
+
+-export function emitJsParser(grammar: CstGrammar, lexSrc: string | null): string {
++export function emitJsParser(
++  grammar: CstGrammar,
++  lexSrc: string | null,
++  options: { packedTokens?: boolean } = {},
++): string {
+   // [Await]/[Yield] context: name-fork the body-reachable rule closure into $A/$Y/$AY
+@@ -1126,2 +1131,9 @@ export function emitJsParser(grammar: CstGrammar, lexSrc: string | null): string
+   const e = new Emitter(a);
++  e.packedTokens = options.packedTokens === true;
++  if (e.packedTokens && lexSrc === null) {
++    throw new Error("Packed token streams require an emitted lexer");
++  }
++  if (e.packedTokens && (a.symtab.kwLitKind.size > 0 || a.symtab.puLitKind.size > 0)) {
++    throw new Error("Packed token streams require a grammar without literal kinds");
++  }
+   e.litT = (v: string) => a.symtab.puLitKind.get(v) ?? -1;
+@@ -2654,3 +2666,3 @@ ${e.soa ? `  lexSource(source);
+
+-type ExternalToken = {
++${e.packedTokens ? 'type PackedTokenSegment = { source: string; tokens: readonly number[] };' : `type ExternalToken = {
+   type: string;
+@@ -2662,5 +2674,5 @@ type ExternalToken = {
+   ranges?: readonly { offset: number; end: number }[];
+-};
++};`}
+
+-${e.soa ? `function externalTokenKind(type: string) {
++${e.soa ? `${e.packedTokens ? 'export function tokenKind' : 'function externalTokenKind'}(type: string) {
+   switch (type) {
+@@ -2670,2 +2682,3 @@ ${[...a.symtab.typeKind].map(([name, kind]) => `    case ${J(name)}: return ${ki
+ }` : ''}
++${e.packedTokens ? '' : `
+ function writeExternalToken(i: number, token: ExternalToken) {
+@@ -2683,4 +2696,19 @@ ${e.soa ? '' : '  tkText[i] = token.text;'}
+ }
++`}
+
+-function tokensInto(source: string, tokens: readonly ExternalToken[]) {
++${e.packedTokens ? String.raw`export const packedTokenStride = 4;
++function packedTokenCount(tokens: readonly number[]) {
++  if (tokens.length % packedTokenStride !== 0) throw new RangeError('packed token stream has an incomplete record');
++  return tokens.length / packedTokenStride;
++}
++function writePackedToken(i: number, tokens: readonly number[], offset: number, sourceBase = 0) {
++  tkK[i] = tokens[offset];
++  tkT[i] = 0;
++  tkOff[i] = tokens[offset + 1] + sourceBase;
++  tkEnd[i] = tokens[offset + 2] + sourceBase;
++  tkFl[i] = tokens[offset + 3];
++  tkDp[i] = 0; tkPd[i] = 0;
++}` : ''}
++
++${e.packedTokens ? '' : `function tokensInto(source: string, tokens: readonly ExternalToken[]) {
+   docPieces = [source]; docPieceOff = [0]; docLen = source.length; docFlat = source; docCur = 0;
+@@ -2696,3 +2724,52 @@ ${e.soa ? '' : '  tkText.length = 0;'}
+   docEmptyPops = [];
+-}
++}`}
++
++${e.packedTokens ? String.raw`function packedTokensInto(source: string, tokens: readonly number[]) {
++  docPieces = [source]; docPieceOff = [0]; docLen = source.length; docFlat = source; docCur = 0;
++  srcLenP1 = source.length + 1;
++  negFrom = 0x7fffffff;
++  const n = packedTokenCount(tokens);
++  if (tkCap < n + 1) growTok(n + 1);
++  for (let i = 0, offset = 0; i < n; i++, offset += packedTokenStride) {
++    writePackedToken(i, tokens, offset);
++  }
++  tokN = n;
++  docEmptyPops = [];
++}` : ''}
++
++${e.packedTokens ? String.raw`function packedTokenSegmentsInto(segments: readonly PackedTokenSegment[], boundaryKind: number) {
++  if (segments.length === 0) throw new RangeError('parsePackedTokenSegments() requires at least one segment');
++  let n = segments.length - 1;
++  for (const segment of segments) n += packedTokenCount(segment.tokens);
++  if (tkCap < n + 1) growTok(n + 1);
++  const pieces = new Array<string>(segments.length);
++  const pieceOffsets = new Array<number>(segments.length);
++  let tokenIndex = 0;
++  let sourceBase = 0;
++  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
++    const segment = segments[segmentIndex];
++    if (segmentIndex > 0) {
++      tkK[tokenIndex] = boundaryKind; tkT[tokenIndex] = 0;
++      tkOff[tokenIndex] = sourceBase; tkEnd[tokenIndex] = sourceBase; tkFl[tokenIndex] = 0;
++      tkDp[tokenIndex] = 0; tkPd[tokenIndex] = 0;
++      tokenIndex++;
++    }
++    pieces[segmentIndex] = segment.source;
++    pieceOffsets[segmentIndex] = sourceBase;
++    const count = packedTokenCount(segment.tokens);
++    for (let index = 0, offset = 0; index < count; index++, offset += packedTokenStride) {
++      writePackedToken(tokenIndex++, segment.tokens, offset, sourceBase);
++    }
++    sourceBase += segment.source.length;
++  }
++  docPieces = pieces;
++  docPieceOff = pieceOffsets;
++  docLen = sourceBase;
++  docFlat = segments.length === 1 ? pieces[0] : null;
++  docCur = 0;
++  srcLenP1 = sourceBase + 1;
++  negFrom = 0x7fffffff;
++  tokN = n;
++  docEmptyPops = [];
++}` : ''}
+
+@@ -3559,3 +3636,3 @@ type LexDiag = { offset: number; end: number; kind: number; ch: string };
+ type Edit = { start: number; end: number; text: string };
+-type TokenChange = { oldStart: number; oldEnd: number; tokens: readonly ExternalToken[] };
++type TokenChange = { oldStart: number; oldEnd: number; tokens: ${e.packedTokens ? 'readonly number[]' : 'readonly ExternalToken[]'} };
+ type Doc = {
+@@ -3689,6 +3766,6 @@ function parseCore(source: string, entryRule?: string) {
+
+-function parseTokensCore(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
++${e.packedTokens ? String.raw`function parsePackedTokenSegmentsCore(segments: readonly PackedTokenSegment[], boundaryKind: number, entryRule?: string) {
+   adoptRoot = -1;
+   adoptRunPos = -1;
+-  tokensInto(source, tokens);
++  packedTokenSegmentsInto(segments, boundaryKind);
+   return parsePrepared(entryRule);
+@@ -3696,2 +3773,16 @@ function parseTokensCore(source: string, tokens: readonly ExternalToken[], entry
+
++function parsePackedTokensCore(source: string, tokens: readonly number[], entryRule?: string) {
++  adoptRoot = -1;
++  adoptRunPos = -1;
++  packedTokensInto(source, tokens);
++  return parsePrepared(entryRule);
++}` : ''}
++
++${e.packedTokens ? '' : `function parseTokensCore(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
++  adoptRoot = -1;
++  adoptRunPos = -1;
++  tokensInto(source, tokens);
++  return parsePrepared(entryRule);
++}`}
++
+ function parsePrepared(entryRule?: string) {
+@@ -3752,3 +3843,3 @@ function apiMisuse(msg: string) {
+ }
+-function editTokensCore(entryRule: string | undefined, edits: readonly Edit[], change: TokenChange) {
++${e.packedTokens ? '' : String.raw`function editTokensCore(entryRule: string | undefined, edits: readonly Edit[], change: TokenChange) {
+   if (docPieces === null) throw apiMisuse('editTokens() before parseTokens(): no document');
+@@ -3777,4 +3868,34 @@ function editTokensCore(entryRule: string | undefined, edits: readonly Edit[], c
+   return editCore(entryRule, edits, change);
+-}
+-function editCore(entryRule: string | undefined, edits: readonly Edit[] | undefined, tokenChange: TokenChange | null) {
++}`}
++
++${e.packedTokens ? String.raw`function editPackedTokensCore(entryRule: string | undefined, edits: readonly Edit[], change: TokenChange) {
++  if (docPieces === null) throw apiMisuse('editPackedTokens() before parsePackedTokens(): no document');
++  if (!Number.isInteger(change.oldStart) || !Number.isInteger(change.oldEnd)
++      || change.oldStart < 0 || change.oldStart > change.oldEnd || change.oldEnd > tokN) {
++    throw apiMisuse('editPackedTokens() token range [' + change.oldStart + ', ' + change.oldEnd + ') is outside the token stream');
++  }
++  let nextLen = docLen;
++  for (let i = 0; i < edits.length; i++) {
++    const edit = edits[i];
++    if (!Number.isInteger(edit.start) || !Number.isInteger(edit.end)
++        || edit.start < 0 || edit.start > edit.end || edit.end > nextLen || typeof edit.text !== 'string') {
++      throw apiMisuse('editPackedTokens() change #' + i + ' out of range: [' + edit.start + ', ' + edit.end + ') of ' + nextLen);
++    }
++    nextLen += edit.text.length - (edit.end - edit.start);
++  }
++  const count = packedTokenCount(change.tokens);
++  for (let i = 0, offset = 0; i < count; i++, offset += packedTokenStride) {
++    const start = change.tokens[offset + 1];
++    const end = change.tokens[offset + 2];
++    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start > end || end > nextLen) {
++      throw apiMisuse('editPackedTokens() replacement token #' + i + ' is outside the edited document');
++    }
++  }
++  return editCore(entryRule, edits, change);
++}` : ''}
++function editCore(
++  entryRule: string | undefined,
++  edits: readonly Edit[] | undefined,
++  tokenChange: TokenChange | null,
++) {
+   if (edits === undefined || (edits.length === 0 && tokenChange === null)) {
+@@ -3825,3 +3946,3 @@ function editCore(entryRule: string | undefined, edits: readonly Edit[] | undefi
+     const oldEnd = change.oldEnd;
+-    const inserted = change.tokens.length;
++    const inserted = ${e.packedTokens ? 'packedTokenCount(change.tokens)' : 'change.tokens.length'};
+     const oldTokenCount = tokN;
+@@ -3852,3 +3973,5 @@ function editCore(entryRule: string | undefined, edits: readonly Edit[] | undefi
+ ${e.soa ? '' : '    tkText.splice(oldStart, oldEnd - oldStart, ...change.tokens.map(token => token.text));'}
+-    for (let i = 0; i < inserted; i++) writeExternalToken(oldStart + i, change.tokens[i]);
++${e.packedTokens ? String.raw`    for (let i = 0, offset = 0; i < inserted; i++, offset += packedTokenStride) {
++      writePackedToken(oldStart + i, change.tokens, offset);
++    }` : '    for (let i = 0; i < inserted; i++) writeExternalToken(oldStart + i, change.tokens[i]);'}
+
+@@ -4192,3 +4315,14 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+
+-${e.soa ? `export function tokenize(source: string) {
++${e.soa ? e.packedTokens ? `export function tokenizePacked(source: string) {
++  activate(docDefault);
++  lexSource(source);
++  const tokens = new Array(tokN * packedTokenStride);
++  for (let i = 0, offset = 0; i < tokN; i++, offset += packedTokenStride) {
++    tokens[offset] = tkK[i];
++    tokens[offset + 1] = toff(i);
++    tokens[offset + 2] = tend(i);
++    tokens[offset + 3] = tkFl[i];
++  }
++  return tokens;
++}` : `export function tokenize(source: string) {
+   activate(docDefault);
+@@ -4202,3 +4336,6 @@ ${e.soa ? `export function tokenize(source: string) {
+ export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }
+-export function parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) { activate(docDefault); return parseTokensCore(source, tokens, entryRule); }
++${e.packedTokens ? String.raw`
++export function parsePackedTokens(source: string, tokens: readonly number[], entryRule?: string) { activate(docDefault); return parsePackedTokensCore(source, tokens, entryRule); }
++export function parsePackedTokenSegments(segments: readonly PackedTokenSegment[], boundaryKind: number, entryRule?: string) { activate(docDefault); return parsePackedTokenSegmentsCore(segments, boundaryKind, entryRule); }` :
++'export function parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) { activate(docDefault); return parseTokensCore(source, tokens, entryRule); }'}
+ export function parseEdited(entryRule?: string, edits?: readonly Edit[]) { activate(docDefault); return editCore(entryRule, edits, null); }
+@@ -4294,8 +4431,12 @@ export function createParser() {
+     },
+-    parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
++${e.packedTokens ? '' : String.raw`    parseTokens(source: string, tokens: readonly ExternalToken[], entryRule?: string) {
+       return open(entryRule, true, () => parseTokensCore(source, tokens, entryRule));
+-    },
++    },`}
++${e.packedTokens ? String.raw`
++    parsePackedTokens(source: string, tokens: readonly number[], entryRule?: string) {
++      return open(entryRule, true, () => parsePackedTokensCore(source, tokens, entryRule));
++    },` : ''}
+     edit(cst: Handle, edits?: readonly Edit[]) {
+       chk(cst);
+-      if (externalUsed) throw apiMisuse('edit() cannot update a parseTokens() document - use editTokens()');
++      if (externalUsed) throw apiMisuse('edit() cannot update an external-token document');
+       activate(d);
+@@ -4308,3 +4449,3 @@ export function createParser() {
+     },
+-    editTokens(cst: Handle, edits: readonly Edit[], change: TokenChange) {
++${e.packedTokens ? '' : String.raw`    editTokens(cst: Handle, edits: readonly Edit[], change: TokenChange) {
+       chk(cst);
+@@ -4318,3 +4459,15 @@ export function createParser() {
+       }
+-    },
++    },`}
++${e.packedTokens ? String.raw`
++    editPackedTokens(cst: Handle, edits: readonly Edit[], change: TokenChange) {
++      chk(cst);
++      if (!externalUsed) throw apiMisuse('editPackedTokens() requires a document opened by parsePackedTokens()');
++      activate(d);
++      try {
++        cst.root = editPackedTokensCore(entryUsed, edits, change);
++      } catch (e) {
++        if (e instanceof RangeError || (e && (e as any).apiMisuse)) throw e;
++        cst.root = totalNet(e);
++      }
++    },` : ''}
+     visit(cst: Handle, fns: _VisitFns) { chk(cst); activate(d); return visitCore(cst.root, fns); },

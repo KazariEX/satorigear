@@ -22,6 +22,13 @@ import type {
 } from "mdast";
 import type { Token } from "monogram/gen-lexer.ts";
 import { linkDefinitionFields } from "./block-scanner.ts";
+import {
+  inlineTokenCount,
+  inlineTokenEnd,
+  inlineTokenStart,
+  type InlineTokenStream,
+  inlineTokenText,
+} from "./inline-syntax-runtime.ts";
 import { normalizeMarkdownReferenceLabel } from "./inline-utils.ts";
 import type { EmittedArena, SyntaxArenaView } from "./emitted-parser.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
@@ -48,7 +55,7 @@ interface InlineProjectionContext {
   arena: EmittedArena;
   source: string;
   tokenBase: number;
-  tokens: readonly Token[];
+  tokens: InlineTokenStream;
   view: SourceView;
 }
 
@@ -110,12 +117,12 @@ function tokenEnd(token: Token): number {
   return token.ranges?.at(-1)?.end ?? token.offset + token.text.length;
 }
 
-function inlineToken(context: InlineProjectionContext, index: number): Token {
-  const token = context.tokens[index - context.tokenBase];
-  if (!token) {
+function inlineTokenIndex(context: InlineProjectionContext, index: number): number {
+  const tokenIndex = index - context.tokenBase;
+  if (tokenIndex < 0 || tokenIndex >= inlineTokenCount(context.tokens)) {
     throw new Error("emitted parser returned a leaf outside its token stream");
   }
-  return token;
+  return tokenIndex;
 }
 
 function lineStart(source: string, offset: number): number {
@@ -196,20 +203,20 @@ function directLeaf(
   tokenBase: number,
   tokenType: string,
   context: InlineProjectionContext,
-): Token | undefined {
+): number | undefined {
   const { arena } = context;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0 && arena.leafTokenType(entry, tokenBase) === tokenType) {
-      return inlineToken(context, arena.leafToken(entry, tokenBase));
+      return inlineTokenIndex(context, arena.leafToken(entry, tokenBase));
     }
   }
 }
 
-function leaf(nodeId: number, tokenBase: number, tokenType: string, context: InlineProjectionContext): Token {
+function leaf(nodeId: number, tokenBase: number, tokenType: string, context: InlineProjectionContext): number {
   const result = directLeaf(nodeId, tokenBase, tokenType, context);
-  if (!result) {
+  if (result === void 0) {
     throw new Error(`Expected ${context.arena.ruleNameOf(nodeId)} syntax to contain ${tokenType}`);
   }
   return result;
@@ -220,13 +227,13 @@ function leafOfTypes(
   tokenBase: number,
   tokenTypes: readonly string[],
   context: InlineProjectionContext,
-): Token {
+): number {
   const { arena } = context;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0 && tokenTypes.includes(arena.leafTokenType(entry, tokenBase))) {
-      return inlineToken(context, arena.leafToken(entry, tokenBase));
+      return inlineTokenIndex(context, arena.leafToken(entry, tokenBase));
     }
   }
   throw new Error(`Expected ${context.arena.ruleNameOf(nodeId)} syntax to contain one of: ${tokenTypes.join(", ")}`);
@@ -500,12 +507,12 @@ function appendInline(
 function appendInlineLeaf(
   entry: number,
   tokenBase: number,
-  token: Token,
+  tokenIndex: number,
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
 ): boolean {
   const { context } = accumulator;
-  const text = token.text;
+  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   const tokenType = context.arena.leafTokenType(entry, tokenBase);
   let value: PhrasingContent;
   switch (tokenType) {
@@ -572,8 +579,8 @@ function contentBounds(
   context: InlineProjectionContext,
 ): [number, number] {
   return [
-    tokenEnd(leafOfTypes(nodeId, tokenBase, openTypes, context)),
-    tokenStart(leafOfTypes(nodeId, tokenBase, closeTypes, context)),
+    inlineTokenEnd(context.tokens, leafOfTypes(nodeId, tokenBase, openTypes, context)),
+    inlineTokenStart(context.tokens, leafOfTypes(nodeId, tokenBase, closeTypes, context)),
   ];
 }
 
@@ -600,17 +607,21 @@ function inlineSequence(
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
-    const token = entry < 0 ? inlineToken(context, arena.leafToken(entry, tokenBase)) : void 0;
-    const childOffset = token ? tokenStart(token) : offset + arena.childRelAt(nodeId, index);
-    const childEnd = token ? tokenEnd(token) : childOffset + arena.lenOf(entry);
-    const childTokenBase = token ? tokenBase : tokenBase + arena.childTokRelAt(nodeId, index);
+    const tokenIndex = entry < 0 ? inlineTokenIndex(context, arena.leafToken(entry, tokenBase)) : void 0;
+    const childOffset = tokenIndex !== void 0
+      ? inlineTokenStart(context.tokens, tokenIndex)
+      : offset + arena.childRelAt(nodeId, index);
+    const childEnd = tokenIndex !== void 0
+      ? inlineTokenEnd(context.tokens, tokenIndex)
+      : childOffset + arena.lenOf(entry);
+    const childTokenBase = tokenIndex !== void 0 ? tokenBase : tokenBase + arena.childTokRelAt(nodeId, index);
     const sourceSpan = context.view.mapSpan(childOffset, childEnd);
     if (cursor !== void 0 && childOffset > cursor) {
       accumulator.gapStart = cursor;
       accumulator.gapEnd = childOffset;
     }
-    const childEmitted = token
-      ? appendInlineLeaf(entry, tokenBase, token, sourceSpan, accumulator)
+    const childEmitted = tokenIndex !== void 0
+      ? appendInlineLeaf(entry, tokenBase, tokenIndex, sourceSpan, accumulator)
       : appendInlineNode(entry, childOffset, childEnd, childTokenBase, sourceSpan, accumulator);
     if (!childEmitted) {
       continue;
@@ -634,7 +645,7 @@ function reference(
   image: boolean,
 ): Reference {
   const close = leaf(nodeId, tokenBase, image ? "ImageReferenceClose" : "ReferenceClose", context);
-  const closeText = close.text;
+  const closeText = inlineTokenText(context.view.text, context.tokens, close);
   const text = context.view.text.slice(syntaxStart, syntaxEnd);
   const content = text.slice(image ? 2 : 1, text.length - closeText.length);
   const full = closeText.startsWith("][") && closeText !== "][]";
@@ -705,7 +716,8 @@ function linkOrImage(
       ? withSpan({ type: "imageReference", alt: phrasingText(children), ...association } satisfies ImageReference, sourceSpan.start, sourceSpan.end)
       : withSpan({ type: "linkReference", children, ...association } satisfies LinkReference, sourceSpan.start, sourceSpan.end);
   }
-  const resource = destinationTitle(leaf(nodeId, tokenBase, `${prefix}LinkClose`, context).text.slice(2, -1));
+  const closeIndex = leaf(nodeId, tokenBase, `${prefix}LinkClose`, context);
+  const resource = destinationTitle(inlineTokenText(context.view.text, context.tokens, closeIndex).slice(2, -1));
   return image
     ? withSpan({ type: "image", alt: phrasingText(children), ...resource } satisfies Image, sourceSpan.start, sourceSpan.end)
     : withSpan({ type: "link", children, ...resource } satisfies Link, sourceSpan.start, sourceSpan.end);

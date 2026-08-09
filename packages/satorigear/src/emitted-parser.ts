@@ -1,5 +1,6 @@
 import type { Token } from "monogram/gen-lexer.ts";
 import type { TextEdit } from "./text-edit.ts";
+import type { TokenChange } from "./token-change.ts";
 
 export interface EmittedArena {
   childAt: (id: number, index: number) => number;
@@ -20,7 +21,7 @@ interface EmittedParserInstance<Handle extends EmittedParserHandle> {
   editTokens: (
     handle: Handle,
     edits: readonly TextEdit[],
-    change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
+    change: TokenChange,
   ) => void;
   parseTokens: (source: string, tokens: readonly Token[], entryRule?: string) => Handle;
   tree: EmittedArena;
@@ -31,7 +32,7 @@ export interface EmittedParserDocument {
 
   edit: (
     edits: readonly TextEdit[],
-    change: { oldEnd: number; oldStart: number; tokens: readonly Token[] },
+    change: TokenChange,
   ) => void;
   view: (tokens: readonly Token[]) => SyntaxArenaView;
 }
@@ -65,13 +66,12 @@ function createEmittedParserDocument<Handle extends EmittedParserHandle>(
 ): EmittedParserDocument {
   const parser = createParser();
   const handle = parser.parseTokens(source, tokens, entryRule);
-  const view = (currentTokens: readonly Token[]): SyntaxArenaView => createArenaView(handle.root, currentTokens, parser.tree);
   return {
     get rootId() {
       return handle.root;
     },
     edit: (edits, change) => parser.editTokens(handle, edits, change),
-    view,
+    view: (currentTokens) => createArenaView(handle.root, currentTokens, parser.tree),
   };
 }
 
@@ -80,23 +80,22 @@ function createArenaView(
   tokens: readonly Token[],
   arena: EmittedArena,
 ): SyntaxArenaView {
-  const tokenAt = (index: number): Token => {
-    const token = tokens[index];
-    if (!token) {
-      throw new Error("emitted parser returned a leaf outside its token stream");
-    }
-    return token;
-  };
-  const tokenOffset = (token: Token): number => token.ranges?.[0]?.offset ?? token.offset;
-  const root = {
-    id: rootId,
-    offset: tokens[0] ? tokenOffset(tokens[0]) : 0,
-    tokenBase: 0,
-  };
   return {
     arena,
-    root,
-    tokenAt,
+    root: {
+      id: rootId,
+      offset: tokens[0]
+        ? tokens[0].ranges?.[0]?.offset ?? tokens[0].offset
+        : 0,
+      tokenBase: 0,
+    },
+    tokenAt(index: number) {
+      const token = tokens[index];
+      if (!token) {
+        throw new Error("emitted parser returned a leaf outside its token stream");
+      }
+      return token;
+    },
   };
 }
 
