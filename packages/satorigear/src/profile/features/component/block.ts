@@ -1,5 +1,6 @@
 import { parse as parseYaml } from "yaml";
 import type { Paragraph, RootContent } from "mdast";
+import { closesFence, type Fence } from "../../../block/fence.ts";
 import {
   type BlockLine,
   lineIndent,
@@ -24,7 +25,7 @@ import {
   normalizeComponentName,
   parseAttributes,
 } from "../attributes/syntax.ts";
-import { closesCodeFence, type CodeFence, codeFenceAt } from "../code.ts";
+import { codeFenceAt } from "../code.ts";
 import type { BlockStart, SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "../attributes/types.ts";
 import type { BlockComponent } from "./types.ts";
@@ -228,12 +229,12 @@ function blockClose(
   start: number,
   opening: BlockOpening,
 ): BlockClosing | undefined {
-  let codeFence: CodeFence | null = null;
+  let codeFence: Fence | null = null;
   let depth = 0;
   for (let index = start + 1; index < lines.length; index++) {
     const line = lines[index];
     if (codeFence) {
-      if (closesCodeFence(source, line, codeFence)) {
+      if (closesFence(source, line, codeFence)) {
         codeFence = null;
       }
       continue;
@@ -263,11 +264,11 @@ function nextSlot(
   start: number,
   end: number,
 ): { index: number; opening: SlotOpening } | undefined {
-  let codeFence: CodeFence | null = null;
+  let codeFence: Fence | null = null;
   for (let index = start; index < end; index++) {
     const line = lines[index];
     if (codeFence) {
-      if (closesCodeFence(source, line, codeFence)) {
+      if (closesFence(source, line, codeFence)) {
         codeFence = null;
       }
       continue;

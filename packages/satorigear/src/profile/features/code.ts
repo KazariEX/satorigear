@@ -1,9 +1,16 @@
 import type { Code, InlineCode } from "mdast";
 import {
+  closesFence,
+  type Fence,
+  fenceAt,
+  fencedBlockContent,
+  type FenceRule,
+  readFencedBlock,
+} from "../../block/fence.ts";
+import {
   type BlockLine,
   indentOf,
   isBlank,
-  lineIndent,
   logicalToken,
   removeIndent,
 } from "../../block/primitives.ts";
@@ -23,42 +30,14 @@ import { semanticText } from "./text.ts";
 import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-export interface CodeFence {
-  marker: "`" | "~";
-  length: number;
-}
+const codeFenceRule: FenceRule = {
+  forbiddenInfoMarkers: "`",
+  markers: "`~",
+  minimumLength: 3,
+};
 
-export function codeFenceAt(source: string, line: BlockLine): CodeFence | null {
-  const indent = lineIndent(source, line);
-  if (!indent) {
-    return null;
-  }
-  const marker = source[indent.offset];
-  if (marker !== "`" && marker !== "~") {
-    return null;
-  }
-  const body = source.slice(indent.offset, line.end);
-  let length = 0;
-  while (body[length] === marker) {
-    length++;
-  }
-  if (length < 3 || (marker === "`" && body.slice(length).includes("`"))) {
-    return null;
-  }
-  return { marker, length };
-}
-
-export function closesCodeFence(source: string, line: BlockLine, fence: CodeFence): boolean {
-  const indent = lineIndent(source, line);
-  if (!indent || source[indent.offset] !== fence.marker) {
-    return false;
-  }
-  const body = source.slice(indent.offset, line.end);
-  let length = 0;
-  while (body[length] === fence.marker) {
-    length++;
-  }
-  return length >= fence.length && /^[ \t]*$/.test(body.slice(length));
+export function codeFenceAt(source: string, line: BlockLine): Fence | null {
+  return fenceAt(source, line, codeFenceRule);
 }
 
 function codeSpanValue(value: string): string {
@@ -97,88 +76,20 @@ export function projectCodeSpan(
   return true;
 }
 
-// Content loses at most the opening indent, so scan only those leading columns instead of replacing every line.
-function fencedCodeContent(source: string, start: number, end: number, indent: number): string {
-  const contentEnd = source.charCodeAt(end - 1) === 10 ? end - 1 : end;
-  if (!indent) {
-    return source.slice(start, contentEnd);
-  }
-
-  const chunks: string[] = [];
-  let lineStart = start;
-  while (lineStart < contentEnd) {
-    const newline = source.indexOf("\n", lineStart);
-    const lineEnd = newline < 0 || newline >= contentEnd ? contentEnd : newline;
-    let contentStart = lineStart;
-    while (contentStart - lineStart < indent && source.charCodeAt(contentStart) === 32) {
-      contentStart++;
-    }
-    chunks.push(source.slice(contentStart, lineEnd));
-    if (lineEnd < contentEnd) {
-      chunks.push("\n");
-    }
-    lineStart = lineEnd + 1;
-  }
-  return chunks.join("");
-}
-
 function fencedCode(value: string): { closed: boolean; node: Code } {
   const source = normalizeLines(value);
-  if (!source) {
-    throw new Error("FencedCodeBlock token is empty");
-  }
-
-  const openingEnd = source.indexOf("\n");
-  const opening = source.slice(0, openingEnd < 0 ? source.length : openingEnd);
-  const contentStart = openingEnd < 0 ? source.length : openingEnd + 1;
-  let indent = 0;
-  while (indent < 3 && opening.charCodeAt(indent) === 32) {
-    indent++;
-  }
-  const marker = opening[indent];
-  if (marker !== "`" && marker !== "~") {
-    throw new Error("FencedCodeBlock token has no opening fence");
-  }
-  let markerEnd = indent;
-  while (opening[markerEnd] === marker) {
-    markerEnd++;
-  }
-  const markerLength = markerEnd - indent;
-
-  const finalLineEnd = source.endsWith("\n") ? source.length - 1 : source.length;
-  const finalLineStart = source.lastIndexOf("\n", finalLineEnd - 1) + 1;
-  const closing = source.slice(finalLineStart, finalLineEnd);
-  let closingIndent = 0;
-  while (closingIndent < 3 && closing.charCodeAt(closingIndent) === 32) {
-    closingIndent++;
-  }
-  let closingMarkerEnd = closingIndent;
-  while (closing[closingMarkerEnd] === marker) {
-    closingMarkerEnd++;
-  }
-  let closingEnd = closingMarkerEnd;
-  while (closingEnd < closing.length) {
-    const code = closing.charCodeAt(closingEnd);
-    if (code !== 32 && code !== 9) {
-      break;
-    }
-    closingEnd++;
-  }
-  const closed = finalLineStart >= contentStart
-    && closingMarkerEnd - closingIndent >= markerLength
-    && closingEnd === closing.length;
-
-  const rawInfo = semanticText(opening.slice(markerEnd).replace(/^[ \t]+/, ""));
+  const block = readFencedBlock(source, codeFenceRule);
+  const rawInfo = semanticText(block.info);
   const langEnd = rawInfo.search(/[ \t]/);
   const lang = rawInfo ? langEnd < 0 ? rawInfo : rawInfo.slice(0, langEnd) : null;
   const metaStart = langEnd < 0 ? -1 : rawInfo.slice(langEnd).search(/[^ \t]/);
   return {
-    closed,
+    closed: block.closed,
     node: {
       type: "code",
       lang,
       meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
-      value: fencedCodeContent(source, contentStart, closed ? finalLineStart : source.length, indent),
+      value: fencedBlockContent(source, block),
     },
   };
 }
@@ -261,7 +172,7 @@ export const feature: SyntaxFeature = {
           return void 0;
         }
         let end = start + 1;
-        while (end < lines.length && !closesCodeFence(source, lines[end], fence)) {
+        while (end < lines.length && !closesFence(source, lines[end], fence)) {
           end++;
         }
         if (end < lines.length) {

@@ -115,6 +115,14 @@ describe("math", () => {
     });
   });
 
+  it.each(["\n", "\r", "\r\n"])("preserves %j math block line endings", (ending) => {
+    const source = `$$${ending}x${ending}y${ending}$$${ending}`;
+    expect(parser.parse(source).children[0]).toMatchObject({
+      type: "math",
+      value: `x${ending}y`,
+    });
+  });
+
   it("accepts empty and unclosed math blocks", () => {
     expect(parser.parse("$$\n\n$$\n").children[0]).toMatchObject({
       type: "math",
