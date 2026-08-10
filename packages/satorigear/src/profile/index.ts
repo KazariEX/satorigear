@@ -64,16 +64,28 @@ export interface SyntaxOptions {
 const profiles = Object.create(null);
 const defaultOptions: SyntaxOptions = {};
 
-function profileKey(options: SyntaxOptions): string {
-  let frontmatter = "";
-  if (options.frontmatter) {
-    frontmatter = typeof options.frontmatter === "object" ? options.frontmatter.marker : "-";
+function profileKey(options: SyntaxOptions): number {
+  let key = 0;
+
+  if (options.attributes) {
+    key |= 1 << 0;
   }
-  return `${options.attributes ? "a" : ""}${options.component ? "c" : ""}${frontmatter && `f${frontmatter}`}` || "{}";
+  if (options.component) {
+    key |= 1 << 1;
+  }
+  if (options.frontmatter) {
+    if (typeof options.frontmatter === "object" && options.frontmatter.marker === "+") {
+      key |= 1 << 2;
+    }
+    else {
+      key |= 1 << 3;
+    }
+  }
+  return key;
 }
 
 export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxProfile {
-  const key = options === defaultOptions ? "{}" : profileKey(options);
+  const key = options === defaultOptions ? 0 : profileKey(options);
   if (key in profiles) {
     return profiles[key];
   }
@@ -105,6 +117,7 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
       return attributes ? transformInlineAttributes(source, carried) : carried;
     }
     : void 0;
+
   profiles[key] = compileProfile(features, inlineCarrier);
   return profiles[key];
 }
