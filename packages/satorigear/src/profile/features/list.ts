@@ -14,7 +14,6 @@ import {
   type BlockProjector,
   blockToken,
   lastChildEnd,
-  normalizeLines,
   payloadBounds,
   tokenEnd,
   tokenStart,
@@ -127,15 +126,44 @@ function hasListContent(source: string, line: BlockLine, marker: ListMarker | nu
 }
 
 function hasBlankLineBetween(source: string, start: number, end: number, stripBlockQuotes: boolean): boolean {
-  const lines = normalizeLines(source.slice(Math.max(0, start - 1), end)).split("\n");
-  return lines.slice(1, -1).some((line) => {
+  let lineEnd = Math.max(0, start - 1);
+  // Child spans may end and begin mid-line; only complete physical lines between them determine spread.
+  while (lineEnd < end && source[lineEnd] !== "\n" && source[lineEnd] !== "\r") {
+    lineEnd++;
+  }
+
+  while (lineEnd < end) {
+    let contentStart = lineEnd + (source[lineEnd] === "\r" && source[lineEnd + 1] === "\n" ? 2 : 1);
     if (stripBlockQuotes) {
-      while (/^ {0,3}>/.test(line)) {
-        line = line.replace(/^ {0,3}>[ \t]?/, "");
+      while (contentStart < end) {
+        let marker = contentStart;
+        for (let spaces = 0; spaces < 3 && source[marker] === " "; spaces++) {
+          marker++;
+        }
+        if (source[marker] !== ">") {
+          break;
+        }
+        contentStart = marker + 1;
+        if (source[contentStart] === " " || source[contentStart] === "\t") {
+          contentStart++;
+        }
       }
     }
-    return /^[ \t]*$/.test(line);
-  });
+    while (contentStart < end && (source[contentStart] === " " || source[contentStart] === "\t")) {
+      contentStart++;
+    }
+    if (contentStart === end) {
+      return false;
+    }
+    if (source[contentStart] === "\n" || source[contentStart] === "\r") {
+      return true;
+    }
+    lineEnd = contentStart + 1;
+    while (lineEnd < end && source[lineEnd] !== "\n" && source[lineEnd] !== "\r") {
+      lineEnd++;
+    }
+  }
+  return false;
 }
 
 function childrenSpread(

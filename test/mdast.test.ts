@@ -90,6 +90,13 @@ describe("markdown mdast conversion", () => {
     expect(parser.parse("1234567890. item\n").children[0]).toMatchObject({ type: "paragraph" });
   });
 
+  it.each(["\n", "\r", "\r\n"])("detects list spread across %j line endings", (ending) => {
+    expect(parser.parse(`- first${ending}${ending}- second${ending}`).children[0]).toMatchObject({
+      type: "list",
+      spread: true,
+    });
+  });
+
   it("maps soft line endings across stripped block quote prefixes", () => {
     const tree = parser.parse("> one\n> two\n");
     expect(tree.children[0]).toMatchObject({
