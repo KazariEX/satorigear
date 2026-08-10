@@ -121,21 +121,7 @@ function componentCandidate(
   if (nameEnd === void 0) {
     return;
   }
-  if (source[nameEnd] !== "[") {
-    return {
-      children: [],
-      close: nameEnd,
-      contentEnd: nameEnd,
-      contentStart: nameEnd,
-      end: nameEnd,
-      flags,
-      inLinkLabel: false,
-      kind: "component",
-      nameEnd,
-      start,
-    };
-  }
-  const close = pairs.get(nameEnd);
+  const close = source[nameEnd] === "[" ? pairs.get(nameEnd) : void 0;
   if (close === void 0) {
     return {
       children: [],
