@@ -58,7 +58,6 @@ export const feature: SyntaxFeature = {
         appendInline(
           accumulator,
           withSpan<Break>({ type: "break" }, sourceSpan.start, sourceSpan.end),
-          sourceSpan.start,
         );
         return true;
       },
@@ -69,7 +68,6 @@ export const feature: SyntaxFeature = {
         appendInline(
           accumulator,
           withSpan<Text>({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end),
-          sourceSpan.start,
         );
         return true;
       },

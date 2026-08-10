@@ -338,10 +338,10 @@ function appendInlineGap(accumulator: InlineAccumulator, start: number, end: num
 
 export function appendInline(
   accumulator: InlineAccumulator,
-  value: PhrasingContent,
-  nextLineOffset: number,
+  value: FragmentNode<PhrasingContent>,
 ): void {
   const { context, target } = accumulator;
+  const nextLineOffset = value.startOffset;
   const newline = value.type === "text" && value.value.startsWith("\n");
   if (accumulator.gapStart >= 0) {
     if (!newline) {

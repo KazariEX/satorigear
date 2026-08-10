@@ -58,7 +58,6 @@ const projectInlineEmphasis: InlineRuleProjector = (
   appendInline(
     accumulator,
     withSpan<Emphasis>({ type: "emphasis", children }, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
   );
   return true;
 };
@@ -78,7 +77,6 @@ const projectInlineStrong: InlineRuleProjector = (
   appendInline(
     accumulator,
     withSpan<Strong>({ type: "strong", children }, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
   );
   return true;
 };
@@ -98,7 +96,6 @@ const projectInlineDelete: InlineRuleProjector = (
   appendInline(
     accumulator,
     withSpan<Delete>({ type: "delete", children }, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
   );
   return true;
 };

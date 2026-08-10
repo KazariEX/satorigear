@@ -71,7 +71,6 @@ export function projectCodeSpan(
       sourceSpan.start,
       sourceSpan.end,
     ),
-    sourceSpan.start,
   );
   return true;
 }

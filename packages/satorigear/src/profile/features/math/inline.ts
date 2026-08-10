@@ -187,7 +187,6 @@ export const inlineTokens: SyntaxFeature["inlineTokens"] = [
           sourceSpan.start,
           sourceSpan.end,
         ),
-        sourceSpan.start,
       );
       return true;
     },

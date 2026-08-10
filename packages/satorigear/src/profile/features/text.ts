@@ -24,7 +24,6 @@ export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, a
   appendInline(
     accumulator,
     withSpan<Text>({ type: "text", value: semanticText(text) }, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
   );
   return true;
 };

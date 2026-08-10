@@ -158,7 +158,7 @@ export const inlineTokens: SyntaxFeature["inlineTokens"] = [
         type: "footnoteReference",
         identifier: normalizeAssociationLabel(label).toLowerCase(),
         label: semanticText(label),
-      }, sourceSpan.start, sourceSpan.end), sourceSpan.start);
+      }, sourceSpan.start, sourceSpan.end));
       return true;
     },
   },

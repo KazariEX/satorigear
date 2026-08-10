@@ -4,6 +4,7 @@ import {
   appendInline,
   contentBounds,
   createInlineAccumulator,
+  type FragmentNode,
   type InlineAccumulator,
   type InlineRuleProjector,
   inlineSequence,
@@ -132,7 +133,7 @@ function linkOrImage(
   context: InlineAccumulator["context"],
   media: "image" | "link",
   resourceKind: "direct" | "reference",
-): Image | ImageReference | Link | LinkReference {
+): FragmentNode<Image | ImageReference | Link | LinkReference> {
   const image = media === "image";
   const referenceNode = resourceKind === "reference";
   const prefix = image ? "Image" : "";
@@ -158,7 +159,6 @@ function projectMedia(media: "image" | "link", resourceKind: "direct" | "referen
     appendInline(
       accumulator,
       linkOrImage(nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator.context, media, resourceKind),
-      sourceSpan.start,
     );
     return true;
   };
@@ -192,7 +192,7 @@ export const feature: SyntaxFeature = {
           children: [
             withSpan<Text>({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1),
           ],
-        }, sourceSpan.start, sourceSpan.end), sourceSpan.start);
+        }, sourceSpan.start, sourceSpan.end));
         return true;
       },
     },

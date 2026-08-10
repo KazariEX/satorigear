@@ -395,7 +395,6 @@ const projectInlineComponent: InlineRuleProjector = (
   appendInline(
     accumulator,
     withSpan(value, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
   );
   return true;
 };
@@ -427,7 +426,6 @@ const projectInlineSpan: InlineRuleProjector = (
   appendInline(
     accumulator,
     withSpan(value, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
   );
   return true;
 };

@@ -140,7 +140,6 @@ const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, accumula
   appendInline(
     accumulator,
     withSpan<Html>({ type: "html", value: text }, sourceSpan.start, sourceSpan.end),
-    sourceSpan.start,
   );
   return true;
 };
