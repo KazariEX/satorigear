@@ -2,6 +2,7 @@ import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdas
 import {
   appendInlineToken,
   copyInlineToken,
+  firstInlineTokenEndingAfter,
   inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
@@ -152,23 +153,8 @@ function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
   return ranges;
 }
 
-function firstTokenEndingAfter(tokens: InlineTokenStream, offset: number): number {
-  let low = 0;
-  let high = inlineTokenCount(tokens);
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (inlineTokenEnd(tokens, middle) <= offset) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
 function copyRange(target: number[], tokens: InlineTokenStream, start: number, end: number): void {
-  for (let index = firstTokenEndingAfter(tokens, start); index < inlineTokenCount(tokens); index++) {
+  for (let index = firstInlineTokenEndingAfter(tokens, start); index < inlineTokenCount(tokens); index++) {
     const tokenStart = inlineTokenStart(tokens, index);
     if (tokenStart >= end) {
       break;

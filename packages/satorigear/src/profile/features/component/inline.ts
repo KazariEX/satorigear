@@ -1,6 +1,7 @@
 import type { PhrasingContent } from "mdast";
 import {
   appendInlineToken,
+  firstInlineTokenEndingAfter,
   inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
@@ -275,21 +276,6 @@ function candidates(
   return { normalClosers: brackets.normalClosers, roots };
 }
 
-function firstTokenEndingAfter(tokens: InlineTokenStream, offset: number): number {
-  let low = 0;
-  let high = inlineTokenCount(tokens);
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (inlineTokenEnd(tokens, middle) <= offset) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
 function copyRange(
   target: number[],
   tokens: InlineTokenStream,
@@ -298,7 +284,7 @@ function copyRange(
   inLinkLabel: boolean,
   normalClosers: ReadonlySet<number>,
 ): void {
-  for (let index = firstTokenEndingAfter(tokens, start); index < inlineTokenCount(tokens); index++) {
+  for (let index = firstInlineTokenEndingAfter(tokens, start); index < inlineTokenCount(tokens); index++) {
     const tokenStart = inlineTokenStart(tokens, index);
     if (tokenStart >= end) {
       break;

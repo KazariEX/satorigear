@@ -1,5 +1,6 @@
 import {
   appendInlineToken,
+  firstInlineTokenEndingAfter,
   inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
@@ -26,23 +27,8 @@ interface MathRange {
 const mathTextKind = inlineKind("MathText");
 const textKind = inlineKind("Text");
 
-function firstTokenEndingAfter(tokens: InlineTokenStream, offset: number): number {
-  let low = 0;
-  let high = inlineTokenCount(tokens);
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (inlineTokenEnd(tokens, middle) <= offset) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
 function textTokenAt(tokens: InlineTokenStream, offset: number): number | undefined {
-  const index = firstTokenEndingAfter(tokens, offset);
+  const index = firstInlineTokenEndingAfter(tokens, offset);
   if (
     index < inlineTokenCount(tokens) &&
     inlineTokenStart(tokens, index) <= offset &&
@@ -112,7 +98,7 @@ function copyRange(
   end: number,
   offset: number,
 ): void {
-  for (let index = firstTokenEndingAfter(tokens, start); index < inlineTokenCount(tokens); index++) {
+  for (let index = firstInlineTokenEndingAfter(tokens, start); index < inlineTokenCount(tokens); index++) {
     const tokenStart = inlineTokenStart(tokens, index);
     if (tokenStart >= end) {
       break;
