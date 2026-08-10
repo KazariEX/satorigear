@@ -1,6 +1,6 @@
 import type { BlockLine } from "../block/primitives.ts";
 import type { BlockToken } from "../block/tokens.ts";
-import type { DelimiterRunConfig, PairedTokenConfig } from "../inline/resolver.ts";
+import type { DelimiterConfig, PairedTokenConfig } from "../inline/resolver.ts";
 import type { InlineTokenStream } from "../inline/runtime.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 
@@ -81,7 +81,7 @@ export interface SyntaxFeature {
   blockRules?: readonly BlockRuleRegistration[];
   blockStarts?: readonly BlockStartRegistration[];
   blockUnwrappers?: readonly BlockLineUnwrapper[];
-  delimiterRuns?: readonly DelimiterRunConfig[];
+  delimiters?: readonly DelimiterConfig[];
   inlineRules?: readonly InlineRuleRegistration[];
   inlineTokens?: readonly InlineTokenRegistration[];
   tokenPairs?: readonly PairedTokenConfig<InlineResolutionContext>[];

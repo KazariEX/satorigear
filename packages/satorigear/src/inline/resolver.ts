@@ -11,14 +11,16 @@ import {
   inlineTokenStride,
 } from "./runtime.ts";
 
-export interface DelimiterRunConfig {
+export interface DelimiterConfig {
   token: string;
   marker: string;
   fallbackToken: string;
-  single: { open: string; close: string };
-  double: { open: string; close: string };
-  intraword?: boolean;
-  ruleOfThree?: boolean;
+  single?: { open: string; close: string };
+  double?: { open: string; close: string };
+  pairing:
+    | { kind: "partial"; ruleOfThree?: boolean }
+    | { kind: "whole" };
+  allowIntraword?: boolean;
 }
 
 export interface PairedTokenConfig<State = undefined> {
@@ -56,20 +58,21 @@ interface DelimitedTokenResolver<State> {
   resolve: (source: string, tokens: InlineTokenStream, state: State) => InlineTokenStream;
 }
 
-interface IndexedDelimiterConfig {
+interface CompiledDelimiterConfig {
   marker: string;
   fallbackKind: number;
-  single: { open: number; close: number };
-  double: { open: number; close: number };
-  intraword?: boolean;
+  single?: { open: number; close: number };
+  double?: { open: number; close: number };
+  allowIntraword?: boolean;
+  matchWholeRun?: boolean;
   ruleOfThree?: boolean;
   index: number;
 }
 
-interface Run {
+interface DelimiterRun {
   tokenIndex: number;
   offset: number;
-  config: IndexedDelimiterConfig;
+  config: CompiledDelimiterConfig;
   length: number;
   start: number;
   remaining: number;
@@ -133,7 +136,7 @@ function characterAfter(source: string, offset: number): string {
 }
 
 // A bit mask avoids allocating a { canOpen, canClose } result for every delimiter run.
-function flanking(source: string, start: number, end: number, config: IndexedDelimiterConfig): number {
+function flanking(source: string, start: number, end: number, config: CompiledDelimiterConfig): number {
   const before = characterBefore(source, start);
   const after = characterAfter(source, end);
   const beforeWhitespace = whitespace.test(before);
@@ -142,7 +145,7 @@ function flanking(source: string, start: number, end: number, config: IndexedDel
   const afterPunctuation = punctuation.test(after);
   const left = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
   const right = !beforeWhitespace && (!beforePunctuation || afterWhitespace || afterPunctuation);
-  if (config.intraword !== false) {
+  if (config.allowIntraword !== false) {
     return (left ? canOpenFlag : 0) | (right ? canCloseFlag : 0);
   }
   const canOpen = left && (!right || beforePunctuation);
@@ -150,8 +153,11 @@ function flanking(source: string, start: number, end: number, config: IndexedDel
   return (canOpen ? canOpenFlag : 0) | (canClose ? canCloseFlag : 0);
 }
 
-function canPair(opener: Run, closer: Run): boolean {
+function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
   if (!opener.canOpen || !closer.canClose) {
+    return false;
+  }
+  if (closer.config.matchWholeRun && opener.length !== closer.length) {
     return false;
   }
   if (!closer.config.ruleOfThree || (!opener.canClose && !closer.canOpen)) {
@@ -330,7 +336,7 @@ function appendFragment(
   appendInlineToken(result, kind, start, end, flags);
 }
 
-function assignDelimiterScopes(runs: Run[], isolations: readonly TokenIsolationRange[]): void {
+function assignDelimiterScopes(runs: DelimiterRun[], isolations: readonly TokenIsolationRange[]): void {
   if (isolations.length === 0) {
     return;
   }
@@ -358,7 +364,7 @@ function assignDelimiterScopes(runs: Run[], isolations: readonly TokenIsolationR
   }
 }
 
-function unlinkRun(runs: Run[], runIndex: number): void {
+function unlinkRun(runs: DelimiterRun[], runIndex: number): void {
   const run = runs[runIndex];
   if (run.previous >= 0) {
     runs[run.previous].next = run.next;
@@ -378,7 +384,7 @@ function addReplacement(replacements: Replacement[][], tokenIndex: number, repla
   }
 }
 
-function matchDelimiterRuns(runs: Run[], first: number, replacements: Replacement[][]): void {
+function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: Replacement[][]): void {
   const openersBottom: number[] = [];
   let current = first;
   while (current >= 0) {
@@ -408,12 +414,15 @@ function matchDelimiterRuns(runs: Run[], first: number, replacements: Replacemen
     }
 
     const opener = runs[openerIndex];
-    const use = opener.remaining >= 2 && closer.remaining >= 2 ? 2 : 1;
+    const use = opener.remaining >= 2 && closer.remaining >= 2 && closer.config.double ? 2 : 1;
     const openEnd = opener.offset + (opener.start + opener.remaining) * opener.config.marker.length;
     const openStart = openEnd - use * opener.config.marker.length;
     const closeStart = closer.offset + closer.start * closer.config.marker.length;
     const closeEnd = closeStart + use * closer.config.marker.length;
     const pair = use === 2 ? closer.config.double : closer.config.single;
+    if (!pair) {
+      throw new Error(`Delimiter ${closer.config.marker} has no replacement for a run of ${use}`);
+    }
     addReplacement(replacements, opener.tokenIndex, { offset: openStart, end: openEnd, kind: pair.open });
     addReplacement(replacements, closer.tokenIndex, { offset: closeStart, end: closeEnd, kind: pair.close });
     opener.remaining -= use;
@@ -434,10 +443,10 @@ function matchDelimiterRuns(runs: Run[], first: number, replacements: Replacemen
 function resolveDelimiterRuns(
   source: string,
   tokens: InlineTokenStream,
-  configByKind: readonly (IndexedDelimiterConfig | undefined)[],
+  configByKind: readonly (CompiledDelimiterConfig | undefined)[],
   isolations: readonly TokenIsolationRange[],
 ): InlineTokenStream {
-  const runs: Run[] = [];
+  const runs: DelimiterRun[] = [];
   const count = inlineTokenCount(tokens);
   for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
     const config = configByKind[inlineTokenKind(tokens, tokenIndex)];
@@ -447,6 +456,12 @@ function resolveDelimiterRuns(
     const offset = inlineTokenStart(tokens, tokenIndex);
     const end = inlineTokenEnd(tokens, tokenIndex);
     const length = (end - offset) / config.marker.length;
+    if (
+      config.matchWholeRun &&
+      (length > 2 || (length === 1 ? !config.single : !config.double))
+    ) {
+      continue;
+    }
     const flags = flanking(source, offset, end, config);
     runs.push({
       tokenIndex,
@@ -520,18 +535,23 @@ function resolveDelimiterRuns(
 }
 
 export function createDelimitedTokenResolver<State = undefined>(
-  delimiterConfigs: readonly DelimiterRunConfig[],
+  delimiterConfigs: readonly DelimiterConfig[],
   pairConfigs: readonly PairedTokenConfig<State>[] = [],
 ): DelimitedTokenResolver<State> {
-  const delimiterByKind: (IndexedDelimiterConfig | undefined)[] = [];
+  const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[inlineKind(config.token)] = {
       marker: config.marker,
       fallbackKind: inlineKind(config.fallbackToken),
-      single: { open: inlineKind(config.single.open), close: inlineKind(config.single.close) },
-      double: { open: inlineKind(config.double.open), close: inlineKind(config.double.close) },
-      intraword: config.intraword,
-      ruleOfThree: config.ruleOfThree,
+      single: config.single
+        ? { open: inlineKind(config.single.open), close: inlineKind(config.single.close) }
+        : void 0,
+      double: config.double
+        ? { open: inlineKind(config.double.open), close: inlineKind(config.double.close) }
+        : void 0,
+      allowIntraword: config.allowIntraword,
+      matchWholeRun: config.pairing.kind === "whole" ? true : void 0,
+      ruleOfThree: config.pairing.kind === "partial" ? config.pairing.ruleOfThree : void 0,
       index,
     };
   });

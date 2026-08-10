@@ -185,13 +185,11 @@ const Escape = token(seq("\\", oneOf(
   "}",
   "~",
 )), { scope: "constant.character.escape" });
-const Strikethrough = token(seq("~~", plus(noneOf("\n", "\r"), { greedy: false }), "~~"), {
-  scope: "markup.strikethrough",
-});
 const Text = token(inlineTextPattern, { scope: "meta.paragraph" });
 
 const AsteriskRun = token(plus("*"));
 const UnderscoreRun = token(plus("_"));
+const TildeRun = token(plus("~"));
 const EmphasisOpen = token(never());
 const EmphasisClose = token(never());
 const StrongOpen = token(never());
@@ -303,10 +301,10 @@ Inline = rule(() => [
   HardBreak,
   Escape,
   Strong,
-  Strikethrough,
   Emphasis,
   Attributes,
   Text,
+  TildeRun,
   Delimiter,
   ReferenceImage,
   BracketFallback,
@@ -323,10 +321,10 @@ LinkContent = rule(() => [
   HardBreak,
   Escape,
   LinkStrong,
-  Strikethrough,
   LinkEmphasis,
   Attributes,
   Text,
+  TildeRun,
   Delimiter,
   LinkReferenceImage,
   BracketFallback,
@@ -343,10 +341,10 @@ export const grammar = defineGrammar({
     Entity,
     HardBreak,
     Escape,
-    Strikethrough,
     Text,
     AsteriskRun,
     UnderscoreRun,
+    TildeRun,
     EmphasisOpen,
     EmphasisClose,
     StrongOpen,

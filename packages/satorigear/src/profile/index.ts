@@ -1,6 +1,6 @@
 import {
   createDelimitedTokenResolver,
-  type DelimiterRunConfig,
+  type DelimiterConfig,
   type PairedTokenConfig,
 } from "../inline/resolver.ts";
 import { inlineKind } from "../inline/runtime.ts";
@@ -13,7 +13,7 @@ import { feature as featureBreak } from "./features/break.ts";
 import { feature as featureCode } from "./features/code.ts";
 import { feature as featureComponent } from "./features/component/index.ts";
 import { transformInlineCarrier } from "./features/component/inline.ts";
-import { feature as featureEmphasis } from "./features/emphasis.ts";
+import { feature as featureFormatting, type StrikethroughOptions } from "./features/formatting.ts";
 import { feature as frontmatterFeature, type FrontmatterOptions } from "./features/frontmatter.ts";
 import { feature as featureHeading } from "./features/heading.ts";
 import { feature as featureHtml } from "./features/html.ts";
@@ -41,28 +41,12 @@ import type {
   SyntaxProfile,
 } from "./types.ts";
 
-const leadingFeatures = [
-  featureHeading,
-  featureBreak,
-  featureBlockQuote,
-  featureList,
-  featureCode,
-  featureHtml,
-  featureReference,
-];
-
-const trailingFeatures = [
-  featureParagraph,
-  featureText,
-  featureEmphasis,
-  featureLink,
-];
-
 export interface SyntaxOptions {
   attributes?: boolean;
   component?: boolean;
   frontmatter?: boolean | FrontmatterOptions;
   math?: boolean | MathOptions;
+  strikethrough?: boolean | StrikethroughOptions;
   table?: boolean;
 }
 
@@ -92,8 +76,14 @@ function createProfileKey(options: SyntaxOptions): number {
       key |= 1 << 5;
     }
   }
-  if (options.table) {
+  if (options.strikethrough) {
     key |= 1 << 6;
+    if (typeof options.strikethrough === "object" && options.strikethrough.singleTilde === false) {
+      key |= 1 << 7;
+    }
+  }
+  if (options.table) {
+    key |= 1 << 8;
   }
   return key;
 }
@@ -126,7 +116,15 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
     return profiles[key];
   }
 
-  const features = [...leadingFeatures];
+  const features = [
+    featureHeading,
+    featureBreak,
+    featureBlockQuote,
+    featureList,
+    featureCode,
+    featureHtml,
+    featureReference,
+  ];
 
   if (options.frontmatter) {
     features.unshift(
@@ -145,7 +143,12 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
     features.push(featureMath);
   }
 
-  features.push(...trailingFeatures);
+  features.push(
+    featureParagraph,
+    featureText,
+    featureFormatting(options.strikethrough),
+    featureLink,
+  );
 
   if (options.component) {
     features.push(featureComponent);
@@ -172,7 +175,7 @@ function compileProfile(features: readonly SyntaxFeature[], transformInline?: In
   const blockRestarts: BlockRestart[] = [];
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
   const blockUnwrappers: BlockLineUnwrapper[] = [];
-  const delimiterRuns: DelimiterRunConfig[] = [];
+  const delimiters: DelimiterConfig[] = [];
   const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
   const inlineTokenProjects: (InlineLeafProjector | undefined)[] = [];
   const tokenPairs: PairedTokenConfig<InlineResolutionContext>[] = [];
@@ -222,8 +225,8 @@ function compileProfile(features: readonly SyntaxFeature[], transformInline?: In
     if (feature.blockUnwrappers) {
       blockUnwrappers.push(...feature.blockUnwrappers);
     }
-    if (feature.delimiterRuns) {
-      delimiterRuns.push(...feature.delimiterRuns);
+    if (feature.delimiters) {
+      delimiters.push(...feature.delimiters);
     }
     if (feature.inlineRules) {
       for (const registration of feature.inlineRules) {
@@ -248,7 +251,7 @@ function compileProfile(features: readonly SyntaxFeature[], transformInline?: In
     blockProjects[registration.rule] = registration.decorate(project);
   }
 
-  const resolver = createDelimitedTokenResolver(delimiterRuns, tokenPairs);
+  const resolver = createDelimitedTokenResolver(delimiters, tokenPairs);
   // Generated lexer tokens become optional syntax carriers before reference and delimiter resolution.
   const resolveInline: SyntaxProfile["resolveInline"] = transformInline === void 0
     ? (source, tokens, state) => resolver.resolve(
