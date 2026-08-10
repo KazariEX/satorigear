@@ -28,6 +28,7 @@ export interface BlockProjectionContext {
 
 export interface InlineProjectionContext {
   arena: SyntaxArena;
+  blockRule: string;
   decodeText: (value: string) => string;
   ruleProjects: Readonly<Record<string, InlineRuleProjector>>;
   source: string;
@@ -474,6 +475,7 @@ export function inlineChildren(
   }
   const inlineContext: InlineProjectionContext = {
     arena: inline.arena,
+    blockRule: inline.blockRule,
     decodeText: context.profile.decodeText,
     ruleProjects: context.profile.inlineRuleProjects,
     source: context.source,

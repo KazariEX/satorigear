@@ -8,7 +8,7 @@ import {
 
 const options = { attributes: true } as const;
 
-describe("native attributes", () => {
+describe("attributes", () => {
   it("does not create span wrappers without component syntax", () => {
     expect(parse("[span]{.mark}\n", options).children[0]).toMatchObject({
       type: "paragraph",

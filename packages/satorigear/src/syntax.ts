@@ -23,6 +23,7 @@ import type { SyntaxArena } from "./syntax-protocol.ts";
 
 export interface MarkdownInlineSyntax {
   arena: SyntaxArena;
+  blockRule: string;
   rootId: number;
   rootOffset: number;
   rootTokenBase: number;
@@ -353,6 +354,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     const forestRoot = this.#forestRoots.get(nodeId);
     return {
       arena: document?.arena ?? inlineSyntaxArena,
+      blockRule: region.rule,
       rootId: document?.rootId ?? forestRoot?.id ?? parseInline(
         region.view.text,
         region.tokens,

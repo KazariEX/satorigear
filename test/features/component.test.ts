@@ -19,7 +19,7 @@ function component(source: string): BlockComponent | InlineComponent {
   return node as BlockComponent;
 }
 
-describe("component syntax", () => {
+describe("component", () => {
   it("keeps component recognition independent from attribute parsing", () => {
     const tree = parse(":Card{tone=info} [span]{.mark}\n", { component: true });
     expect(tree.children[0]).toMatchObject({

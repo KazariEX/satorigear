@@ -24,6 +24,7 @@ import {
   feature as featureReference,
   reassociateReferenceTails,
 } from "./features/reference.ts";
+import { feature as featureTable } from "./features/table.ts";
 import { feature as featureText, semanticText } from "./features/text.ts";
 import type { BlockToken } from "../block/tokens.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
@@ -40,7 +41,7 @@ import type {
   SyntaxProfile,
 } from "./types.ts";
 
-const defaultFeatures = [
+const leadingFeatures = [
   featureHeading,
   featureBreak,
   featureBlockQuote,
@@ -48,16 +49,20 @@ const defaultFeatures = [
   featureCode,
   featureHtml,
   featureReference,
+];
+
+const trailingFeatures = [
   featureParagraph,
   featureText,
   featureEmphasis,
   featureLink,
-] as const;
+];
 
 export interface SyntaxOptions {
   attributes?: boolean;
   component?: boolean;
   frontmatter?: boolean | FrontmatterOptions;
+  table?: boolean;
 }
 
 // Canonical option keys make equivalent option objects share one immutable profile.
@@ -81,6 +86,9 @@ function profileKey(options: SyntaxOptions): number {
       key |= 1 << 3;
     }
   }
+  if (options.table) {
+    key |= 1 << 4;
+  }
   return key;
 }
 
@@ -92,7 +100,7 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
 
   const component = Boolean(options.component);
   const attributes = Boolean(options.attributes);
-  const features = [...defaultFeatures];
+  const features = [...leadingFeatures];
 
   if (options.frontmatter) {
     features.unshift(
@@ -103,6 +111,12 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
       ),
     );
   }
+  if (options.table) {
+    // A delimiter promotes the preceding paragraph line, so tables must run before the paragraph fallback.
+    features.push(featureTable);
+  }
+
+  features.push(...trailingFeatures);
 
   if (component) {
     features.push(featureComponent);
@@ -169,7 +183,9 @@ function compileProfile(features: readonly SyntaxFeature[], transformInline?: In
     }
     if (feature.blockRules) {
       for (const registration of feature.blockRules) {
-        blockProjects[registration.rule] = registration.project;
+        if (registration.project) {
+          blockProjects[registration.rule] = registration.project;
+        }
         if (registration.inlineContent) {
           blockInlineContents[registration.rule] = true;
         }

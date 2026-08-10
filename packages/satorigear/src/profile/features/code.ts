@@ -13,11 +13,13 @@ import {
   type BlockProjectionContext,
   blockToken,
   firstNonspace,
+  type InlineAccumulator,
   lineEnd,
   normalizeLines,
   withSpan,
 } from "../../mdast.ts";
 import { semanticText } from "./text.ts";
+import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export interface CodeFence {
@@ -68,6 +70,30 @@ function codeSpanValue(value: string): string {
     result = result.slice(1, -1);
   }
   return result;
+}
+
+export function projectCodeSpan(
+  tokenIndex: number,
+  sourceSpan: SourceSpan,
+  accumulator: InlineAccumulator,
+  decodeTablePipe = false,
+): boolean {
+  const { context } = accumulator;
+  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
+  const value = codeSpanValue(text);
+  appendInline(
+    accumulator,
+    withSpan(
+      {
+        type: "inlineCode",
+        value: decodeTablePipe ? value.replace(/\\\|/g, "|") : value,
+      } satisfies InlineCode,
+      sourceSpan.start,
+      sourceSpan.end,
+    ),
+    sourceSpan.start,
+  );
+  return true;
 }
 
 function fencedCode(value: string): { closed: boolean; node: Code } {
@@ -222,20 +248,7 @@ export const feature: SyntaxFeature = {
   inlineTokens: [
     {
       token: "CodeSpan",
-      project(tokenIndex, sourceSpan, accumulator) {
-        const { context } = accumulator;
-        const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-        appendInline(
-          accumulator,
-          withSpan(
-            { type: "inlineCode", value: codeSpanValue(text) } satisfies InlineCode,
-            sourceSpan.start,
-            sourceSpan.end,
-          ),
-          sourceSpan.start,
-        );
-        return true;
-      },
+      project: projectCodeSpan,
     },
   ],
 };

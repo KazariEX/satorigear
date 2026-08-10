@@ -33,7 +33,7 @@ export interface BlockStartRegistration {
 
 export interface BlockRuleRegistration {
   inlineContent?: true;
-  project: BlockProjector;
+  project?: BlockProjector;
   referenceLabel?: (token: BlockToken) => string;
   rule: string;
 }

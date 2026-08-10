@@ -22,6 +22,16 @@ const FencedCodeBlock = token(never());
 const IndentedCodeBlockToken = token(never());
 const ThematicBreakToken = token(never());
 const HtmlBlockToken = token(never());
+const TableOpen = token(never());
+const TableCellOpen = token(never());
+const TableCellClose = token(never());
+const TableRowOpen = token(never());
+const TableRowClose = token(never());
+const TableAlignNone = token(never());
+const TableAlignLeft = token(never());
+const TableAlignRight = token(never());
+const TableAlignCenter = token(never());
+const TableClose = token(never());
 const LinkDefinitionOpen = token(never());
 const LinkDefinitionChunk = token(never());
 const LinkDefinitionClose = token(never());
@@ -42,6 +52,15 @@ const FencedCode = rule(() => [FencedCodeBlock]);
 const IndentedCodeBlock = rule(() => [IndentedCodeBlockToken]);
 const ThematicBreak = rule(() => [ThematicBreakToken]);
 const HtmlBlock = rule(() => [HtmlBlockToken]);
+const TableCell = rule(() => [[TableCellOpen, many(InlineChunk), TableCellClose]]);
+const TableRow = rule(() => [[TableRowOpen, many1(TableCell), TableRowClose]]);
+const TableDelimiter = rule(() => [many1(alt(
+  TableAlignNone,
+  TableAlignLeft,
+  TableAlignRight,
+  TableAlignCenter,
+))]);
+const Table = rule(() => [[TableOpen, TableRow, TableDelimiter, many(TableRow), TableClose]]);
 const LinkDefinition = rule(() => [[LinkDefinitionOpen, many1(LinkDefinitionChunk), LinkDefinitionClose]]);
 let Block: RuleRef;
 const BlockComponentLabel = rule(() => [[
@@ -76,6 +95,7 @@ Block = rule(() => [
   FencedCode,
   IndentedCodeBlock,
   HtmlBlock,
+  Table,
   LinkDefinition,
   BlockComponent,
   BlockComponentSlot,
@@ -111,6 +131,16 @@ export const grammar = defineGrammar({
     IndentedCodeBlockToken,
     ThematicBreakToken,
     HtmlBlockToken,
+    TableOpen,
+    TableCellOpen,
+    TableCellClose,
+    TableRowOpen,
+    TableRowClose,
+    TableAlignNone,
+    TableAlignLeft,
+    TableAlignRight,
+    TableAlignCenter,
+    TableClose,
     LinkDefinitionOpen,
     LinkDefinitionChunk,
     LinkDefinitionClose,
@@ -131,6 +161,10 @@ export const grammar = defineGrammar({
     FencedCode,
     IndentedCodeBlock,
     HtmlBlock,
+    TableCell,
+    TableRow,
+    TableDelimiter,
+    Table,
     LinkDefinition,
     BlockComponentLabel,
     BlockComponent,
