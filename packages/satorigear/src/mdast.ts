@@ -1,6 +1,7 @@
 import type {
   BlockContent,
   DefinitionContent,
+  Node,
   PhrasingContent,
   Root,
   Text,
@@ -27,6 +28,31 @@ export interface BlockProjectionContext {
   syntax: MarkdownSyntax;
 }
 
+interface FragmentValue {
+  [key: string]: unknown;
+  children?: FragmentValue[];
+  endOffset: number;
+  startOffset: number;
+}
+
+export type FragmentNode<T extends object = Node> = T & FragmentValue;
+
+export interface BlockFragment {
+  node: FragmentNode<TopLevelContent>;
+  // Origin belongs to the cached projection; offset moves so positions can shift without rebuilding nodes.
+  offset: number;
+  origin: number;
+  version: number;
+}
+
+// Core owns projection state and traversal; profiles supply every syntax-specific node constructor.
+export type BlockProjector = (
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: BlockProjectionContext,
+) => FragmentNode<TopLevelContent>;
+
 export interface InlineProjectionContext {
   arena: SyntaxArena;
   blockRule: string;
@@ -46,14 +72,6 @@ export interface InlineAccumulator {
   target: PhrasingContent[];
 }
 
-// Core owns projection state and traversal; profiles supply every syntax-specific node constructor.
-export type BlockProjector = (
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockProjectionContext,
-) => TopLevelContent;
-
 export type InlineLeafProjector = (
   tokenIndex: number,
   sourceSpan: SourceSpan,
@@ -63,8 +81,8 @@ export type InlineLeafProjector = (
 export type InlineRuleProjector = (
   nodeId: number,
   offset: number,
-  endOffset: number,
   tokenBase: number,
+  endOffset: number,
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
 ) => boolean;
@@ -72,39 +90,19 @@ export type InlineRuleProjector = (
 export const projectInlineChildren: InlineRuleProjector = (
   nodeId,
   offset,
-  endOffset,
   tokenBase,
+  endOffset,
   sourceSpan,
   accumulator,
 ) => inlineSequence(nodeId, offset, tokenBase, accumulator);
 
 export const projectInlineIgnore: InlineLeafProjector = () => false;
 
-export interface BlockFragment {
-  node: TopLevelContent;
-  // Origin belongs to the cached projection; offset moves so positions can shift without rebuilding nodes.
-  offset: number;
-  origin: number;
-  version: number;
-}
-
-interface FragmentValue {
-  [key: string]: unknown;
-  children?: FragmentValue[];
-  endOffset: number;
-  startOffset: number;
-}
-
-interface MaterializedValue {
-  children?: MaterializedValue[];
-  position: { end: SourceLocation; start: SourceLocation };
-}
-
-export function withSpan<const T extends object>(value: T, start: number, end: number): T {
-  const fragment = value as T & FragmentValue;
+export function withSpan<const T extends object>(value: T, start: number, end: number): FragmentNode<T> {
+  const fragment = value as FragmentNode<T>;
   fragment.startOffset = start;
   fragment.endOffset = end;
-  return value;
+  return fragment;
 }
 
 export function extendSpan(value: object, end: number): void {
@@ -435,7 +433,7 @@ export function inlineSequence(
     }
     const childEmitted = tokenIndex !== void 0
       ? appendInlineLeaf(entry, tokenBase, tokenIndex, sourceSpan, accumulator)
-      : appendInlineNode(entry, childOffset, childEnd, childTokenBase, sourceSpan, accumulator);
+      : appendInlineNode(entry, childOffset, childTokenBase, childEnd, sourceSpan, accumulator);
     if (!childEmitted) {
       continue;
     }
@@ -452,8 +450,8 @@ export function inlineSequence(
 function appendInlineNode(
   nodeId: number,
   offset: number,
-  endOffset: number,
   tokenBase: number,
+  endOffset: number,
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
 ): boolean {
@@ -463,7 +461,7 @@ function appendInlineNode(
   if (!project) {
     throw new Error(`Unexpected inline syntax rule: ${rule}`);
   }
-  return project(nodeId, offset, endOffset, tokenBase, sourceSpan, accumulator);
+  return project(nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator);
 }
 
 export function inlineChildren(
@@ -538,7 +536,7 @@ function blockContent(
   offset: number,
   tokenBase: number,
   context: BlockProjectionContext,
-): TopLevelContent {
+): FragmentNode<TopLevelContent> {
   const arena = context.view.arena;
   const rule = arena.ruleNameOf(nodeId);
   if (rule !== "Block") {
@@ -569,7 +567,7 @@ function blockNode(
   offset: number,
   tokenBase: number,
   context: BlockProjectionContext,
-): TopLevelContent {
+): FragmentNode<TopLevelContent> {
   const arena = context.view.arena;
   const rule = arena.ruleNameOf(nodeId);
   const project = context.profile.blockProjects[rule];
@@ -592,12 +590,12 @@ export function projectBlock(
   };
 }
 
-function cloneFragment(
+function materializeNode(
   value: FragmentValue,
   shift: number,
   point: (offset: number) => SourceLocation,
-): MaterializedValue {
-  const result = {} as MaterializedValue & Record<string, unknown>;
+): Node {
+  const result = {} as Node & Record<string, unknown>;
   // Preserve start → children → end order for the tokenizer's forward source locator.
   const start = point(shift + value.startOffset);
   for (const key in value) {
@@ -607,9 +605,9 @@ function cloneFragment(
   }
   const childrenTarget = value.children;
   if (childrenTarget) {
-    const children = new Array<MaterializedValue>(childrenTarget.length);
+    const children = new Array<Node>(childrenTarget.length);
     for (let i = 0; i < childrenTarget.length; i++) {
-      children[i] = cloneFragment(childrenTarget[i], shift, point);
+      children[i] = materializeNode(childrenTarget[i], shift, point);
     }
     result.children = children;
   }
@@ -624,11 +622,11 @@ function materializeBlock(
   fragment: BlockFragment,
   point: (offset: number) => SourceLocation,
 ): TopLevelContent {
-  return cloneFragment(
-    fragment.node as unknown as FragmentValue,
+  return materializeNode(
+    fragment.node,
     fragment.offset - fragment.origin,
     point,
-  ) as unknown as TopLevelContent;
+  ) as TopLevelContent;
 }
 
 export function materialize(
@@ -642,5 +640,5 @@ export function materialize(
     type: "root",
     children,
     position: { start, end: locate(sourceLength) },
-  } satisfies Root;
+  };
 }

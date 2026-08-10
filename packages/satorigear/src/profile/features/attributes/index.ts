@@ -11,7 +11,7 @@ import {
   type InlineTokenStream,
   setInlineTokenFlags,
 } from "../../../inline/runtime.ts";
-import { type BlockProjector, extendSpan, lineEnd } from "../../../mdast.ts";
+import { extendSpan, type FragmentNode, lineEnd } from "../../../mdast.ts";
 import {
   carryTerminalAttributes,
   hasTerminalAttributes,
@@ -34,19 +34,17 @@ const textKind = inlineKind("Text");
 const detachedFlag = 4;
 const terminalFlag = 8;
 
-function decorateInlineContainer(project: BlockProjector): BlockProjector {
-  return (nodeId, offset, tokenBase, context) => {
-    const result = project(nodeId, offset, tokenBase, context) as Paragraph | Heading;
-    const attributes = takeTerminalAttributes(result.children);
-    if (attributes) {
-      result.attributes = attributes;
-    }
-    return result;
-  };
-}
+const decorateInlineContainer: BlockProjectorDecorator = (project) => (nodeId, offset, tokenBase, context) => {
+  const result = project(nodeId, offset, tokenBase, context) as FragmentNode<Paragraph | Heading>;
+  const attributes = takeTerminalAttributes(result.children);
+  if (attributes) {
+    result.attributes = attributes;
+  }
+  return result;
+};
 
 const decorateList: BlockProjectorDecorator = (project) => (nodeId, offset, tokenBase, context) => {
-  const result = project(nodeId, offset, tokenBase, context) as List;
+  const result = project(nodeId, offset, tokenBase, context) as FragmentNode<List>;
   if (!result.spread) {
     for (const item of result.children) {
       const paragraph = !item.spread && item.children.length === 1 && item.children[0].type === "paragraph"
@@ -62,7 +60,7 @@ const decorateList: BlockProjectorDecorator = (project) => (nodeId, offset, toke
 };
 
 const decorateBlockquote: BlockProjectorDecorator = (project) => (nodeId, offset, tokenBase, context) => {
-  const result = project(nodeId, offset, tokenBase, context) as Blockquote;
+  const result = project(nodeId, offset, tokenBase, context) as FragmentNode<Blockquote>;
   const paragraph = result.children.length === 1 && result.children[0].type === "paragraph"
     ? result.children[0]
     : void 0;

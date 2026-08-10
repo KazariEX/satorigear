@@ -434,7 +434,7 @@ export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "LinkDefinition",
-      project(nodeId, offset, tokenBase, context): Definition {
+      project(nodeId, offset, tokenBase, context) {
         const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
         const fields = linkDefinitionFields(token);
         return withSpan<Definition>({

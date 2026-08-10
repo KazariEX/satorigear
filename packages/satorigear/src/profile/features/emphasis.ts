@@ -35,8 +35,8 @@ const markdownDelimiterRuns: DelimiterRunConfig[] = [
 const projectInlineEmphasis: InlineRuleProjector = (
   nodeId,
   offset,
-  endOffset,
   tokenBase,
+  endOffset,
   sourceSpan,
   accumulator,
 ) => {
@@ -55,8 +55,8 @@ const projectInlineEmphasis: InlineRuleProjector = (
 const projectInlineStrong: InlineRuleProjector = (
   nodeId,
   offset,
-  endOffset,
   tokenBase,
+  endOffset,
   sourceSpan,
   accumulator,
 ) => {

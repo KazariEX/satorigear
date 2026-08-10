@@ -72,7 +72,7 @@ class DocumentImpl implements Document {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(source, profile);
     this.#blockSyntax = createBlockSyntaxDocument(source, this.#blockScanner.tokens);
-    this.#syntax = createMarkdownSyntax(profile, this.#blockSyntax.view(this.#blockScanner.tokens), source);
+    this.#syntax = createMarkdownSyntax(source, this.#blockSyntax.view(this.#blockScanner.tokens), profile);
   }
 
   get source(): string {
@@ -87,7 +87,7 @@ class DocumentImpl implements Document {
     const changedSpan = changedSpanOf(edits);
     const update = this.#blockScanner.edit(edits);
     this.#blockSyntax.edit(sequentialEdits(edits), update.change);
-    this.#syntax.update(this.#blockSyntax.view(this.#blockScanner.tokens), this.source, edits);
+    this.#syntax.update(this.source, this.#blockSyntax.view(this.#blockScanner.tokens), edits);
     return { changedSpan };
   }
 

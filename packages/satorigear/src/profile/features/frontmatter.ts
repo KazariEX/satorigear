@@ -56,7 +56,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
     blockRules: [
       {
         rule: "Frontmatter",
-        project(nodeId, offset, tokenBase, context): Yaml {
+        project(nodeId, offset, tokenBase, context) {
           const token = blockToken(nodeId, tokenBase, "FrontmatterToken", context);
           const ranges = token.ranges;
           if (!ranges || ranges.length < 2) {

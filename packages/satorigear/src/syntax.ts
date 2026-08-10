@@ -21,6 +21,16 @@ import type { BlockToken } from "./block/tokens.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
 
+export interface SyntaxBlock {
+  id: number;
+  offset: number;
+  regionIds: readonly number[];
+  regionRevisions: readonly number[];
+  source: string;
+  tokenBase: number;
+  version: number;
+}
+
 export interface MarkdownInlineSyntax {
   arena: SyntaxArena;
   blockRule: string;
@@ -41,7 +51,7 @@ export interface MarkdownSyntax {
   blockView: () => BlockSyntaxView;
   inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
   openInlineForest: (blocks: readonly SyntaxBlock[]) => InlineForestLease;
-  update: (view: BlockSyntaxView, source: string, edits?: readonly TextEdit[]) => void;
+  update: (source: string, view: BlockSyntaxView, edits?: readonly TextEdit[]) => void;
 }
 
 interface InlineRegionDescriptor {
@@ -49,6 +59,11 @@ interface InlineRegionDescriptor {
   rule: string;
   span: { end: number; start: number };
   view: SourceView;
+}
+
+interface InlineForestRoot {
+  id: number;
+  tokenBase: number;
 }
 
 class InlineRegion extends InlineTokenState {
@@ -101,21 +116,6 @@ class InlineRegion extends InlineTokenState {
   }
 }
 
-export interface SyntaxBlock {
-  id: number;
-  offset: number;
-  regionIds: readonly number[];
-  regionRevisions: readonly number[];
-  source: string;
-  tokenBase: number;
-  version: number;
-}
-
-interface InlineForestRoot {
-  id: number;
-  tokenBase: number;
-}
-
 function appendTokenSpans(spans: SourceSpan[], token: BlockToken): void {
   if (token.ranges?.length) {
     for (const range of token.ranges) {
@@ -159,17 +159,17 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   #regions = new Map<number, InlineRegion>();
   #view: BlockSyntaxView;
 
-  constructor(profile: SyntaxProfile, view: BlockSyntaxView, source: string) {
+  constructor(source: string, view: BlockSyntaxView, profile: SyntaxProfile) {
     this.#profile = profile;
     this.#view = view;
-    this.update(view, source);
+    this.update(source, view);
   }
 
   blocks(): readonly SyntaxBlock[] {
     return this.#blocks;
   }
 
-  update(view: BlockSyntaxView, source: string, edits: readonly TextEdit[] = []): void {
+  update(source: string, view: BlockSyntaxView, edits: readonly TextEdit[] = []): void {
     const arena = view.arena;
     const labels = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
@@ -367,6 +367,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   }
 }
 
-export function createMarkdownSyntax(profile: SyntaxProfile, view: BlockSyntaxView, source: string): MarkdownSyntax {
-  return new MarkdownSyntaxImpl(profile, view, source);
+export function createMarkdownSyntax(source: string, view: BlockSyntaxView, profile: SyntaxProfile): MarkdownSyntax {
+  return new MarkdownSyntaxImpl(source, view, profile);
 }

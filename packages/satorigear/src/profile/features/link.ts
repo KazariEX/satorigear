@@ -126,8 +126,8 @@ function phrasingText(children: readonly PhrasingContent[]): string {
 function linkOrImage(
   nodeId: number,
   offset: number,
-  endOffset: number,
   tokenBase: number,
+  endOffset: number,
   sourceSpan: { end: number; start: number },
   context: InlineAccumulator["context"],
   media: "image" | "link",
@@ -154,10 +154,10 @@ function linkOrImage(
 }
 
 function projectMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineRuleProjector {
-  return (nodeId, offset, endOffset, tokenBase, sourceSpan, accumulator) => {
+  return (nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator) => {
     appendInline(
       accumulator,
-      linkOrImage(nodeId, offset, endOffset, tokenBase, sourceSpan, accumulator.context, media, resourceKind),
+      linkOrImage(nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator.context, media, resourceKind),
       sourceSpan.start,
     );
     return true;

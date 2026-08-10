@@ -45,6 +45,18 @@ interface Candidate {
   start: number;
 }
 
+interface BracketIndex {
+  linkLabels: Array<{ end: number; start: number }>;
+  normalClosers: Set<number>;
+  pairs: Map<number, number>;
+  referenceSuffixes: Map<number, number>;
+}
+
+interface CandidateSet {
+  normalClosers: ReadonlySet<number>;
+  roots: Candidate[];
+}
+
 const bracketOpenKind = inlineKind("BracketOpen");
 const imageOpenKind = inlineKind("ImageOpen");
 const linkTailKind = inlineKind("LinkTail");
@@ -57,13 +69,6 @@ const componentLabelCloseKind = inlineKind("InlineComponentLabelClose");
 const spanOpenKind = inlineKind("InlineSpanOpen");
 const spanCloseKind = inlineKind("InlineSpanClose");
 const inlineBoundaryKind = inlineKind("InlineBoundary");
-
-interface BracketIndex {
-  linkLabels: Array<{ end: number; start: number }>;
-  normalClosers: Set<number>;
-  pairs: Map<number, number>;
-  referenceSuffixes: Map<number, number>;
-}
 
 function bracketIndex(tokens: InlineTokenStream): BracketIndex {
   const stack: Array<{ image: boolean; start: number }> = [];
@@ -162,11 +167,6 @@ function componentCandidate(
 
 function insideLinkLabel(offset: number, labels: readonly { end: number; start: number }[]): boolean {
   return labels.some((label) => offset > label.start && offset < label.end);
-}
-
-interface CandidateSet {
-  normalClosers: ReadonlySet<number>;
-  roots: Candidate[];
 }
 
 function candidates(
@@ -390,8 +390,8 @@ export function transformInlineCarrier(
 const projectInlineComponent: InlineRuleProjector = (
   nodeId,
   offset,
-  endOffset,
   tokenBase,
+  endOffset,
   sourceSpan,
   accumulator,
 ) => {
@@ -433,8 +433,8 @@ const projectInlineComponent: InlineRuleProjector = (
 const projectInlineSpan: InlineRuleProjector = (
   nodeId,
   offset,
-  endOffset,
   tokenBase,
+  endOffset,
   sourceSpan,
   accumulator,
 ) => {

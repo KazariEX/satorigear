@@ -7,6 +7,7 @@ import {
   structural,
 } from "../../block/primitives.ts";
 import {
+  type BlockProjectionContext,
   blockToken,
   inlineChildren,
   tokenStart,
@@ -14,7 +15,6 @@ import {
 } from "../../mdast.ts";
 import { projectCodeSpan } from "./code.ts";
 import type { BlockToken } from "../../block/tokens.ts";
-import type { BlockProjectionContext } from "../../mdast.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface CellRange {
@@ -286,7 +286,7 @@ export const feature: SyntaxFeature = {
     },
     {
       rule: "Table",
-      project(nodeId, offset, tokenBase, context): Table {
+      project(nodeId, offset, tokenBase, context) {
         const open = blockToken(nodeId, tokenBase, "TableOpen", context);
         const close = blockToken(nodeId, tokenBase, "TableClose", context);
         const rows = childRules(nodeId, offset, tokenBase, "TableRow", context).map((row) => (
