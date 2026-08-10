@@ -1,6 +1,6 @@
 import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
-import { type BlockFragment, materialize, projectBlock } from "./mdast.ts";
+import { type BlockFragment, type BlockProjectionContext, materialize, projectBlock } from "./mdast.ts";
 import { createSyntaxState, type SyntaxState } from "./syntax-state.ts";
 import type { BlockSyntaxDocument, BlockSyntaxParser } from "./block/syntax.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
@@ -59,9 +59,10 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
 export class DocumentImpl implements Document {
   #blockScanner: BlockScanner;
   #blockSyntax: BlockSyntaxDocument;
+  #fragmentsByBlockId?: Map<number, BlockFragment>;
+  #fragments: BlockFragment[] = [];
   #profile: SyntaxProfile;
   #syntaxState: SyntaxState;
-  #fragments = new Map<number, BlockFragment>();
 
   constructor(source: string, profile: SyntaxProfile, blockParser: BlockSyntaxParser) {
     this.#profile = profile;
@@ -79,44 +80,70 @@ export class DocumentImpl implements Document {
     if (edits.length === 0) {
       return { changedSpan: { start: 0, end: 0 } };
     }
-    const changedSpan = changedSpanOf(edits);
-    const update = this.#blockScanner.edit(edits);
-    this.#blockSyntax.edit(sequentialEdits(edits), update.change);
+
+    if (this.#fragments.length > 0 && this.#fragmentsByBlockId === void 0) {
+      // Preserve fragment identity before the syntax update changes block order and offsets.
+      const blocks = this.#syntaxState.blocks();
+      const fragmentsByBlockId = new Map<number, BlockFragment>();
+      for (let index = 0; index < blocks.length; index++) {
+        fragmentsByBlockId.set(blocks[index].id, this.#fragments[index]);
+      }
+      this.#fragmentsByBlockId = fragmentsByBlockId;
+    }
+
+    const { change } = this.#blockScanner.edit(edits);
+    // The emitted parser applies edits sequentially; SyntaxState maps the original batch onto existing regions.
+    this.#blockSyntax.edit(sequentialEdits(edits), change);
     this.#syntaxState.update(this.source, this.#blockSyntax.view(this.#blockScanner.tokens), edits);
-    return { changedSpan };
+
+    return {
+      changedSpan: changedSpanOf(edits),
+    };
   }
 
   #projectBlocks(): BlockFragment[] {
-    const fragments = new Map<number, BlockFragment>();
-    const syntaxBlocks = this.#syntaxState.blocks();
-    const changed = syntaxBlocks.filter((block) => this.#fragments.get(block.id)?.version !== block.version);
-    const context = {
+    const previousFragments = this.#fragmentsByBlockId;
+    if (this.#fragments.length > 0 && previousFragments === void 0) {
+      return this.#fragments;
+    }
+
+    const blocks = this.#syntaxState.blocks();
+    const changedBlocks = previousFragments === void 0
+      ? blocks
+      : blocks.filter((block) => previousFragments.get(block.id)?.version !== block.version);
+
+    const context: BlockProjectionContext = {
       profile: this.#profile,
       source: this.source,
       syntaxState: this.#syntaxState,
       view: this.#syntaxState.blockView(),
     };
-    const forest = this.#syntaxState.openInlineForest(changed);
+
+    const forestFragments = new Map<number, BlockFragment>();
+    const forest = this.#syntaxState.openInlineForest(changedBlocks);
     try {
-      // Consume scratch-backed roots before the later path can activate a region's document-owned arena.
+      // Forest roots borrow shared scratch, so their projection must finish before the lease closes.
       for (const block of forest.blocks) {
-        fragments.set(block.id, projectBlock(block, context));
+        forestFragments.set(block.id, projectBlock(block, context));
       }
     }
     finally {
       forest.close();
     }
-    const blocks = syntaxBlocks.map((block) => {
-      const previous = this.#fragments.get(block.id);
-      const fragment = fragments.get(block.id) ?? (previous?.version === block.version
-        ? previous
-        : projectBlock(block, context));
+
+    const nextFragments = blocks.map((block) => {
+      let fragment = forestFragments.get(block.id);
+      if (fragment === void 0) {
+        const previous = previousFragments?.get(block.id);
+        fragment = previous?.version === block.version ? previous : projectBlock(block, context);
+      }
       fragment.offset = block.offset;
-      fragments.set(block.id, fragment);
       return fragment;
     });
-    this.#fragments = fragments;
-    return blocks;
+
+    this.#fragmentsByBlockId = void 0;
+    this.#fragments = nextFragments;
+    return nextFragments;
   }
 
   snapshot(): Root {

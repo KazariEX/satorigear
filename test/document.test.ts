@@ -111,6 +111,17 @@ describe("markdown document", () => {
     expect(after.children[2].position?.start.offset).toBeGreaterThan(before.children[1].position?.start.offset ?? 0);
   });
 
+  it("applies consecutive edits before the next snapshot", () => {
+    const document = parser.createDocument("one\n\ntwo\n\nthree\n");
+    document.snapshot();
+
+    document.edit([{ start: 0, end: 0, text: "# heading\n\n" }]);
+    const start = document.source.indexOf("three");
+    document.edit([{ start, end: start + 5, text: "THREE" }]);
+
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
+  });
+
   it("isolates snapshots from user mutations", () => {
     const source = "# heading *text*\n\nbody\n";
     const document = parser.createDocument(source);
