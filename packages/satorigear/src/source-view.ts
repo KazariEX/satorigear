@@ -119,55 +119,6 @@ function mapSpans(this: SourceView, start: number, end: number): SourceSpan[] {
   return mapped;
 }
 
-// Project document edits into a view whose physical segments remain structurally stable.
-export function projectSourceEdits(
-  previous: SourceView,
-  next: SourceView,
-  edits: readonly TextEdit[],
-): TextEdit[] | undefined {
-  if (previous.segments.length !== next.segments.length) {
-    return;
-  }
-
-  const projected: TextEdit[] = [];
-  let editIndex = 0;
-  let documentDelta = 0;
-  let viewDelta = 0;
-  for (let segmentIndex = 0; segmentIndex < previous.segments.length; segmentIndex++) {
-    const oldSegment = previous.segments[segmentIndex];
-    const newSegment = next.segments[segmentIndex];
-    if (
-      newSegment.start !== oldSegment.start + documentDelta ||
-      newSegment.viewStart !== oldSegment.viewStart + viewDelta
-    ) {
-      return;
-    }
-
-    while (editIndex < edits.length && edits[editIndex].start < oldSegment.end) {
-      const edit = edits[editIndex++];
-      if (edit.start <= oldSegment.start || edit.end >= oldSegment.end) {
-        return;
-      }
-      projected.push({
-        start: oldSegment.viewStart + edit.start - oldSegment.start + viewDelta,
-        end: oldSegment.viewStart + edit.end - oldSegment.start + viewDelta,
-        text: edit.text,
-      });
-      const delta = edit.text.length - (edit.end - edit.start);
-      documentDelta += delta;
-      viewDelta += delta;
-    }
-
-    if (
-      newSegment.end !== oldSegment.end + documentDelta ||
-      newSegment.viewEnd !== oldSegment.viewEnd + viewDelta
-    ) {
-      return;
-    }
-  }
-  return editIndex === edits.length ? projected : void 0;
-}
-
 // Build logical text from physical source spans while preserving original coordinates.
 export function createSourceView(source: string, spans: readonly SourceSpan[]): SourceView {
   if (spans.length === 1) {

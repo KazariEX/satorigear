@@ -144,6 +144,22 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
       { rule: "Strong", project: projectStrong },
       { rule: "LinkStrong", project: projectStrong },
     ],
+    inlineStructures: [
+      {
+        kind: "pair",
+        open: "EmphasisOpen",
+        close: "EmphasisClose",
+        rule: "Emphasis",
+        linkRule: "LinkEmphasis",
+      },
+      {
+        kind: "pair",
+        open: "StrongOpen",
+        close: "StrongClose",
+        rule: "Strong",
+        linkRule: "LinkStrong",
+      },
+    ],
     inlineTokens,
   };
 }

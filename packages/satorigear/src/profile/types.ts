@@ -1,6 +1,7 @@
 import type { BlockLine } from "../block/lines.ts";
 import type { BlockToken } from "../block/tokens.ts";
 import type { DelimiterConfig, PairedTokenConfig } from "../inline/pairing.ts";
+import type { InlineStructureRegistration, InlineSyntaxSchema } from "../inline/syntax.ts";
 import type { InlineTokenStream } from "../inline/tokens.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 
@@ -86,6 +87,7 @@ export interface SyntaxFeature {
   inlineTransform?: InlineTransform;
   inlineNormalize?: InlineTransform;
   inlineRules?: readonly InlineRuleRegistration[];
+  inlineStructures?: readonly InlineStructureRegistration[];
   inlineTokens?: readonly InlineTokenRegistration[];
   tokenPairs?: readonly PairedTokenConfig<InlineResolutionContext>[];
 }
@@ -104,6 +106,7 @@ export interface SyntaxProfile {
   blockUnwrappers: readonly BlockLineUnwrapper[];
   decodeText: (value: string) => string;
   inlineRuleProjects: Readonly<Record<string, InlineRuleProjector>>;
+  inlineSyntax: InlineSyntaxSchema;
   inlineTokenProjects: readonly (InlineLeafProjector | undefined)[];
   resolveInline: InlineTransform;
 }

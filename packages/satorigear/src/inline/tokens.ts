@@ -1,10 +1,8 @@
 import * as generatedInline from "../generated/inline.ts";
-import type { TokenChange } from "../syntax-protocol.ts";
 
 export type InlineTokenStream = readonly number[];
-export type InlineTokenChange = TokenChange<InlineTokenStream>;
 
-// The generated lexer, resolver, incremental parser, and projector share this one
+// The generated lexer, resolver, semantic arena, and projector share this one
 // region-local record layout. Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = generatedInline.packedTokenStride;
 
@@ -77,76 +75,4 @@ export function copyInlineToken(target: number[], tokens: InlineTokenStream, ind
   for (let field = 0; field < inlineTokenStride; field++) {
     target.push(tokens[offset + field]);
   }
-}
-
-function tokenEqualsAfterShift(
-  previousSource: string,
-  previous: InlineTokenStream,
-  previousIndex: number,
-  nextSource: string,
-  next: InlineTokenStream,
-  nextIndex: number,
-  delta: number,
-): boolean {
-  const previousStart = inlineTokenStart(previous, previousIndex);
-  const previousEnd = inlineTokenEnd(previous, previousIndex);
-  const nextStart = inlineTokenStart(next, nextIndex);
-  const nextEnd = inlineTokenEnd(next, nextIndex);
-  if (
-    inlineTokenKind(previous, previousIndex) !== inlineTokenKind(next, nextIndex) ||
-    inlineTokenFlags(previous, previousIndex) !== inlineTokenFlags(next, nextIndex) ||
-    previousStart + delta !== nextStart ||
-    previousEnd + delta !== nextEnd
-  ) {
-    return false;
-  }
-  return previousSource.slice(previousStart, previousEnd) === nextSource.slice(nextStart, nextEnd);
-}
-
-export function createInlineTokenChange(
-  previousSource: string,
-  previous: InlineTokenStream,
-  nextSource: string,
-  next: InlineTokenStream,
-  delta: number,
-): InlineTokenChange {
-  const previousCount = inlineTokenCount(previous);
-  const nextCount = inlineTokenCount(next);
-  if (previousCount === 0) {
-    return { oldStart: 0, oldEnd: 0, tokens: next };
-  }
-  if (nextCount === 0) {
-    return { oldStart: 0, oldEnd: previousCount, tokens: next };
-  }
-
-  let start = 0;
-  const common = Math.min(previousCount, nextCount);
-  while (
-    start < common &&
-    tokenEqualsAfterShift(previousSource, previous, start, nextSource, next, start, 0)
-  ) {
-    start++;
-  }
-
-  let suffix = 0;
-  while (
-    suffix < common - start &&
-    tokenEqualsAfterShift(
-      previousSource,
-      previous,
-      previousCount - 1 - suffix,
-      nextSource,
-      next,
-      nextCount - 1 - suffix,
-      delta,
-    )
-  ) {
-    suffix++;
-  }
-
-  return {
-    oldStart: start,
-    oldEnd: previousCount - suffix,
-    tokens: next.slice(start * inlineTokenStride, (nextCount - suffix) * inlineTokenStride),
-  };
 }

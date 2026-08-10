@@ -1,18 +1,13 @@
 import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
-import {
-  inlineSyntaxArena,
-  parseInline,
-  parseInlineForest,
-} from "./inline/syntax.ts";
 import { inlineTokenCount, inlineTokenStart, type InlineTokenStream } from "./inline/tokens.ts";
 import {
   createSourceView,
   type SourceSpan,
   type SourceView,
-  type TextEdit,
 } from "./source-view.ts";
 import type { BlockSyntaxView } from "./block/syntax.ts";
 import type { BlockToken } from "./block/tokens.ts";
+import type { InlineSyntaxArena } from "./inline/syntax.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
 
@@ -36,20 +31,7 @@ export interface MarkdownInlineSyntax {
   view: SourceView;
 }
 
-export interface InlineForestLease {
-  blocks: readonly SyntaxBlock[];
-  close: () => void;
-}
-
-export interface SyntaxState {
-  blocks: () => readonly SyntaxBlock[];
-  blockView: () => BlockSyntaxView;
-  inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
-  openInlineForest: (blocks: readonly SyntaxBlock[]) => InlineForestLease;
-  update: (source: string, view: BlockSyntaxView, edits?: readonly TextEdit[]) => void;
-}
-
-interface InlineForestRoot {
+interface InlineRoot {
   id: number;
   tokenBase: number;
 }
@@ -89,15 +71,21 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-class SyntaxStateImpl implements SyntaxState {
+export class SyntaxState {
   #blocks: readonly SyntaxBlock[] = [];
-  // Root IDs point into generated scratch storage and exist only while an inline forest lease is open.
-  #forestRoots = new Map<number, InlineForestRoot>();
+  #inlineArena: InlineSyntaxArena;
+  #inlineRoots = new Map<number, InlineRoot>();
   #profile: SyntaxProfile;
   #regions = new Map<number, InlineRegion>();
   #view: BlockSyntaxView;
 
-  constructor(source: string, view: BlockSyntaxView, profile: SyntaxProfile) {
+  constructor(
+    source: string,
+    view: BlockSyntaxView,
+    profile: SyntaxProfile,
+    inlineArena: InlineSyntaxArena,
+  ) {
+    this.#inlineArena = inlineArena;
     this.#profile = profile;
     this.#view = view;
     this.update(source, view);
@@ -107,7 +95,7 @@ class SyntaxStateImpl implements SyntaxState {
     return this.#blocks;
   }
 
-  update(source: string, view: BlockSyntaxView, edits: readonly TextEdit[] = []): void {
+  update(source: string, view: BlockSyntaxView): void {
     const arena = view.arena;
     const definitions = new Set<string>();
     const bindings: InlineRegionBinding[] = [];
@@ -203,7 +191,7 @@ class SyntaxStateImpl implements SyntaxState {
         }
       }
       const region = previous
-        ? previous.update(binding, definitions, edits)
+        ? previous.update(binding, definitions)
         : new InlineRegion(this.#profile.resolveInline, binding, definitions);
       regions.set(binding.id, region);
     }
@@ -234,52 +222,27 @@ class SyntaxStateImpl implements SyntaxState {
     return this.#view;
   }
 
-  openInlineForest(blocks: readonly SyntaxBlock[]): InlineForestLease {
-    const regions: InlineRegion[] = [];
-    const forestBlocks: SyntaxBlock[] = [];
-    // A leased block stays entirely on scratch; one region-owned syntax arena would switch arenas mid-projection.
+  prepareInline(blocks: readonly SyntaxBlock[]): void {
+    const regionIds: number[] = [];
+    const segments: InlineTokenStream[] = [];
     for (const block of blocks) {
-      const start = regions.length;
       for (const id of block.regionIds) {
         const region = this.#regions.get(id);
-        if (!region || region.syntax) {
-          regions.length = start;
-          break;
+        if (!region) {
+          throw new Error(`Block references missing inline region ${id}`);
         }
-        regions.push(region);
-      }
-      if (regions.length > start) {
-        forestBlocks.push(block);
+        regionIds.push(id);
+        segments.push(region.tokens);
       }
     }
-    this.#forestRoots.clear();
-    try {
-      if (regions.length < 2) {
-        forestBlocks.length = 0;
-      }
-      else {
-        const arena = inlineSyntaxArena;
-        const rootId = parseInlineForest(regions);
-        const childCount = arena.childCount(rootId);
-        let regionIndex = 0;
-        for (let index = 0; index < childCount; index++) {
-          const childId = arena.childAt(rootId, index);
-          if (childId >= 0 && arena.ruleNameOf(childId) === "InlineLines") {
-            this.#forestRoots.set(regions[regionIndex++].id, {
-              id: childId,
-              tokenBase: arena.childTokRelAt(rootId, index),
-            });
-          }
-        }
-        if (regionIndex !== regions.length) {
-          throw new Error("Inline forest did not preserve its region boundaries");
-        }
-      }
-      return { blocks: forestBlocks, close: () => this.#forestRoots.clear() };
-    }
-    catch (error) {
-      this.#forestRoots.clear();
-      throw error;
+
+    const roots: number[] = [];
+    this.#inlineArena.build(segments, roots);
+    this.#inlineRoots.clear();
+    let tokenBase = 0;
+    for (let index = 0; index < regionIds.length; index++) {
+      this.#inlineRoots.set(regionIds[index], { id: roots[index], tokenBase });
+      tokenBase += inlineTokenCount(segments[index]);
     }
   }
 
@@ -288,24 +251,18 @@ class SyntaxStateImpl implements SyntaxState {
     if (!region) {
       return;
     }
-    // Region syntax documents own their arena; forest and one-shot roots borrow shared scratch synchronously.
-    const regionSyntax = region.syntax;
-    const forestRoot = this.#forestRoots.get(nodeId);
+    const root = this.#inlineRoots.get(nodeId);
+    if (!root) {
+      throw new Error(`Inline region ${nodeId} was projected outside its prepared block batch`);
+    }
     return {
-      arena: regionSyntax?.arena ?? inlineSyntaxArena,
+      arena: this.#inlineArena,
       blockRule: region.rule,
-      rootId: regionSyntax?.rootId ?? forestRoot?.id ?? parseInline(
-        region.view.text,
-        region.tokens,
-      ),
+      rootId: root.id,
       rootOffset: inlineTokenCount(region.tokens) > 0 ? inlineTokenStart(region.tokens, 0) : 0,
-      rootTokenBase: forestRoot?.tokenBase ?? 0,
+      rootTokenBase: root.tokenBase,
       tokens: region.tokens,
       view: region.view,
     };
   }
-}
-
-export function createSyntaxState(source: string, view: BlockSyntaxView, profile: SyntaxProfile): SyntaxState {
-  return new SyntaxStateImpl(source, view, profile);
 }

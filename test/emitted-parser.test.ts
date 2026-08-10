@@ -41,8 +41,10 @@ interface Runtime {
   createParser: () => Parser;
 }
 
-interface LexerRuntime {
-  tokenize: (source: string) => ExternalToken[];
+interface PackedLexerRuntime {
+  packedTokenStride: number;
+  tokenKind: (type: string) => number;
+  tokenizePacked: (source: string) => number[];
 }
 
 const Word = token(plus(range("a", "z")));
@@ -102,30 +104,26 @@ function outcome(parser: Parser, handle: Handle): unknown {
   };
 }
 
-function tokenShape(token: ExternalToken): ExternalToken {
-  return {
-    commentBefore: token.commentBefore,
-    multilineFlowBefore: token.multilineFlowBefore,
-    newlineBefore: token.newlineBefore,
-    offset: token.offset,
-    text: token.text,
-    type: token.type,
-  };
+function packTokens(runtime: PackedLexerRuntime, tokens: readonly ExternalToken[]): number[] {
+  return tokens.flatMap((token) => [
+    runtime.tokenKind(token.type),
+    token.offset,
+    token.offset + token.text.length,
+    (token.newlineBefore ? 1 : 0) |
+      (token.commentBefore ? 2 : 0) |
+      (token.multilineFlowBefore ? 4 : 0),
+  ]);
 }
 
 it("matches the fallback lexer for newline and delimited spans", async () => {
   const directory = await mkdtemp(join(tmpdir(), "satorigear-emitted-lexer-"));
   try {
     const emitter = await import("monogram/emit-parser.ts" as string) as {
-      emitJsLexer: (value: typeof newlineGrammar) => string | null;
-      emitJsParser: (value: typeof newlineGrammar, lexer: string) => string;
+      emitJsPackedLexer: (value: typeof newlineGrammar) => string;
     };
-    const lexer = emitter.emitJsLexer(newlineGrammar);
-    expect(lexer).not.toBeNull();
-
-    const modulePath = join(directory, "parser.ts");
-    await writeFile(modulePath, `// @ts-nocheck\n${emitter.emitJsParser(newlineGrammar, lexer!)}`);
-    const runtime = await import(/* @vite-ignore */ pathToFileURL(modulePath).href) as LexerRuntime;
+    const modulePath = join(directory, "lexer.ts");
+    await writeFile(modulePath, `// @ts-nocheck\n${emitter.emitJsPackedLexer(newlineGrammar)}`);
+    const runtime = await import(/* @vite-ignore */ pathToFileURL(modulePath).href) as PackedLexerRuntime;
     const fallback = createLexer(newlineGrammar).tokenize;
     const sources = [
       "alpha\nbeta",
@@ -138,7 +136,8 @@ it("matches the fallback lexer for newline and delimited spans", async () => {
     ];
 
     for (const source of sources) {
-      expect(runtime.tokenize(source).map(tokenShape)).toEqual(fallback(source).map(tokenShape));
+      expect(runtime.packedTokenStride).toBe(4);
+      expect(runtime.tokenizePacked(source)).toEqual(packTokens(runtime, fallback(source)));
     }
   }
   finally {

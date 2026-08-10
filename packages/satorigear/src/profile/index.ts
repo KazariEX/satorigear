@@ -3,6 +3,7 @@ import {
   type DelimiterConfig,
   type PairedTokenConfig,
 } from "../inline/pairing.ts";
+import { compileInlineSyntax, type InlineStructureRegistration } from "../inline/syntax.ts";
 import { inlineKind } from "../inline/tokens.ts";
 import { feature as featureAttributes } from "./features/attributes/index.ts";
 import { feature as featureBlockQuote } from "./features/blockquote.ts";
@@ -121,6 +122,8 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   const delimiters: DelimiterConfig[] = [];
   const inlineNormalizes: InlineTransform[] = [];
   const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
+  const inlineStructures: InlineStructureRegistration[] = [];
+  const inlineTokenNames: (string | undefined)[] = [];
   const inlineTokenProjects: (InlineLeafProjector | undefined)[] = [];
   const inlineTransforms: InlineTransform[] = [];
   const tokenPairs: PairedTokenConfig<InlineResolutionContext>[] = [];
@@ -181,9 +184,14 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
         inlineRuleProjects[registration.rule] = registration.project;
       }
     }
+    if (feature.inlineStructures) {
+      inlineStructures.push(...feature.inlineStructures);
+    }
     if (feature.inlineTokens) {
       for (const registration of feature.inlineTokens) {
-        inlineTokenProjects[inlineKind(registration.token)] = registration.project;
+        const kind = inlineKind(registration.token);
+        inlineTokenNames[kind] = registration.token;
+        inlineTokenProjects[kind] = registration.project;
       }
     }
     if (feature.inlineTransform) {
@@ -233,6 +241,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     blockUnwrappers,
     decodeText: semanticText,
     inlineRuleProjects,
+    inlineSyntax: compileInlineSyntax(inlineStructures, inlineTokenNames),
     inlineTokenProjects,
     resolveInline,
   };

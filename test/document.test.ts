@@ -85,7 +85,7 @@ describe("markdown document", () => {
     expect(document.snapshot().children[0]).toMatchObject({ type: "definition", identifier: "foo] > xxxfoo&" });
   });
 
-  it("scopes batched inline forests around edited region arenas", () => {
+  it("isolates edited regions in the shared inline arena", () => {
     const document = parser.createDocument("one *a*\n\ntwo **b**\n");
     document.snapshot();
     document.edit([

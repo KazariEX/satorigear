@@ -1,8 +1,9 @@
 import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
 import { type BlockFragment, type BlockProjectionContext, materialize, projectBlock } from "./mdast.ts";
-import { createSyntaxState, type SyntaxState } from "./syntax-state.ts";
+import { SyntaxState } from "./syntax-state.ts";
 import type { BlockSyntaxDocument, BlockSyntaxParser } from "./block/syntax.ts";
+import type { InlineSyntaxArena } from "./inline/syntax.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { TextEdit } from "./source-view.ts";
 
@@ -64,11 +65,21 @@ export class DocumentImpl implements Document {
   #profile: SyntaxProfile;
   #syntaxState: SyntaxState;
 
-  constructor(source: string, profile: SyntaxProfile, blockParser: BlockSyntaxParser) {
+  constructor(
+    source: string,
+    profile: SyntaxProfile,
+    blockParser: BlockSyntaxParser,
+    inlineArena: InlineSyntaxArena,
+  ) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(source, profile);
     this.#blockSyntax = blockParser.parse(source, this.#blockScanner.tokens);
-    this.#syntaxState = createSyntaxState(source, this.#blockSyntax.view(this.#blockScanner.tokens), profile);
+    this.#syntaxState = new SyntaxState(
+      source,
+      this.#blockSyntax.view(this.#blockScanner.tokens),
+      profile,
+      inlineArena,
+    );
   }
 
   get source(): string {
@@ -94,7 +105,7 @@ export class DocumentImpl implements Document {
     const { change } = this.#blockScanner.edit(edits);
     // The emitted parser applies edits sequentially; SyntaxState maps the original batch onto existing regions.
     this.#blockSyntax.edit(sequentialEdits(edits), change);
-    this.#syntaxState.update(this.source, this.#blockSyntax.view(this.#blockScanner.tokens), edits);
+    this.#syntaxState.update(this.source, this.#blockSyntax.view(this.#blockScanner.tokens));
 
     return {
       changedSpan: changedSpanOf(edits),
@@ -111,32 +122,18 @@ export class DocumentImpl implements Document {
     const changedBlocks = previousFragments === void 0
       ? blocks
       : blocks.filter((block) => previousFragments.get(block.id)?.version !== block.version);
-
     const context: BlockProjectionContext = {
       profile: this.#profile,
       source: this.source,
       syntaxState: this.#syntaxState,
       view: this.#syntaxState.blockView(),
     };
-
-    const forestFragments = new Map<number, BlockFragment>();
-    const forest = this.#syntaxState.openInlineForest(changedBlocks);
-    try {
-      // Forest roots borrow shared scratch, so their projection must finish before the lease closes.
-      for (const block of forest.blocks) {
-        forestFragments.set(block.id, projectBlock(block, context));
-      }
-    }
-    finally {
-      forest.close();
-    }
+    // Changed regions share one projection workspace; no arena reference escapes the resulting fragments.
+    this.#syntaxState.prepareInline(changedBlocks);
 
     const nextFragments = blocks.map((block) => {
-      let fragment = forestFragments.get(block.id);
-      if (fragment === void 0) {
-        const previous = previousFragments?.get(block.id);
-        fragment = previous?.version === block.version ? previous : projectBlock(block, context);
-      }
+      const previous = previousFragments?.get(block.id);
+      const fragment = previous?.version === block.version ? previous : projectBlock(block, context);
       fragment.offset = block.offset;
       return fragment;
     });

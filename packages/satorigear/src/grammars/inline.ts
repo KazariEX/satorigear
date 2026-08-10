@@ -219,15 +219,12 @@ const Delimiter = token(oneOf("\\", "`", "*", "_", "[", "]", "<", ">", "!", "&",
   scope: "punctuation.definition.markdown",
 });
 const Newline = token(never());
-// A zero-width structural token keeps batched regions independent without changing their spans.
-const InlineBoundary = token(never());
 
 let Inline: RuleRef;
 let LinkContent: RuleRef;
 
 const InlineLine = rule(() => [[many1(Inline)]]);
 const InlineLines = rule(($) => [InlineLine, [$, Newline, InlineLine]]);
-const InlineForest = rule(() => [[InlineLines, many(InlineBoundary, InlineLines)]]);
 const Emphasis = rule(() => [[EmphasisOpen, many1(alt(Inline, Newline)), EmphasisClose]]);
 const Strong = rule(() => [[StrongOpen, many1(alt(Inline, Newline)), StrongClose]]);
 const LinkEmphasis = rule(() => [[EmphasisOpen, many1(alt(LinkContent, Newline)), EmphasisClose]]);
@@ -375,13 +372,11 @@ export const grammar = defineGrammar({
     InlineSpanClose,
     Delimiter,
     Newline,
-    InlineBoundary,
   },
   rules: {
     Inline,
     InlineLine,
     InlineLines,
-    InlineForest,
     Emphasis,
     Strong,
     LinkEmphasis,
