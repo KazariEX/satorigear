@@ -1,4 +1,5 @@
 import type { PhrasingContent } from "mdast";
+import { assignAttribute } from "./syntax.ts";
 import type { Attributes } from "./types.ts";
 
 // Projection-local children carry terminal attributes to block decorators without exposing AST state.
@@ -10,13 +11,7 @@ type AttributeChildren = PhrasingContent[] & {
 
 export function mergeAttributes(target: Attributes, source: Attributes): void {
   for (const key in source) {
-    const value = source[key];
-    if (key === "class" && typeof value === "string" && typeof target.class === "string") {
-      target.class += ` ${value}`;
-    }
-    else {
-      target[key] = value;
-    }
+    assignAttribute(target, key, source[key]);
   }
 }
 

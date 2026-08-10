@@ -1,4 +1,4 @@
-import type { Attributes } from "./types.ts";
+import type { Attributes, AttributeValue } from "./types.ts";
 
 const brackets: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
 
@@ -78,7 +78,7 @@ export function normalizeComponentName(value: string): string {
   return parts.map((value) => value.toLowerCase()).join("-");
 }
 
-function assignAttribute(attributes: Attributes, name: string, value: string): void {
+export function assignAttribute(attributes: Attributes, name: string, value: AttributeValue): void {
   if (name === "class" && typeof value === "string" && typeof attributes.class === "string") {
     attributes.class += ` ${value}`;
   }
