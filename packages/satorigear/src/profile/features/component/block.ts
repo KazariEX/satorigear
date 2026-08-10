@@ -13,6 +13,7 @@ import {
   type BlockProjector,
   blockToken,
   directBlockToken,
+  type FragmentNode,
   inlineChildren,
   tokenEnd,
   tokenStart,
@@ -413,7 +414,7 @@ function blockLabel(
   nodeId: number,
   tokenBase: number,
   context: Parameters<BlockProjector>[3],
-) {
+): FragmentNode<Paragraph> {
   const open = blockToken(nodeId, tokenBase, "BlockComponentLabelOpen", context);
   const close = blockToken(nodeId, tokenBase, "BlockComponentLabelClose", context);
   return withSpan<Paragraph>({
