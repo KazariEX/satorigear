@@ -1,6 +1,6 @@
 import * as generatedInline from "../generated/inline.ts";
+import type { TextEdit } from "../source-view.ts";
 import type { SyntaxArena, TokenChange } from "../syntax-protocol.ts";
-import type { TextEdit } from "../text-edit.ts";
 
 export type InlineTokenStream = readonly number[];
 export type InlineTokenChange = TokenChange<InlineTokenStream>;

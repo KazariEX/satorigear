@@ -1,6 +1,6 @@
 import * as generatedBlocks from "../generated/blocks.ts";
+import type { TextEdit } from "../source-view.ts";
 import type { SyntaxArenaView } from "../syntax-protocol.ts";
-import type { TextEdit } from "../text-edit.ts";
 import type { BlockToken, BlockTokenChange } from "./tokens.ts";
 
 export type BlockSyntaxView = SyntaxArenaView<BlockToken>;

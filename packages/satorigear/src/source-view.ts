@@ -1,5 +1,3 @@
-import type { TextEdit } from "./text-edit.ts";
-
 export interface SourceLocation {
   column: number;
   line: number;
@@ -9,6 +7,10 @@ export interface SourceLocation {
 export interface SourceSpan {
   end: number;
   start: number;
+}
+
+export interface TextEdit extends SourceSpan {
+  text: string;
 }
 
 export interface SourceViewSegment extends SourceSpan {

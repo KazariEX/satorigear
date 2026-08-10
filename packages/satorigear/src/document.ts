@@ -9,7 +9,7 @@ import {
 import { createProfile, type SyntaxOptions } from "./profile/index.ts";
 import { createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
-import type { TextEdit } from "./text-edit.ts";
+import type { TextEdit } from "./source-view.ts";
 
 export interface EditResult {
   changedSpan: {

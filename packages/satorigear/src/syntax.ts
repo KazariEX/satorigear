@@ -9,12 +9,17 @@ import {
   parseInlineForest,
 } from "./inline/runtime.ts";
 import { InlineTokenState } from "./inline/tokenizer.ts";
-import { createSourceView, projectSourceEdits, type SourceSpan, type SourceView } from "./source-view.ts";
+import {
+  createSourceView,
+  projectSourceEdits,
+  type SourceSpan,
+  type SourceView,
+  type TextEdit,
+} from "./source-view.ts";
 import type { BlockSyntaxView } from "./block/runtime.ts";
 import type { BlockToken } from "./block/tokens.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
-import type { TextEdit } from "./text-edit.ts";
 
 export interface MarkdownInlineSyntax {
   arena: SyntaxArena;

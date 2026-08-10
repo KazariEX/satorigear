@@ -7,8 +7,7 @@ import {
   tokenEqualsAfterShift,
 } from "./tokens.ts";
 import type { BlockScanContext, SyntaxProfile } from "../profile/types.ts";
-import type { SourceLocation } from "../source-view.ts";
-import type { TextEdit } from "../text-edit.ts";
+import type { SourceLocation, TextEdit } from "../source-view.ts";
 
 function linesOf(source: string): BlockLine[] {
   const lines: BlockLine[] = [];

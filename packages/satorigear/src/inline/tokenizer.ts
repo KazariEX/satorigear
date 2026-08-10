@@ -5,7 +5,7 @@ import {
   tokenizeInline,
 } from "./runtime.ts";
 import type { InlineResolutionContext, SyntaxProfile } from "../profile/types.ts";
-import type { TextEdit } from "../text-edit.ts";
+import type { TextEdit } from "../source-view.ts";
 
 type ApplyTokenChange = (edits: readonly TextEdit[], change: InlineTokenChange) => void;
 
