@@ -1,5 +1,4 @@
 import type { Root } from "mdast";
-import { type BlockSyntaxDocument, createBlockSyntaxDocument } from "./block/runtime.ts";
 import { BlockScanner } from "./block/scanner.ts";
 import {
   type BlockFragment,
@@ -7,6 +6,7 @@ import {
   projectBlock,
 } from "./mdast.ts";
 import { createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
+import type { BlockSyntaxDocument, BlockSyntaxParser } from "./block/runtime.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { TextEdit } from "./source-view.ts";
 
@@ -67,10 +67,10 @@ export class DocumentImpl implements Document {
   #syntax: MarkdownSyntax;
   #fragments = new Map<number, BlockFragment>();
 
-  constructor(source: string, profile: SyntaxProfile) {
+  constructor(source: string, profile: SyntaxProfile, blockParser: BlockSyntaxParser) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(source, profile);
-    this.#blockSyntax = createBlockSyntaxDocument(source, this.#blockScanner.tokens);
+    this.#blockSyntax = blockParser.parse(source, this.#blockScanner.tokens);
     this.#syntax = createMarkdownSyntax(source, this.#blockSyntax.view(this.#blockScanner.tokens), profile);
   }
 
