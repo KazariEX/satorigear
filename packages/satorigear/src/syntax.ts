@@ -78,13 +78,13 @@ class InlineRegion extends InlineTokenState {
     return this.view.text;
   }
 
-  constructor(profile: SyntaxProfile, descriptor: InlineRegionDescriptor, labels: ReadonlySet<string>) {
+  constructor(profile: SyntaxProfile, descriptor: InlineRegionDescriptor, definitions: ReadonlySet<string>) {
     super(profile);
     this.id = descriptor.id;
     this.rule = descriptor.rule;
     this.span = descriptor.span;
     this.view = descriptor.view;
-    this.updateTokens(descriptor.view.text, labels);
+    this.updateTokens(descriptor.view.text, definitions);
   }
 
   #rebind(descriptor: InlineRegionDescriptor): void {
@@ -96,14 +96,14 @@ class InlineRegion extends InlineTokenState {
 
   update(
     descriptor: InlineRegionDescriptor,
-    labels: ReadonlySet<string>,
+    definitions: ReadonlySet<string>,
     edits: readonly TextEdit[] | null,
   ): this {
     const document = this.document;
     const sourceEdits = edits && this.view.text !== descriptor.view.text
       ? projectSourceEdits(this.view, descriptor.view, edits)
       : null;
-    const changed = this.updateTokens(descriptor.view.text, labels, document?.edit, sourceEdits);
+    const changed = this.updateTokens(descriptor.view.text, definitions, document?.edit, sourceEdits);
     this.#rebind(descriptor);
     if (!changed) {
       return this;
@@ -171,7 +171,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
 
   update(source: string, view: BlockSyntaxView, edits: readonly TextEdit[] = []): void {
     const arena = view.arena;
-    const labels = new Set<string>();
+    const definitions = new Set<string>();
     const descriptors: InlineRegionDescriptor[] = [];
     const stableRegionIds = new Set<number>();
     const blocks: SyntaxBlock[] = [];
@@ -182,10 +182,9 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       regionIds: number[],
     ): void => {
       const rule = arena.ruleNameOf(nodeId);
-      const referenceLabel = this.#profile.blockReferenceLabels[rule];
-      if (referenceLabel) {
-        labels.add(referenceLabel(view.tokenAt(tokenBase)));
-        return;
+      const definitionKey = this.#profile.blockDefinitionKeys[rule];
+      if (definitionKey) {
+        definitions.add(definitionKey(view.tokenAt(tokenBase)));
       }
       if (this.#profile.blockInlineContents[rule]) {
         const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
@@ -237,7 +236,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       });
     }
 
-    // Inline resolution starts after the full reference map is known; later definitions affect earlier uses.
+    // Inline resolution starts after the full definition map is known; later definitions affect earlier uses.
     const regions = new Map<number, InlineRegion>();
     const available: InlineRegion[] = [];
     for (const region of this.#regions.values()) {
@@ -266,8 +265,8 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         }
       }
       const region = previous
-        ? previous.update(descriptor, labels, edits)
-        : new InlineRegion(this.#profile, descriptor, labels);
+        ? previous.update(descriptor, definitions, edits)
+        : new InlineRegion(this.#profile, descriptor, definitions);
       regions.set(descriptor.id, region);
     }
     const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));

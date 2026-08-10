@@ -36,7 +36,7 @@ export interface PairedTokenConfig<State = undefined> {
     forbidTokens?: readonly string[];
   };
   activate?: (context: PairedTokenActivationContext<State>) => boolean;
-  splitUnmatchedCloser?: (source: string, tokens: InlineTokenStream, tokenIndex: number) => InlineTokenStream;
+  splitUnmatchedCloser?: (tokens: InlineTokenStream, tokenIndex: number) => InlineTokenStream;
 }
 
 interface PairedTokenActivationContext<State> {
@@ -582,7 +582,7 @@ export function createDelimitedTokenResolver<State = undefined>(
     let expanded: number[] | undefined;
     for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
       const split = pairIndex.splitByCloser[inlineTokenKind(tokens, tokenIndex)];
-      const fragments = split && !paired.matchedClosers[tokenIndex] ? split(source, tokens, tokenIndex) : void 0;
+      const fragments = split && !paired.matchedClosers[tokenIndex] ? split(tokens, tokenIndex) : void 0;
       if (fragments) {
         if (!expanded) {
           expanded = [];

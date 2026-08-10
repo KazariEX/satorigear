@@ -12,7 +12,7 @@ import {
   projectInlineIgnore,
   withSpan,
 } from "../../mdast.ts";
-import { normalizeReferenceLabel } from "./reference.ts";
+import { normalizeAssociationLabel } from "../utils.ts";
 import { projectInlineText, semanticText } from "./text.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -98,7 +98,7 @@ function reference(
   const full = closeText.startsWith("][") && closeText !== "][]";
   const labelSource = full ? closeText.slice(2, -1) : content;
   return {
-    identifier: normalizeReferenceLabel(labelSource).toLowerCase(),
+    identifier: normalizeAssociationLabel(labelSource).toLowerCase(),
     label: semanticText(labelSource),
     referenceType: full ? "full" : closeText === "][]" ? "collapsed" : "shortcut",
   };

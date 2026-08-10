@@ -1,6 +1,7 @@
 import type { List, ListItem } from "mdast";
 import {
   type BlockLine,
+  contentAfterColumns,
   indentOf,
   isBlank,
   lineIndent,
@@ -106,32 +107,6 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
 
 function sameList(a: ListMarker, b: ListMarker): boolean {
   return a.kind === b.kind && a.delimiter === b.delimiter;
-}
-
-function contentAfterColumns(
-  source: string,
-  line: BlockLine,
-  columns: number,
-): { offset: number; prefixColumns: number } {
-  let offset = line.start;
-  let consumed = line.prefixColumns ?? 0;
-  if (consumed >= columns) {
-    return { offset, prefixColumns: consumed - columns };
-  }
-  while (offset < line.end && consumed < columns) {
-    if (source[offset] === " ") {
-      consumed++;
-      offset++;
-      continue;
-    }
-    if (source[offset] === "\t") {
-      consumed += 4 - (consumed % 4);
-      offset++;
-      continue;
-    }
-    break;
-  }
-  return { offset, prefixColumns: Math.max(0, consumed - columns) };
 }
 
 function hasListContent(source: string, line: BlockLine, marker: ListMarker | null): boolean {

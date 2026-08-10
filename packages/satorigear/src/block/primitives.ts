@@ -123,6 +123,32 @@ export function lineIndent(source: string, line: BlockLine): Indent | null {
   return indent;
 }
 
+export function contentAfterColumns(
+  source: string,
+  line: BlockLine,
+  columns: number,
+): { offset: number; prefixColumns: number } {
+  let offset = line.start;
+  let consumed = line.prefixColumns ?? 0;
+  if (consumed >= columns) {
+    return { offset, prefixColumns: consumed - columns };
+  }
+  while (offset < line.end && consumed < columns) {
+    if (source[offset] === " ") {
+      consumed++;
+      offset++;
+      continue;
+    }
+    if (source[offset] === "\t") {
+      consumed += 4 - (consumed % 4);
+      offset++;
+      continue;
+    }
+    break;
+  }
+  return { offset, prefixColumns: Math.max(0, consumed - columns) };
+}
+
 export function removeIndent(value: string, columns: number): string {
   let offset = 0;
   let consumed = 0;

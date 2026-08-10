@@ -36,6 +36,8 @@ const TableClose = token(never());
 const LinkDefinitionOpen = token(never());
 const LinkDefinitionChunk = token(never());
 const LinkDefinitionClose = token(never());
+const FootnoteDefinitionOpen = token(never());
+const FootnoteDefinitionClose = token(never());
 const BlockComponentOpen = token(never());
 const BlockComponentLabelOpen = token(never());
 const BlockComponentLabelClose = token(never());
@@ -65,6 +67,7 @@ const TableDelimiter = rule(() => [many1(alt(
 const Table = rule(() => [[TableOpen, TableRow, TableDelimiter, many(TableRow), TableClose]]);
 const LinkDefinition = rule(() => [[LinkDefinitionOpen, many1(LinkDefinitionChunk), LinkDefinitionClose]]);
 let Block: RuleRef;
+const FootnoteDefinition = rule(() => [[FootnoteDefinitionOpen, many(Block), FootnoteDefinitionClose]]);
 const BlockComponentLabel = rule(() => [[
   BlockComponentLabelOpen,
   many(InlineChunk),
@@ -99,6 +102,7 @@ Block = rule(() => [
   IndentedCodeBlock,
   HtmlBlock,
   Table,
+  FootnoteDefinition,
   LinkDefinition,
   BlockComponent,
   BlockComponentSlot,
@@ -148,6 +152,8 @@ export const grammar = defineGrammar({
     LinkDefinitionOpen,
     LinkDefinitionChunk,
     LinkDefinitionClose,
+    FootnoteDefinitionOpen,
+    FootnoteDefinitionClose,
     BlockComponentOpen,
     BlockComponentLabelOpen,
     BlockComponentLabelClose,
@@ -170,6 +176,7 @@ export const grammar = defineGrammar({
     TableRow,
     TableDelimiter,
     Table,
+    FootnoteDefinition,
     LinkDefinition,
     BlockComponentLabel,
     BlockComponent,

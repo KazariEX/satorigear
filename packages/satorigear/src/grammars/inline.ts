@@ -208,6 +208,7 @@ const ReferenceOpen = token(never());
 const ReferenceClose = token(never());
 const ImageReferenceOpen = token(never());
 const ImageReferenceClose = token(never());
+const FootnoteReference = token(never());
 const InlineComponentOpen = token(never());
 const InlineComponentLabelOpen = token(never());
 const InlineComponentLabelClose = token(never());
@@ -293,6 +294,7 @@ Inline = rule(() => [
   Image,
   Link,
   ReferenceLink,
+  FootnoteReference,
   InlineComponent,
   InlineSpan,
   Autolink,
@@ -314,6 +316,7 @@ LinkContent = rule(() => [
   CodeSpan,
   MathText,
   LinkImage,
+  FootnoteReference,
   LinkComponent,
   LinkSpan,
   InlineHtml,
@@ -363,6 +366,7 @@ export const grammar = defineGrammar({
     ReferenceClose,
     ImageReferenceOpen,
     ImageReferenceClose,
+    FootnoteReference,
     InlineComponentOpen,
     InlineComponentLabelOpen,
     InlineComponentLabelClose,

@@ -10,6 +10,8 @@ import { feature as featureBreak } from "./features/break.ts";
 import { feature as featureCode } from "./features/code.ts";
 import { feature as featureComponent } from "./features/component/index.ts";
 import { transformInlineCarrier } from "./features/component/inline.ts";
+import { feature as featureFootnote } from "./features/footnote/index.ts";
+import { transformInlineFootnotes } from "./features/footnote/inline.ts";
 import { feature as featureFormatting, type StrikethroughOptions } from "./features/formatting.ts";
 import { feature as frontmatterFeature, type FrontmatterOptions } from "./features/frontmatter.ts";
 import { feature as featureHeading } from "./features/heading.ts";
@@ -40,6 +42,7 @@ import type {
 export interface SyntaxOptions {
   attributes?: boolean;
   component?: boolean;
+  footnote?: boolean;
   frontmatter?: boolean | FrontmatterOptions;
   math?: boolean | MathOptions;
   strikethrough?: boolean | StrikethroughOptions;
@@ -49,6 +52,9 @@ export interface SyntaxOptions {
 function createInlineTransform(options: SyntaxOptions): InlineTransform | undefined {
   const transforms: InlineTransform[] = [];
 
+  if (options.footnote) {
+    transforms.push(transformInlineFootnotes);
+  }
   if (options.math) {
     const singleDollarTextMath = typeof options.math !== "object" || options.math.singleDollarTextMath !== false;
     transforms.push(transformInlineMath.bind(void 0, singleDollarTextMath));
@@ -82,8 +88,12 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     featureList,
     featureCode,
     featureHtml,
-    featureReference,
   ];
+
+  if (options.footnote) {
+    features.push(featureFootnote);
+  }
+  features.push(featureReference);
 
   if (options.frontmatter) {
     features.unshift(
@@ -124,7 +134,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   const blockInlineContents: Record<string, true> = Object.create(null);
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
   const blockProjects: Record<string, BlockProjector> = Object.create(null);
-  const blockReferenceLabels: Record<string, (token: BlockToken) => string> = Object.create(null);
+  const blockDefinitionKeys: Record<string, (token: BlockToken) => string> = Object.create(null);
   const blockRestarts: BlockRestart[] = [];
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
   const blockUnwrappers: BlockLineUnwrapper[] = [];
@@ -170,8 +180,8 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
         if (registration.inlineContent) {
           blockInlineContents[registration.rule] = true;
         }
-        if (registration.referenceLabel) {
-          blockReferenceLabels[registration.rule] = registration.referenceLabel;
+        if (registration.definitionKey) {
+          blockDefinitionKeys[registration.rule] = registration.definitionKey;
         }
       }
     }
@@ -223,7 +233,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     blockInlineContents,
     blockInterrupts,
     blockProjects,
-    blockReferenceLabels,
+    blockDefinitionKeys,
     blockRestart(source, lines, changedStart, changedEnd) {
       let result: number | undefined;
       for (const restart of blockRestarts) {

@@ -32,9 +32,9 @@ export interface BlockStartRegistration {
 }
 
 export interface BlockRuleRegistration {
+  definitionKey?: (token: BlockToken) => string;
   inlineContent?: true;
   project?: BlockProjector;
-  referenceLabel?: (token: BlockToken) => string;
   rule: string;
 }
 
@@ -55,7 +55,7 @@ export type BlockRestart = (
 ) => number | undefined;
 
 export interface InlineResolutionContext {
-  hasReference: (label: string) => boolean;
+  hasDefinition: (key: string) => boolean;
 }
 
 export interface InlineTokenRegistration {
@@ -95,7 +95,7 @@ export interface SyntaxProfile {
   blockInlineContents: Readonly<Record<string, true>>;
   blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
   blockProjects: Readonly<Record<string, BlockProjector>>;
-  blockReferenceLabels: Readonly<Record<string, (token: BlockToken) => string>>;
+  blockDefinitionKeys: Readonly<Record<string, (token: BlockToken) => string>>;
   blockRestart: BlockRestart;
   blockStarts: readonly (BlockStartDispatch | undefined)[];
   blockUnwrappers: readonly BlockLineUnwrapper[];

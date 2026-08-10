@@ -9,18 +9,18 @@ import type { TextEdit } from "../source-view.ts";
 
 type ApplyTokenChange = (edits: readonly TextEdit[], change: InlineTokenChange) => void;
 
-// Most regions contain no references, so they share one immutable empty dependency set.
-const emptyReferenceDependencies: ReadonlySet<string> = new Set();
+// Most regions consult no definitions, so they share one immutable empty dependency set.
+const emptyDefinitionDependencies: ReadonlySet<string> = new Set();
 const emptyTokens: InlineTokenStream = [];
 
 interface InlineResolutionContextState extends InlineResolutionContext {
+  definitions: ReadonlySet<string>;
   dependencies?: Set<string>;
-  labels: ReadonlySet<string>;
 }
 
-function hasReference(this: InlineResolutionContextState, label: string): boolean {
-  (this.dependencies ??= new Set()).add(label);
-  return this.labels.has(label);
+function hasDefinition(this: InlineResolutionContextState, key: string): boolean {
+  (this.dependencies ??= new Set()).add(key);
+  return this.definitions.has(key);
 }
 
 function textEdit(previous: string, next: string): readonly TextEdit[] {
@@ -50,11 +50,11 @@ function textEdit(previous: string, next: string): readonly TextEdit[] {
 }
 
 export class InlineTokenState {
-  // Track only labels consulted by this region so unrelated definitions do not invalidate it.
-  #labels?: ReadonlySet<string>;
+  // Track only definitions consulted by this region so unrelated definitions do not invalidate it.
+  #definitionDependencies?: ReadonlySet<string>;
+  #definitions?: ReadonlySet<string>;
   #profile: SyntaxProfile;
-  #referenceDependencies?: ReadonlySet<string>;
-  // Keep unresolved tokens so a reference-map change can re-resolve without re-lexing unchanged text.
+  // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
   #source?: string;
   #tokens?: InlineTokenStream;
@@ -69,19 +69,19 @@ export class InlineTokenState {
 
   protected updateTokens(
     source: string,
-    labels: ReadonlySet<string>,
+    definitions: ReadonlySet<string>,
     apply?: ApplyTokenChange,
     sourceEdits: readonly TextEdit[] | null = null,
   ): boolean {
-    if (source === this.#source && !this.#referencesChanged(labels)) {
-      this.#labels = labels;
+    if (source === this.#source && !this.#definitionsChanged(definitions)) {
+      this.#definitions = definitions;
       return false;
     }
 
     const previousSource = this.#source ?? "";
     const previousTokens = this.#tokens ?? emptyTokens;
     const edits = this.#rawTokens || apply ? sourceEdits ?? textEdit(previousSource, source) : [];
-    const context: InlineResolutionContextState = { hasReference, labels };
+    const context: InlineResolutionContextState = { definitions, hasDefinition };
     const rawTokens = edits.length === 0 && this.#rawTokens
       ? this.#rawTokens
       : tokenizeInline(source);
@@ -98,19 +98,19 @@ export class InlineTokenState {
     );
 
     this.#source = source;
-    this.#labels = labels;
-    this.#referenceDependencies = context.dependencies ?? emptyReferenceDependencies;
+    this.#definitionDependencies = context.dependencies ?? emptyDefinitionDependencies;
+    this.#definitions = definitions;
     this.#rawTokens = rawTokens;
     this.#tokens = tokens;
     return true;
   }
 
-  #referencesChanged(labels: ReadonlySet<string>): boolean {
-    if (!this.#referenceDependencies || !this.#labels) {
+  #definitionsChanged(definitions: ReadonlySet<string>): boolean {
+    if (!this.#definitionDependencies || !this.#definitions) {
       return true;
     }
-    for (const candidate of this.#referenceDependencies) {
-      if (this.#labels.has(candidate) !== labels.has(candidate)) {
+    for (const candidate of this.#definitionDependencies) {
+      if (this.#definitions.has(candidate) !== definitions.has(candidate)) {
         return true;
       }
     }

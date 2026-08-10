@@ -16,11 +16,11 @@ import {
   inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
-  type InlineTokenStream,
   inlineTokenStride,
   inlineTokenText,
 } from "../../inline/runtime.ts";
 import { blockEnd, blockToken, withSpan } from "../../mdast.ts";
+import { normalizeAssociationLabel, splitReferenceTail } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockToken } from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/resolver.ts";
@@ -31,10 +31,10 @@ import type {
 } from "../types.ts";
 
 interface LinkDefinitionFields {
+  definitionKey: string;
   destination: string;
   label: string;
   markerOffset: number;
-  normalizedLabel: string;
   title: string | null;
 }
 
@@ -45,10 +45,6 @@ interface LinkDefinitionOpenToken extends BlockToken {
 interface LinkDefinitionMatch {
   end: number;
   fields: LinkDefinitionFields;
-}
-
-export function normalizeReferenceLabel(label: string): string {
-  return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();
 }
 
 function linkDefinitionOpen(offset: number, fields: LinkDefinitionFields): LinkDefinitionOpenToken {
@@ -195,10 +191,10 @@ function linkDefinitionAt(
 
   const closer = source[offset] === "(" ? ")" : source[offset] === "\"" || source[offset] === "'" ? source[offset] : null;
   const fields: LinkDefinitionFields = {
+    definitionKey: normalizeAssociationLabel(label),
     destination,
     label,
     markerOffset: indent.offset - lines[startIndex].start,
-    normalizedLabel: normalizeReferenceLabel(label),
     title: null,
   };
   if (!closer) {
@@ -245,20 +241,6 @@ function linkDefinitionAt(
   return { end: lineIndex + 1, fields };
 }
 
-function splitReferenceTail(source: string, tokens: InlineTokenStream, index: number): InlineTokenStream {
-  const start = inlineTokenStart(tokens, index);
-  const end = inlineTokenEnd(tokens, index);
-  const flags = inlineTokenFlags(tokens, index);
-  const result: number[] = [];
-  appendInlineToken(result, inlineKind("ReferenceSeparatorClose"), start, start + 1, flags);
-  appendInlineToken(result, inlineKind("BracketOpen"), start + 1, start + 2);
-  if (end > start + 3) {
-    appendInlineToken(result, inlineKind("Text"), start + 2, end - 1);
-  }
-  appendInlineToken(result, inlineKind("ShortcutReferenceTail"), end - 1, end);
-  return result;
-}
-
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
 export const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
   const referenceTail = inlineKind("ReferenceTail");
@@ -270,7 +252,7 @@ export const reassociateReferenceTails: InlineTransform = (source, tokens, conte
   for (let index = 0; index < count; index++) {
     const kind = inlineTokenKind(tokens, index);
     const label = kind === referenceTail ? inlineTokenText(source, tokens, index).slice(2, -1) : "";
-    if (kind !== referenceTail || context.hasReference(normalizeReferenceLabel(label))) {
+    if (kind !== referenceTail || context.hasDefinition(normalizeAssociationLabel(label))) {
       if (result) {
         copyInlineToken(result, tokens, index);
       }
@@ -301,7 +283,7 @@ export const reassociateReferenceTails: InlineTransform = (source, tokens, conte
       continue;
     }
     const nextLabel = source.slice(inlineTokenEnd(tokens, openerIndex), inlineTokenStart(tokens, closerIndex));
-    if (!context.hasReference(normalizeReferenceLabel(nextLabel))) {
+    if (!context.hasDefinition(normalizeAssociationLabel(nextLabel))) {
       if (result) {
         copyInlineToken(result, tokens, index);
       }
@@ -313,7 +295,7 @@ export const reassociateReferenceTails: InlineTransform = (source, tokens, conte
         copyInlineToken(result, tokens, prefix);
       }
     }
-    const split = splitReferenceTail(source, tokens, index);
+    const split = splitReferenceTail(tokens, index);
     result.push(...split.slice(0, -inlineTokenStride));
     const offset = inlineTokenEnd(tokens, index) - 1;
     appendInlineToken(
@@ -337,7 +319,7 @@ const activateReference: NonNullable<PairedTokenConfig<InlineResolutionContext>[
 }) => {
   const closer = inlineTokenText(source, tokens, closerIndex);
   const explicit = closer.startsWith("][") ? closer.slice(2, -1) : "";
-  return state.hasReference(normalizeReferenceLabel(explicit || content));
+  return state.hasDefinition(normalizeAssociationLabel(explicit || content));
 };
 
 const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionContext>[] = [
@@ -439,13 +421,15 @@ export const feature: SyntaxFeature = {
         const fields = linkDefinitionFields(token);
         return withSpan<Definition>({
           type: "definition",
-          identifier: fields.normalizedLabel.toLowerCase(),
+          identifier: fields.definitionKey.toLowerCase(),
           label: semanticText(fields.label),
           url: semanticText(fields.destination),
           title: fields.title === null ? null : semanticText(fields.title),
         }, token.offset + fields.markerOffset, blockEnd(nodeId, offset, context));
       },
-      referenceLabel: (token) => linkDefinitionFields(token).normalizedLabel,
+      definitionKey(token) {
+        return linkDefinitionFields(token).definitionKey;
+      },
     },
   ],
   blockStarts: [
