@@ -401,6 +401,29 @@ End
     });
   });
 
+  it("isolates delimiter pairing at component boundaries", () => {
+    expect(componentParser.parse("*foo [bar* baz]\n").children[0]).toMatchObject({
+      children: [
+        { type: "text", value: "*foo " },
+        {
+          type: "inlineComponent",
+          name: "span",
+          children: [{ type: "text", value: "bar* baz" }],
+        },
+      ],
+    });
+    expect(componentParser.parse("[foo*]: /url\n\n*[foo*]\n").children[1]).toMatchObject({
+      children: [
+        { type: "text", value: "*" },
+        {
+          type: "inlineComponent",
+          name: "span",
+          children: [{ type: "text", value: "foo*" }],
+        },
+      ],
+    });
+  });
+
   it("keeps direct links and full references ahead of spans", () => {
     const source = "[direct](/url) [full][ref] [shortcut]\n\n[ref]: /ref\n[shortcut]: /shortcut\n";
     expect(parser.parse(source).children[0]).toMatchObject({

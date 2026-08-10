@@ -26,8 +26,8 @@ export interface DelimiterConfig {
 export interface PairedTokenConfig<State = undefined> {
   opener: string;
   closer: string;
-  open: string;
-  close: string;
+  open?: string;
+  close?: string;
   deactivateEarlier?: readonly string[];
   isolateDelimiters?: boolean;
   content?: {
@@ -207,12 +207,12 @@ function indexPairs<State>(configs: readonly PairedTokenConfig<State>[]): PairIn
     const pairs = byCloser[closerKind] ?? [];
     pairs.push({
       activate: config.activate,
-      closeKind: inlineKind(config.close),
+      closeKind: config.close === void 0 ? closerKind : inlineKind(config.close),
       content: config.content,
       deactivatedKinds: config.deactivateEarlier?.map(inlineKind) ?? [],
       forbiddenKinds: config.content?.forbidTokens?.map(inlineKind) ?? [],
       isolateDelimiters: config.isolateDelimiters,
-      openKind: inlineKind(config.open),
+      openKind: config.open === void 0 ? openerKind : inlineKind(config.open),
       openerKind,
     });
     byCloser[closerKind] = pairs;
@@ -282,8 +282,13 @@ function resolvePairedTokens<State>(
         return;
       }
     }
-    replacements[openerIndex] = pair.openKind;
-    replacements[tokenIndex] = pair.closeKind;
+    // Isolation-only pairs preserve their kinds and should not copy the token stream.
+    if (inlineTokenKind(tokens, openerIndex) !== pair.openKind) {
+      replacements[openerIndex] = pair.openKind;
+    }
+    if (tokenKind !== pair.closeKind) {
+      replacements[tokenIndex] = pair.closeKind;
+    }
     matchedClosers[tokenIndex] = true;
 
     for (const kind of pair.deactivatedKinds) {
