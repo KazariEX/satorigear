@@ -84,13 +84,26 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
   if (!(markerCode >= 48 && markerCode <= 57)) {
     return null;
   }
-  const body = source.slice(indent.offset, line.end);
-  const ordered = /^(\d{1,9})([.)])(?=[ \t]|$)/.exec(body);
-  if (!ordered) {
+  let startNumber = 0;
+  let orderedEnd = indent.offset;
+  // CommonMark caps ordered markers at nine digits, so the prefix is cheaper to scan than to slice and match.
+  while (orderedEnd < line.end && orderedEnd - indent.offset < 9) {
+    const digit = source.charCodeAt(orderedEnd) - 48;
+    if (digit < 0 || digit > 9) {
+      break;
+    }
+    startNumber = startNumber * 10 + digit;
+    orderedEnd++;
+  }
+  const delimiter = source[orderedEnd];
+  if (
+    (delimiter !== "." && delimiter !== ")")
+    || (orderedEnd + 1 < line.end && source[orderedEnd + 1] !== " " && source[orderedEnd + 1] !== "\t")
+  ) {
     return null;
   }
-  const orderedEnd = indent.offset + ordered[0].length;
-  const markerWidth = ordered[0].length;
+  orderedEnd++;
+  const markerWidth = orderedEnd - indent.offset;
   const padding = listMarkerPadding(source, line, orderedEnd, indent.columns + markerWidth);
   return {
     kind: "ordered",
@@ -99,9 +112,9 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
     contentOffset: padding.offset,
     contentIndent: indent.columns + markerWidth + padding.columns,
     contentPrefixColumns: padding.prefixColumns,
-    delimiter: ordered[2],
-    text: ordered[1] + ordered[2],
-    startNumber: Number(ordered[1]),
+    delimiter,
+    text: source.slice(indent.offset, orderedEnd),
+    startNumber,
   };
 }
 

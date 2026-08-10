@@ -76,6 +76,20 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it("recognizes the bounded ordered-list marker forms", () => {
+    expect(parser.parse("123456789. item\n").children[0]).toMatchObject({
+      type: "list",
+      ordered: true,
+      start: 123456789,
+    });
+    expect(parser.parse("1)\titem\n").children[0]).toMatchObject({
+      type: "list",
+      ordered: true,
+      start: 1,
+    });
+    expect(parser.parse("1234567890. item\n").children[0]).toMatchObject({ type: "paragraph" });
+  });
+
   it("maps soft line endings across stripped block quote prefixes", () => {
     const tree = parser.parse("> one\n> two\n");
     expect(tree.children[0]).toMatchObject({
