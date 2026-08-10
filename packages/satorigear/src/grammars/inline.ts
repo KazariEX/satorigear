@@ -1,15 +1,11 @@
 import {
-  alt,
   altPattern,
   anyChar,
   defineGrammar,
   end,
   followedBy,
-  many,
-  many1,
   never,
   noneOf,
-  not,
   notFollowedBy,
   oneOf,
   optPattern,
@@ -17,7 +13,6 @@ import {
   range,
   repeat,
   rule,
-  type RuleRef,
   seq,
   star,
   token,
@@ -220,115 +215,8 @@ const Delimiter = token(oneOf("\\", "`", "*", "_", "[", "]", "<", ">", "!", "&",
 });
 const Newline = token(never());
 
-let Inline: RuleRef;
-let LinkContent: RuleRef;
-
-const InlineLine = rule(() => [[many1(Inline)]]);
-const InlineLines = rule(($) => [InlineLine, [$, Newline, InlineLine]]);
-const Emphasis = rule(() => [[EmphasisOpen, many1(alt(Inline, Newline)), EmphasisClose]]);
-const Strong = rule(() => [[StrongOpen, many1(alt(Inline, Newline)), StrongClose]]);
-const LinkEmphasis = rule(() => [[EmphasisOpen, many1(alt(LinkContent, Newline)), EmphasisClose]]);
-const LinkStrong = rule(() => [[StrongOpen, many1(alt(LinkContent, Newline)), StrongClose]]);
-const Image = rule(() => [[ImageLinkOpen, many(not(ImageLinkClose), Inline), ImageLinkClose]]);
-const Link = rule(() => [[LinkOpen, many(not(LinkClose), LinkContent), LinkClose]]);
-const ReferenceLink = rule(() => [[ReferenceOpen, many(not(ReferenceClose), Inline), ReferenceClose]]);
-const ReferenceImage = rule(() => [[ImageReferenceOpen, many(not(ImageReferenceClose), Inline), ImageReferenceClose]]);
-const LinkImage = rule(() => [[ImageLinkOpen, many(not(ImageLinkClose), LinkContent), ImageLinkClose]]);
-const LinkReferenceImage = rule(() => [[
-  ImageReferenceOpen,
-  many(not(ImageReferenceClose), LinkContent),
-  ImageReferenceClose,
-]]);
-const InlineComponent = rule(() => [
-  [InlineComponentOpen],
-  [
-    InlineComponentOpen,
-    InlineComponentLabelOpen,
-    many(alt(Inline, Newline)),
-    InlineComponentLabelClose,
-  ],
-]);
-const InlineSpan = rule(() => [[
-  InlineSpanOpen,
-  many(alt(Inline, Newline)),
-  InlineSpanClose,
-]]);
-const LinkComponent = rule(() => [
-  [InlineComponentOpen],
-  [
-    InlineComponentOpen,
-    InlineComponentLabelOpen,
-    many(alt(LinkContent, Newline)),
-    InlineComponentLabelClose,
-  ],
-]);
-const LinkSpan = rule(() => [[
-  InlineSpanOpen,
-  many(alt(LinkContent, Newline)),
-  InlineSpanClose,
-]]);
-const BracketFallback = rule(() => [
-  ImageOpen,
-  BracketOpen,
-  LinkTail,
-  ReferenceTail,
-  ShortcutReferenceTail,
-  ReferenceSeparatorClose,
-  LinkOpen,
-  LinkClose,
-  ImageLinkOpen,
-  ImageLinkClose,
-  ReferenceOpen,
-  ReferenceClose,
-  ImageReferenceOpen,
-  ImageReferenceClose,
-]);
-
-Inline = rule(() => [
-  HtmlComment,
-  CodeSpan,
-  MathText,
-  Image,
-  Link,
-  ReferenceLink,
-  FootnoteReference,
-  InlineComponent,
-  InlineSpan,
-  Autolink,
-  InlineHtml,
-  Entity,
-  HardBreak,
-  Escape,
-  Strong,
-  Emphasis,
-  Attributes,
-  Text,
-  TildeRun,
-  Delimiter,
-  ReferenceImage,
-  BracketFallback,
-]);
-LinkContent = rule(() => [
-  HtmlComment,
-  CodeSpan,
-  MathText,
-  LinkImage,
-  FootnoteReference,
-  LinkComponent,
-  LinkSpan,
-  InlineHtml,
-  Entity,
-  HardBreak,
-  Escape,
-  LinkStrong,
-  LinkEmphasis,
-  Attributes,
-  Text,
-  TildeRun,
-  Delimiter,
-  LinkReferenceImage,
-  BracketFallback,
-]);
+// The packed emitter reads token declarations directly; hierarchy is compiled from the active profile.
+const LexerEntry = rule(() => [Text]);
 
 export const grammar = defineGrammar({
   name: "markdown-inline",
@@ -374,27 +262,9 @@ export const grammar = defineGrammar({
     Newline,
   },
   rules: {
-    Inline,
-    InlineLine,
-    InlineLines,
-    Emphasis,
-    Strong,
-    LinkEmphasis,
-    LinkStrong,
-    Image,
-    Link,
-    ReferenceLink,
-    ReferenceImage,
-    LinkImage,
-    LinkReferenceImage,
-    InlineComponent,
-    InlineSpan,
-    LinkComponent,
-    LinkSpan,
-    LinkContent,
-    BracketFallback,
+    LexerEntry,
   },
-  entry: BracketFallback,
+  entry: LexerEntry,
   newline: {
     token: "Newline",
     hardBreak: { token: "HardBreak", minSpaces: 2 },
