@@ -15,6 +15,7 @@ import {
   createInlineAccumulator,
   directLeaf,
   inlineSequence,
+  lineEnd,
   projectInlineIgnore,
   withSpan,
 } from "../../../mdast.ts";
@@ -159,17 +160,6 @@ function componentCandidate(
   };
 }
 
-function hasInlineAttributes(source: string, start: number): boolean {
-  if (source[start] !== "{") {
-    return false;
-  }
-  let end = start;
-  while (end < source.length && source[end] !== "\n" && source[end] !== "\r") {
-    end++;
-  }
-  return attributesEnd(source, start, end) !== void 0;
-}
-
 function insideLinkLabel(offset: number, labels: readonly { end: number; start: number }[]): boolean {
   return labels.some((label) => offset > label.start && offset < label.end);
 }
@@ -186,6 +176,7 @@ function candidates(
   const brackets = bracketIndex(tokens);
   const result: Candidate[] = [];
   const componentLabels = new Set<number>();
+  let attributeLineEnd = 0;
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     if (inlineTokenKind(tokens, index) !== textKind) {
       continue;
@@ -238,7 +229,14 @@ function candidates(
     if (close === void 0 || source[close + 1] === "(" || source[close + 1] === "[") {
       continue;
     }
-    const attributed = hasInlineAttributes(source, close + 1);
+    const attributesStart = close + 1;
+    let attributed = false;
+    if (source[attributesStart] === "{") {
+      if (attributesStart >= attributeLineEnd) {
+        attributeLineEnd = lineEnd(source, attributesStart);
+      }
+      attributed = attributesEnd(source, attributesStart, attributeLineEnd) !== void 0;
+    }
     if (!attributed && insideLinkLabel(start, brackets.linkLabels)) {
       continue;
     }

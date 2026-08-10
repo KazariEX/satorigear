@@ -148,9 +148,14 @@ function lineStart(source: string, offset: number): number {
   return 0;
 }
 
-export function lineEnd(source: string, offset: number): number {
-  const ending = /[\r\n]/.exec(source.slice(offset));
-  return ending ? offset + ending.index : source.length;
+export function lineEnd(source: string, offset: number, limit = source.length): number {
+  for (; offset < limit; offset++) {
+    const character = source.charCodeAt(offset);
+    if (character === 10 || character === 13) {
+      return offset;
+    }
+  }
+  return limit;
 }
 
 function lineEndingStart(source: string, offset: number): number {

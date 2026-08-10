@@ -11,7 +11,7 @@ import {
   type InlineTokenStream,
   setInlineTokenFlags,
 } from "../../../inline/runtime.ts";
-import { type BlockProjector, extendSpan } from "../../../mdast.ts";
+import { type BlockProjector, extendSpan, lineEnd } from "../../../mdast.ts";
 import {
   carryTerminalAttributes,
   hasTerminalAttributes,
@@ -73,15 +73,6 @@ const decorateBlockquote: BlockProjectorDecorator = (project) => (nodeId, offset
   return result;
 };
 
-function lineEnd(source: string, start: number, limit: number): number {
-  for (let offset = start; offset < limit; offset++) {
-    if (source[offset] === "\n" || source[offset] === "\r") {
-      return offset;
-    }
-  }
-  return limit;
-}
-
 function isMarkdownWhitespace(code: number): boolean {
   return code === 9 || code === 10 || code === 13 || code === 32;
 }
@@ -108,6 +99,7 @@ function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
   }
   regionEnd = boundaries[0] ?? source.length;
   let boundaryIndex = 0;
+  let attributeLineEnd = 0;
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const kind = inlineTokenKind(tokens, index);
     const start = inlineTokenStart(tokens, index);
@@ -116,6 +108,7 @@ function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
       regionEnd = boundaries[boundaryIndex + 1] ?? source.length;
       boundaryIndex++;
       hasContent = false;
+      attributeLineEnd = 0;
     }
     if (kind === boundaryKind || end <= consumedEnd) {
       continue;
@@ -130,9 +123,10 @@ function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
         hasContent = true;
       }
       const invalidPrefix = source[offset + 1] === "{" || source[offset - 1] === "{" || source[offset - 1] === "$";
-      const parsedEnd = invalidPrefix
-        ? void 0
-        : attributesEnd(source, offset, lineEnd(source, offset, regionEnd));
+      if (!invalidPrefix && offset >= attributeLineEnd) {
+        attributeLineEnd = lineEnd(source, offset, regionEnd);
+      }
+      const parsedEnd = invalidPrefix ? void 0 : attributesEnd(source, offset, attributeLineEnd);
       if (parsedEnd === void 0) {
         hasContent = true;
         cursor = offset + 1;
