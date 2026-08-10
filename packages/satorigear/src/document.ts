@@ -6,7 +6,6 @@ import {
   materialize,
   projectBlock,
 } from "./mdast.ts";
-import { createProfile, type SyntaxOptions } from "./profile/index.ts";
 import { createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { TextEdit } from "./source-view.ts";
@@ -61,7 +60,7 @@ function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
   });
 }
 
-class DocumentImpl implements Document {
+export class DocumentImpl implements Document {
   #blockScanner: BlockScanner;
   #blockSyntax: BlockSyntaxDocument;
   #profile: SyntaxProfile;
@@ -127,12 +126,4 @@ class DocumentImpl implements Document {
   snapshot(): Root {
     return materialize(this.#projectBlocks(), this.source.length, this.#blockScanner.locator());
   }
-}
-
-export function createDocument(source: string, options?: SyntaxOptions): Document {
-  return new DocumentImpl(source, createProfile(options));
-}
-
-export function parse(source: string, options?: SyntaxOptions): Root {
-  return createDocument(source, options).snapshot();
 }

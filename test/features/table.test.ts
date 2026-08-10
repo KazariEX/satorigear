@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createDocument, parse } from "../../packages/satorigear/src/index.ts";
+import { createParser } from "../../packages/satorigear/src/index.ts";
 
 const options = { table: true } as const;
+const parser = createParser(options);
+const defaultParser = createParser();
 
 describe("table", () => {
   it("projects aligned GFM tables with inline cell content", () => {
     const source = "| **name** | value\\|unit |\n| :--- | ---: |\n| alpha | `1` |\n";
-    expect(parse(source, options).children[0]).toEqual({
+    expect(parser.parse(source).children[0]).toEqual({
       type: "table",
       align: ["left", "right"],
       children: [
@@ -65,7 +67,7 @@ describe("table", () => {
 
   it("keeps variable body widths and stops at another block", () => {
     const source = "a | b\n--- | ---\none\nthree | four | five\n> quote\n";
-    const tree = parse(source, options);
+    const tree = parser.parse(source);
     expect(tree.children).toMatchObject([
       {
         type: "table",
@@ -84,11 +86,11 @@ describe("table", () => {
   });
 
   it("recognizes tables inside CommonMark containers", () => {
-    expect(parse("> a | b\n> --- | ---\n> c | d\n", options).children[0]).toMatchObject({
+    expect(parser.parse("> a | b\n> --- | ---\n> c | d\n").children[0]).toMatchObject({
       type: "blockquote",
       children: [{ type: "table", children: [{ type: "tableRow" }, { type: "tableRow" }] }],
     });
-    expect(parse("- a | b\n  --- | ---\n  c | d\n", options).children[0]).toMatchObject({
+    expect(parser.parse("- a | b\n  --- | ---\n  c | d\n").children[0]).toMatchObject({
       type: "list",
       children: [{ children: [{ type: "table" }] }],
     });
@@ -96,24 +98,24 @@ describe("table", () => {
 
   it("preserves CommonMark precedence and remains disabled by default", () => {
     const source = "| a | b |\n| --- | --- |\n";
-    expect(parse(source).children[0]).toMatchObject({ type: "paragraph" });
-    expect(parse("| a | b |\n| --- |\n", options).children[0]).toMatchObject({ type: "paragraph" });
-    expect(parse("a | b\n- | -\n", options).children.map((node) => node.type)).toEqual([
+    expect(defaultParser.parse(source).children[0]).toMatchObject({ type: "paragraph" });
+    expect(parser.parse("| a | b |\n| --- |\n").children[0]).toMatchObject({ type: "paragraph" });
+    expect(parser.parse("a | b\n- | -\n").children.map((node) => node.type)).toEqual([
       "paragraph",
       "list",
     ]);
-    expect(parse("| a |\n---\n", options).children[0]).toMatchObject({ type: "heading", depth: 2 });
+    expect(parser.parse("| a |\n---\n").children[0]).toMatchObject({ type: "heading", depth: 2 });
   });
 
   it("keeps full and incremental table parsing equivalent", () => {
-    const document = createDocument("| a | b |\n| === | --- |\n| c | d |\n", options);
+    const document = parser.createDocument("| a | b |\n| === | --- |\n| c | d |\n");
     document.edit([{ start: 12, end: 15, text: "---" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({ type: "table" });
 
     const body = document.source.indexOf("| c | d |");
     document.edit([{ start: body, end: body + 9, text: "# heading" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children.map((node) => node.type)).toEqual(["table", "heading"]);
   });
 });

@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { tests } from "commonmark-spec";
 import { bench, do_not_optimize, run, summary } from "mitata";
 import { remark } from "remark";
-import { parse as parseSatorigear } from "satorigear";
+import { createParser } from "satorigear";
 import { markdownToMdast as parseSatteri } from "satteri";
 import { force } from "./utils.ts";
 
@@ -37,15 +37,17 @@ const inputs = [
   { name: "delimiter stress document", source: delimiterStress },
 ];
 
+const parseSatorigear = createParser().parse;
+
+const processor = remark();
+const parseRemark = processor.parse.bind(processor);
+
 const satteriOptions = {
   features: {
     frontmatter: false,
     gfm: false,
   },
 } as const;
-
-const processor = remark();
-const parseRemark = processor.parse.bind(processor);
 
 for (const input of inputs) {
   summary(() => {

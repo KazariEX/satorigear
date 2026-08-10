@@ -1,7 +1,9 @@
 import { Buffer } from "node:buffer";
 import { bench, do_not_optimize, run, summary } from "mitata";
-import { createDocument, parse, type TextEdit } from "satorigear";
+import { createParser, type TextEdit } from "satorigear";
 import { force } from "./utils.ts";
+
+const parser = createParser();
 
 const body = Array.from({ length: 200 }, (_, index) => [
   `## Section ${index}`,
@@ -50,7 +52,7 @@ const scenarios = [
 
 summary(() => {
   const bytes = Buffer.byteLength(base);
-  const document = createDocument(base);
+  const document = parser.createDocument(base);
   document.snapshot();
 
   bench(`snapshot creation (${bytes} bytes)`, () => {
@@ -62,10 +64,10 @@ summary(() => {
     do_not_optimize(tree);
   });
   bench(`fresh snapshot (${bytes} bytes)`, () => {
-    do_not_optimize(parse(base));
+    do_not_optimize(parser.parse(base));
   });
   bench(`fresh fully read (${bytes} bytes)`, () => {
-    const tree = parse(base);
+    const tree = parser.parse(base);
     force(tree);
     do_not_optimize(tree);
   });
@@ -75,11 +77,11 @@ for (const scenario of scenarios) {
   summary(() => {
     const bytes = Math.max(Buffer.byteLength(scenario.first), Buffer.byteLength(scenario.second));
     let editSource = scenario.first;
-    const editDocument = createDocument(editSource);
+    const editDocument = parser.createDocument(editSource);
     let snapshotSource = scenario.first;
-    const snapshotDocument = createDocument(snapshotSource);
+    const snapshotDocument = parser.createDocument(snapshotSource);
     let forcedSource = scenario.first;
-    const forcedDocument = createDocument(forcedSource);
+    const forcedDocument = parser.createDocument(forcedSource);
     let freshSnapshotSource = scenario.first;
     let freshForcedSource = scenario.first;
 
@@ -104,11 +106,11 @@ for (const scenario of scenarios) {
     });
     bench(`fresh snapshot (${scenario.name}, ${bytes} bytes)`, () => {
       freshSnapshotSource = freshSnapshotSource === scenario.first ? scenario.second : scenario.first;
-      do_not_optimize(parse(freshSnapshotSource));
+      do_not_optimize(parser.parse(freshSnapshotSource));
     });
     bench(`fresh fully read (${scenario.name}, ${bytes} bytes)`, () => {
       freshForcedSource = freshForcedSource === scenario.first ? scenario.second : scenario.first;
-      const tree = parse(freshForcedSource);
+      const tree = parser.parse(freshForcedSource);
       force(tree);
       do_not_optimize(tree);
     });

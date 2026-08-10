@@ -129,9 +129,9 @@ function copyRange(
 }
 
 export function transformInlineMath(
+  singleDollarTextMath: boolean,
   source: string,
   tokens: InlineTokenStream,
-  singleDollarTextMath: boolean,
 ): InlineTokenStream {
   const minimum = singleDollarTextMath ? 1 : 2;
   let segmentSource = source;

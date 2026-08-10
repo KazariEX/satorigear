@@ -2,17 +2,19 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import type { Root } from "mdast";
 import {
   type BlockComponent,
-  createDocument,
+  createParser,
   type Document,
   type InlineComponent,
-  parse,
   type TextEdit,
 } from "../../packages/satorigear/src/index.ts";
 
 const options = { attributes: true, component: true } as const;
+const parser = createParser(options);
+const componentParser = createParser({ component: true });
+const defaultParser = createParser();
 
 function component(source: string): BlockComponent | InlineComponent {
-  const node = parse(source, options).children[0];
+  const node = parser.parse(source).children[0];
   if (node.type === "paragraph") {
     return node.children[0] as InlineComponent;
   }
@@ -21,7 +23,7 @@ function component(source: string): BlockComponent | InlineComponent {
 
 describe("component", () => {
   it("keeps component recognition independent from attribute parsing", () => {
-    const tree = parse(":Card{tone=info} [span]{.mark}\n", { component: true });
+    const tree = componentParser.parse(":Card{tone=info} [span]{.mark}\n");
     expect(tree.children[0]).toMatchObject({
       type: "paragraph",
       children: [
@@ -31,7 +33,7 @@ describe("component", () => {
         { type: "text", value: "{.mark}" },
       ],
     });
-    expect(parse("::Card{tone=info}\n#header{.wide}\nbody\n::\n", { component: true }).children[0]).toMatchObject({
+    expect(componentParser.parse("::Card{tone=info}\n#header{.wide}\nbody\n::\n").children[0]).toMatchObject({
       type: "blockComponent",
       name: "card",
       attributes: { tone: "info" },
@@ -41,7 +43,7 @@ describe("component", () => {
         attributes: { class: "wide", name: "header" },
       }],
     });
-    expect(parse("::Card\n---\ncount: 42\n---\n::\n", { component: true }).children[0]).toMatchObject({
+    expect(componentParser.parse("::Card\n---\ncount: 42\n---\n::\n").children[0]).toMatchObject({
       type: "blockComponent",
       attributes: { count: 42 },
     });
@@ -88,7 +90,7 @@ describe("component", () => {
       name: "alert-box",
       attributes: { class: "wide" },
     });
-    expect(parse(": Alert\n", options).children[0]).toMatchObject({ type: "paragraph" });
+    expect(parser.parse(": Alert\n").children[0]).toMatchObject({ type: "paragraph" });
   });
 
   it("matches nested component fences and ignores closers inside code fences", () => {
@@ -259,13 +261,13 @@ End
   });
 
   it("does not auto-close unmatched block fences", () => {
-    expect(parse("::alert\nbody\n", options).children.some(
+    expect(parser.parse("::alert\nbody\n").children.some(
       (node) => node.type === "blockComponent",
     )).toBe(false);
   });
 
   it("supports line-start block shorthand", () => {
-    const tree = parse(":Badge[**New**]{tone=info}\ntext :Icon\n", options);
+    const tree = parser.parse(":Badge[**New**]{tone=info}\ntext :Icon\n");
     expect(tree.children[0]).toMatchObject({
       type: "blockComponent",
       name: "badge",
@@ -283,7 +285,7 @@ End
 
   it("projects inline leaf, container, props-only and nested components", () => {
     const source = "before :Icon :Badge[**New :Dot**]{:items=[\"a\",\"b\"]} :Card{disabled} after\n";
-    expect(parse(source, options).children[0]).toMatchObject({
+    expect(parser.parse(source).children[0]).toMatchObject({
       type: "paragraph",
       children: [
         { type: "text", value: "before " },
@@ -315,7 +317,7 @@ End
 
   it("parses normal inline syntax inside component labels", () => {
     const source = "See :Badge[![icon](i.png) [docs](https://x.dev) :Inner[:Leaf]] here\n";
-    expect(parse(source, options).children[0]).toMatchObject({
+    expect(parser.parse(source).children[0]).toMatchObject({
       type: "paragraph",
       children: [
         { type: "text", value: "See " },
@@ -341,12 +343,12 @@ End
 
   it("keeps invalid component names as text", () => {
     const source = ":8100\n\n::8100\nbody\n::\n";
-    expect(JSON.stringify(parse(source, options))).not.toContain("blockComponent");
-    expect(JSON.stringify(parse(source, options))).not.toContain("inlineComponent");
+    expect(JSON.stringify(parser.parse(source))).not.toContain("blockComponent");
+    expect(JSON.stringify(parser.parse(source))).not.toContain("inlineComponent");
   });
 
   it("does not pair component brackets across inline regions", () => {
-    const tree = parse(":Badge[open\n\nclose]\n", options);
+    const tree = parser.parse(":Badge[open\n\nclose]\n");
     expect(tree.children[0]).toMatchObject({
       type: "paragraph",
       children: [
@@ -357,7 +359,7 @@ End
   });
 
   it("does not consume component attributes across inline regions", () => {
-    const tree = parse(":Card{open\n\nclose}\n", options);
+    const tree = parser.parse(":Card{open\n\nclose}\n");
     expect(tree.children[0]).toMatchObject({
       type: "paragraph",
       children: [
@@ -368,7 +370,7 @@ End
   });
 
   it("does not consume component attributes across soft line endings", () => {
-    expect(parse(":Card{open\nclose}\n", options).children[0]).toMatchObject({
+    expect(parser.parse(":Card{open\nclose}\n").children[0]).toMatchObject({
       type: "paragraph",
       children: [
         { type: "inlineComponent", name: "card", attributes: {} },
@@ -378,7 +380,7 @@ End
   });
 
   it("represents bare and attributed spans as inline components", () => {
-    const tree = parse("[plain] [**bold**]{.lead #main}\n", options);
+    const tree = parser.parse("[plain] [**bold**]{.lead #main}\n");
     expect(tree.children[0]).toMatchObject({
       type: "paragraph",
       children: [
@@ -401,7 +403,7 @@ End
 
   it("keeps direct links and full references ahead of spans", () => {
     const source = "[direct](/url) [full][ref] [shortcut]\n\n[ref]: /ref\n[shortcut]: /shortcut\n";
-    expect(parse(source, options).children[0]).toMatchObject({
+    expect(parser.parse(source).children[0]).toMatchObject({
       type: "paragraph",
       children: [
         { type: "link", url: "/url" },
@@ -414,7 +416,7 @@ End
   });
 
   it("supports component and attributed span content inside links", () => {
-    expect(parse("[:Icon ![alt](image.png) [label]{.mark}](/url)\n", options).children[0]).toMatchObject({
+    expect(parser.parse("[:Icon ![alt](image.png) [label]{.mark}](/url)\n").children[0]).toMatchObject({
       type: "paragraph",
       children: [{
         type: "link",
@@ -431,7 +433,7 @@ End
   });
 
   it("does not activate nested links through component labels", () => {
-    expect(parse("[:Badge[[nested](inner)]](outer)\n", options).children[0]).toMatchObject({
+    expect(parser.parse("[:Badge[[nested](inner)]](outer)\n").children[0]).toMatchObject({
       type: "paragraph",
       children: [{
         type: "link",
@@ -446,7 +448,7 @@ End
   });
 
   it("keeps link-like suffixes outside component labels", () => {
-    expect(parse(":Badge[text](url) :Chip[text][ref]\n", options).children[0]).toMatchObject({
+    expect(parser.parse(":Badge[text](url) :Chip[text][ref]\n").children[0]).toMatchObject({
       type: "paragraph",
       children: [
         { type: "inlineComponent", name: "badge", children: [{ type: "text", value: "text" }] },
@@ -459,23 +461,23 @@ End
 
   it("leaves component markers inert in the default profile", () => {
     const source = "::Alert\nbody\n::\n\n:Icon [span]\n";
-    const tree = parse(source);
+    const tree = defaultParser.parse(source);
     expect(JSON.stringify(tree)).not.toContain("blockComponent");
     expect(JSON.stringify(tree)).not.toContain("inlineComponent");
   });
 
   it("keeps public return types tied to the selected capability", () => {
-    expectTypeOf(parse("", options)).toEqualTypeOf<Root>();
-    expectTypeOf(parse("")).toEqualTypeOf<Root>();
-    expectTypeOf(createDocument("", options)).toEqualTypeOf<Document>();
-    expectTypeOf(createDocument("")).toEqualTypeOf<Document>();
+    expectTypeOf(defaultParser.parse("")).toEqualTypeOf<Root>();
+    expectTypeOf(parser.parse("")).toEqualTypeOf<Root>();
+    expectTypeOf(parser.createDocument("")).toEqualTypeOf<Document>();
+    expectTypeOf(defaultParser.createDocument("")).toEqualTypeOf<Document>();
   });
 
   it("keeps full and incremental projection identical", () => {
-    const document = createDocument("::Card{tone=old}\nHello :Badge[old]\n::\n", options);
+    const document = parser.createDocument("::Card{tone=old}\nHello :Badge[old]\n::\n");
     const edit = (batch: TextEdit[]): void => {
       document.edit(batch);
-      expect(document.snapshot()).toEqual(parse(document.source, options));
+      expect(document.snapshot()).toEqual(parser.parse(document.source));
     };
 
     let start = document.source.indexOf("old");
@@ -504,10 +506,10 @@ End
   });
 
   it("updates YAML props and slots through the existing incremental path", () => {
-    const document = createDocument("::card\n---\ncount: 1\n---\n#header\nTitle\n::\n", options);
+    const document = parser.createDocument("::card\n---\ncount: 1\n---\n#header\nTitle\n::\n");
     let start = document.source.indexOf("1");
     document.edit([{ start, end: start + 1, text: "2" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
       attributes: { count: 2 },
       children: [{ attributes: { name: "header" } }],
@@ -515,32 +517,32 @@ End
 
     start = document.source.indexOf("header");
     document.edit([{ start, end: start + 6, text: "footer" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
       children: [{ attributes: { name: "footer" } }],
     });
 
     start = document.source.indexOf("#footer");
     document.edit([{ start, end: start + 1, text: "" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
       children: [{ type: "paragraph", children: [{ type: "text", value: "footer\nTitle" }] }],
     });
     document.edit([{ start, end: start, text: "#" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
       children: [{ type: "blockComponent", attributes: { name: "footer" } }],
     });
   });
 
   it("restarts far enough when an edit closes a component", () => {
-    const document = createDocument("before\n\n::Card\nbody\n", options);
+    const document = parser.createDocument("before\n\n::Card\nbody\n");
     document.edit([{
       start: document.source.length,
       end: document.source.length,
       text: "::\n",
     }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children.at(-1)).toMatchObject({
       type: "blockComponent",
       name: "card",
@@ -548,7 +550,7 @@ End
 
     const close = document.source.lastIndexOf("::\n");
     document.edit([{ start: close, end: close + 3, text: "" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children.some(
       (node) => node.type === "blockComponent",
     )).toBe(false);

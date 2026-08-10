@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { createDocument, parse } from "../../packages/satorigear/src/index.ts";
+import { createParser } from "../../packages/satorigear/src/index.ts";
 
 const options = { strikethrough: true } as const;
 const strictOptions = { strikethrough: { singleTilde: false } } as const;
+const parser = createParser(options);
+const strictParser = createParser(strictOptions);
+const defaultParser = createParser();
+const disabledParser = createParser({ strikethrough: false });
+const compositeParser = createParser({
+  attributes: true,
+  component: true,
+  math: true,
+  strikethrough: true,
+  table: true,
+});
 
 describe("strikethrough", () => {
   it("projects GFM delete nodes with nested inline content", () => {
-    expect(parse("before ~~**deleted** and [linked](url)~~ after", options).children[0]).toMatchObject({
+    expect(parser.parse("before ~~**deleted** and [linked](url)~~ after").children[0]).toMatchObject({
       type: "paragraph",
       children: [
         { type: "text", value: "before " },
@@ -22,7 +33,7 @@ describe("strikethrough", () => {
       ],
     });
 
-    expect(parse("a ~~b~~ c", options).children[0]).toMatchObject({
+    expect(parser.parse("a ~~b~~ c").children[0]).toMatchObject({
       children: [{ type: "text", value: "a " }, {
         type: "delete",
         children: [{
@@ -40,13 +51,13 @@ describe("strikethrough", () => {
       }, { type: "text", value: " c" }],
     });
 
-    expect(parse("~~a\nb~~", options).children[0]).toMatchObject({
+    expect(parser.parse("~~a\nb~~").children[0]).toMatchObject({
       children: [{ type: "delete", children: [{ type: "text", value: "a\nb" }] }],
     });
   });
 
   it("supports GitHub single-tilde syntax", () => {
-    expect(parse("a ~b~ c", options).children[0]).toMatchObject({
+    expect(parser.parse("a ~b~ c").children[0]).toMatchObject({
       children: [
         { type: "text", value: "a " },
         { type: "delete", children: [{ type: "text", value: "b" }] },
@@ -55,7 +66,7 @@ describe("strikethrough", () => {
     });
 
     for (const source of ["~~a~", "~a~~", "x ~~~a~~~ y"]) {
-      expect(parse(source, options).children[0]).toMatchObject({
+      expect(parser.parse(source).children[0]).toMatchObject({
         children: [{ type: "text", value: source }],
       });
     }
@@ -63,11 +74,11 @@ describe("strikethrough", () => {
 
   it("can require exact double-tilde runs", () => {
     for (const source of ["~a~", "~~a~", "~a~~", "a~~~b~~~c", "~~ a~~", "~~a ~~"]) {
-      expect(parse(source, strictOptions).children[0]).toMatchObject({
+      expect(strictParser.parse(source).children[0]).toMatchObject({
         children: [{ type: "text", value: source }],
       });
     }
-    expect(parse("foo~~bar~~baz", strictOptions).children[0]).toMatchObject({
+    expect(strictParser.parse("foo~~bar~~baz").children[0]).toMatchObject({
       children: [
         { type: "text", value: "foo" },
         { type: "delete", children: [{ type: "text", value: "bar" }] },
@@ -77,20 +88,14 @@ describe("strikethrough", () => {
   });
 
   it("remains disabled by default", () => {
-    expect(parse("~~text~~")).toEqual(parse("~~text~~", { strikethrough: false }));
-    expect(parse("~~text~~").children[0]).toMatchObject({
+    expect(defaultParser.parse("~~text~~")).toEqual(disabledParser.parse("~~text~~"));
+    expect(defaultParser.parse("~~text~~").children[0]).toMatchObject({
       children: [{ type: "text", value: "~~text~~" }],
     });
   });
 
   it("composes with other inline features", () => {
-    expect(parse("| ~~[$x$]{.math}~~ |\n| --- |\n", {
-      attributes: true,
-      component: true,
-      math: true,
-      strikethrough: true,
-      table: true,
-    }).children[0]).toMatchObject({
+    expect(compositeParser.parse("| ~~[$x$]{.math}~~ |\n| --- |\n").children[0]).toMatchObject({
       type: "table",
       children: [{
         children: [{
@@ -108,19 +113,19 @@ describe("strikethrough", () => {
   });
 
   it("keeps full and incremental parsing equivalent", () => {
-    const document = createDocument("before ~~old~~ after\n", options);
+    const document = parser.createDocument("before ~~old~~ after\n");
     document.snapshot();
 
     const value = document.source.indexOf("old");
     document.edit([{ start: value, end: value + 3, text: "**new**" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
       children: [{ type: "text" }, { type: "delete", children: [{ type: "strong" }] }, { type: "text" }],
     });
 
     const close = document.source.lastIndexOf("~~");
     document.edit([{ start: close, end: close + 2, text: "~" }]);
-    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(JSON.stringify(document.snapshot())).not.toContain("\"delete\"");
   });
 });

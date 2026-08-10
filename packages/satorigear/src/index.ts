@@ -1,5 +1,5 @@
-export { createDocument, parse } from "./document.ts";
 export type { Document, EditResult } from "./document.ts";
+export { createParser, type Parser } from "./parser.ts";
 export type { Attributes, AttributeValue } from "./profile/features/attributes/types.ts";
 export type { BlockComponent, InlineComponent } from "./profile/features/component/types.ts";
 export type { StrikethroughOptions } from "./profile/features/formatting.ts";

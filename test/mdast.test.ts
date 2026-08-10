@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "../packages/satorigear/src/index.ts";
+import { createParser } from "../packages/satorigear/src/index.ts";
+
+const parser = createParser();
 
 describe("markdown mdast conversion", () => {
   it("preserves mdast definitions and references", () => {
-    expect(parse("[label][id]\n\n[id]: /url \"title\"\n")).toMatchObject({
+    expect(parser.parse("[label][id]\n\n[id]: /url \"title\"\n")).toMatchObject({
       type: "root",
       children: [
         {
@@ -28,7 +30,7 @@ describe("markdown mdast conversion", () => {
   });
 
   it("reassociates overlapping references", () => {
-    expect(parse("[foo][bar][baz]\n\n[baz]: /url\n").children[0]).toMatchObject({
+    expect(parser.parse("[foo][bar][baz]\n\n[baz]: /url\n").children[0]).toMatchObject({
       type: "paragraph",
       children: [
         { type: "text", value: "[foo]" },
@@ -44,7 +46,7 @@ describe("markdown mdast conversion", () => {
   });
 
   it("decodes only valid CommonMark character references", () => {
-    const links = parse([
+    const links = parser.parse([
       "[valid](&ouml; \"&#35;\")",
       "",
       "[escaped](\\&amp; \"\\&copy;\")",
@@ -58,12 +60,12 @@ describe("markdown mdast conversion", () => {
       { children: [{ type: "link", url: "&#87654321;", title: "&#xabcdef0;" }] },
     ]);
 
-    expect(parse("``` &copy;\nx\n```\n").children[0]).toMatchObject({ lang: "©" });
-    expect(parse("``` &#87654321;\nx\n```\n").children[0]).toMatchObject({ lang: "&#87654321;" });
+    expect(parser.parse("``` &copy;\nx\n```\n").children[0]).toMatchObject({ lang: "©" });
+    expect(parser.parse("``` &#87654321;\nx\n```\n").children[0]).toMatchObject({ lang: "&#87654321;" });
   });
 
   it("maps source offsets to mdast positions", () => {
-    const tree = parse("  foo  \nbar\n");
+    const tree = parser.parse("  foo  \nbar\n");
     expect(tree.position).toEqual({
       start: { line: 1, column: 1, offset: 0 },
       end: { line: 3, column: 1, offset: 12 },
@@ -75,7 +77,7 @@ describe("markdown mdast conversion", () => {
   });
 
   it("maps soft line endings across stripped block quote prefixes", () => {
-    const tree = parse("> one\n> two\n");
+    const tree = parser.parse("> one\n> two\n");
     expect(tree.children[0]).toMatchObject({
       type: "blockquote",
       children: [{
@@ -93,7 +95,7 @@ describe("markdown mdast conversion", () => {
   });
 
   it("keeps stripped block quote prefixes out of inline containers", () => {
-    const tree = parse("> a *b\n> c* d\n");
+    const tree = parser.parse("> a *b\n> c* d\n");
     expect(tree.children[0]).toMatchObject({
       type: "blockquote",
       children: [{
@@ -118,7 +120,7 @@ describe("markdown mdast conversion", () => {
   });
 
   it("extends hard breaks across stripped block quote prefixes", () => {
-    const tree = parse("> a  \n> b\n");
+    const tree = parser.parse("> a  \n> b\n");
     expect(tree.children[0]).toMatchObject({
       type: "blockquote",
       children: [{
@@ -144,7 +146,7 @@ describe("markdown mdast conversion", () => {
     { name: "CRLF", ending: "\r\n", breakEnd: 9 },
   ])("maps $name line boundaries at the document edges", ({ ending, breakEnd }) => {
     const source = `${ending}> a  ${ending}> b${ending}`;
-    const tree = parse(source);
+    const tree = parser.parse(source);
     const quote = tree.children[0];
     if (quote?.type !== "blockquote") {
       throw new Error("Expected a block quote");
@@ -162,7 +164,7 @@ describe("markdown mdast conversion", () => {
   });
 
   it("uses original delimiter run lengths for the rule of three", () => {
-    const tree = parse("*****b___(__\n___**_.****(__*****\n");
+    const tree = parser.parse("*****b___(__\n___**_.****(__*****\n");
     expect(tree.children).toMatchObject([{
       type: "paragraph",
       children: [

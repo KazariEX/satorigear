@@ -2,7 +2,9 @@ import { isDeepStrictEqual } from "node:util";
 import { tests } from "commonmark-spec";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { afterAll, describe, expect, it } from "vitest";
-import { parse } from "../packages/satorigear/src/index.ts";
+import { createParser } from "../packages/satorigear/src/index.ts";
+
+const parser = createParser();
 
 interface SpecCase { markdown: string; section: string }
 
@@ -26,7 +28,7 @@ const failures: { section: string; markdown: string; expected: unknown; actual: 
 for (const test of cases) {
   const source = test.markdown.replace(/→/g, "\t");
   const expected = withoutPositions(fromMarkdown(source));
-  const actual = withoutPositions(parse(source));
+  const actual = withoutPositions(parser.parse(source));
   if (isDeepStrictEqual(actual, expected)) {
     exact++;
   }

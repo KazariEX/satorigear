@@ -4,10 +4,7 @@ import {
   type PairedTokenConfig,
 } from "../inline/resolver.ts";
 import { inlineKind } from "../inline/runtime.ts";
-import {
-  feature as featureAttributes,
-  transformInlineAttributes,
-} from "./features/attributes/index.ts";
+import { feature as featureAttributes, transformInlineAttributes } from "./features/attributes/index.ts";
 import { feature as featureBlockQuote } from "./features/blockquote.ts";
 import { feature as featureBreak } from "./features/break.ts";
 import { feature as featureCode } from "./features/code.ts";
@@ -37,7 +34,6 @@ import type {
   BlockStartDispatch,
   InlineResolutionContext,
   InlineTransform,
-  SyntaxFeature,
   SyntaxProfile,
 } from "./types.ts";
 
@@ -50,72 +46,35 @@ export interface SyntaxOptions {
   table?: boolean;
 }
 
-// Canonical option keys make equivalent option objects share one immutable profile.
-const profiles = Object.create(null);
-const defaultOptions: SyntaxOptions = {};
+function createInlineTransform(options: SyntaxOptions): InlineTransform | undefined {
+  const transforms: InlineTransform[] = [];
 
-function createProfileKey(options: SyntaxOptions): number {
-  let key = 0;
-
-  if (options.attributes) {
-    key |= 1 << 0;
+  if (options.math) {
+    const singleDollarTextMath = typeof options.math !== "object" || options.math.singleDollarTextMath !== false;
+    transforms.push(transformInlineMath.bind(void 0, singleDollarTextMath));
   }
   if (options.component) {
-    key |= 1 << 1;
+    transforms.push(transformInlineCarrier);
   }
-  if (options.frontmatter) {
-    key |= 1 << (
-      typeof options.frontmatter === "object" && options.frontmatter.marker === "+"
-        ? 2
-        : 3
-    );
+  if (options.attributes) {
+    transforms.push(transformInlineAttributes);
   }
-  if (options.math) {
-    key |= 1 << 4;
-    if (typeof options.math === "object" && options.math.singleDollarTextMath === false) {
-      key |= 1 << 5;
-    }
-  }
-  if (options.strikethrough) {
-    key |= 1 << 6;
-    if (typeof options.strikethrough === "object" && options.strikethrough.singleTilde === false) {
-      key |= 1 << 7;
-    }
-  }
-  if (options.table) {
-    key |= 1 << 8;
-  }
-  return key;
-}
-
-function createInlineTransform(options: SyntaxOptions): InlineTransform | undefined {
-  const math = Boolean(options.math);
-  const component = Boolean(options.component);
-  const attributes = Boolean(options.attributes);
-  if (!math && !component && !attributes) {
+  if (transforms.length === 0) {
     return;
   }
-  const singleDollarTextMath = typeof options.math !== "object" || options.math.singleDollarTextMath !== false;
-  return (source, tokens) => {
-    if (math) {
-      tokens = transformInlineMath(source, tokens, singleDollarTextMath);
-    }
-    if (component) {
-      tokens = transformInlineCarrier(source, tokens);
-    }
-    if (attributes) {
-      tokens = transformInlineAttributes(source, tokens);
+  if (transforms.length === 1) {
+    return transforms[0];
+  }
+  return (source, tokens, context) => {
+    for (const transform of transforms) {
+      tokens = transform(source, tokens, context);
     }
     return tokens;
   };
 }
 
-export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxProfile {
-  const key = options === defaultOptions ? 0 : createProfileKey(options);
-  if (key in profiles) {
-    return profiles[key];
-  }
-
+// Compilation builds the hot dispatch tables once; documents only retain the immutable result.
+export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   const features = [
     featureHeading,
     featureBreak,
@@ -158,14 +117,8 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
   }
 
   // Compile one straight-line pipeline; the default profile keeps the resolver-only hot path.
-  const inlineTransform = createInlineTransform(options);
+  const transformInline = createInlineTransform(options);
 
-  profiles[key] = compileProfile(features, inlineTransform);
-  return profiles[key];
-}
-
-// Compilation builds the hot dispatch tables once; documents only retain the immutable result.
-function compileProfile(features: readonly SyntaxFeature[], transformInline?: InlineTransform): SyntaxProfile {
   const blockDecorators: BlockDecoratorRegistration[] = [];
   const blockFallbacks: BlockStart[] = [];
   const blockInlineContents: Record<string, true> = Object.create(null);
