@@ -1,5 +1,5 @@
 import type { Root } from "mdast";
-import { createBlockSyntaxParser } from "./block/runtime.ts";
+import { createBlockSyntaxParser } from "./block/syntax.ts";
 import { type Document, DocumentImpl } from "./document.ts";
 import { compileProfile, type SyntaxOptions } from "./profile/index.ts";
 

@@ -1,9 +1,9 @@
 import {
-  createDelimitedTokenResolver,
+  createPairingResolver,
   type DelimiterConfig,
   type PairedTokenConfig,
-} from "../inline/resolver.ts";
-import { inlineKind } from "../inline/runtime.ts";
+} from "../inline/pairing.ts";
+import { inlineKind } from "../inline/tokens.ts";
 import { feature as featureAttributes } from "./features/attributes/index.ts";
 import { feature as featureBlockQuote } from "./features/blockquote.ts";
 import { feature as featureBreak } from "./features/break.ts";
@@ -203,7 +203,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   }
 
   // Compile the registered stages into one path; documents never branch on enabled syntax.
-  const resolver = createDelimitedTokenResolver(delimiters, tokenPairs);
+  const resolver = createPairingResolver(delimiters, tokenPairs);
   const transformInline = composeInlineTransforms(...inlineTransforms, ...inlineNormalizes);
   const resolveInline: SyntaxProfile["resolveInline"] = transformInline
     ? (source, tokens, state) => resolver.resolve(

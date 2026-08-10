@@ -1,4 +1,4 @@
-import { type BlockLine, indentOf, isBlank, lineIndent } from "./primitives.ts";
+import { type BlockLine, indentOf, isBlank, lineIndent } from "./lines.ts";
 import {
   type BlockToken,
   type BlockTokenChange,

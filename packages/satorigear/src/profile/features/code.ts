@@ -7,14 +7,9 @@ import {
   type FenceRule,
   readFencedBlock,
 } from "../../block/fence.ts";
-import {
-  type BlockLine,
-  indentOf,
-  isBlank,
-  logicalToken,
-  removeIndent,
-} from "../../block/primitives.ts";
-import { inlineTokenText } from "../../inline/runtime.ts";
+import { type BlockLine, indentOf, isBlank, removeIndent } from "../../block/lines.ts";
+import { logicalToken } from "../../block/tokens.ts";
+import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
   blockEnd,

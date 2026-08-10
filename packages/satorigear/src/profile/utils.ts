@@ -5,7 +5,7 @@ import {
   inlineTokenFlags,
   inlineTokenStart,
   type InlineTokenStream,
-} from "../inline/runtime.ts";
+} from "../inline/tokens.ts";
 
 export function normalizeAssociationLabel(label: string): string {
   return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();

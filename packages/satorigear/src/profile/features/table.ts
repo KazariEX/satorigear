@@ -1,20 +1,13 @@
 import type { AlignType, Table, TableCell, TableRow } from "mdast";
-import {
-  type BlockLine,
-  isBlank,
-  lineIndent,
-  named,
-  structural,
-} from "../../block/primitives.ts";
+import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
+import { type BlockToken, namedToken, structuralToken, tokenStart } from "../../block/tokens.ts";
 import {
   type BlockProjectionContext,
   blockToken,
   inlineChildren,
-  tokenStart,
   withSpan,
 } from "../../mdast.ts";
 import { projectCodeSpan } from "./code.ts";
-import type { BlockToken } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface CellRange {
@@ -149,19 +142,19 @@ function delimiterAt(source: string, line: BlockLine): { cells: CellRange[]; tok
 }
 
 function emitTableRow(source: string, line: BlockLine, cells: readonly CellRange[], out: BlockToken[]): void {
-  out.push(structural("TableRowOpen", cells[0].start));
+  out.push(structuralToken("TableRowOpen", cells[0].start));
   for (const cell of cells) {
-    out.push(structural("TableCellOpen", cell.start));
+    out.push(structuralToken("TableCellOpen", cell.start));
     if (cell.contentEnd > cell.contentStart) {
-      out.push(named(
+      out.push(namedToken(
         "InlineChunk",
         source.slice(cell.contentStart, cell.contentEnd),
         cell.contentStart,
       ));
     }
-    out.push(structural("TableCellClose", cell.end));
+    out.push(structuralToken("TableCellClose", cell.end));
   }
-  out.push(structural("TableRowClose", line.end));
+  out.push(structuralToken("TableRowClose", line.end));
 }
 
 function childRules(
@@ -251,11 +244,11 @@ export const feature: SyntaxFeature = {
         return;
       }
 
-      out.push(structural("TableOpen", header[0].start));
+      out.push(structuralToken("TableOpen", header[0].start));
       emitTableRow(source, lines[start], header, out);
       for (let index = 0; index < delimiter.cells.length; index++) {
         const cell = delimiter.cells[index];
-        out.push(named(
+        out.push(namedToken(
           delimiter.tokens[index],
           source.slice(cell.start, cell.end),
           cell.start,
@@ -275,7 +268,7 @@ export const feature: SyntaxFeature = {
         emitTableRow(source, line, cells, out);
         end++;
       }
-      out.push(structural("TableClose", lines[end - 1].end));
+      out.push(structuralToken("TableClose", lines[end - 1].end));
       return end;
     },
   ],

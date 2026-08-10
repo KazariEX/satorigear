@@ -1,13 +1,12 @@
 import type { Heading } from "mdast";
-import { type BlockLine, lineIndent, named, structural } from "../../block/primitives.ts";
+import { type BlockLine, lineIndent } from "../../block/lines.ts";
+import { namedToken, structuralToken, tokenEnd, tokenStart } from "../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,
   directBlockToken,
   firstChildStart,
   inlineChildren,
-  tokenEnd,
-  tokenStart,
   withSpan,
 } from "../../mdast.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -103,11 +102,11 @@ export const feature: SyntaxFeature = {
         if (!atx) {
           return;
         }
-        out.push(structural("AtxHeadingOpen", atx.markerOffset, atx.marker));
+        out.push(structuralToken("AtxHeadingOpen", atx.markerOffset, atx.marker));
         if (atx.contentEnd > atx.contentOffset) {
-          out.push(named("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
+          out.push(namedToken("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
         }
-        out.push(structural("HeadingClose", line.end));
+        out.push(structuralToken("HeadingClose", line.end));
         return start + 1;
       },
     },

@@ -1,6 +1,6 @@
 import { decodeHTMLStrict } from "entities";
 import type { Text } from "mdast";
-import { inlineTokenText } from "../../inline/runtime.ts";
+import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
   type InlineLeafProjector,

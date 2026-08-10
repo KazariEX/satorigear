@@ -1,6 +1,7 @@
 import type { Break, Text, ThematicBreak } from "mdast";
-import { type BlockLine, named } from "../../block/primitives.ts";
+import { namedToken } from "../../block/tokens.ts";
 import { appendInline, blockEnd, firstNonspace, withSpan } from "../../mdast.ts";
+import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {
@@ -46,7 +47,7 @@ export const feature: SyntaxFeature = {
         if (!isThematicBreak(source, line, contentOffset)) {
           return;
         }
-        out.push(named("ThematicBreakToken", source.slice(line.start, line.end), line.start));
+        out.push(namedToken("ThematicBreakToken", source.slice(line.start, line.end), line.start));
         return start + 1;
       },
     },

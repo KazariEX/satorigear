@@ -1,6 +1,7 @@
 import type { Html } from "mdast";
-import { type BlockLine, isBlank, lineIndent, logicalToken } from "../../block/primitives.ts";
-import { inlineTokenText } from "../../inline/runtime.ts";
+import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
+import { type BlockToken, logicalToken } from "../../block/tokens.ts";
+import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
   blockEnd,
@@ -9,7 +10,6 @@ import {
   normalizeLines,
   withSpan,
 } from "../../mdast.ts";
-import type { BlockToken } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface HtmlStart {

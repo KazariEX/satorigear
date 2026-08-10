@@ -9,7 +9,7 @@ import {
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
-} from "../../../inline/runtime.ts";
+} from "../../../inline/tokens.ts";
 import {
   appendInline,
   contentBounds,

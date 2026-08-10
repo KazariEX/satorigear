@@ -1,22 +1,17 @@
+import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
 import {
-  createInlineSyntaxDocument,
   inlineSyntaxArena,
-  type InlineSyntaxDocument,
-  inlineTokenCount,
-  inlineTokenStart,
-  type InlineTokenStream,
   parseInline,
   parseInlineForest,
-} from "./inline/runtime.ts";
-import { InlineTokenState } from "./inline/tokenizer.ts";
+} from "./inline/syntax.ts";
+import { inlineTokenCount, inlineTokenStart, type InlineTokenStream } from "./inline/tokens.ts";
 import {
   createSourceView,
-  projectSourceEdits,
   type SourceSpan,
   type SourceView,
   type TextEdit,
 } from "./source-view.ts";
-import type { BlockSyntaxView } from "./block/runtime.ts";
+import type { BlockSyntaxView } from "./block/syntax.ts";
 import type { BlockToken } from "./block/tokens.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
@@ -46,7 +41,7 @@ export interface InlineForestLease {
   close: () => void;
 }
 
-export interface MarkdownSyntax {
+export interface SyntaxState {
   blocks: () => readonly SyntaxBlock[];
   blockView: () => BlockSyntaxView;
   inlineForBlock: (nodeId: number) => MarkdownInlineSyntax | undefined;
@@ -54,66 +49,9 @@ export interface MarkdownSyntax {
   update: (source: string, view: BlockSyntaxView, edits?: readonly TextEdit[]) => void;
 }
 
-interface InlineRegionDescriptor {
-  id: number;
-  rule: string;
-  span: { end: number; start: number };
-  view: SourceView;
-}
-
 interface InlineForestRoot {
   id: number;
   tokenBase: number;
-}
-
-class InlineRegion extends InlineTokenState {
-  document?: InlineSyntaxDocument;
-  id: number;
-  revision = 0;
-  rule: string;
-  span: { end: number; start: number };
-  view: SourceView;
-
-  get source(): string {
-    return this.view.text;
-  }
-
-  constructor(profile: SyntaxProfile, descriptor: InlineRegionDescriptor, definitions: ReadonlySet<string>) {
-    super(profile);
-    this.id = descriptor.id;
-    this.rule = descriptor.rule;
-    this.span = descriptor.span;
-    this.view = descriptor.view;
-    this.updateTokens(descriptor.view.text, definitions);
-  }
-
-  #rebind(descriptor: InlineRegionDescriptor): void {
-    this.id = descriptor.id;
-    this.rule = descriptor.rule;
-    this.span = descriptor.span;
-    this.view = descriptor.view;
-  }
-
-  update(
-    descriptor: InlineRegionDescriptor,
-    definitions: ReadonlySet<string>,
-    edits: readonly TextEdit[],
-  ): this {
-    const document = this.document;
-    const sourceEdits = this.view.text !== descriptor.view.text
-      ? projectSourceEdits(this.view, descriptor.view, edits)
-      : void 0;
-    const changed = this.updateTokens(descriptor.view.text, definitions, document?.edit, sourceEdits);
-    this.#rebind(descriptor);
-    if (!changed) {
-      return this;
-    }
-    if (!document) {
-      this.document = createInlineSyntaxDocument(descriptor.view.text, this.tokens);
-    }
-    this.revision++;
-    return this;
-  }
 }
 
 function appendTokenSpans(spans: SourceSpan[], token: BlockToken): void {
@@ -151,7 +89,7 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-class MarkdownSyntaxImpl implements MarkdownSyntax {
+class SyntaxStateImpl implements SyntaxState {
   #blocks: readonly SyntaxBlock[] = [];
   // Root IDs point into generated scratch storage and exist only while an inline forest lease is open.
   #forestRoots = new Map<number, InlineForestRoot>();
@@ -172,7 +110,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   update(source: string, view: BlockSyntaxView, edits: readonly TextEdit[] = []): void {
     const arena = view.arena;
     const definitions = new Set<string>();
-    const descriptors: InlineRegionDescriptor[] = [];
+    const bindings: InlineRegionBinding[] = [];
     const stableRegionIds = new Set<number>();
     const blocks: SyntaxBlock[] = [];
     const collect = (
@@ -189,7 +127,7 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
       if (this.#profile.blockInlineContents[rule]) {
         const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
         if (spans.length > 0) {
-          descriptors.push({
+          bindings.push({
             id: nodeId,
             rule,
             span: { start: offset, end: offset + arena.lenOf(nodeId) },
@@ -244,16 +182,16 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         available.push(region);
       }
     }
-    for (const descriptor of descriptors) {
-      let previous = this.#regions.get(descriptor.id);
+    for (const binding of bindings) {
+      let previous = this.#regions.get(binding.id);
       if (!previous) {
         // Rebind displaced state by rule and proximity when arena surgery changes node identities.
         let nearest = -1;
         let distance = Number.POSITIVE_INFINITY;
         for (let index = 0; index < available.length; index++) {
           const candidate = available[index];
-          const candidateDistance = candidate.rule === descriptor.rule
-            ? Math.abs(candidate.span.start - descriptor.span.start)
+          const candidateDistance = candidate.rule === binding.rule
+            ? Math.abs(candidate.span.start - binding.span.start)
             : Number.POSITIVE_INFINITY;
           if (candidateDistance < distance) {
             distance = candidateDistance;
@@ -265,9 +203,9 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         }
       }
       const region = previous
-        ? previous.update(descriptor, definitions, edits)
-        : new InlineRegion(this.#profile, descriptor, definitions);
-      regions.set(descriptor.id, region);
+        ? previous.update(binding, definitions, edits)
+        : new InlineRegion(this.#profile.resolveInline, binding, definitions);
+      regions.set(binding.id, region);
     }
     const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));
     for (const block of blocks) {
@@ -299,12 +237,12 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   openInlineForest(blocks: readonly SyntaxBlock[]): InlineForestLease {
     const regions: InlineRegion[] = [];
     const forestBlocks: SyntaxBlock[] = [];
-    // A leased block must stay entirely on the scratch arena; one private region would switch arenas mid-projection.
+    // A leased block stays entirely on scratch; one region-owned syntax arena would switch arenas mid-projection.
     for (const block of blocks) {
       const start = regions.length;
       for (const id of block.regionIds) {
         const region = this.#regions.get(id);
-        if (!region || region.document) {
+        if (!region || region.syntax) {
           regions.length = start;
           break;
         }
@@ -350,13 +288,13 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
     if (!region) {
       return;
     }
-    // Document views own their arena; forest and one-shot roots borrow the generated scratch arena synchronously.
-    const document = region.document;
+    // Region syntax documents own their arena; forest and one-shot roots borrow shared scratch synchronously.
+    const regionSyntax = region.syntax;
     const forestRoot = this.#forestRoots.get(nodeId);
     return {
-      arena: document?.arena ?? inlineSyntaxArena,
+      arena: regionSyntax?.arena ?? inlineSyntaxArena,
       blockRule: region.rule,
-      rootId: document?.rootId ?? forestRoot?.id ?? parseInline(
+      rootId: regionSyntax?.rootId ?? forestRoot?.id ?? parseInline(
         region.view.text,
         region.tokens,
       ),
@@ -368,6 +306,6 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
   }
 }
 
-export function createMarkdownSyntax(source: string, view: BlockSyntaxView, profile: SyntaxProfile): MarkdownSyntax {
-  return new MarkdownSyntaxImpl(source, view, profile);
+export function createSyntaxState(source: string, view: BlockSyntaxView, profile: SyntaxProfile): SyntaxState {
+  return new SyntaxStateImpl(source, view, profile);
 }

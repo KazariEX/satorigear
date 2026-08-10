@@ -9,7 +9,7 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
   inlineTokenStride,
-} from "./runtime.ts";
+} from "./tokens.ts";
 
 export interface DelimiterConfig {
   token: string;
@@ -54,7 +54,7 @@ interface TokenIsolationRange {
   id: number;
 }
 
-interface DelimitedTokenResolver<State> {
+interface PairingResolver<State> {
   resolve: (source: string, tokens: InlineTokenStream, state: State) => InlineTokenStream;
 }
 
@@ -539,10 +539,10 @@ function resolveDelimiterRuns(
   return result;
 }
 
-export function createDelimitedTokenResolver<State = undefined>(
+export function createPairingResolver<State = undefined>(
   delimiterConfigs: readonly DelimiterConfig[],
   pairConfigs: readonly PairedTokenConfig<State>[] = [],
-): DelimitedTokenResolver<State> {
+): PairingResolver<State> {
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[inlineKind(config.token)] = {

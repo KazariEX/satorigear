@@ -1,8 +1,4 @@
-import {
-  type BlockLine,
-  lineIndent,
-  removeIndent,
-} from "./primitives.ts";
+import { type BlockLine, lineIndent, removeIndent } from "./lines.ts";
 
 export interface Fence {
   length: number;

@@ -1,18 +1,12 @@
 import type { Blockquote } from "mdast";
-import {
-  type BlockLine,
-  isBlank,
-  lineIndent,
-  physicalColumnAt,
-  structural,
-} from "../../block/primitives.ts";
+import { type BlockLine, isBlank, lineIndent, physicalColumnAt } from "../../block/lines.ts";
+import { structuralToken, tokenStart } from "../../block/tokens.ts";
 import {
   blockChildren,
   blockEnd,
   blockToken,
   firstNonspace,
   lineEnd,
-  tokenStart,
   withSpan,
 } from "../../mdast.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -91,9 +85,9 @@ export const feature: SyntaxFeature = {
           quoteLines.push({ ...lines[index], lazy: true });
           index++;
         }
-        out.push(structural("BlockQuoteOpen", line.start, ">"));
+        out.push(structuralToken("BlockQuoteOpen", line.start, ">"));
         context.resolveLines(source, quoteLines, out);
-        out.push(structural("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
+        out.push(structuralToken("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
         return index;
       },
     },

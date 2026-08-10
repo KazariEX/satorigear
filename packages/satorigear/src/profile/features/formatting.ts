@@ -9,7 +9,7 @@ import {
   withSpan,
 } from "../../mdast.ts";
 import { projectInlineText } from "./text.ts";
-import type { DelimiterConfig } from "../../inline/resolver.ts";
+import type { DelimiterConfig } from "../../inline/pairing.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {

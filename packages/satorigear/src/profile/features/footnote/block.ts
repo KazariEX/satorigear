@@ -5,18 +5,16 @@ import {
   indentOf,
   isBlank,
   lineIndent,
-  structural,
-} from "../../../block/primitives.ts";
+} from "../../../block/lines.ts";
+import { type BlockToken, structuralToken, tokenStart } from "../../../block/tokens.ts";
 import {
   blockChildren,
   blockEnd,
   blockToken,
-  tokenStart,
   withSpan,
 } from "../../../mdast.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
-import type { BlockToken } from "../../../block/tokens.ts";
 import type { SyntaxFeature } from "../../types.ts";
 
 interface FootnoteDefinitionFields {
@@ -59,7 +57,7 @@ function definitionAt(source: string, line: BlockLine): FootnoteDefinitionMatch 
 
 function definitionOpen(source: string, match: FootnoteDefinitionMatch): FootnoteDefinitionOpenToken {
   return {
-    ...structural(
+    ...structuralToken(
       "FootnoteDefinitionOpen",
       match.markerStart,
       source.slice(match.markerStart, match.markerEnd),
@@ -146,7 +144,7 @@ export const blockStarts: SyntaxFeature["blockStarts"] = [
       out.push(definitionOpen(source, match));
       context.resolveLines(source, definitionLines, out);
       const end = definitionLines.at(-1)?.next ?? match.markerEnd;
-      out.push(structural("FootnoteDefinitionClose", end));
+      out.push(structuralToken("FootnoteDefinitionClose", end));
       return index;
     },
   },

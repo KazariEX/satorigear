@@ -1,5 +1,5 @@
 import type { Image, ImageReference, Link, LinkReference, PhrasingContent, Text } from "mdast";
-import { inlineTokenText } from "../../inline/runtime.ts";
+import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
   contentBounds,

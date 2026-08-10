@@ -1,12 +1,8 @@
 import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
-import {
-  type BlockFragment,
-  materialize,
-  projectBlock,
-} from "./mdast.ts";
-import { createMarkdownSyntax, type MarkdownSyntax } from "./syntax.ts";
-import type { BlockSyntaxDocument, BlockSyntaxParser } from "./block/runtime.ts";
+import { type BlockFragment, materialize, projectBlock } from "./mdast.ts";
+import { createSyntaxState, type SyntaxState } from "./syntax-state.ts";
+import type { BlockSyntaxDocument, BlockSyntaxParser } from "./block/syntax.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { TextEdit } from "./source-view.ts";
 
@@ -64,14 +60,14 @@ export class DocumentImpl implements Document {
   #blockScanner: BlockScanner;
   #blockSyntax: BlockSyntaxDocument;
   #profile: SyntaxProfile;
-  #syntax: MarkdownSyntax;
+  #syntaxState: SyntaxState;
   #fragments = new Map<number, BlockFragment>();
 
   constructor(source: string, profile: SyntaxProfile, blockParser: BlockSyntaxParser) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(source, profile);
     this.#blockSyntax = blockParser.parse(source, this.#blockScanner.tokens);
-    this.#syntax = createMarkdownSyntax(source, this.#blockSyntax.view(this.#blockScanner.tokens), profile);
+    this.#syntaxState = createSyntaxState(source, this.#blockSyntax.view(this.#blockScanner.tokens), profile);
   }
 
   get source(): string {
@@ -86,21 +82,21 @@ export class DocumentImpl implements Document {
     const changedSpan = changedSpanOf(edits);
     const update = this.#blockScanner.edit(edits);
     this.#blockSyntax.edit(sequentialEdits(edits), update.change);
-    this.#syntax.update(this.source, this.#blockSyntax.view(this.#blockScanner.tokens), edits);
+    this.#syntaxState.update(this.source, this.#blockSyntax.view(this.#blockScanner.tokens), edits);
     return { changedSpan };
   }
 
   #projectBlocks(): BlockFragment[] {
     const fragments = new Map<number, BlockFragment>();
-    const syntaxBlocks = this.#syntax.blocks();
+    const syntaxBlocks = this.#syntaxState.blocks();
     const changed = syntaxBlocks.filter((block) => this.#fragments.get(block.id)?.version !== block.version);
     const context = {
       profile: this.#profile,
       source: this.source,
-      syntax: this.#syntax,
-      view: this.#syntax.blockView(),
+      syntaxState: this.#syntaxState,
+      view: this.#syntaxState.blockView(),
     };
-    const forest = this.#syntax.openInlineForest(changed);
+    const forest = this.#syntaxState.openInlineForest(changed);
     try {
       // Consume scratch-backed roots before the later path can activate a region's document-owned arena.
       for (const block of forest.blocks) {

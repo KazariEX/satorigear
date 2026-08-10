@@ -11,7 +11,7 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
   setInlineTokenFlags,
-} from "../../../inline/runtime.ts";
+} from "../../../inline/tokens.ts";
 import { extendSpan, type FragmentNode, lineEnd } from "../../../mdast.ts";
 import {
   carryTerminalAttributes,

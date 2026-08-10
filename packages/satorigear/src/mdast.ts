@@ -7,25 +7,25 @@ import type {
   Text,
   TopLevelContent,
 } from "mdast";
+import { type BlockToken, tokenEnd, tokenStart } from "./block/tokens.ts";
 import {
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
-} from "./inline/runtime.ts";
-import type { BlockSyntaxView } from "./block/runtime.ts";
-import type { BlockToken } from "./block/tokens.ts";
+} from "./inline/tokens.ts";
+import type { BlockSyntaxView } from "./block/syntax.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
-import type { MarkdownSyntax, SyntaxBlock } from "./syntax.ts";
+import type { SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 
 export interface BlockProjectionContext {
   profile: SyntaxProfile;
   view: BlockSyntaxView;
   source: string;
-  syntax: MarkdownSyntax;
+  syntaxState: SyntaxState;
 }
 
 interface FragmentValue {
@@ -119,14 +119,6 @@ export function blockEnd(nodeId: number, offset: number, context: BlockProjectio
     end--;
   }
   return end;
-}
-
-export function tokenStart(token: BlockToken): number {
-  return token.ranges?.[0]?.offset ?? token.offset;
-}
-
-export function tokenEnd(token: BlockToken): number {
-  return token.ranges?.at(-1)?.end ?? token.offset + token.text.length;
 }
 
 function inlineTokenIndex(context: InlineProjectionContext, index: number): number {
@@ -353,7 +345,8 @@ export function appendInline(
     }
   }
   if (newline) {
-    // Markdown syntax newlines point past stripped container prefixes, while mdast spans include the physical line ending.
+    // Markdown syntax newlines point past stripped container prefixes,
+    // while mdast spans include the physical line ending.
     const previous = target.at(-1);
     if (previous?.type === "break") {
       extendSpan(previous, lineStart(context.source, nextLineOffset));
@@ -469,7 +462,7 @@ export function inlineChildren(
   context: BlockProjectionContext,
   allowEmpty = false,
 ): PhrasingContent[] {
-  const inline = context.syntax.inlineForBlock(nodeId);
+  const inline = context.syntaxState.inlineForBlock(nodeId);
   if (!inline) {
     const rule = context.view.arena.ruleNameOf(nodeId);
     if (allowEmpty) {

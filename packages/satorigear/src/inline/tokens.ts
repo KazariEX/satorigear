@@ -1,27 +1,12 @@
 import * as generatedInline from "../generated/inline.ts";
-import type { TextEdit } from "../source-view.ts";
-import type { SyntaxArena, TokenChange } from "../syntax-protocol.ts";
+import type { TokenChange } from "../syntax-protocol.ts";
 
 export type InlineTokenStream = readonly number[];
 export type InlineTokenChange = TokenChange<InlineTokenStream>;
 
-export interface InlineSyntaxDocument {
-  readonly arena: SyntaxArena;
-  readonly rootId: number;
-
-  edit: (edits: readonly TextEdit[], change: InlineTokenChange) => void;
-}
-
-interface InlineTokenSegment {
-  source: string;
-  tokens: InlineTokenStream;
-}
-
 // The generated lexer, resolver, incremental parser, and projector share this one
 // region-local record layout. Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = generatedInline.packedTokenStride;
-export const inlineSyntaxArena: SyntaxArena = generatedInline.tree;
-const inlineBoundaryKind = generatedInline.tokenKind("InlineBoundary");
 
 export function inlineKind(type: string): number {
   return generatedInline.tokenKind(type);
@@ -29,29 +14,6 @@ export function inlineKind(type: string): number {
 
 export function tokenizeInline(source: string): InlineTokenStream {
   return generatedInline.tokenizePacked(source);
-}
-
-export function parseInline(source: string, tokens: InlineTokenStream): number {
-  return generatedInline.parsePackedTokens(source, tokens, "InlineLines");
-}
-
-export function parseInlineForest(segments: readonly InlineTokenSegment[]): number {
-  return generatedInline.parsePackedTokenSegments(segments, inlineBoundaryKind, "InlineForest");
-}
-
-export function createInlineSyntaxDocument(
-  source: string,
-  tokens: InlineTokenStream,
-): InlineSyntaxDocument {
-  const parser = generatedInline.createParser();
-  const handle = parser.parsePackedTokens(source, tokens, "InlineLines");
-  return {
-    arena: parser.tree,
-    get rootId() {
-      return handle.root;
-    },
-    edit: (edits, change) => parser.editPackedTokens(handle, edits, change),
-  };
 }
 
 export function inlineTokenCount(tokens: InlineTokenStream): number {

@@ -1,12 +1,6 @@
 import type { Definition } from "mdast";
-import {
-  type BlockLine,
-  indentOf,
-  isBlank,
-  lineIndent,
-  named,
-  structural,
-} from "../../block/primitives.ts";
+import { type BlockLine, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
+import { namedToken, structuralToken } from "../../block/tokens.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -18,12 +12,12 @@ import {
   inlineTokenStart,
   inlineTokenStride,
   inlineTokenText,
-} from "../../inline/runtime.ts";
+} from "../../inline/tokens.ts";
 import { blockEnd, blockToken, withSpan } from "../../mdast.ts";
 import { normalizeAssociationLabel, splitReferenceTail } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockToken } from "../../block/tokens.ts";
-import type { PairedTokenConfig } from "../../inline/resolver.ts";
+import type { PairedTokenConfig } from "../../inline/pairing.ts";
 import type {
   InlineResolutionContext,
   InlineTransform,
@@ -48,7 +42,7 @@ interface LinkDefinitionMatch {
 }
 
 function linkDefinitionOpen(offset: number, fields: LinkDefinitionFields): LinkDefinitionOpenToken {
-  return { ...structural("LinkDefinitionOpen", offset), linkDefinition: fields };
+  return { ...structuralToken("LinkDefinitionOpen", offset), linkDefinition: fields };
 }
 
 function linkDefinitionFields(token: BlockToken): LinkDefinitionFields {
@@ -445,9 +439,9 @@ export const feature: SyntaxFeature = {
         for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
           const current = lines[definitionLine];
           const end = definitionLine + 1 < definition.end ? current.next : current.end;
-          out.push(named("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+          out.push(namedToken("LinkDefinitionChunk", source.slice(current.start, end), current.start));
         }
-        out.push(structural("LinkDefinitionClose", lines[definition.end - 1].end));
+        out.push(structuralToken("LinkDefinitionClose", lines[definition.end - 1].end));
         return definition.end;
       },
     },

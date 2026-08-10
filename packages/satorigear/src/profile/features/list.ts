@@ -5,8 +5,8 @@ import {
   indentOf,
   isBlank,
   lineIndent,
-  structural,
-} from "../../block/primitives.ts";
+} from "../../block/lines.ts";
+import { structuralToken, tokenEnd, tokenStart } from "../../block/tokens.ts";
 import {
   blockChildren,
   blockEnd,
@@ -15,8 +15,6 @@ import {
   blockToken,
   lastChildEnd,
   payloadBounds,
-  tokenEnd,
-  tokenStart,
   withSpan,
 } from "../../mdast.ts";
 import { isThematicBreak } from "./break.ts";
@@ -277,7 +275,7 @@ export const feature: SyntaxFeature = {
         const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
         const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
         const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
-        out.push(structural(listOpen, listMarker.offset, listMarker.text));
+        out.push(structuralToken(listOpen, listMarker.offset, listMarker.text));
         let index = start;
         let listEnd = listMarker.offset + listMarker.text.length;
         while (index < lines.length) {
@@ -285,7 +283,7 @@ export const feature: SyntaxFeature = {
           if (!marker || !sameList(marker, listMarker)) {
             break;
           }
-          out.push(structural(itemOpen, marker.offset, marker.text));
+          out.push(structuralToken(itemOpen, marker.offset, marker.text));
           const itemLines: BlockLine[] = [{
             ...lines[index],
             start: marker.contentOffset,
@@ -327,9 +325,9 @@ export const feature: SyntaxFeature = {
           }
           context.resolveLines(source, itemLines, out);
           listEnd = itemLines.at(-1)?.next ?? marker.offset;
-          out.push(structural(itemClose, listEnd));
+          out.push(structuralToken(itemClose, listEnd));
         }
-        out.push(structural(listClose, listEnd));
+        out.push(structuralToken(listClose, listEnd));
         return index;
       },
     },

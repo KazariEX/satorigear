@@ -5,7 +5,7 @@ import {
   type FenceRule,
   readFencedBlock,
 } from "../../../block/fence.ts";
-import { logicalToken } from "../../../block/primitives.ts";
+import { logicalToken } from "../../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,

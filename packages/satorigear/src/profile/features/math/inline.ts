@@ -10,11 +10,8 @@ import {
   type InlineTokenStream,
   inlineTokenText,
   tokenizeInline,
-} from "../../../inline/runtime.ts";
-import {
-  appendInline,
-  withSpan,
-} from "../../../mdast.ts";
+} from "../../../inline/tokens.ts";
+import { appendInline, withSpan } from "../../../mdast.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { InlineMath } from "./types.ts";
 

@@ -1,13 +1,12 @@
 import type { Yaml } from "mdast";
-import { logicalToken } from "../../block/primitives.ts";
+import { logicalToken, tokenStart } from "../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,
   normalizeLines,
-  tokenStart,
   withSpan,
 } from "../../mdast.ts";
-import type { BlockLine } from "../../block/primitives.ts";
+import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export type FrontmatterMarker = "+" | "-";

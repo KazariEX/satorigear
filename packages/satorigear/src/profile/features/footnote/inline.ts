@@ -10,7 +10,7 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
   inlineTokenText,
-} from "../../../inline/runtime.ts";
+} from "../../../inline/tokens.ts";
 import { appendInline, withSpan } from "../../../mdast.ts";
 import { normalizeAssociationLabel, splitReferenceTail } from "../../utils.ts";
 import { semanticText } from "../text.ts";
