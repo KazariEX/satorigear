@@ -54,6 +54,9 @@ catalogs:
     vitest:
       specifier: ^4.1.10
       version: 4.1.10
+    yaml:
+      specifier: 2.9.0
+      version: 2.9.0
 
 importers:
 
@@ -113,6 +116,9 @@ importers:
       entities:
         specifier: 'catalog:'
         version: 3.0.1
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.0
 
 packages:
 

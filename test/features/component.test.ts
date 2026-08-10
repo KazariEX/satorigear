@@ -36,6 +36,10 @@ describe("component syntax", () => {
       name: "card",
       attributes: {},
     });
+    expect(parse("::Card\n---\ncount: 42\n---\n::\n", { component: true }).children[0]).toMatchObject({
+      type: "blockComponent",
+      attributes: { count: 42 },
+    });
   });
 
   it("projects fenced block components with normalized names and attributes", () => {
@@ -98,6 +102,143 @@ describe("component syntax", () => {
       type: "blockComponent",
       name: "alert",
     });
+  });
+
+  it("parses typed YAML props before component content", () => {
+    const source = `::DataCard{count="inline"}
+---
+count: 42
+enabled: true
+empty: null
+items:
+  - one
+  - two
+config:
+  mode: dark
+published: 2025-08-10
+---
+Body
+::
+`;
+    const value = component(source) as BlockComponent;
+    expect(value).toMatchObject({
+      type: "blockComponent",
+      name: "data-card",
+      attributes: {
+        count: "inline",
+        enabled: true,
+        empty: null,
+        items: ["one", "two"],
+        config: { mode: "dark" },
+        published: "2025-08-10",
+      },
+      children: [{ type: "paragraph", children: [{ type: "text", value: "Body" }] }],
+    });
+  });
+
+  it("accepts YAML props code fences without emitting code nodes", () => {
+    for (const [open, close] of [
+      ["```yaml [props]", "```"],
+      ["~~~yml [props]", "~~~"],
+    ]) {
+      const value = component(`::card\n${open}\ncount: 42\n${close}\nBody\n::\n`) as BlockComponent;
+      expect(value).toMatchObject({
+        attributes: { count: 42 },
+        children: [{ type: "paragraph" }],
+      });
+      expect(value.children.some((node) => node.type === "code")).toBe(false);
+    }
+  });
+
+  it("projects explicit default and named slots as template components", () => {
+    const source = `::card
+#default
+Body
+#footer{.wide}
+Before
+\`\`\`
+#not-a-slot
+::
+\`\`\`
+After
+::
+`;
+    const value = component(source) as BlockComponent;
+    expect(value).toMatchObject({
+      children: [
+        {
+          type: "blockComponent",
+          name: "template",
+          attributes: { name: "default" },
+          children: [{ type: "paragraph", children: [{ type: "text", value: "Body" }] }],
+        },
+        {
+          type: "blockComponent",
+          name: "template",
+          attributes: { class: "wide", name: "footer" },
+          children: [
+            { type: "paragraph" },
+            { type: "code", value: "#not-a-slot\n::" },
+            { type: "paragraph", children: [{ type: "text", value: "After" }] },
+          ],
+        },
+      ],
+    });
+    expect(value.children[0]?.position).toEqual({
+      start: { line: 2, column: 1, offset: source.indexOf("#default") },
+      end: { line: 4, column: 1, offset: source.indexOf("#footer") },
+    });
+    expect(value.children[1]?.position).toEqual({
+      start: { line: 4, column: 1, offset: source.indexOf("#footer") },
+      end: { line: 11, column: 1, offset: source.lastIndexOf("::\n") },
+    });
+  });
+
+  it("keeps nested components inside their current slot", () => {
+    const source = `::outer
+#content
+Before
+:::child
+Inside
+:::
+After
+#footer
+End
+::
+`;
+    expect(component(source)).toMatchObject({
+      children: [
+        {
+          type: "blockComponent",
+          name: "template",
+          attributes: { name: "content" },
+          children: [
+            { type: "paragraph", children: [{ type: "text", value: "Before" }] },
+            {
+              type: "blockComponent",
+              name: "child",
+              children: [{ type: "paragraph", children: [{ type: "text", value: "Inside" }] }],
+            },
+            { type: "paragraph", children: [{ type: "text", value: "After" }] },
+          ],
+        },
+        {
+          type: "blockComponent",
+          name: "template",
+          attributes: { name: "footer" },
+          children: [{ type: "paragraph", children: [{ type: "text", value: "End" }] }],
+        },
+      ],
+    });
+  });
+
+  it("only consumes YAML props at the beginning of component content", () => {
+    const value = component("::card\nBody\n---\ncount: 42\n---\n::\n") as BlockComponent;
+    expect(value.attributes).toEqual({});
+  });
+
+  it("throws for invalid closed component YAML", () => {
+    expect(() => component("::card\n---\nitems: [\n---\n::\n")).toThrow();
   });
 
   it("supports nested components with independent fence sizes", () => {
@@ -354,6 +495,36 @@ describe("component syntax", () => {
           { type: "inlineComponent", name: "badge", children: [{ type: "strong" }] },
         ],
       }],
+    });
+  });
+
+  it("updates YAML props and slots through the existing incremental path", () => {
+    const document = createDocument("::card\n---\ncount: 1\n---\n#header\nTitle\n::\n", options);
+    let start = document.source.indexOf("1");
+    document.edit([{ start, end: start + 1, text: "2" }]);
+    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot().children[0]).toMatchObject({
+      attributes: { count: 2 },
+      children: [{ attributes: { name: "header" } }],
+    });
+
+    start = document.source.indexOf("header");
+    document.edit([{ start, end: start + 6, text: "footer" }]);
+    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot().children[0]).toMatchObject({
+      children: [{ attributes: { name: "footer" } }],
+    });
+
+    start = document.source.indexOf("#footer");
+    document.edit([{ start, end: start + 1, text: "" }]);
+    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot().children[0]).toMatchObject({
+      children: [{ type: "paragraph", children: [{ type: "text", value: "footer\nTitle" }] }],
+    });
+    document.edit([{ start, end: start, text: "#" }]);
+    expect(document.snapshot()).toEqual(parse(document.source, options));
+    expect(document.snapshot().children[0]).toMatchObject({
+      children: [{ type: "blockComponent", attributes: { name: "footer" } }],
     });
   });
 

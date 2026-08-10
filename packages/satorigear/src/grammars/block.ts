@@ -29,7 +29,10 @@ const BlockComponentOpen = token(never());
 const BlockComponentLabelOpen = token(never());
 const BlockComponentLabelClose = token(never());
 const BlockComponentAttributes = token(never());
+const BlockComponentYamlProps = token(never());
 const BlockComponentClose = token(never());
+const BlockComponentSlotOpen = token(never());
+const BlockComponentSlotClose = token(never());
 
 const Paragraph = rule(() => [[ParagraphOpen, many1(InlineChunk), ParagraphClose]]);
 const AtxHeading = rule(() => [[AtxHeadingOpen, many(InlineChunk), HeadingClose]]);
@@ -50,8 +53,15 @@ const BlockComponent = rule(() => [[
   BlockComponentOpen,
   opt(BlockComponentLabel),
   opt(BlockComponentAttributes),
+  opt(BlockComponentYamlProps),
   many(Block),
   BlockComponentClose,
+]]);
+const BlockComponentSlot = rule(() => [[
+  BlockComponentSlotOpen,
+  opt(BlockComponentAttributes),
+  many(Block),
+  BlockComponentSlotClose,
 ]]);
 const BlockQuote = rule(() => [[BlockQuoteOpen, many(Block), BlockQuoteClose]]);
 const UnorderedListItem = rule(() => [[UnorderedItemOpen, many(Block), UnorderedItemClose]]);
@@ -68,6 +78,7 @@ Block = rule(() => [
   HtmlBlock,
   LinkDefinition,
   BlockComponent,
+  BlockComponentSlot,
   BlockQuote,
   UnorderedList,
   OrderedList,
@@ -107,7 +118,10 @@ export const grammar = defineGrammar({
     BlockComponentLabelOpen,
     BlockComponentLabelClose,
     BlockComponentAttributes,
+    BlockComponentYamlProps,
     BlockComponentClose,
+    BlockComponentSlotOpen,
+    BlockComponentSlotClose,
   },
   rules: {
     Paragraph,
@@ -120,6 +134,7 @@ export const grammar = defineGrammar({
     LinkDefinition,
     BlockComponentLabel,
     BlockComponent,
+    BlockComponentSlot,
     ThematicBreak,
     BlockQuote,
     UnorderedListItem,
