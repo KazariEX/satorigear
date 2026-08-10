@@ -97,16 +97,42 @@ export function projectCodeSpan(
   return true;
 }
 
+// Content loses at most the opening indent, so scan only those leading columns instead of replacing every line.
+function fencedCodeContent(source: string, start: number, end: number, indent: number): string {
+  const contentEnd = source.charCodeAt(end - 1) === 10 ? end - 1 : end;
+  if (!indent) {
+    return source.slice(start, contentEnd);
+  }
+
+  const chunks: string[] = [];
+  let lineStart = start;
+  while (lineStart < contentEnd) {
+    const newline = source.indexOf("\n", lineStart);
+    const lineEnd = newline < 0 || newline >= contentEnd ? contentEnd : newline;
+    let contentStart = lineStart;
+    while (contentStart - lineStart < indent && source.charCodeAt(contentStart) === 32) {
+      contentStart++;
+    }
+    chunks.push(source.slice(contentStart, lineEnd));
+    if (lineEnd < contentEnd) {
+      chunks.push("\n");
+    }
+    lineStart = lineEnd + 1;
+  }
+  return chunks.join("");
+}
+
 function fencedCode(value: string): { closed: boolean; node: Code } {
   const source = normalizeLines(value);
-  const lines = source.match(/[^\n]*(?:\n|$)/g)?.filter(Boolean);
-  if (!lines?.length) {
+  if (!source) {
     throw new Error("FencedCodeBlock token is empty");
   }
-  const opening = lines[0];
-  const contentLines = lines.slice(1);
+
+  const openingEnd = source.indexOf("\n");
+  const opening = source.slice(0, openingEnd < 0 ? source.length : openingEnd);
+  const contentStart = openingEnd < 0 ? source.length : openingEnd + 1;
   let indent = 0;
-  while (indent < 3 && opening[indent] === " ") {
+  while (indent < 3 && opening.charCodeAt(indent) === 32) {
     indent++;
   }
   const marker = opening[indent];
@@ -118,13 +144,31 @@ function fencedCode(value: string): { closed: boolean; node: Code } {
     markerEnd++;
   }
   const markerLength = markerEnd - indent;
-  const closing = contentLines.at(-1);
-  const closed = Boolean(closing && new RegExp(`^ {0,3}\\${marker}{${markerLength},}[ \\t]*(?:\\n|$)`).test(closing));
-  if (closed) {
-    contentLines.pop();
+
+  const finalLineEnd = source.endsWith("\n") ? source.length - 1 : source.length;
+  const finalLineStart = source.lastIndexOf("\n", finalLineEnd - 1) + 1;
+  const closing = source.slice(finalLineStart, finalLineEnd);
+  let closingIndent = 0;
+  while (closingIndent < 3 && closing.charCodeAt(closingIndent) === 32) {
+    closingIndent++;
   }
-  const literal = contentLines.map((line) => line.replace(new RegExp(`^ {0,${indent}}`), "").replace(/\n?$/, "\n")).join("");
-  const rawInfo = semanticText(opening.slice(markerEnd).replace(/^[ \t]+/, "").replace(/\n$/, ""));
+  let closingMarkerEnd = closingIndent;
+  while (closing[closingMarkerEnd] === marker) {
+    closingMarkerEnd++;
+  }
+  let closingEnd = closingMarkerEnd;
+  while (closingEnd < closing.length) {
+    const code = closing.charCodeAt(closingEnd);
+    if (code !== 32 && code !== 9) {
+      break;
+    }
+    closingEnd++;
+  }
+  const closed = finalLineStart >= contentStart
+    && closingMarkerEnd - closingIndent >= markerLength
+    && closingEnd === closing.length;
+
+  const rawInfo = semanticText(opening.slice(markerEnd).replace(/^[ \t]+/, ""));
   const langEnd = rawInfo.search(/[ \t]/);
   const lang = rawInfo ? langEnd < 0 ? rawInfo : rawInfo.slice(0, langEnd) : null;
   const metaStart = langEnd < 0 ? -1 : rawInfo.slice(langEnd).search(/[^ \t]/);
@@ -134,7 +178,7 @@ function fencedCode(value: string): { closed: boolean; node: Code } {
       type: "code",
       lang,
       meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
-      value: literal.replace(/\n$/, ""),
+      value: fencedCodeContent(source, contentStart, closed ? finalLineStart : source.length, indent),
     },
   };
 }
