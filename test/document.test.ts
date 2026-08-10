@@ -157,6 +157,25 @@ describe("markdown document", () => {
     expect(split.snapshot()).toEqual(parser.parse(split.source));
   });
 
+  it("updates HTML block termination", () => {
+    const document = parser.createDocument("<script>\nvalue\n");
+    expect(document.snapshot().children[0]).toMatchObject({
+      type: "html",
+      value: "<script>\nvalue\n",
+    });
+
+    document.edit([{
+      start: document.source.length,
+      end: document.source.length,
+      text: "</script>\n",
+    }]);
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.snapshot().children[0]).toMatchObject({
+      type: "html",
+      value: "<script>\nvalue\n</script>",
+    });
+  });
+
   it.each([
     { source: "***\n", shape: { type: "thematicBreak" } },
     { source: "- item\n", shape: { type: "list" } },

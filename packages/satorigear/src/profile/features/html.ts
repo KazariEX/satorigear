@@ -9,11 +9,17 @@ import {
   normalizeLines,
   withSpan,
 } from "../../mdast.ts";
+import type { BlockToken } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface HtmlStart {
   interruptParagraph: boolean;
   terminator?: string;
+}
+
+// Scanning owns block classification; projection only needs to preserve an unfinished terminator block.
+interface HtmlBlockToken extends BlockToken {
+  unterminated: boolean;
 }
 
 const htmlBlockTags = new Set([
@@ -120,27 +126,12 @@ function htmlStartAt(source: string, line: BlockLine): HtmlStart | undefined {
   }
 }
 
-function htmlBlockValue(value: string): string {
-  const source = normalizeLines(value);
-  const lower = source.toLowerCase();
-  let terminator: string | undefined;
-  const tag = /^ {0,3}<(script|pre|style|textarea)(?:[ \t\n>]|$)/i.exec(source)?.[1];
-  if (tag) {
-    terminator = `</${tag.toLowerCase()}>`;
+function htmlBlockToken(token: BlockToken): HtmlBlockToken {
+  const result = token as Partial<HtmlBlockToken>;
+  if (token.type !== "HtmlBlockToken" || typeof result.unterminated !== "boolean") {
+    throw new Error("Expected HtmlBlockToken to contain its termination state");
   }
-  else if (/^ {0,3}<!--/.test(source)) {
-    terminator = "-->";
-  }
-  else if (/^ {0,3}<\?/.test(source)) {
-    terminator = "?>";
-  }
-  else if (/^ {0,3}<!\[cdata\[/i.test(source)) {
-    terminator = "]]>";
-  }
-  else if (/^ {0,3}<![A-Z]/.test(source)) {
-    terminator = ">";
-  }
-  return terminator && !lower.includes(terminator) ? source : source.replace(/\n$/, "");
+  return result as HtmlBlockToken;
 }
 
 const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, accumulator) => {
@@ -160,7 +151,11 @@ export const feature: SyntaxFeature = {
       rule: "HtmlBlock",
       project(nodeId, offset, tokenBase, context) {
         const end = offset + context.view.arena.lenOf(nodeId);
-        const html = htmlBlockValue(blockToken(nodeId, tokenBase, "HtmlBlockToken", context).text);
+        const token = htmlBlockToken(blockToken(nodeId, tokenBase, "HtmlBlockToken", context));
+        let html = normalizeLines(token.text);
+        if (!token.unterminated && html.endsWith("\n")) {
+          html = html.slice(0, -1);
+        }
         return withSpan<Html>(
           { type: "html", value: html },
           offset,
@@ -182,6 +177,7 @@ export const feature: SyntaxFeature = {
           return;
         }
         let end = start + 1;
+        let unterminated = false;
         if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
           while (
             end < lines.length &&
@@ -192,13 +188,18 @@ export const feature: SyntaxFeature = {
           if (end < lines.length) {
             end++;
           }
+          else {
+            unterminated = true;
+          }
         }
         else if (!htmlStart.terminator) {
           while (end < lines.length && !isBlank(source, lines[end])) {
             end++;
           }
         }
-        out.push(logicalToken("HtmlBlockToken", source, lines, start, end));
+        const token = logicalToken("HtmlBlockToken", source, lines, start, end) as HtmlBlockToken;
+        token.unterminated = unterminated;
+        out.push(token);
         return end;
       },
     },
