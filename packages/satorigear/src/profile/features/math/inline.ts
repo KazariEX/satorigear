@@ -43,11 +43,13 @@ function firstTokenEndingAfter(tokens: InlineTokenStream, offset: number): numbe
 
 function textTokenAt(tokens: InlineTokenStream, offset: number): number | undefined {
   const index = firstTokenEndingAfter(tokens, offset);
-  return index < inlineTokenCount(tokens)
-      && inlineTokenStart(tokens, index) <= offset
-      && inlineTokenKind(tokens, index) === textKind
-    ? index
-    : void 0;
+  if (
+    index < inlineTokenCount(tokens) &&
+    inlineTokenStart(tokens, index) <= offset &&
+    inlineTokenKind(tokens, index) === textKind
+  ) {
+    return index;
+  }
 }
 
 function markerRunEnd(source: string, start: number): number {
@@ -71,8 +73,9 @@ function firstMathRange(
     }
     const tokenIndex = textTokenAt(tokens, start);
     if (
-      tokenIndex === void 0
-      || (source[start - 1] === "$" && textTokenAt(tokens, start - 1) !== void 0)
+      tokenIndex === void 0 || (
+        source[start - 1] === "$" && textTokenAt(tokens, start - 1) !== void 0
+      )
     ) {
       search = start + 1;
       continue;

@@ -136,8 +136,10 @@ export function projectSourceEdits(
   for (let segmentIndex = 0; segmentIndex < previous.segments.length; segmentIndex++) {
     const oldSegment = previous.segments[segmentIndex];
     const newSegment = next.segments[segmentIndex];
-    if (newSegment.start !== oldSegment.start + documentDelta
-      || newSegment.viewStart !== oldSegment.viewStart + viewDelta) {
+    if (
+      newSegment.start !== oldSegment.start + documentDelta ||
+      newSegment.viewStart !== oldSegment.viewStart + viewDelta
+    ) {
       return null;
     }
 
@@ -156,8 +158,10 @@ export function projectSourceEdits(
       viewDelta += delta;
     }
 
-    if (newSegment.end !== oldSegment.end + documentDelta
-      || newSegment.viewEnd !== oldSegment.viewEnd + viewDelta) {
+    if (
+      newSegment.end !== oldSegment.end + documentDelta ||
+      newSegment.viewEnd !== oldSegment.viewEnd + viewDelta
+    ) {
       return null;
     }
   }

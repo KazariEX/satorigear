@@ -212,11 +212,13 @@ export const feature: SyntaxFeature = {
         const flags = inlineTokenFlags(accumulator.context.tokens, tokenIndex);
         const terminal = Boolean(flags & terminalFlag);
         const detached = Boolean(flags & detachedFlag);
-        if (terminal && (
-          detached
-          || previous.type === "text"
-          || hasTerminalAttributes(accumulator.target)
-        )) {
+        if (
+          terminal && (
+            detached ||
+            previous.type === "text" ||
+            hasTerminalAttributes(accumulator.target)
+          )
+        ) {
           carryTerminalAttributes(accumulator.target, parsed.attributes);
           return true;
         }
@@ -258,11 +260,13 @@ function transformInlineAttributes(source: string, tokens: InlineTokenStream): I
         setInlineTokenFlags(result, index, inlineTokenFlags(result, index) | terminalFlag);
       }
     }
-    else if (kind !== textKind || hasVisibleText(
-      source,
-      inlineTokenStart(result, index),
-      inlineTokenEnd(result, index),
-    )) {
+    else if (
+      kind !== textKind || hasVisibleText(
+        source,
+        inlineTokenStart(result, index),
+        inlineTokenEnd(result, index),
+      )
+    ) {
       terminal = false;
     }
   }

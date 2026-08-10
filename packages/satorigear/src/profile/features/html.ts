@@ -184,8 +184,10 @@ export const feature: SyntaxFeature = {
         }
         let end = start + 1;
         if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
-          while (end < lines.length
-            && !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)) {
+          while (
+            end < lines.length &&
+            !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)
+          ) {
             end++;
           }
           if (end < lines.length) {

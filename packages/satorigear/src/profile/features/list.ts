@@ -64,9 +64,11 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
   }
   const marker = source[indent.offset];
   const markerEnd = indent.offset + 1;
-  if ((marker === "-" || marker === "+" || marker === "*")
-    && (markerEnd === line.end || source[markerEnd] === " " || source[markerEnd] === "\t")
-    && !isThematicBreak(source, line, indent.offset)) {
+  if (
+    (marker === "-" || marker === "+" || marker === "*") &&
+    (markerEnd === line.end || source[markerEnd] === " " || source[markerEnd] === "\t") &&
+    !isThematicBreak(source, line, indent.offset)
+  ) {
     const padding = listMarkerPadding(source, line, markerEnd, indent.columns + 1);
     return {
       kind: "unordered",
@@ -80,7 +82,7 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
     };
   }
   const markerCode = source.charCodeAt(indent.offset);
-  if (!(markerCode >= 48 && markerCode <= 57)) {
+  if (markerCode < 48 || markerCode > 57) {
     return null;
   }
   let startNumber = 0;
@@ -96,8 +98,11 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
   }
   const delimiter = source[orderedEnd];
   if (
-    (delimiter !== "." && delimiter !== ")")
-    || (orderedEnd + 1 < line.end && source[orderedEnd + 1] !== " " && source[orderedEnd + 1] !== "\t")
+    delimiter !== "." && delimiter !== ")" || (
+      orderedEnd + 1 < line.end &&
+      source[orderedEnd + 1] !== " " &&
+      source[orderedEnd + 1] !== "\t"
+    )
   ) {
     return null;
   }
@@ -257,8 +262,10 @@ export const feature: SyntaxFeature = {
       codes: [42, 43, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57],
       interrupt(source, line) {
         const marker = listMarkerAt(source, line);
-        return hasListContent(source, line, marker)
-          && (marker?.kind === "unordered" || (marker?.kind === "ordered" && marker.startNumber === 1));
+        return hasListContent(source, line, marker) && (
+          marker?.kind === "unordered" ||
+          marker?.kind === "ordered" && marker.startNumber === 1
+        );
       },
       start(source, lines, start, out, contentOffset, context) {
         const listMarker = listMarkerAt(source, lines[start]);

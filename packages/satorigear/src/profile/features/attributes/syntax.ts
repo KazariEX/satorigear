@@ -29,8 +29,15 @@ export function componentNameEnd(source: string, start: number, block: boolean):
   let end = start + 1;
   while (end < source.length) {
     const character = source[end];
-    if (!isAsciiLetter(character) && !isAsciiDigit(character) && character !== "$"
-      && character !== "_" && character !== "-" && (!block || character !== ".")) {
+    if (
+      !isAsciiLetter(character) &&
+      !isAsciiDigit(character) &&
+      character !== "$" &&
+      character !== "_" &&
+      character !== "-" && (
+        !block || character !== "."
+      )
+    ) {
       break;
     }
     end++;
@@ -199,8 +206,12 @@ function scanAttributes(
       return;
     }
     offset++;
-    while (isAsciiLetter(source[offset]) || isAsciiDigit(source[offset])
-      || source[offset] === "_" || source[offset] === "-") {
+    while (
+      isAsciiLetter(source[offset]) ||
+      isAsciiDigit(source[offset]) ||
+      source[offset] === "_" ||
+      source[offset] === "-"
+    ) {
       offset++;
     }
     const rawName = source.slice(nameStart, offset);

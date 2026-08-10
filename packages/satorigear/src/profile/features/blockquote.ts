@@ -81,8 +81,11 @@ export const feature: SyntaxFeature = {
             index++;
             continue;
           }
-          if (!lazyParagraph || isBlank(source, lines[index])
-            || (!lines[index].lazy && context.startsInterruptingBlock(source, lines[index]))) {
+          if (
+            !lazyParagraph ||
+            isBlank(source, lines[index]) ||
+            !lines[index].lazy && context.startsInterruptingBlock(source, lines[index])
+          ) {
             break;
           }
           quoteLines.push({ ...lines[index], lazy: true });

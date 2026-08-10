@@ -35,9 +35,10 @@ function closerIndex(tokens: InlineTokenStream, start: number, end: number): num
       break;
     }
     if (
-      inlineTokenEnd(tokens, index) === end &&
-      (inlineTokenKind(tokens, index) === shortcutReferenceTailKind
-        || inlineTokenKind(tokens, index) === referenceSeparatorCloseKind)
+      inlineTokenEnd(tokens, index) === end && (
+        inlineTokenKind(tokens, index) === shortcutReferenceTailKind ||
+        inlineTokenKind(tokens, index) === referenceSeparatorCloseKind
+      )
     ) {
       return index;
     }
@@ -77,8 +78,10 @@ function splitFootnoteTails(
     }
     const embedded = footnoteLabelAt(source, start + 1, inlineTokenEnd(tokens, index));
     if (
-      activeFootnoteEnd !== start + 1
-      && (!embedded || !context.hasDefinition(embedded.definitionKey))
+      activeFootnoteEnd !== start + 1 && (
+        !embedded ||
+        !context.hasDefinition(embedded.definitionKey)
+      )
     ) {
       if (result) {
         copyInlineToken(result, tokens, index);

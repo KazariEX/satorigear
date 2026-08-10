@@ -279,9 +279,11 @@ class MarkdownSyntaxImpl implements MarkdownSyntax {
         }
         return region.revision;
       });
-      const unchanged = previous?.source === block.source
-        && sameNumbers(previous.regionIds, block.regionIds)
-        && sameNumbers(previous.regionRevisions, regionRevisions);
+      const unchanged = (
+        previous?.source === block.source &&
+        sameNumbers(previous.regionIds, block.regionIds) &&
+        sameNumbers(previous.regionRevisions, regionRevisions)
+      );
       block.regionRevisions = regionRevisions;
       block.version = unchanged ? previous.version : (previous?.version ?? -1) + 1;
     }

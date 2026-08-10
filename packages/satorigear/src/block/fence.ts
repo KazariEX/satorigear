@@ -105,11 +105,17 @@ export function readFencedBlock(source: string, rule: FenceRule): FencedBlock {
 
   const finalLineEnd = lineContentEnd(source, 0, source.length);
   let finalLineStart = finalLineEnd;
-  while (finalLineStart > 0 && source[finalLineStart - 1] !== "\n" && source[finalLineStart - 1] !== "\r") {
+  while (
+    finalLineStart > 0 &&
+    source[finalLineStart - 1] !== "\n" &&
+    source[finalLineStart - 1] !== "\r"
+  ) {
     finalLineStart--;
   }
-  const closed = finalLineStart >= contentStart
-    && closesFence(source, { start: finalLineStart, end: finalLineEnd, next: source.length }, fence);
+  const closed = (
+    finalLineStart >= contentStart &&
+    closesFence(source, { start: finalLineStart, end: finalLineEnd, next: source.length }, fence)
+  );
 
   let infoStart = fence.offset + fence.length;
   while (infoStart < openingEnd) {

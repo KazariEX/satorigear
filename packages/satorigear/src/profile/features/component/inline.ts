@@ -110,8 +110,10 @@ function componentCandidate(
   pairs: ReadonlyMap<number, number>,
 ): Candidate | undefined {
   const previous = source[start - 1];
-  if (start > 0 && previous !== " " && previous !== "\t" && previous !== "\n"
-    && previous !== "\r" && previous !== "*" && previous !== "_" && previous !== "[") {
+  if (
+    start > 0 && previous !== " " && previous !== "\t" && previous !== "\n" &&
+    previous !== "\r" && previous !== "*" && previous !== "_" && previous !== "["
+  ) {
     return;
   }
   const nameEnd = componentNameEnd(source, start + 1, false);
@@ -308,8 +310,8 @@ function copyRange(
     // A component inside a link may contain bracket text, but activating that text as a
     // nested link would deactivate the outer CommonMark link.
     const literalLink = inLinkLabel && (
-      kind === bracketOpenKind
-      || normalClosers.has(tokenStart) && (
+      kind === bracketOpenKind ||
+      normalClosers.has(tokenStart) && (
         kind === linkTailKind || kind === referenceTailKind || kind === shortcutTailKind
       )
     );

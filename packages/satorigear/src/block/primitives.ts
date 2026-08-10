@@ -79,13 +79,14 @@ export function logicalToken(
     // Ranges retain the physical source spans even when the token text needs logical indentation repair.
     ranges[index] = { offset: line.start, end: line.next };
 
-    canSliceSource &&=
+    canSliceSource &&= (
       // Tab overshoot is represented as virtual leading columns that do not exist in the source slice.
       (line.prefixColumns ?? 0) === 0 &&
       // A derived line may begin inside its physical line after a container marker was stripped.
       (line.start === 0 || source[line.start - 1] === "\n" || source[line.start - 1] === "\r") &&
       // Adjacent physical spans are required so a single slice cannot restore skipped container prefixes.
-      (index === 0 || line.start === previousLineEnd);
+      (index === 0 || line.start === previousLineEnd)
+    );
     previousLineEnd = line.next;
   }
 

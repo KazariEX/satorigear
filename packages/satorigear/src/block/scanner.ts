@@ -79,9 +79,11 @@ function startsInterruptingBlock(profile: SyntaxProfile, source: string, line: B
 }
 
 function startsParagraphAt(context: BlockScanContext, source: string, line: BlockLine): boolean {
-  return !isBlank(source, line)
-    && !context.startsInterruptingBlock(source, line)
-    && indentOf(source, line).columns < 4;
+  return (
+    !isBlank(source, line) &&
+    !context.startsInterruptingBlock(source, line) &&
+    indentOf(source, line).columns < 4
+  );
 }
 
 function endsWithParagraphLeaf(
@@ -353,8 +355,10 @@ export class BlockScanner {
     const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, lastEdit.end, delta);
     const profileRestart = this.#profile.blockRestart(nextSource, nextLines, firstEdit.start, changedEnd);
     if (profileRestart !== void 0 && profileRestart < firstEdit.start) {
-      const candidate = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineStart <= profileRestart
-        && checkpoint.lineEnd > profileRestart);
+      const candidate = this.#checkpoints.findIndex((checkpoint) => (
+        checkpoint.lineStart <= profileRestart &&
+        checkpoint.lineEnd > profileRestart
+      ));
       if (candidate >= 0) {
         restart = restart < 0 ? restart : Math.min(restart, candidate);
       }
@@ -372,9 +376,11 @@ export class BlockScanner {
       const blockStart = scanLines[lineStart].start;
       const blockEnd = scanLines[lineEnd - 1].next;
       if (blockEnd >= changedEnd) {
-        const candidate = this.#checkpoints.findIndex((old) => old.lineStart + delta === blockStart
-          && old.lineEnd + delta === blockEnd
-          && old.lineStart >= lastEdit.end);
+        const candidate = this.#checkpoints.findIndex((old) => (
+          old.lineStart + delta === blockStart &&
+          old.lineEnd + delta === blockEnd &&
+          old.lineStart >= lastEdit.end
+        ));
         if (candidate >= 0 && sameShiftedBlock(this.#tokens, this.#checkpoints[candidate], replacement, tokenStart, tokenEnd, delta)) {
           replacement.length = tokenStart;
           converged = candidate;

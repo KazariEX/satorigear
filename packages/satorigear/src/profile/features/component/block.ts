@@ -107,9 +107,11 @@ function slotOpeningAt(
   line: BlockLine,
 ): SlotOpening | undefined {
   const contentOffset = contentOffsetOf(source, line);
-  if (contentOffset === void 0 || source[contentOffset] !== "#"
-    || source[contentOffset + 1] === "#" || source[contentOffset + 1] === " "
-    || source[contentOffset + 1] === "\t") {
+  if (
+    contentOffset === void 0 || source[contentOffset] !== "#" ||
+    source[contentOffset + 1] === "#" || source[contentOffset + 1] === " " ||
+    source[contentOffset + 1] === "\t"
+  ) {
     return;
   }
   const nameEnd = componentNameEnd(source, contentOffset + 1, true);
