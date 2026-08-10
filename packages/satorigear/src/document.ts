@@ -28,9 +28,6 @@ export interface Document {
 function validateEdits(source: string, edits: readonly TextEdit[]): void {
   let previousEnd = 0;
   for (const [index, edit] of edits.entries()) {
-    if (!Number.isInteger(edit.start) || !Number.isInteger(edit.end)) {
-      throw new TypeError("Markdown edit offsets must be integers");
-    }
     if (edit.start < 0 || edit.end < edit.start || edit.end > source.length) {
       throw new RangeError(`Markdown edit [${edit.start}, ${edit.end}) is outside the document`);
     }

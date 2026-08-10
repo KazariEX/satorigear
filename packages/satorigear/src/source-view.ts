@@ -41,22 +41,20 @@ function containingSegment(view: SourceView, offset: number): number {
 }
 
 function validateSpan(view: SourceView, start: number, end: number): void {
-  if (!Number.isInteger(start) || !Number.isInteger(end)
-    || start < 0 || end < start || end > view.text.length) {
-    throw new Error(`Invalid source-view span [${start}, ${end}) for length ${view.text.length}`);
+  if (start < 0 || end < start || end > view.text.length) {
+    throw new RangeError(`Invalid source-view span [${start}, ${end}) for length ${view.text.length}`);
   }
 }
 
 function validateSourceSpan(span: SourceSpan, sourceLength: number): void {
-  if (!Number.isInteger(span.start) || !Number.isInteger(span.end)
-    || span.start < 0 || span.end < span.start || span.end > sourceLength) {
-    throw new Error(`Invalid source span [${span.start}, ${span.end}) for source length ${sourceLength}`);
+  if (span.start < 0 || span.end < span.start || span.end > sourceLength) {
+    throw new RangeError(`Invalid source span [${span.start}, ${span.end}) for source length ${sourceLength}`);
   }
 }
 
 function mapPoint(this: SourceView, offset: number): number {
-  if (!Number.isInteger(offset) || offset < 0 || offset > this.text.length) {
-    throw new Error(`Invalid source-view offset ${offset} for length ${this.text.length}`);
+  if (offset < 0 || offset > this.text.length) {
+    throw new RangeError(`Invalid source-view offset ${offset} for length ${this.text.length}`);
   }
   if (this.segments.length === 0) {
     return 0;
@@ -191,7 +189,7 @@ export function createSourceView(source: string, spans: readonly SourceSpan[]): 
   for (const span of spans) {
     validateSourceSpan(span, source.length);
     if (segments.length > 0 && span.start < previousEnd) {
-      throw new Error(`Source spans must be ordered and non-overlapping: ${span.start} < ${previousEnd}`);
+      throw new RangeError(`Source spans must be ordered and non-overlapping: ${span.start} < ${previousEnd}`);
     }
     if (span.start === span.end) {
       continue;

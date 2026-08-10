@@ -201,8 +201,7 @@ function applyBlockEdits(source: string, edits: readonly TextEdit[]): string {
   const parts: string[] = [];
   let cursor = 0;
   for (const [index, edit] of edits.entries()) {
-    if (!Number.isInteger(edit.start) || !Number.isInteger(edit.end)
-      || edit.start < cursor || edit.start > edit.end || edit.end > source.length) {
+    if (edit.start < cursor || edit.start > edit.end || edit.end > source.length) {
       throw new RangeError(`Invalid block edit #${index}: [${edit.start}, ${edit.end})`);
     }
     parts.push(source.slice(cursor, edit.start), edit.text);
