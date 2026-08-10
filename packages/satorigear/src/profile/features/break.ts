@@ -44,7 +44,7 @@ export const feature: SyntaxFeature = {
       start(source, lines, start, out, contentOffset) {
         const line = lines[start];
         if (!isThematicBreak(source, line, contentOffset)) {
-          return void 0;
+          return;
         }
         out.push(named("ThematicBreakToken", source.slice(line.start, line.end), line.start));
         return start + 1;

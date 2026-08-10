@@ -146,10 +146,10 @@ function logicalLine(source: string, line: BlockLine): string {
   return result + source.slice(offset, line.next);
 }
 
-export function lineIndent(source: string, line: BlockLine): Indent | null {
+export function lineIndent(source: string, line: BlockLine): Indent | undefined {
   const indent = indentOf(source, line, 3);
   if (source[indent.offset] === " " || source[indent.offset] === "\t") {
-    return null;
+    return;
   }
   return indent;
 }

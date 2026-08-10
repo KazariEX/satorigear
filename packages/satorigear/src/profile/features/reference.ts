@@ -35,7 +35,7 @@ interface LinkDefinitionFields {
   destination: string;
   label: string;
   markerOffset: number;
-  title: string | null;
+  title: string | undefined;
 }
 
 interface LinkDefinitionOpenToken extends BlockToken {
@@ -63,10 +63,10 @@ function linkDefinitionAt(
   source: string,
   lines: readonly BlockLine[],
   startIndex: number,
-): LinkDefinitionMatch | null {
+): LinkDefinitionMatch | undefined {
   const indent = lineIndent(source, lines[startIndex]);
   if (!indent || source[indent.offset] !== "[") {
-    return null;
+    return;
   }
   let lineIndex = startIndex;
   let offset = indent.offset + 1;
@@ -79,10 +79,10 @@ function linkDefinitionAt(
     const line = lines[lineIndex];
     if (!line || offset >= line.end) {
       if (!line || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
-        return null;
+        return;
       }
       if (++labelLength > 999) {
-        return null;
+        return;
       }
       label += source.slice(labelStart, line.next);
       lineIndex++;
@@ -97,7 +97,7 @@ function linkDefinitionAt(
       continue;
     }
     if (source[offset] === "[") {
-      return null;
+      return;
     }
     if (source[offset] === "]" && source[offset + 1] === ":") {
       break;
@@ -106,13 +106,13 @@ function linkDefinitionAt(
       labelHasContent = true;
     }
     if (++labelLength > 999) {
-      return null;
+      return;
     }
     offset++;
   }
   label += source.slice(labelStart, offset);
   if (!labelHasContent) {
-    return null;
+    return;
   }
   offset += 2;
 
@@ -124,7 +124,7 @@ function linkDefinitionAt(
   skipSpaces();
   if (offset === lines[lineIndex].end) {
     if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
-      return null;
+      return;
     }
     lineIndex++;
     offset = lines[lineIndex].start;
@@ -137,7 +137,7 @@ function linkDefinitionAt(
     const destinationStart = offset;
     while (offset < lines[lineIndex].end && source[offset] !== ">") {
       if (source[offset] === "<") {
-        return null;
+        return;
       }
       if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
         offset += 2;
@@ -147,7 +147,7 @@ function linkDefinitionAt(
       }
     }
     if (source[offset] !== ">") {
-      return null;
+      return;
     }
     destination = source.slice(destinationStart, offset);
     offset++;
@@ -162,23 +162,23 @@ function linkDefinitionAt(
       }
       if (source[offset] === "(") {
         if (++depth > 32) {
-          return null;
+          return;
         }
       }
       else if (source[offset] === ")" && --depth < 0) {
-        return null;
+        return;
       }
       offset++;
     }
     if (offset === destinationStart || depth !== 0) {
-      return null;
+      return;
     }
     destination = source.slice(destinationStart, offset);
   }
 
   const destinationLine = lineIndex;
   if (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
-    return null;
+    return;
   }
   skipSpaces();
   let titleOnNextLine = false;
@@ -189,13 +189,13 @@ function linkDefinitionAt(
     titleOnNextLine = true;
   }
 
-  const closer = source[offset] === "(" ? ")" : source[offset] === "\"" || source[offset] === "'" ? source[offset] : null;
+  const closer = source[offset] === "(" ? ")" : source[offset] === "\"" || source[offset] === "'" ? source[offset] : void 0;
   const fields: LinkDefinitionFields = {
     definitionKey: normalizeAssociationLabel(label),
     destination,
     label,
     markerOffset: indent.offset - lines[startIndex].start,
-    title: null,
+    title: void 0,
   };
   if (!closer) {
     return { end: destinationLine + 1, fields };
@@ -231,11 +231,11 @@ function linkDefinitionAt(
     titleStart = offset;
   }
   if (!closed) {
-    return titleOnNextLine ? { end: destinationLine + 1, fields } : null;
+    return titleOnNextLine ? { end: destinationLine + 1, fields } : void 0;
   }
   skipSpaces();
   if (offset !== lines[lineIndex].end) {
-    return titleOnNextLine ? { end: destinationLine + 1, fields } : null;
+    return titleOnNextLine ? { end: destinationLine + 1, fields } : void 0;
   }
   fields.title = title;
   return { end: lineIndex + 1, fields };
@@ -424,7 +424,7 @@ export const feature: SyntaxFeature = {
           identifier: fields.definitionKey.toLowerCase(),
           label: semanticText(fields.label),
           url: semanticText(fields.destination),
-          title: fields.title === null ? null : semanticText(fields.title),
+          title: fields.title === void 0 ? null : semanticText(fields.title),
         }, token.offset + fields.markerOffset, blockEnd(nodeId, offset, context));
       },
       definitionKey(token) {
@@ -438,7 +438,7 @@ export const feature: SyntaxFeature = {
       start(source, lines, start, out) {
         const definition = linkDefinitionAt(source, lines, start);
         if (!definition) {
-          return void 0;
+          return;
         }
         const line = lines[start];
         out.push(linkDefinitionOpen(line.start, definition.fields));

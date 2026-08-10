@@ -87,10 +87,10 @@ const htmlAttributeValue = `(?:${htmlUnquotedValue}|'[^']*'|"[^"]*")`;
 const htmlAttribute = `\\s+${htmlAttributeName}(?:\\s*=\\s*${htmlAttributeValue})?`;
 const completeHtmlTag = new RegExp(`^(?:<${htmlTagName}(?:${htmlAttribute})*\\s*/?>|</${htmlTagName}\\s*>)[ \\t]*$`, "i");
 
-function htmlStartAt(source: string, line: BlockLine): HtmlStart | null {
+function htmlStartAt(source: string, line: BlockLine): HtmlStart | undefined {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== "<") {
-    return null;
+    return;
   }
   const body = source.slice(indent.offset, line.end);
   const lower = body.toLowerCase();
@@ -118,13 +118,12 @@ function htmlStartAt(source: string, line: BlockLine): HtmlStart | null {
   if (completeHtmlTag.test(body)) {
     return { interruptParagraph: false };
   }
-  return null;
 }
 
 function htmlBlockValue(value: string): string {
   const source = normalizeLines(value);
   const lower = source.toLowerCase();
-  let terminator: string | null = null;
+  let terminator: string | undefined;
   const tag = /^ {0,3}<(script|pre|style|textarea)(?:[ \t\n>]|$)/i.exec(source)?.[1];
   if (tag) {
     terminator = `</${tag.toLowerCase()}>`;
@@ -180,7 +179,7 @@ export const feature: SyntaxFeature = {
         const line = lines[start];
         const htmlStart = htmlStartAt(source, line);
         if (!htmlStart) {
-          return void 0;
+          return;
         }
         let end = start + 1;
         if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {

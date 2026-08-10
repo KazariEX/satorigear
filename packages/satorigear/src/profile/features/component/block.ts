@@ -231,13 +231,13 @@ function blockClose(
   start: number,
   opening: BlockOpening,
 ): BlockClosing | undefined {
-  let codeFence: Fence | null = null;
+  let codeFence: Fence | undefined;
   let depth = 0;
   for (let index = start + 1; index < lines.length; index++) {
     const line = lines[index];
     if (codeFence) {
       if (closesFence(source, line, codeFence)) {
-        codeFence = null;
+        codeFence = void 0;
       }
       continue;
     }
@@ -266,12 +266,12 @@ function nextSlot(
   start: number,
   end: number,
 ): { index: number; opening: SlotOpening } | undefined {
-  let codeFence: Fence | null = null;
+  let codeFence: Fence | undefined;
   for (let index = start; index < end; index++) {
     const line = lines[index];
     if (codeFence) {
       if (closesFence(source, line, codeFence)) {
-        codeFence = null;
+        codeFence = void 0;
       }
       continue;
     }

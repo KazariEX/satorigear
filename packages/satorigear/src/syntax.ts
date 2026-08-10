@@ -97,12 +97,12 @@ class InlineRegion extends InlineTokenState {
   update(
     descriptor: InlineRegionDescriptor,
     definitions: ReadonlySet<string>,
-    edits: readonly TextEdit[] | null,
+    edits: readonly TextEdit[],
   ): this {
     const document = this.document;
-    const sourceEdits = edits && this.view.text !== descriptor.view.text
+    const sourceEdits = this.view.text !== descriptor.view.text
       ? projectSourceEdits(this.view, descriptor.view, edits)
-      : null;
+      : void 0;
     const changed = this.updateTokens(descriptor.view.text, definitions, document?.edit, sourceEdits);
     this.#rebind(descriptor);
     if (!changed) {

@@ -35,14 +35,14 @@ interface FootnoteDefinitionOpenToken extends BlockToken {
   footnoteDefinition: FootnoteDefinitionFields;
 }
 
-function definitionAt(source: string, line: BlockLine): FootnoteDefinitionMatch | null {
+function definitionAt(source: string, line: BlockLine): FootnoteDefinitionMatch | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
-    return null;
+    return;
   }
   const label = footnoteLabelAt(source, indent.offset, line.end);
   if (!label || source[label.end] !== ":") {
-    return null;
+    return;
   }
   const markerEnd = label.end + 1;
   let contentOffset = markerEnd;
@@ -107,12 +107,12 @@ export const blockStarts: SyntaxFeature["blockStarts"] = [
   {
     codes: [91],
     interrupt(source, line) {
-      return definitionAt(source, line) !== null;
+      return definitionAt(source, line) !== void 0;
     },
     start(source, lines, start, out, contentOffset, context) {
       const match = definitionAt(source, lines[start]);
       if (!match) {
-        return void 0;
+        return;
       }
       const definitionLines: BlockLine[] = [firstContentLine(lines[start], match)];
       let index = start + 1;

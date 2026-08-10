@@ -9,9 +9,9 @@ export interface FootnoteLabel {
   normalizedLabel: string;
 }
 
-export function footnoteLabelAt(source: string, start: number, limit: number): FootnoteLabel | null {
+export function footnoteLabelAt(source: string, start: number, limit: number): FootnoteLabel | undefined {
   if (source[start] !== "[" || source[start + 1] !== "^") {
-    return null;
+    return;
   }
   const labelStart = start + 2;
   let offset = labelStart;
@@ -19,19 +19,19 @@ export function footnoteLabelAt(source: string, start: number, limit: number): F
   while (offset < limit) {
     const character = source[offset];
     if (character === " " || character === "\t" || character === "\n" || character === "\r") {
-      return null;
+      return;
     }
     if (character === "\\" && offset + 1 < limit) {
       const escaped = source[offset + 1];
       if (escaped === " " || escaped === "\t" || escaped === "\n" || escaped === "\r") {
-        return null;
+        return;
       }
       offset += 2;
       length += 2;
     }
     else if (character === "]") {
       if (length === 0) {
-        return null;
+        return;
       }
       const label = source.slice(labelStart, offset);
       const normalizedLabel = normalizeAssociationLabel(label);
@@ -44,14 +44,13 @@ export function footnoteLabelAt(source: string, start: number, limit: number): F
     }
     else {
       if (character === "[") {
-        return null;
+        return;
       }
       offset++;
       length++;
     }
     if (length > 999) {
-      return null;
+      return;
     }
   }
-  return null;
 }

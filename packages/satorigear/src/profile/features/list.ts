@@ -57,10 +57,10 @@ function listMarkerPadding(
   return { offset: markerEnd + 1, columns: 1, prefixColumns: Math.max(0, consumedColumn - markerColumn - 1) };
 }
 
-function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
+function listMarkerAt(source: string, line: BlockLine): ListMarker | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
-    return null;
+    return;
   }
   const marker = source[indent.offset];
   const markerEnd = indent.offset + 1;
@@ -83,7 +83,7 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
   }
   const markerCode = source.charCodeAt(indent.offset);
   if (markerCode < 48 || markerCode > 57) {
-    return null;
+    return;
   }
   let startNumber = 0;
   let orderedEnd = indent.offset;
@@ -104,7 +104,7 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | null {
       source[orderedEnd + 1] !== "\t"
     )
   ) {
-    return null;
+    return;
   }
   orderedEnd++;
   const markerWidth = orderedEnd - indent.offset;
@@ -126,7 +126,7 @@ function sameList(a: ListMarker, b: ListMarker): boolean {
   return a.kind === b.kind && a.delimiter === b.delimiter;
 }
 
-function hasListContent(source: string, line: BlockLine, marker: ListMarker | null): boolean {
+function hasListContent(source: string, line: BlockLine, marker: ListMarker | undefined): boolean {
   return !!marker && /\S/.test(source.slice(marker.contentOffset, line.end));
 }
 
@@ -270,7 +270,7 @@ export const feature: SyntaxFeature = {
       start(source, lines, start, out, contentOffset, context) {
         const listMarker = listMarkerAt(source, lines[start]);
         if (!listMarker) {
-          return void 0;
+          return;
         }
         const kind = listMarker.kind;
         const listOpen = kind === "ordered" ? "OrderedListOpen" : "UnorderedListOpen";

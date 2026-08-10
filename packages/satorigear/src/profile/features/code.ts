@@ -36,7 +36,7 @@ const codeFenceRule: FenceRule = {
   minimumLength: 3,
 };
 
-export function codeFenceAt(source: string, line: BlockLine): Fence | null {
+export function codeFenceAt(source: string, line: BlockLine): Fence | undefined {
   return fenceAt(source, line, codeFenceRule);
 }
 
@@ -125,7 +125,7 @@ export const feature: SyntaxFeature = {
   blockFallbacks: [
     (source, lines, start, out) => {
       if (indentOf(source, lines[start]).columns < 4) {
-        return void 0;
+        return;
       }
       let end = start + 1;
       while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
@@ -169,7 +169,7 @@ export const feature: SyntaxFeature = {
       start(source, lines, start, out) {
         const fence = codeFenceAt(source, lines[start]);
         if (!fence) {
-          return void 0;
+          return;
         }
         let end = start + 1;
         while (end < lines.length && !closesFence(source, lines[end], fence)) {

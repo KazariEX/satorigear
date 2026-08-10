@@ -26,14 +26,14 @@ export interface FencedBlock {
   info: string;
 }
 
-export function fenceAt(source: string, line: BlockLine, rule: FenceRule): Fence | null {
+export function fenceAt(source: string, line: BlockLine, rule: FenceRule): Fence | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
-    return null;
+    return;
   }
   const marker = source[indent.offset];
   if (!rule.markers.includes(marker)) {
-    return null;
+    return;
   }
   let offset = indent.offset;
   while (source[offset] === marker) {
@@ -41,12 +41,12 @@ export function fenceAt(source: string, line: BlockLine, rule: FenceRule): Fence
   }
   const length = offset - indent.offset;
   if (length < rule.minimumLength) {
-    return null;
+    return;
   }
   if (rule.forbiddenInfoMarkers.includes(marker)) {
     while (offset < line.end) {
       if (source[offset++] === marker) {
-        return null;
+        return;
       }
     }
   }

@@ -17,14 +17,14 @@ function atxAt(source: string, line: BlockLine): {
   contentOffset: number;
   marker: string;
   markerOffset: number;
-} | null {
+} | undefined {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== "#") {
-    return null;
+    return;
   }
   const match = /^(#{1,6})(?:[ \t]+|$)/.exec(source.slice(indent.offset, line.end));
   if (!match) {
-    return null;
+    return;
   }
   const contentOffset = indent.offset + match[0].length;
   let contentEnd = line.end;
@@ -44,16 +44,16 @@ function atxAt(source: string, line: BlockLine): {
   return { markerOffset: indent.offset, marker: match[1], contentOffset, contentEnd };
 }
 
-export function setextMarkerAt(source: string, line: BlockLine): "=" | "-" | null {
+export function setextMarkerAt(source: string, line: BlockLine): "=" | "-" | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
-    return null;
+    return;
   }
   const marker = source[indent.offset];
   const match = marker === "=" || marker === "-"
     ? /^(=+|-+)[ \t]*$/.exec(source.slice(indent.offset, line.end))
-    : null;
-  return match ? match[1][0] as "=" | "-" : null;
+    : void 0;
+  return match ? match[1][0] as "=" | "-" : void 0;
 }
 
 export const feature: SyntaxFeature = {
@@ -101,7 +101,7 @@ export const feature: SyntaxFeature = {
         const line = lines[start];
         const atx = atxAt(source, line);
         if (!atx) {
-          return void 0;
+          return;
         }
         out.push(structural("AtxHeadingOpen", atx.markerOffset, atx.marker));
         if (atx.contentEnd > atx.contentOffset) {

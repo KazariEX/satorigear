@@ -40,11 +40,11 @@ function profileStarts(
 ): number | undefined {
   const indent = lineIndent(source, lines[start]);
   if (!indent) {
-    return void 0;
+    return;
   }
   const starts = profile.blockStarts[source.charCodeAt(indent.offset)];
   if (!starts) {
-    return void 0;
+    return;
   }
   if (typeof starts === "function") {
     return starts(source, lines, start, out, indent.offset, context);
@@ -55,7 +55,6 @@ function profileStarts(
       return end;
     }
   }
-  return void 0;
 }
 
 function startsInterruptingBlock(profile: SyntaxProfile, source: string, line: BlockLine): boolean {

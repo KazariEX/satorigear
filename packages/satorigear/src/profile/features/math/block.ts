@@ -55,12 +55,12 @@ export const blockStarts: SyntaxFeature["blockStarts"] = [
   {
     codes: [36],
     interrupt(source, line) {
-      return fenceAt(source, line, mathFenceRule) !== null;
+      return fenceAt(source, line, mathFenceRule) !== void 0;
     },
     start(source, lines, start, out) {
       const fence = fenceAt(source, lines[start], mathFenceRule);
       if (!fence) {
-        return void 0;
+        return;
       }
       let end = start + 1;
       while (end < lines.length && !closesFence(source, lines[end], fence)) {

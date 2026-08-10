@@ -22,10 +22,10 @@ interface BlockQuoteMarker {
   prefixColumns: number;
 }
 
-function blockQuoteOffset(source: string, line: BlockLine): BlockQuoteMarker | null {
+function blockQuoteOffset(source: string, line: BlockLine): BlockQuoteMarker | undefined {
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== ">") {
-    return null;
+    return;
   }
   let offset = indent.offset + 1;
   let prefixColumns = line.prefixColumns ?? 0;
@@ -63,12 +63,12 @@ export const feature: SyntaxFeature = {
     {
       codes: [62],
       interrupt(source, line) {
-        return blockQuoteOffset(source, line) !== null;
+        return blockQuoteOffset(source, line) !== void 0;
       },
       start(source, lines, start, out, contentOffset, context) {
         const line = lines[start];
-        if (blockQuoteOffset(source, line) === null) {
-          return void 0;
+        if (blockQuoteOffset(source, line) === void 0) {
+          return;
         }
         const quoteLines: BlockLine[] = [];
         let index = start;

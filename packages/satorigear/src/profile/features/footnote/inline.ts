@@ -108,7 +108,7 @@ const activateFootnoteReferences: InlineTransform = (source, tokens, context) =>
     const labelStart = kind === imageOpenKind ? start + 1 : start;
     const label = kind === bracketOpenKind || kind === imageOpenKind
       ? footnoteLabelAt(source, labelStart, source.length)
-      : null;
+      : void 0;
     const close = label ? closerIndex(tokens, index, label.end) : -1;
     if (
       !label ||

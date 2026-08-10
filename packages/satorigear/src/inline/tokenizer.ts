@@ -71,7 +71,7 @@ export class InlineTokenState {
     source: string,
     definitions: ReadonlySet<string>,
     apply?: ApplyTokenChange,
-    sourceEdits: readonly TextEdit[] | null = null,
+    sourceEdits?: readonly TextEdit[],
   ): boolean {
     if (source === this.#source && !this.#definitionsChanged(definitions)) {
       this.#definitions = definitions;

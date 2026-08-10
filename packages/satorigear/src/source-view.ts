@@ -124,9 +124,9 @@ export function projectSourceEdits(
   previous: SourceView,
   next: SourceView,
   edits: readonly TextEdit[],
-): TextEdit[] | null {
+): TextEdit[] | undefined {
   if (previous.segments.length !== next.segments.length) {
-    return null;
+    return;
   }
 
   const projected: TextEdit[] = [];
@@ -140,13 +140,13 @@ export function projectSourceEdits(
       newSegment.start !== oldSegment.start + documentDelta ||
       newSegment.viewStart !== oldSegment.viewStart + viewDelta
     ) {
-      return null;
+      return;
     }
 
     while (editIndex < edits.length && edits[editIndex].start < oldSegment.end) {
       const edit = edits[editIndex++];
       if (edit.start <= oldSegment.start || edit.end >= oldSegment.end) {
-        return null;
+        return;
       }
       projected.push({
         start: oldSegment.viewStart + edit.start - oldSegment.start + viewDelta,
@@ -162,10 +162,10 @@ export function projectSourceEdits(
       newSegment.end !== oldSegment.end + documentDelta ||
       newSegment.viewEnd !== oldSegment.viewEnd + viewDelta
     ) {
-      return null;
+      return;
     }
   }
-  return editIndex === edits.length ? projected : null;
+  return editIndex === edits.length ? projected : void 0;
 }
 
 // Build logical text from physical source spans while preserving original coordinates.

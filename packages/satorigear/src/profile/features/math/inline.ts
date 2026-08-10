@@ -64,7 +64,7 @@ function firstMathRange(
   source: string,
   tokens: InlineTokenStream,
   minimum: number,
-): MathRange | null {
+): MathRange | undefined {
   let search = 0;
   while (search < source.length) {
     const start = source.indexOf("$", search);
@@ -103,7 +103,6 @@ function firstMathRange(
       close = closeEnd;
     }
   }
-  return null;
 }
 
 function copyRange(
