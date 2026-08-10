@@ -375,13 +375,13 @@ function emitOpening(
   }
 }
 
-const projectBlockLabel: BlockProjector = (nodeId, _offset, tokenBase, context) => {
+const projectBlockLabel: BlockProjector = (nodeId, offset, tokenBase, context) => {
   const open = blockToken(nodeId, tokenBase, "BlockComponentLabelOpen", context);
   const close = blockToken(nodeId, tokenBase, "BlockComponentLabelClose", context);
-  return withSpan({
+  return withSpan<Paragraph>({
     type: "paragraph",
     children: inlineChildren(nodeId, context, true),
-  } satisfies Paragraph, tokenStart(open), tokenEnd(close));
+  }, tokenStart(open), tokenEnd(close));
 };
 
 function parseYamlAttributes(

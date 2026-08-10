@@ -188,16 +188,16 @@ function childRules(
 
 function projectCell(
   nodeId: number,
-  _offset: number,
+  offset: number,
   tokenBase: number,
   context: BlockProjectionContext,
 ): TableCell {
   const open = blockToken(nodeId, tokenBase, "TableCellOpen", context);
   const close = blockToken(nodeId, tokenBase, "TableCellClose", context);
-  return withSpan({
+  return withSpan<TableCell>({
     type: "tableCell",
     children: inlineChildren(nodeId, context, true),
-  } satisfies TableCell, tokenStart(open), tokenStart(close));
+  }, tokenStart(open), tokenStart(close));
 }
 
 function projectRow(
@@ -211,7 +211,7 @@ function projectRow(
   const children = childRules(nodeId, offset, tokenBase, "TableCell", context).map((cell) => (
     projectCell(cell.id, cell.offset, cell.tokenBase, context)
   ));
-  return withSpan({ type: "tableRow", children } satisfies TableRow, tokenStart(open), tokenStart(close));
+  return withSpan<TableRow>({ type: "tableRow", children }, tokenStart(open), tokenStart(close));
 }
 
 function tableAlignment(
@@ -240,7 +240,7 @@ function tableAlignment(
 
 export const feature: SyntaxFeature = {
   blockFallbacks: [
-    (source, lines, start, out, _contentOffset, context) => {
+    (source, lines, start, out, contentOffset, context) => {
       const delimiterLine = lines[start + 1];
       if (!delimiterLine || context.startsInterruptingBlock(source, delimiterLine)) {
         return;
@@ -296,7 +296,7 @@ export const feature: SyntaxFeature = {
         if (!delimiter) {
           throw new Error("Table syntax does not contain a delimiter");
         }
-        return withSpan({
+        return withSpan<Table>({
           type: "table",
           align: tableAlignment(delimiter.id, delimiter.tokenBase, context),
           children: rows,

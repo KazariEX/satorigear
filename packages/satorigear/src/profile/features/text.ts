@@ -1,4 +1,5 @@
 import { decodeHTMLStrict } from "entities";
+import type { Text } from "mdast";
 import { inlineTokenText } from "../../inline/runtime.ts";
 import {
   appendInline,
@@ -22,7 +23,7 @@ export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, a
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   appendInline(
     accumulator,
-    withSpan({ type: "text", value: semanticText(text) }, sourceSpan.start, sourceSpan.end),
+    withSpan<Text>({ type: "text", value: semanticText(text) }, sourceSpan.start, sourceSpan.end),
     sourceSpan.start,
   );
   return true;

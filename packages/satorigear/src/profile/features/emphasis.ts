@@ -35,7 +35,7 @@ const markdownDelimiterRuns: DelimiterRunConfig[] = [
 const projectInlineEmphasis: InlineRuleProjector = (
   nodeId,
   offset,
-  _endOffset,
+  endOffset,
   tokenBase,
   sourceSpan,
   accumulator,
@@ -46,7 +46,7 @@ const projectInlineEmphasis: InlineRuleProjector = (
   inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
   appendInline(
     accumulator,
-    withSpan({ type: "emphasis", children } satisfies Emphasis, sourceSpan.start, sourceSpan.end),
+    withSpan<Emphasis>({ type: "emphasis", children }, sourceSpan.start, sourceSpan.end),
     sourceSpan.start,
   );
   return true;
@@ -55,7 +55,7 @@ const projectInlineEmphasis: InlineRuleProjector = (
 const projectInlineStrong: InlineRuleProjector = (
   nodeId,
   offset,
-  _endOffset,
+  endOffset,
   tokenBase,
   sourceSpan,
   accumulator,
@@ -66,7 +66,7 @@ const projectInlineStrong: InlineRuleProjector = (
   inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
   appendInline(
     accumulator,
-    withSpan({ type: "strong", children } satisfies Strong, sourceSpan.start, sourceSpan.end),
+    withSpan<Strong>({ type: "strong", children }, sourceSpan.start, sourceSpan.end),
     sourceSpan.start,
   );
   return true;

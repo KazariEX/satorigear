@@ -193,12 +193,12 @@ function listItem(
     rule === "OrderedListItem" ? "OrderedItemOpen" : "UnorderedItemOpen",
     context,
   );
-  const result = {
+  const result: ListItem = {
     type: "listItem",
     spread: childrenSpread(nodeId, offset, tokenBase, "Block", true, context),
     checked: null,
     children: blockChildren(nodeId, offset, tokenBase, context),
-  } satisfies ListItem;
+  };
   return withSpan(result, tokenStart(marker), lastChildEnd(result, blockEnd(nodeId, offset, context)));
 }
 
@@ -220,13 +220,13 @@ function projectList(ordered: boolean): BlockProjector {
         ));
       }
     }
-    const result = {
+    const result: List = {
       type: "list",
       ordered,
       start: ordered ? Number.parseInt(listMarker.text, 10) : null,
       spread: childrenSpread(nodeId, offset, tokenBase, itemRule, false, context),
       children: items,
-    } satisfies List;
+    };
     return withSpan(result, tokenStart(listMarker), lastChildEnd(result, tokenEnd(listMarker)));
   };
 }
@@ -244,7 +244,7 @@ export const feature: SyntaxFeature = {
         return hasListContent(source, line, marker)
           && (marker?.kind === "unordered" || (marker?.kind === "ordered" && marker.startNumber === 1));
       },
-      start(source, lines, start, out, _contentOffset, context) {
+      start(source, lines, start, out, contentOffset, context) {
         const listMarker = listMarkerAt(source, lines[start]);
         if (!listMarker) {
           return void 0;

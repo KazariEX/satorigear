@@ -32,7 +32,7 @@ function emitParagraph(source: string, lines: readonly BlockLine[], out: BlockTo
 
 export const feature: SyntaxFeature = {
   blockFallbacks: [
-    (source, lines, start, out, _contentOffset, context) => {
+    (source, lines, start, out, contentOffset, context) => {
       const paragraph: BlockLine[] = [];
       let index = start;
       while (index < lines.length) {
@@ -66,8 +66,8 @@ export const feature: SyntaxFeature = {
     {
       rule: "Paragraph",
       inlineContent: true,
-      project(nodeId, offset, _tokenBase, context) {
-        const result = { type: "paragraph", children: inlineChildren(nodeId, context) } satisfies Paragraph;
+      project(nodeId, offset, tokenBase, context) {
+        const result: Paragraph = { type: "paragraph", children: inlineChildren(nodeId, context) };
         return withSpan(result, firstChildStart(result), blockEnd(nodeId, offset, context));
       },
     },

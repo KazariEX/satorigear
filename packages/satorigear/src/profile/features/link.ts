@@ -1,4 +1,4 @@
-import type { Image, ImageReference, Link, LinkReference, PhrasingContent } from "mdast";
+import type { Image, ImageReference, Link, LinkReference, PhrasingContent, Text } from "mdast";
 import { inlineTokenText } from "../../inline/runtime.ts";
 import {
   appendInline,
@@ -143,14 +143,14 @@ function linkOrImage(
   if (referenceNode) {
     const association = reference(nodeId, tokenBase, offset, endOffset, context, image);
     return image
-      ? withSpan({ type: "imageReference", alt: phrasingText(children), ...association } satisfies ImageReference, sourceSpan.start, sourceSpan.end)
-      : withSpan({ type: "linkReference", children, ...association } satisfies LinkReference, sourceSpan.start, sourceSpan.end);
+      ? withSpan<ImageReference>({ type: "imageReference", alt: phrasingText(children), ...association }, sourceSpan.start, sourceSpan.end)
+      : withSpan<LinkReference>({ type: "linkReference", children, ...association }, sourceSpan.start, sourceSpan.end);
   }
   const closeIndex = leaf(nodeId, tokenBase, `${prefix}LinkClose`, context);
   const resource = destinationTitle(inlineTokenText(context.view.text, context.tokens, closeIndex).slice(2, -1));
   return image
-    ? withSpan({ type: "image", alt: phrasingText(children), ...resource } satisfies Image, sourceSpan.start, sourceSpan.end)
-    : withSpan({ type: "link", children, ...resource } satisfies Link, sourceSpan.start, sourceSpan.end);
+    ? withSpan<Image>({ type: "image", alt: phrasingText(children), ...resource }, sourceSpan.start, sourceSpan.end)
+    : withSpan<Link>({ type: "link", children, ...resource }, sourceSpan.start, sourceSpan.end);
 }
 
 function projectMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineRuleProjector {
@@ -185,12 +185,14 @@ export const feature: SyntaxFeature = {
         const { context } = accumulator;
         const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
         const label = text.slice(1, -1);
-        appendInline(accumulator, withSpan({
+        appendInline(accumulator, withSpan<Link>({
           type: "link",
           url: label.includes(":") ? label : `mailto:${label}`,
           title: null,
-          children: [withSpan({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1)],
-        } satisfies Link, sourceSpan.start, sourceSpan.end), sourceSpan.start);
+          children: [
+            withSpan<Text>({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1),
+          ],
+        }, sourceSpan.start, sourceSpan.end), sourceSpan.start);
         return true;
       },
     },

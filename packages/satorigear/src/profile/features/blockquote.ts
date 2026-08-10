@@ -49,10 +49,10 @@ export const feature: SyntaxFeature = {
     {
       rule: "BlockQuote",
       project(nodeId, offset, tokenBase, context) {
-        const result = {
+        const result: Blockquote = {
           type: "blockquote",
           children: blockChildren(nodeId, offset, tokenBase, context),
-        } satisfies Blockquote;
+        };
         const marker = blockToken(nodeId, tokenBase, "BlockQuoteOpen", context);
         const start = firstNonspace(context.source, tokenStart(marker), lineEnd(context.source, offset));
         return withSpan(result, start, blockEnd(nodeId, offset, context));
@@ -65,7 +65,7 @@ export const feature: SyntaxFeature = {
       interrupt(source, line) {
         return blockQuoteOffset(source, line) !== null;
       },
-      start(source, lines, start, out, _contentOffset, context) {
+      start(source, lines, start, out, contentOffset, context) {
         const line = lines[start];
         if (blockQuoteOffset(source, line) === null) {
           return void 0;

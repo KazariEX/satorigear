@@ -3,6 +3,7 @@ import type {
   DefinitionContent,
   PhrasingContent,
   Root,
+  Text,
   TopLevelContent,
 } from "mdast";
 import {
@@ -71,9 +72,9 @@ export type InlineRuleProjector = (
 export const projectInlineChildren: InlineRuleProjector = (
   nodeId,
   offset,
-  _endOffset,
+  endOffset,
   tokenBase,
-  _sourceSpan,
+  sourceSpan,
   accumulator,
 ) => inlineSequence(nodeId, offset, tokenBase, accumulator);
 
@@ -303,7 +304,7 @@ function appendText(target: PhrasingContent[], value: string, start: number, end
     extendSpan(previous, end);
   }
   else {
-    target.push(withSpan({ type: "text", value }, start, end));
+    target.push(withSpan<Text>({ type: "text", value }, start, end));
   }
 }
 

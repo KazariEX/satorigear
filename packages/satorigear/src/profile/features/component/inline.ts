@@ -433,7 +433,7 @@ const projectInlineComponent: InlineRuleProjector = (
 const projectInlineSpan: InlineRuleProjector = (
   nodeId,
   offset,
-  _endOffset,
+  endOffset,
   tokenBase,
   sourceSpan,
   accumulator,

@@ -63,26 +63,26 @@ export const feature: SyntaxFeature = {
       inlineContent: true,
       project(nodeId, offset, tokenBase, context) {
         const marker = blockToken(nodeId, tokenBase, "AtxHeadingOpen", context);
-        return withSpan({
+        return withSpan<Heading>({
           type: "heading",
           depth: tokenEnd(marker) - tokenStart(marker) as Heading["depth"],
           children: inlineChildren(nodeId, context, true),
-        } satisfies Heading, tokenStart(marker), blockEnd(nodeId, offset, context));
+        }, tokenStart(marker), blockEnd(nodeId, offset, context));
       },
     },
     {
       rule: "SetextHeading",
       inlineContent: true,
-      project(nodeId, _offset, tokenBase, context) {
+      project(nodeId, offset, tokenBase, context) {
         const levelOne = directBlockToken(nodeId, tokenBase, "SetextHeading1Open", context);
         if (!levelOne) {
           blockToken(nodeId, tokenBase, "SetextHeading2Open", context);
         }
-        const result = {
+        const result: Heading = {
           type: "heading",
           depth: levelOne ? 1 : 2,
           children: inlineChildren(nodeId, context),
-        } satisfies Heading;
+        };
         return withSpan(
           result,
           firstChildStart(result),

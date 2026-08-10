@@ -437,7 +437,7 @@ export const feature: SyntaxFeature = {
       project(nodeId, offset, tokenBase, context): Definition {
         const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
         const fields = linkDefinitionFields(token);
-        return withSpan({
+        return withSpan<Definition>({
           type: "definition",
           identifier: fields.normalizedLabel.toLowerCase(),
           label: semanticText(fields.label),

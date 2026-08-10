@@ -1,3 +1,4 @@
+import type { Break, Text, ThematicBreak } from "mdast";
 import { type BlockLine, named } from "../../block/primitives.ts";
 import { appendInline, blockEnd, firstNonspace, withSpan } from "../../mdast.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -26,7 +27,7 @@ export const feature: SyntaxFeature = {
       rule: "ThematicBreak",
       project(nodeId, offset, tokenBase, context) {
         const end = offset + context.view.arena.lenOf(nodeId);
-        return withSpan(
+        return withSpan<ThematicBreak>(
           { type: "thematicBreak" },
           firstNonspace(context.source, offset, end),
           blockEnd(nodeId, offset, context),
@@ -56,7 +57,7 @@ export const feature: SyntaxFeature = {
       project(tokenIndex, sourceSpan, accumulator) {
         appendInline(
           accumulator,
-          withSpan({ type: "break" }, sourceSpan.start, sourceSpan.end),
+          withSpan<Break>({ type: "break" }, sourceSpan.start, sourceSpan.end),
           sourceSpan.start,
         );
         return true;
@@ -67,7 +68,7 @@ export const feature: SyntaxFeature = {
       project(tokenIndex, sourceSpan, accumulator) {
         appendInline(
           accumulator,
-          withSpan({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end),
+          withSpan<Text>({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end),
           sourceSpan.start,
         );
         return true;

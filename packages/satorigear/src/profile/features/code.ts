@@ -83,11 +83,11 @@ export function projectCodeSpan(
   const value = codeSpanValue(text);
   appendInline(
     accumulator,
-    withSpan(
+    withSpan<InlineCode>(
       {
         type: "inlineCode",
         value: decodeTablePipe ? value.replace(/\\\|/g, "|") : value,
-      } satisfies InlineCode,
+      },
       sourceSpan.start,
       sourceSpan.end,
     ),

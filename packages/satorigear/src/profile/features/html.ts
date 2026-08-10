@@ -149,7 +149,7 @@ const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, accumula
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   appendInline(
     accumulator,
-    withSpan({ type: "html", value: text } satisfies Html, sourceSpan.start, sourceSpan.end),
+    withSpan<Html>({ type: "html", value: text }, sourceSpan.start, sourceSpan.end),
     sourceSpan.start,
   );
   return true;
@@ -162,8 +162,8 @@ export const feature: SyntaxFeature = {
       project(nodeId, offset, tokenBase, context) {
         const end = offset + context.view.arena.lenOf(nodeId);
         const html = htmlBlockValue(blockToken(nodeId, tokenBase, "HtmlBlockToken", context).text);
-        return withSpan(
-          { type: "html", value: html } satisfies Html,
+        return withSpan<Html>(
+          { type: "html", value: html },
           offset,
           html.endsWith("\n") ? end : blockEnd(nodeId, offset, context),
         );

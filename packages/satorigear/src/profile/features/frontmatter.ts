@@ -66,7 +66,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
           if (value.endsWith("\n")) {
             value = value.slice(0, -1);
           }
-          return withSpan(
+          return withSpan<Yaml>(
             { type: "yaml", value },
             tokenStart(token),
             blockEnd(nodeId, offset, context),
