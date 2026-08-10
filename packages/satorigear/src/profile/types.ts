@@ -82,6 +82,9 @@ export interface SyntaxFeature {
   blockStarts?: readonly BlockStartRegistration[];
   blockUnwrappers?: readonly BlockLineUnwrapper[];
   delimiters?: readonly DelimiterConfig[];
+  // Carrier transforms run before normalizers; both precede generic token pairing.
+  inlineTransform?: InlineTransform;
+  inlineNormalize?: InlineTransform;
   inlineRules?: readonly InlineRuleRegistration[];
   inlineTokens?: readonly InlineTokenRegistration[];
   tokenPairs?: readonly PairedTokenConfig<InlineResolutionContext>[];

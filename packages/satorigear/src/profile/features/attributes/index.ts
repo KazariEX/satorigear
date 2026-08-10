@@ -231,9 +231,10 @@ export const feature: SyntaxFeature = {
       },
     },
   ],
+  inlineTransform: transformInlineAttributes,
 };
 
-export function transformInlineAttributes(source: string, tokens: InlineTokenStream): InlineTokenStream {
+function transformInlineAttributes(source: string, tokens: InlineTokenStream): InlineTokenStream {
   const ranges = rangesOf(source, tokens);
   if (ranges.length === 0) {
     return tokens;

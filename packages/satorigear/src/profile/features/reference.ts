@@ -242,7 +242,7 @@ function linkDefinitionAt(
 }
 
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
-export const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
+const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
   const referenceTail = inlineKind("ReferenceTail");
   const bracketOpen = inlineKind("BracketOpen");
   const shortcutTail = inlineKind("ShortcutReferenceTail");
@@ -452,5 +452,6 @@ export const feature: SyntaxFeature = {
       },
     },
   ],
+  inlineNormalize: reassociateReferenceTails,
   tokenPairs: markdownBracketPairs,
 };

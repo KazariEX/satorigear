@@ -4,14 +4,12 @@ import {
   type PairedTokenConfig,
 } from "../inline/resolver.ts";
 import { inlineKind } from "../inline/runtime.ts";
-import { feature as featureAttributes, transformInlineAttributes } from "./features/attributes/index.ts";
+import { feature as featureAttributes } from "./features/attributes/index.ts";
 import { feature as featureBlockQuote } from "./features/blockquote.ts";
 import { feature as featureBreak } from "./features/break.ts";
 import { feature as featureCode } from "./features/code.ts";
 import { feature as featureComponent } from "./features/component/index.ts";
-import { transformInlineCarrier } from "./features/component/inline.ts";
 import { feature as featureFootnote } from "./features/footnote/index.ts";
-import { transformInlineFootnotes } from "./features/footnote/inline.ts";
 import { feature as featureFormatting, type StrikethroughOptions } from "./features/formatting.ts";
 import { feature as frontmatterFeature, type FrontmatterOptions } from "./features/frontmatter.ts";
 import { feature as featureHeading } from "./features/heading.ts";
@@ -19,9 +17,8 @@ import { feature as featureHtml } from "./features/html.ts";
 import { feature as featureLink } from "./features/link.ts";
 import { feature as featureList } from "./features/list.ts";
 import { feature as featureMath } from "./features/math/index.ts";
-import { transformInlineMath } from "./features/math/inline.ts";
 import { feature as featureParagraph } from "./features/paragraph.ts";
-import { feature as featureReference, reassociateReferenceTails } from "./features/reference.ts";
+import { feature as featureReference } from "./features/reference.ts";
 import { feature as featureTable } from "./features/table.ts";
 import { feature as featureText, semanticText } from "./features/text.ts";
 import type { BlockToken } from "../block/tokens.ts";
@@ -49,22 +46,7 @@ export interface SyntaxOptions {
   table?: boolean;
 }
 
-function createInlineTransform(options: SyntaxOptions): InlineTransform | undefined {
-  const transforms: InlineTransform[] = [];
-
-  if (options.footnote) {
-    transforms.push(transformInlineFootnotes);
-  }
-  if (options.math) {
-    const singleDollarTextMath = typeof options.math !== "object" || options.math.singleDollarTextMath !== false;
-    transforms.push(transformInlineMath.bind(void 0, singleDollarTextMath));
-  }
-  if (options.component) {
-    transforms.push(transformInlineCarrier);
-  }
-  if (options.attributes) {
-    transforms.push(transformInlineAttributes);
-  }
+function composeInlineTransforms(...transforms: readonly InlineTransform[]): InlineTransform | undefined {
   if (transforms.length === 0) {
     return;
   }
@@ -93,6 +75,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   if (options.footnote) {
     features.push(featureFootnote);
   }
+
   features.push(featureReference);
 
   if (options.frontmatter) {
@@ -109,7 +92,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     features.push(featureTable);
   }
   if (options.math) {
-    features.push(featureMath);
+    features.push(featureMath(options.math));
   }
 
   features.push(
@@ -126,9 +109,6 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     features.push(featureAttributes);
   }
 
-  // Compile one straight-line pipeline; the default profile keeps the resolver-only hot path.
-  const transformInline = createInlineTransform(options);
-
   const blockDecorators: BlockDecoratorRegistration[] = [];
   const blockFallbacks: BlockStart[] = [];
   const blockInlineContents: Record<string, true> = Object.create(null);
@@ -139,8 +119,10 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   const blockStarts: (BlockStartDispatch | undefined)[] = [];
   const blockUnwrappers: BlockLineUnwrapper[] = [];
   const delimiters: DelimiterConfig[] = [];
+  const inlineNormalizes: InlineTransform[] = [];
   const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
   const inlineTokenProjects: (InlineLeafProjector | undefined)[] = [];
+  const inlineTransforms: InlineTransform[] = [];
   const tokenPairs: PairedTokenConfig<InlineResolutionContext>[] = [];
   for (const feature of features) {
     if (feature.blockDecorators) {
@@ -191,6 +173,9 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     if (feature.delimiters) {
       delimiters.push(...feature.delimiters);
     }
+    if (feature.inlineNormalize) {
+      inlineNormalizes.push(feature.inlineNormalize);
+    }
     if (feature.inlineRules) {
       for (const registration of feature.inlineRules) {
         inlineRuleProjects[registration.rule] = registration.project;
@@ -200,6 +185,9 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
       for (const registration of feature.inlineTokens) {
         inlineTokenProjects[inlineKind(registration.token)] = registration.project;
       }
+    }
+    if (feature.inlineTransform) {
+      inlineTransforms.push(feature.inlineTransform);
     }
     if (feature.tokenPairs) {
       tokenPairs.push(...feature.tokenPairs);
@@ -214,19 +202,16 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     blockProjects[registration.rule] = registration.decorate(project);
   }
 
+  // Compile the registered stages into one path; documents never branch on enabled syntax.
   const resolver = createDelimitedTokenResolver(delimiters, tokenPairs);
-  // Generated lexer tokens become optional syntax carriers before reference and delimiter resolution.
-  const resolveInline: SyntaxProfile["resolveInline"] = transformInline === void 0
+  const transformInline = composeInlineTransforms(...inlineTransforms, ...inlineNormalizes);
+  const resolveInline: SyntaxProfile["resolveInline"] = transformInline
     ? (source, tokens, state) => resolver.resolve(
       source,
-      reassociateReferenceTails(source, tokens, state),
+      transformInline(source, tokens, state),
       state,
     )
-    : (source, tokens, state) => resolver.resolve(
-      source,
-      reassociateReferenceTails(source, transformInline(source, tokens, state), state),
-      state,
-    );
+    : resolver.resolve;
 
   return {
     blockFallbacks,
