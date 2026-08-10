@@ -182,7 +182,6 @@ interface CandidateSet {
 function candidates(
   source: string,
   tokens: InlineTokenStream,
-  attributes: boolean,
 ): CandidateSet {
   const brackets = bracketIndex(tokens);
   const result: Candidate[] = [];
@@ -239,7 +238,7 @@ function candidates(
     if (close === void 0 || source[close + 1] === "(" || source[close + 1] === "[") {
       continue;
     }
-    const attributed = attributes && hasInlineAttributes(source, close + 1);
+    const attributed = hasInlineAttributes(source, close + 1);
     if (!attributed && insideLinkLabel(start, brackets.linkLabels)) {
       continue;
     }
@@ -380,9 +379,8 @@ function emitRange(
 export function transformInlineCarrier(
   source: string,
   tokens: InlineTokenStream,
-  attributes: boolean,
 ): InlineTokenStream {
-  const syntax = candidates(source, tokens, attributes);
+  const syntax = candidates(source, tokens);
   if (syntax.roots.length === 0) {
     return tokens;
   }

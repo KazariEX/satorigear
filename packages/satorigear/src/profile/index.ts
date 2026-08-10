@@ -105,7 +105,7 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
   }
 
   if (component) {
-    features.push(featureComponent(attributes));
+    features.push(featureComponent);
   }
   if (attributes) {
     features.push(featureAttributes);
@@ -113,7 +113,7 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
 
   const inlineCarrier: InlineTransform | undefined = component || attributes
     ? (source, tokens) => {
-      const carried = component ? transformInlineCarrier(source, tokens, attributes) : tokens;
+      const carried = component ? transformInlineCarrier(source, tokens) : tokens;
       return attributes ? transformInlineAttributes(source, carried) : carried;
     }
     : void 0;

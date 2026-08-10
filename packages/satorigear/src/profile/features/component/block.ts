@@ -104,7 +104,6 @@ function yamlPropsAt(
 function slotOpeningAt(
   source: string,
   line: BlockLine,
-  attributes: boolean,
 ): SlotOpening | undefined {
   const contentOffset = contentOffsetOf(source, line);
   if (contentOffset === void 0 || source[contentOffset] !== "#"
@@ -119,7 +118,7 @@ function slotOpeningAt(
   let offset = skipSpaces(source, nameEnd, line.end);
   let attributesStart: number | undefined;
   let parsedAttributesEnd: number | undefined;
-  if (attributes && source[offset] === "{") {
+  if (source[offset] === "{") {
     parsedAttributesEnd = attributesEnd(source, offset, line.end);
     if (parsedAttributesEnd === void 0) {
       return;
@@ -143,7 +142,6 @@ function blockOpeningAt(
   line: BlockLine,
   contentOffset: number,
   shorthand: boolean,
-  attributes: boolean,
 ): BlockOpening | undefined {
   let offset = contentOffset;
   while (source[offset] === ":") {
@@ -175,7 +173,7 @@ function blockOpeningAt(
   }
   let attributesStart: number | undefined;
   let parsedAttributesEnd: number | undefined;
-  if (attributes && source[offset] === "{") {
+  if (source[offset] === "{") {
     parsedAttributesEnd = attributesEnd(source, offset, line.end);
     if (parsedAttributesEnd === void 0) {
       return;
@@ -200,14 +198,13 @@ function nestedComponentEnd(
   source: string,
   lines: readonly BlockLine[],
   index: number,
-  attributes: boolean,
 ): number | undefined {
   const offset = contentOffsetOf(source, lines[index]);
   if (offset === void 0) {
     return;
   }
-  const opening = blockOpeningAt(source, lines[index], offset, false, attributes);
-  return opening ? blockClose(source, lines, index, opening, attributes)?.index : void 0;
+  const opening = blockOpeningAt(source, lines[index], offset, false);
+  return opening ? blockClose(source, lines, index, opening)?.index : void 0;
 }
 
 function fenceAt(source: string, line: BlockLine, size: number): number | undefined {
@@ -230,7 +227,6 @@ function blockClose(
   lines: readonly BlockLine[],
   start: number,
   opening: BlockOpening,
-  attributes: boolean,
 ): BlockClosing | undefined {
   let codeFence: CodeFence | null = null;
   let depth = 0;
@@ -255,7 +251,7 @@ function blockClose(
       continue;
     }
     const indent = lineIndent(source, line);
-    if (indent && blockOpeningAt(source, line, indent.offset, false, attributes)?.fenceSize === opening.fenceSize) {
+    if (indent && blockOpeningAt(source, line, indent.offset, false)?.fenceSize === opening.fenceSize) {
       depth++;
     }
   }
@@ -266,7 +262,6 @@ function nextSlot(
   lines: readonly BlockLine[],
   start: number,
   end: number,
-  attributes: boolean,
 ): { index: number; opening: SlotOpening } | undefined {
   let codeFence: CodeFence | null = null;
   for (let index = start; index < end; index++) {
@@ -281,11 +276,11 @@ function nextSlot(
     if (codeFence) {
       continue;
     }
-    const slot = slotOpeningAt(source, line, attributes);
+    const slot = slotOpeningAt(source, line);
     if (slot) {
       return { index, opening: slot };
     }
-    const nestedEnd = nestedComponentEnd(source, lines, index, attributes);
+    const nestedEnd = nestedComponentEnd(source, lines, index);
     if (nestedEnd !== void 0) {
       index = nestedEnd;
     }
@@ -317,7 +312,6 @@ function emitComponentBody(
   start: number,
   end: number,
   closingOffset: number,
-  attributes: boolean,
   out: Parameters<BlockStart>[3],
   context: Parameters<BlockStart>[5],
 ): void {
@@ -329,7 +323,7 @@ function emitComponentBody(
       : structural("BlockComponentYamlProps", lines[yaml.open].end));
     cursor = yaml.close + 1;
   }
-  let slot = nextSlot(source, lines, cursor, end, attributes);
+  let slot = nextSlot(source, lines, cursor, end);
   if (!slot) {
     context.resolveLines(source, lines.slice(cursor, end), out);
     return;
@@ -338,7 +332,7 @@ function emitComponentBody(
     context.resolveLines(source, lines.slice(cursor, slot.index), out);
   }
   while (slot) {
-    const following = nextSlot(source, lines, slot.index + 1, end, attributes);
+    const following = nextSlot(source, lines, slot.index + 1, end);
     const next = following?.index ?? end;
     emitSlotOpening(source, slot.opening, out);
     context.resolveLines(source, lines.slice(slot.index + 1, next), out);
@@ -464,9 +458,9 @@ const projectBlockSlot: BlockProjector = (nodeId, offset, tokenBase, context) =>
   return withSpan(value, tokenStart(open), tokenEnd(close));
 };
 
-function createBlockStart(shorthand: boolean, attributes: boolean): BlockStart {
+function createBlockStart(shorthand: boolean): BlockStart {
   return (source, lines, start, out, contentOffset, context) => {
-    const opening = blockOpeningAt(source, lines[start], contentOffset, shorthand, attributes);
+    const opening = blockOpeningAt(source, lines[start], contentOffset, shorthand);
     if (!opening) {
       return;
     }
@@ -475,7 +469,7 @@ function createBlockStart(shorthand: boolean, attributes: boolean): BlockStart {
       out.push(structural("BlockComponentClose", lines[start].end));
       return start + 1;
     }
-    const closing = blockClose(source, lines, start, opening, attributes);
+    const closing = blockClose(source, lines, start, opening);
     if (!closing) {
       return;
     }
@@ -486,7 +480,6 @@ function createBlockStart(shorthand: boolean, attributes: boolean): BlockStart {
       start + 1,
       closing.index,
       closing.offset,
-      attributes,
       out,
       context,
     );
@@ -499,25 +492,23 @@ function createBlockStart(shorthand: boolean, attributes: boolean): BlockStart {
   };
 }
 
-export function feature(attributes: boolean): SyntaxFeature {
-  return {
-    blockRules: [
-      { rule: "BlockComponentLabel", inlineContent: true, project: projectBlockLabel },
-      { rule: "BlockComponent", project: projectBlockComponent },
-      { rule: "BlockComponentSlot", project: projectBlockSlot },
-    ],
-    blockStarts: [
-      {
-        codes: [58],
-        interrupt(source, line, contentOffset) {
-          return (
-            blockOpeningAt(source, line, contentOffset, false, attributes) !== void 0 ||
-            blockOpeningAt(source, line, contentOffset, true, attributes) !== void 0
-          );
-        },
-        start: createBlockStart(false, attributes),
+export const feature: SyntaxFeature = {
+  blockRules: [
+    { rule: "BlockComponentLabel", inlineContent: true, project: projectBlockLabel },
+    { rule: "BlockComponent", project: projectBlockComponent },
+    { rule: "BlockComponentSlot", project: projectBlockSlot },
+  ],
+  blockStarts: [
+    {
+      codes: [58],
+      interrupt(source, line, contentOffset) {
+        return (
+          blockOpeningAt(source, line, contentOffset, false) !== void 0 ||
+          blockOpeningAt(source, line, contentOffset, true) !== void 0
+        );
       },
-      { codes: [58], start: createBlockStart(true, attributes) },
-    ],
-  };
-}
+      start: createBlockStart(false),
+    },
+    { codes: [58], start: createBlockStart(true) },
+  ],
+};

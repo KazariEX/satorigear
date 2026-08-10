@@ -31,10 +31,15 @@ describe("component syntax", () => {
         { type: "text", value: "{.mark}" },
       ],
     });
-    expect(parse("::Card\nbody\n::\n", { component: true }).children[0]).toMatchObject({
+    expect(parse("::Card{tone=info}\n#header{.wide}\nbody\n::\n", { component: true }).children[0]).toMatchObject({
       type: "blockComponent",
       name: "card",
-      attributes: {},
+      attributes: { tone: "info" },
+      children: [{
+        type: "blockComponent",
+        name: "template",
+        attributes: { class: "wide", name: "header" },
+      }],
     });
     expect(parse("::Card\n---\ncount: 42\n---\n::\n", { component: true }).children[0]).toMatchObject({
       type: "blockComponent",
