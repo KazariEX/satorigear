@@ -6,14 +6,15 @@
     "build": "pnpm --filter satorigear... build",
     "dev": "pnpm --filter satorigear... --parallel dev",
     "prepare": "zin link satorigear",
+    "prepare:corpus": "node scripts/corpus.ts",
     "prepare:vendor": "node scripts/vendor.ts",
     "release": "bumpp -r --no-push -c \"release: v%s\"",
     "test": "vitest",
     "typecheck": "tsc",
-    "benchmark": "pnpm build && node --expose-gc benchmark/parse.bench.ts",
-    "benchmark:incremental": "pnpm build && node --expose-gc benchmark/edit.bench.ts",
-    "test:markdown": "vitest run test/mdast.test.ts test/document.test.ts",
-    "conformance:markdown": "vitest run test/mdast-conformance.test.ts test/incremental-fuzz.test.ts --reporter=verbose"
+    "benchmark:features": "node --expose-gc test/benchmark/features.bench.ts",
+    "benchmark:incremental": "node --expose-gc test/benchmark/incremental.bench.ts",
+    "benchmark:parse": "node --expose-gc test/benchmark/parse.bench.ts",
+    "benchmark:stress": "node --expose-gc test/benchmark/stress.bench.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -1,0 +1,38 @@
+import { bench, do_not_optimize, run, summary } from "mitata";
+import { createParser } from "satorigear";
+import { load } from "./helpers/corpus.ts";
+import { createCommonmarkEngines } from "./helpers/engines.ts";
+import { corpusLabel, parseCorpus } from "./helpers/utils.ts";
+
+const engines = createCommonmarkEngines();
+const corpora = load();
+
+// Parser (profile) construction is intentionally separate from steady-state document parsing.
+summary(() => {
+  bench("satorigear, create parser", () => {
+    do_not_optimize(createParser());
+  });
+});
+
+for (const corpus of corpora) {
+  summary(() => {
+    const suffix = corpusLabel(corpus);
+    for (const engine of engines) {
+      // This measures public API latency; lazy libraries may defer most tree construction.
+      bench(`${engine.name}, parse return (${suffix})`, () => {
+        parseCorpus(engine, corpus, false);
+      });
+    }
+  });
+  summary(() => {
+    const suffix = corpusLabel(corpus);
+    for (const engine of engines) {
+      // This is the comparable string-to-consumable-MDAST measurement.
+      bench(`${engine.name}, fully read (${suffix})`, () => {
+        parseCorpus(engine, corpus, true);
+      });
+    }
+  });
+}
+
+await run();
