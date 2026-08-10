@@ -5,6 +5,7 @@ import {
   isBlank,
   lineIndent,
   logicalToken,
+  removeIndent,
 } from "../../block/primitives.ts";
 import { inlineTokenText } from "../../inline/runtime.ts";
 import {
@@ -136,24 +137,6 @@ function fencedCode(value: string): { closed: boolean; node: Code } {
       value: literal.replace(/\n$/, ""),
     },
   };
-}
-
-function removeIndent(value: string, columns: number): string {
-  let offset = 0;
-  let consumed = 0;
-  while (offset < value.length && consumed < columns) {
-    if (value[offset] === " ") {
-      consumed++;
-    }
-    else if (value[offset] === "\t") {
-      consumed += 4 - (consumed % 4);
-    }
-    else {
-      break;
-    }
-    offset++;
-  }
-  return " ".repeat(Math.max(0, consumed - columns)) + value.slice(offset);
 }
 
 function indentedCode(value: string): Code {

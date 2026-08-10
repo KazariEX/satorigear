@@ -1,10 +1,9 @@
 import { blockRules, blockStarts } from "./block.ts";
-import { inlineRules, inlineTokens } from "./inline.ts";
+import { inlineTokens } from "./inline.ts";
 import type { SyntaxFeature } from "../../types.ts";
 
 export const feature: SyntaxFeature = {
   blockRules,
   blockStarts,
-  inlineRules,
   inlineTokens,
 };

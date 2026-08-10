@@ -139,6 +139,7 @@ const CodeSpan = token(altPattern(
   scope: "markup.raw.inline",
   delimitedSpan: { markers: ["`"], minLength: 1, multiline: true },
 });
+const MathText = token(never());
 const Autolink = token(autolinkPattern, { scope: "markup.underline.link" });
 const InlineHtml = token(inlineHtmlPattern, { scope: "meta.tag.inline.html" });
 const Entity = token(seq("&", altPattern(
@@ -290,6 +291,7 @@ const BracketFallback = rule(() => [
 Inline = rule(() => [
   HtmlComment,
   CodeSpan,
+  MathText,
   Image,
   Link,
   ReferenceLink,
@@ -312,6 +314,7 @@ Inline = rule(() => [
 LinkContent = rule(() => [
   HtmlComment,
   CodeSpan,
+  MathText,
   LinkImage,
   LinkComponent,
   LinkSpan,
@@ -334,6 +337,7 @@ export const grammar = defineGrammar({
   tokens: {
     HtmlComment,
     CodeSpan,
+    MathText,
     Autolink,
     InlineHtml,
     Entity,

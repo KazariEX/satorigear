@@ -25,11 +25,7 @@ import {
   normalizeComponentName,
 } from "../attributes/syntax.ts";
 import type { InlineRuleProjector } from "../../../mdast.ts";
-import type {
-  InlineRuleRegistration,
-  InlineTokenRegistration,
-  SyntaxFeature,
-} from "../../types.ts";
+import type { SyntaxFeature } from "../../types.ts";
 import type { InlineComponent } from "./types.ts";
 
 interface Candidate {
@@ -462,26 +458,17 @@ const projectInlineSpan: InlineRuleProjector = (
   return true;
 };
 
-const spanRules: readonly InlineRuleRegistration[] = [
+export const inlineRules: SyntaxFeature["inlineRules"] = [
+  { rule: "InlineComponent", project: projectInlineComponent },
+  { rule: "LinkComponent", project: projectInlineComponent },
   { rule: "InlineSpan", project: projectInlineSpan },
   { rule: "LinkSpan", project: projectInlineSpan },
 ];
 
-const spanTokens: readonly InlineTokenRegistration[] = [
+export const inlineTokens: SyntaxFeature["inlineTokens"] = [
+  { token: "InlineComponentOpen", project: projectInlineIgnore },
+  { token: "InlineComponentLabelOpen", project: projectInlineIgnore },
+  { token: "InlineComponentLabelClose", project: projectInlineIgnore },
   { token: "InlineSpanOpen", project: projectInlineIgnore },
   { token: "InlineSpanClose", project: projectInlineIgnore },
 ];
-
-export const feature: SyntaxFeature = {
-  inlineRules: [
-    { rule: "InlineComponent", project: projectInlineComponent },
-    { rule: "LinkComponent", project: projectInlineComponent },
-    ...spanRules,
-  ],
-  inlineTokens: [
-    { token: "InlineComponentOpen", project: projectInlineIgnore },
-    { token: "InlineComponentLabelOpen", project: projectInlineIgnore },
-    { token: "InlineComponentLabelClose", project: projectInlineIgnore },
-    ...spanTokens,
-  ],
-};

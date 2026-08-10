@@ -19,15 +19,15 @@ import { feature as featureHeading } from "./features/heading.ts";
 import { feature as featureHtml } from "./features/html.ts";
 import { feature as featureLink } from "./features/link.ts";
 import { feature as featureList } from "./features/list.ts";
+import { feature as featureMath } from "./features/math/index.ts";
+import { transformInlineMath } from "./features/math/inline.ts";
 import { feature as featureParagraph } from "./features/paragraph.ts";
-import {
-  feature as featureReference,
-  reassociateReferenceTails,
-} from "./features/reference.ts";
+import { feature as featureReference, reassociateReferenceTails } from "./features/reference.ts";
 import { feature as featureTable } from "./features/table.ts";
 import { feature as featureText, semanticText } from "./features/text.ts";
 import type { BlockToken } from "../block/tokens.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
+import type { MathOptions } from "./features/math/types.ts";
 import type {
   BlockDecoratorRegistration,
   BlockInterruptDispatch,
@@ -62,6 +62,7 @@ export interface SyntaxOptions {
   attributes?: boolean;
   component?: boolean;
   frontmatter?: boolean | FrontmatterOptions;
+  math?: boolean | MathOptions;
   table?: boolean;
 }
 
@@ -69,7 +70,7 @@ export interface SyntaxOptions {
 const profiles = Object.create(null);
 const defaultOptions: SyntaxOptions = {};
 
-function profileKey(options: SyntaxOptions): number {
+function createProfileKey(options: SyntaxOptions): number {
   let key = 0;
 
   if (options.attributes) {
@@ -79,27 +80,52 @@ function profileKey(options: SyntaxOptions): number {
     key |= 1 << 1;
   }
   if (options.frontmatter) {
-    if (typeof options.frontmatter === "object" && options.frontmatter.marker === "+") {
-      key |= 1 << 2;
-    }
-    else {
-      key |= 1 << 3;
+    key |= 1 << (
+      typeof options.frontmatter === "object" && options.frontmatter.marker === "+"
+        ? 2
+        : 3
+    );
+  }
+  if (options.math) {
+    key |= 1 << 4;
+    if (typeof options.math === "object" && options.math.singleDollarTextMath === false) {
+      key |= 1 << 5;
     }
   }
   if (options.table) {
-    key |= 1 << 4;
+    key |= 1 << 6;
   }
   return key;
 }
 
+function createInlineTransform(options: SyntaxOptions): InlineTransform | undefined {
+  const math = Boolean(options.math);
+  const component = Boolean(options.component);
+  const attributes = Boolean(options.attributes);
+  if (!math && !component && !attributes) {
+    return;
+  }
+  const singleDollarTextMath = typeof options.math !== "object" || options.math.singleDollarTextMath !== false;
+  return (source, tokens) => {
+    if (math) {
+      tokens = transformInlineMath(source, tokens, singleDollarTextMath);
+    }
+    if (component) {
+      tokens = transformInlineCarrier(source, tokens);
+    }
+    if (attributes) {
+      tokens = transformInlineAttributes(source, tokens);
+    }
+    return tokens;
+  };
+}
+
 export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxProfile {
-  const key = options === defaultOptions ? 0 : profileKey(options);
+  const key = options === defaultOptions ? 0 : createProfileKey(options);
   if (key in profiles) {
     return profiles[key];
   }
 
-  const component = Boolean(options.component);
-  const attributes = Boolean(options.attributes);
   const features = [...leadingFeatures];
 
   if (options.frontmatter) {
@@ -115,24 +141,23 @@ export function createProfile(options: SyntaxOptions = defaultOptions): SyntaxPr
     // A delimiter promotes the preceding paragraph line, so tables must run before the paragraph fallback.
     features.push(featureTable);
   }
+  if (options.math) {
+    features.push(featureMath);
+  }
 
   features.push(...trailingFeatures);
 
-  if (component) {
+  if (options.component) {
     features.push(featureComponent);
   }
-  if (attributes) {
+  if (options.attributes) {
     features.push(featureAttributes);
   }
 
-  const inlineCarrier: InlineTransform | undefined = component || attributes
-    ? (source, tokens) => {
-      const carried = component ? transformInlineCarrier(source, tokens) : tokens;
-      return attributes ? transformInlineAttributes(source, carried) : carried;
-    }
-    : void 0;
+  // Compile one straight-line pipeline; the default profile keeps the resolver-only hot path.
+  const inlineTransform = createInlineTransform(options);
 
-  profiles[key] = compileProfile(features, inlineCarrier);
+  profiles[key] = compileProfile(features, inlineTransform);
   return profiles[key];
 }
 

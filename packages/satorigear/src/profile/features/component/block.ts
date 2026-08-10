@@ -9,6 +9,7 @@ import {
 } from "../../../block/primitives.ts";
 import {
   blockChildren,
+  type BlockProjector,
   blockToken,
   directBlockToken,
   inlineChildren,
@@ -24,7 +25,6 @@ import {
   parseAttributes,
 } from "../attributes/syntax.ts";
 import { closesCodeFence, type CodeFence, codeFenceAt } from "../code.ts";
-import type { BlockProjector } from "../../../mdast.ts";
 import type { BlockStart, SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "../attributes/types.ts";
 import type { BlockComponent } from "./types.ts";
@@ -375,15 +375,6 @@ function emitOpening(
   }
 }
 
-const projectBlockLabel: BlockProjector = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, "BlockComponentLabelOpen", context);
-  const close = blockToken(nodeId, tokenBase, "BlockComponentLabelClose", context);
-  return withSpan<Paragraph>({
-    type: "paragraph",
-    children: inlineChildren(nodeId, context, true),
-  }, tokenStart(open), tokenEnd(close));
-};
-
 function parseYamlAttributes(
   token: NonNullable<ReturnType<typeof directBlockToken>>,
 ): Attributes {
@@ -399,64 +390,34 @@ function parseYamlAttributes(
 
 function directRule(
   nodeId: number,
-  offset: number,
   tokenBase: number,
   rule: string,
   context: Parameters<BlockProjector>[3],
-): { id: number; offset: number; tokenBase: number } | undefined {
+): { id: number; tokenBase: number } | undefined {
   const arena = context.view.arena;
   for (let index = 0; index < arena.childCount(nodeId); index++) {
     const child = arena.childAt(nodeId, index);
     if (child >= 0 && arena.ruleNameOf(child) === rule) {
       return {
         id: child,
-        offset: offset + arena.childRelAt(nodeId, index),
         tokenBase: tokenBase + arena.childTokRelAt(nodeId, index),
       };
     }
   }
 }
 
-const projectBlockComponent: BlockProjector = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, "BlockComponentOpen", context);
-  const close = blockToken(nodeId, tokenBase, "BlockComponentClose", context);
-  const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
-  const parsed = attributesToken ? parseAttributes(context.source, tokenStart(attributesToken)) : void 0;
-  const yamlToken = directBlockToken(nodeId, tokenBase, "BlockComponentYamlProps", context);
-  const label = directRule(nodeId, offset, tokenBase, "BlockComponentLabel", context);
-  const children: RootContent[] = [];
-  if (label) {
-    children.push(projectBlockLabel(label.id, label.offset, label.tokenBase, context));
-  }
-  children.push(...blockChildren(nodeId, offset, tokenBase, context));
-  const value: BlockComponent = {
-    type: "blockComponent",
-    name: normalizeComponentName(open.text.slice(open.text.lastIndexOf(":") + 1).trim()),
-    attributes: yamlToken
-      ? { ...parseYamlAttributes(yamlToken), ...parsed?.attributes }
-      : (parsed?.attributes ?? {}),
-    children,
-  };
-  return withSpan(value, tokenStart(open), tokenEnd(close));
-};
-
-const projectBlockSlot: BlockProjector = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, "BlockComponentSlotOpen", context);
-  const close = blockToken(nodeId, tokenBase, "BlockComponentSlotClose", context);
-  const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
-  const parsed = attributesToken ? parseAttributes(context.source, tokenStart(attributesToken)) : void 0;
-  const children = blockChildren(nodeId, offset, tokenBase, context);
-  const value: BlockComponent = {
-    type: "blockComponent",
-    name: "template",
-    attributes: {
-      ...parsed?.attributes,
-      name: normalizeComponentName(open.text.slice(1).trim()),
-    },
-    children,
-  };
-  return withSpan(value, tokenStart(open), tokenEnd(close));
-};
+function blockLabel(
+  nodeId: number,
+  tokenBase: number,
+  context: Parameters<BlockProjector>[3],
+) {
+  const open = blockToken(nodeId, tokenBase, "BlockComponentLabelOpen", context);
+  const close = blockToken(nodeId, tokenBase, "BlockComponentLabelClose", context);
+  return withSpan<Paragraph>({
+    type: "paragraph",
+    children: inlineChildren(nodeId, context, true),
+  }, tokenStart(open), tokenEnd(close));
+}
 
 function createBlockStart(shorthand: boolean): BlockStart {
   return (source, lines, start, out, contentOffset, context) => {
@@ -492,23 +453,74 @@ function createBlockStart(shorthand: boolean): BlockStart {
   };
 }
 
-export const feature: SyntaxFeature = {
-  blockRules: [
-    { rule: "BlockComponentLabel", inlineContent: true, project: projectBlockLabel },
-    { rule: "BlockComponent", project: projectBlockComponent },
-    { rule: "BlockComponentSlot", project: projectBlockSlot },
-  ],
-  blockStarts: [
-    {
-      codes: [58],
-      interrupt(source, line, contentOffset) {
-        return (
-          blockOpeningAt(source, line, contentOffset, false) !== void 0 ||
-          blockOpeningAt(source, line, contentOffset, true) !== void 0
-        );
-      },
-      start: createBlockStart(false),
+export const blockRules: SyntaxFeature["blockRules"] = [
+  {
+    rule: "BlockComponentLabel",
+    inlineContent: true,
+    project(nodeId, offset, tokenBase, context) {
+      return blockLabel(nodeId, tokenBase, context);
     },
-    { codes: [58], start: createBlockStart(true) },
-  ],
-};
+  },
+  {
+    rule: "BlockComponent",
+    project(nodeId, offset, tokenBase, context) {
+      const open = blockToken(nodeId, tokenBase, "BlockComponentOpen", context);
+      const close = blockToken(nodeId, tokenBase, "BlockComponentClose", context);
+      const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
+      const parsed = attributesToken ? parseAttributes(context.source, tokenStart(attributesToken)) : void 0;
+      const yamlToken = directBlockToken(nodeId, tokenBase, "BlockComponentYamlProps", context);
+      const label = directRule(nodeId, tokenBase, "BlockComponentLabel", context);
+      const children: RootContent[] = [];
+      if (label) {
+        children.push(blockLabel(label.id, label.tokenBase, context));
+      }
+      children.push(...blockChildren(nodeId, offset, tokenBase, context));
+      const value: BlockComponent = {
+        type: "blockComponent",
+        name: normalizeComponentName(open.text.slice(open.text.lastIndexOf(":") + 1).trim()),
+        attributes: yamlToken
+          ? { ...parseYamlAttributes(yamlToken), ...parsed?.attributes }
+          : (parsed?.attributes ?? {}),
+        children,
+      };
+      return withSpan(value, tokenStart(open), tokenEnd(close));
+    },
+  },
+  {
+    rule: "BlockComponentSlot",
+    project(nodeId, offset, tokenBase, context) {
+      const open = blockToken(nodeId, tokenBase, "BlockComponentSlotOpen", context);
+      const close = blockToken(nodeId, tokenBase, "BlockComponentSlotClose", context);
+      const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
+      const parsed = attributesToken ? parseAttributes(context.source, tokenStart(attributesToken)) : void 0;
+      const children = blockChildren(nodeId, offset, tokenBase, context);
+      const value: BlockComponent = {
+        type: "blockComponent",
+        name: "template",
+        attributes: {
+          ...parsed?.attributes,
+          name: normalizeComponentName(open.text.slice(1).trim()),
+        },
+        children,
+      };
+      return withSpan(value, tokenStart(open), tokenEnd(close));
+    },
+  },
+];
+
+export const blockStarts: SyntaxFeature["blockStarts"] = [
+  {
+    codes: [58],
+    interrupt(source, line, contentOffset) {
+      return (
+        blockOpeningAt(source, line, contentOffset, false) !== void 0 ||
+          blockOpeningAt(source, line, contentOffset, true) !== void 0
+      );
+    },
+    start: createBlockStart(false),
+  },
+  {
+    codes: [58],
+    start: createBlockStart(true),
+  },
+];
