@@ -10,7 +10,8 @@ import {
 } from "../../mdast.ts";
 import { projectInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
-import type { InlineFeature, SyntaxFeature } from "../types.ts";
+import type { InlineFeature } from "../../inline/profile.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {
   token: "AsteriskRun",

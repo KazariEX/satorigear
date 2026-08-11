@@ -1,5 +1,5 @@
-import type { InlineResolutionContext, SyntaxProfile } from "../profile/types.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
+import type { InlineProfile, InlineResolutionContext } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
 // Most regions consult no definitions, so they share one immutable empty dependency set.
@@ -29,7 +29,7 @@ export class InlineRegion {
   #definitions?: ReadonlySet<string>;
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
-  #syntax: SyntaxProfile["inline"];
+  #syntax: InlineProfile;
   #tokenSource?: string;
   #tokens?: InlineTokenStream;
   id: number;
@@ -39,7 +39,7 @@ export class InlineRegion {
   view: SourceView;
 
   constructor(
-    syntax: SyntaxProfile["inline"],
+    syntax: InlineProfile,
     binding: InlineRegionBinding,
     definitions: ReadonlySet<string>,
   ) {

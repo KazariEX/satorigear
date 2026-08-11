@@ -1,5 +1,5 @@
 import { blockRules, blockStarts } from "./block.ts";
-import { inlineTokens, transformInlineFootnotes } from "./inline.ts";
+import { inlineTokens, rewriteFootnoteTokens } from "./inline.ts";
 import type { SyntaxFeature } from "../../types.ts";
 
 export const feature: SyntaxFeature = {
@@ -9,6 +9,6 @@ export const feature: SyntaxFeature = {
   },
   inline: {
     tokens: inlineTokens,
-    transform: transformInlineFootnotes,
+    rewriteTokens: rewriteFootnoteTokens,
   },
 };

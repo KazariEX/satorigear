@@ -14,7 +14,7 @@ import {
   withSpan,
 } from "../../../mdast.ts";
 import { semanticText } from "../text.ts";
-import type { BlockFeature } from "../../types.ts";
+import type { BlockFeature } from "../../../block/profile.ts";
 import type { Math } from "./types.ts";
 
 const mathFenceRule: FenceRule = {

@@ -1,8 +1,8 @@
 import type { PhrasingContent } from "mdast";
+import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   firstInlineTokenEndingAfter,
-  inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenFlags,
@@ -25,8 +25,8 @@ import {
   componentNameEnd,
   normalizeComponentName,
 } from "../attributes/syntax.ts";
+import type { InlineFeature } from "../../../inline/profile.ts";
 import type { InlineRuleProjector } from "../../../mdast.ts";
-import type { InlineFeature } from "../../types.ts";
 import type { InlineComponent } from "./types.ts";
 
 interface Candidate {
@@ -344,7 +344,7 @@ function emitRange(
 }
 
 // Reclassify CommonMark bracket/text tokens as explicit semantic carriers.
-export function transformInlineCarrier(
+export function rewriteComponentTokens(
   source: string,
   tokens: InlineTokenStream,
 ): InlineTokenStream {

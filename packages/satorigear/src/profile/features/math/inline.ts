@@ -1,7 +1,7 @@
+import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   firstInlineTokenEndingAfter,
-  inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenFlags,
@@ -11,7 +11,7 @@ import {
   inlineTokenText,
 } from "../../../inline/tokens.ts";
 import { appendInline, withSpan } from "../../../mdast.ts";
-import type { InlineFeature, InlineResolutionContext } from "../../types.ts";
+import type { InlineFeature, InlineResolutionContext } from "../../../inline/profile.ts";
 import type { InlineMath } from "./types.ts";
 
 interface MathRange {
@@ -112,7 +112,7 @@ function copyRange(
   }
 }
 
-export function transformInlineMath(
+export function rewriteMathTokens(
   singleDollarTextMath: boolean,
   source: string,
   tokens: InlineTokenStream,

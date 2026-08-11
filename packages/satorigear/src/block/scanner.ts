@@ -6,8 +6,14 @@ import {
   createTokenChange,
   tokenEqualsAfterShift,
 } from "./tokens.ts";
-import type { BlockScanContext, SyntaxProfile } from "../profile/types.ts";
 import type { SourceLocation, TextEdit } from "../source-view.ts";
+import type { BlockProfile } from "./profile.ts";
+
+export interface BlockScanContext {
+  endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
+  startsInterruptingBlock: (source: string, line: BlockLine) => boolean;
+  resolveLines: (source: string, lines: readonly BlockLine[], tokens: BlockToken[]) => void;
+}
 
 function linesOf(source: string): BlockLine[] {
   const lines: BlockLine[] = [];
@@ -31,7 +37,7 @@ function linesOf(source: string): BlockLine[] {
 }
 
 function profileStarts(
-  profile: SyntaxProfile,
+  profile: BlockProfile,
   context: BlockScanContext,
   source: string,
   lines: readonly BlockLine[],
@@ -42,7 +48,7 @@ function profileStarts(
   if (!indent) {
     return;
   }
-  const starts = profile.blockStarts[source.charCodeAt(indent.offset)];
+  const starts = profile.starts[source.charCodeAt(indent.offset)];
   if (!starts) {
     return;
   }
@@ -54,12 +60,12 @@ function profileStarts(
   }
 }
 
-function startsInterruptingBlock(profile: SyntaxProfile, source: string, line: BlockLine): boolean {
+function startsInterruptingBlock(profile: BlockProfile, source: string, line: BlockLine): boolean {
   const indent = lineIndent(source, line);
   if (!indent) {
     return false;
   }
-  const interrupts = profile.blockInterrupts[source.charCodeAt(indent.offset)];
+  const interrupts = profile.interrupts[source.charCodeAt(indent.offset)];
   if (!interrupts) {
     return false;
   }
@@ -80,7 +86,7 @@ function startsParagraphAt(context: BlockScanContext, source: string, line: Bloc
 }
 
 function endsWithParagraphLeaf(
-  profile: SyntaxProfile,
+  profile: BlockProfile,
   context: BlockScanContext,
   source: string,
   line: BlockLine,
@@ -103,7 +109,7 @@ function endsWithParagraphLeaf(
 }
 
 function resolveBlock(
-  profile: SyntaxProfile,
+  profile: BlockProfile,
   context: BlockScanContext,
   source: string,
   lines: readonly BlockLine[],
@@ -114,7 +120,7 @@ function resolveBlock(
   if (matchedEnd !== void 0) {
     return matchedEnd;
   }
-  for (const fallback of profile.blockFallbacks) {
+  for (const fallback of profile.fallbacks) {
     const fallbackEnd = fallback(source, lines, start, out, context);
     if (fallbackEnd !== void 0) {
       return fallbackEnd;
@@ -122,8 +128,6 @@ function resolveBlock(
   }
   throw new Error("Syntax profile did not provide a block fallback");
 }
-
-type BlockVisitor = (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => boolean;
 
 interface BlockCheckpoint {
   lineEnd: number;
@@ -141,12 +145,12 @@ interface BlockEditResult {
 }
 
 function resolveLines(
-  profile: SyntaxProfile,
+  profile: BlockProfile,
   context: BlockScanContext,
   source: string,
   lines: readonly BlockLine[],
   out: BlockToken[],
-  visit?: BlockVisitor,
+  visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => boolean,
 ): void {
   for (let index = 0; index < lines.length;) {
     if (isBlank(source, lines[index])) {
@@ -162,33 +166,13 @@ function resolveLines(
   }
 }
 
-function createBlockScanContext(profile: SyntaxProfile): BlockScanContext {
+function createBlockScanContext(profile: BlockProfile): BlockScanContext {
   const context: BlockScanContext = {
     endsWithParagraphLeaf: (source, line) => endsWithParagraphLeaf(profile, context, source, line),
     startsInterruptingBlock: (source, line) => startsInterruptingBlock(profile, source, line),
     resolveLines: (source, lines, tokens) => resolveLines(profile, context, source, lines, tokens),
   };
   return context;
-}
-
-function scanBlocks(
-  profile: SyntaxProfile,
-  context: BlockScanContext,
-  source: string,
-): { checkpoints: BlockCheckpoint[]; lines: BlockLine[]; tokens: BlockToken[] } {
-  const lines = linesOf(source);
-  const tokens: BlockToken[] = [];
-  const checkpoints: BlockCheckpoint[] = [];
-  resolveLines(profile, context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
-    checkpoints.push({
-      lineStart: lines[lineStart].start,
-      lineEnd: lines[lineEnd - 1].next,
-      tokenStart,
-      tokenEnd,
-    });
-    return false;
-  });
-  return { checkpoints, lines, tokens };
 }
 
 function applyBlockEdits(source: string, edits: readonly TextEdit[]): string {
@@ -293,19 +277,31 @@ export class BlockScanner {
   #checkpoints: BlockCheckpoint[];
   #context: BlockScanContext;
   #lines: BlockLine[];
-  #profile: SyntaxProfile;
+  #profile: BlockProfile;
   #source: string;
   #tokens: BlockToken[];
 
-  constructor(source: string, profile: SyntaxProfile) {
+  constructor(source: string, profile: BlockProfile) {
     const context = createBlockScanContext(profile);
-    const initial = scanBlocks(profile, context, source);
+    const lines = linesOf(source);
+    const tokens: BlockToken[] = [];
+    const checkpoints: BlockCheckpoint[] = [];
+    resolveLines(profile, context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+      checkpoints.push({
+        lineStart: lines[lineStart].start,
+        lineEnd: lines[lineEnd - 1].next,
+        tokenStart,
+        tokenEnd,
+      });
+      return false;
+    });
+
     this.#context = context;
     this.#profile = profile;
     this.#source = source;
-    this.#lines = initial.lines;
-    this.#tokens = initial.tokens;
-    this.#checkpoints = initial.checkpoints;
+    this.#lines = lines;
+    this.#tokens = tokens;
+    this.#checkpoints = checkpoints;
   }
 
   get source(): string {
@@ -346,7 +342,7 @@ export class BlockScanner {
     let restart = this.#checkpoints[affected]?.lineStart > firstEdit.start ? -1 : Math.max(0, affected - 1);
     const initialRestartOffset = this.#checkpoints[restart]?.lineStart ?? 0;
     const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, lastEdit.end, delta);
-    const profileRestart = this.#profile.blockRestart(nextSource, nextLines, firstEdit.start, changedEnd);
+    const profileRestart = this.#profile.restart(nextSource, nextLines, firstEdit.start, changedEnd);
     if (profileRestart !== void 0 && profileRestart < firstEdit.start) {
       const candidate = this.#checkpoints.findIndex((checkpoint) => (
         checkpoint.lineStart <= profileRestart &&

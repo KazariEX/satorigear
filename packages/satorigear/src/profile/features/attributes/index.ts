@@ -1,9 +1,9 @@
 import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdast";
+import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
   firstInlineTokenEndingAfter,
-  inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenFlags,
@@ -20,7 +20,8 @@ import {
   takeTerminalAttributes,
 } from "./carrier.ts";
 import { attributesEnd, parseAttributes } from "./syntax.ts";
-import type { BlockProjectorDecorator, SyntaxFeature } from "../../types.ts";
+import type { BlockProjectorDecorator } from "../../../block/profile.ts";
+import type { SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "./types.ts";
 
 interface AttributeRange {
@@ -222,11 +223,11 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    transform: transformInlineAttributes,
+    rewriteTokens: rewriteAttributeTokens,
   },
 };
 
-function transformInlineAttributes(source: string, tokens: InlineTokenStream): InlineTokenStream {
+function rewriteAttributeTokens(source: string, tokens: InlineTokenStream): InlineTokenStream {
   const ranges = rangesOf(source, tokens);
   if (ranges.length === 0) {
     return tokens;

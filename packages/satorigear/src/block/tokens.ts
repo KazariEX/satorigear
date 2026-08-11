@@ -1,5 +1,4 @@
 import { type BlockLine, logicalLine } from "./lines.ts";
-import type { TokenChange } from "../syntax-protocol.ts";
 
 export interface BlockTokenRange {
   end: number;
@@ -18,7 +17,11 @@ export interface BlockToken {
   type: string;
 }
 
-export type BlockTokenChange = TokenChange<readonly BlockToken[]>;
+export interface BlockTokenChange {
+  oldEnd: number;
+  oldStart: number;
+  tokens: readonly BlockToken[];
+}
 
 export function tokenStart(token: BlockToken): number {
   return token.ranges?.[0]?.offset ?? token.offset;

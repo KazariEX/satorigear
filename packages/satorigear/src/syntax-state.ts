@@ -5,9 +5,9 @@ import {
   type SourceSpan,
   type SourceView,
 } from "./source-view.ts";
-import type { BlockSyntaxView } from "./block/syntax.ts";
+import type { BlockSyntaxView } from "./block/arena.ts";
 import type { BlockToken } from "./block/tokens.ts";
-import type { InlineSyntaxArena } from "./inline/syntax.ts";
+import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
 
@@ -73,7 +73,7 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
 
 export class SyntaxState {
   #blocks: readonly SyntaxBlock[] = [];
-  #inlineArena: InlineSyntaxArena;
+  #inlineArena: InlineArena;
   #inlineRoots = new Map<number, InlineRoot>();
   #profile: SyntaxProfile;
   #regions = new Map<number, InlineRegion>();
@@ -83,7 +83,7 @@ export class SyntaxState {
     source: string,
     view: BlockSyntaxView,
     profile: SyntaxProfile,
-    inlineArena: InlineSyntaxArena,
+    inlineArena: InlineArena,
   ) {
     this.#inlineArena = inlineArena;
     this.#profile = profile;
@@ -108,11 +108,11 @@ export class SyntaxState {
       regionIds: number[],
     ): void => {
       const rule = arena.ruleNameOf(nodeId);
-      const definitionKey = this.#profile.blockDefinitionKeys[rule];
+      const definitionKey = this.#profile.block.definitionKeys[rule];
       if (definitionKey) {
         definitions.add(definitionKey(view.tokenAt(tokenBase)));
       }
-      if (this.#profile.blockInlineContents[rule]) {
+      if (this.#profile.block.inlineContents[rule]) {
         const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
         if (spans.length > 0) {
           bindings.push({

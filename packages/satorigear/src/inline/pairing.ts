@@ -1,7 +1,7 @@
+import { inlineKind } from "./kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
-  inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenFlags,

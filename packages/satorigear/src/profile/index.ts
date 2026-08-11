@@ -1,7 +1,5 @@
-import { tokenizeInline } from "../inline/lexer.ts";
-import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "../inline/pairing.ts";
-import { compileInlineSyntax, type InlineStructureRegistration } from "../inline/syntax.ts";
-import { inlineKind } from "../inline/tokens.ts";
+import { type BlockFeature, compileBlockProfile } from "../block/profile.ts";
+import { compileInlineProfile, type InlineFeature } from "../inline/profile.ts";
 import { feature as featureAttributes } from "./features/attributes/index.ts";
 import { feature as featureBlockQuote } from "./features/blockquote.ts";
 import { feature as featureBreak } from "./features/break.ts";
@@ -19,21 +17,8 @@ import { feature as featureParagraph } from "./features/paragraph.ts";
 import { feature as featureReference } from "./features/reference.ts";
 import { feature as featureTable } from "./features/table.ts";
 import { feature as featureText, semanticText } from "./features/text.ts";
-import type { BlockSyntaxFrame, BlockSyntaxSchema } from "../block/syntax.ts";
-import type { BlockToken } from "../block/tokens.ts";
-import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 import type { MathOptions } from "./features/math/types.ts";
-import type {
-  BlockDecoratorRegistration,
-  BlockFallback,
-  BlockInterrupt,
-  BlockRestart,
-  BlockStart,
-  InlineResolutionContext,
-  InlineTransform,
-  LazyContinuationUnwrapper,
-  SyntaxProfile,
-} from "./types.ts";
+import type { SyntaxProfile } from "./types.ts";
 
 export interface SyntaxOptions {
   attributes?: boolean;
@@ -43,21 +28,6 @@ export interface SyntaxOptions {
   math?: boolean | MathOptions;
   strikethrough?: boolean | StrikethroughOptions;
   table?: boolean;
-}
-
-function composeInlineTransforms(...transforms: readonly InlineTransform[]): InlineTransform | undefined {
-  if (transforms.length === 0) {
-    return;
-  }
-  if (transforms.length === 1) {
-    return transforms[0];
-  }
-  return (source, tokens, context) => {
-    for (const transform of transforms) {
-      tokens = transform(source, tokens, context);
-    }
-    return tokens;
-  };
 }
 
 // Compilation builds the hot dispatch tables once; documents only retain the immutable result.
@@ -108,165 +78,19 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     features.push(featureAttributes);
   }
 
-  const blockDecorators: BlockDecoratorRegistration[] = [];
-  const blockFallbacks: BlockFallback[] = [];
-  const blockInlineContents: Record<string, true> = Object.create(null);
-  const blockFrameByOpen: Record<string, BlockSyntaxFrame> = Object.create(null);
-  const blockGroupedRuleByToken: Record<string, string> = Object.create(null);
-  const blockInterrupts: BlockInterrupt[][] = [];
-  const blockRuleByLeaf: Record<string, string> = Object.create(null);
-  const blockProjects: Record<string, BlockProjector> = Object.create(null);
-  const blockDefinitionKeys: Record<string, (token: BlockToken) => string> = Object.create(null);
-  const blockRestarts: BlockRestart[] = [];
-  const blockStarts: BlockStart[][] = [];
-  const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
-  const delimiters: DelimiterConfig[] = [];
-  const inlineNormalizes: InlineTransform[] = [];
-  const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
-  const inlineStructures: InlineStructureRegistration[] = [];
-  const inlineTokenNames: (string | undefined)[] = [];
-  const inlineTokenProjects: (InlineLeafProjector | undefined)[] = [];
-  const inlineTransforms: InlineTransform[] = [];
-  const tokenPairs: PairedTokenConfig<InlineResolutionContext>[] = [];
+  const blockFeatures: BlockFeature[] = [];
+  const inlineFeatures: InlineFeature[] = [];
   for (const feature of features) {
-    const block = feature.block;
-    if (block?.decorators) {
-      blockDecorators.push(...block.decorators);
+    if (feature.block) {
+      blockFeatures.push(feature.block);
     }
-    if (block?.fallbacks) {
-      blockFallbacks.push(...block.fallbacks);
-    }
-    if (block?.restart) {
-      blockRestarts.push(block.restart);
-    }
-    if (block?.starts) {
-      for (const registration of block.starts) {
-        if (registration.unwrapLazyContinuation) {
-          lazyContinuationUnwrappers.push(registration.unwrapLazyContinuation);
-        }
-        for (const code of registration.codes) {
-          (blockStarts[code] ??= []).push(registration.start);
-          if (registration.interrupt) {
-            (blockInterrupts[code] ??= []).push(registration.interrupt);
-          }
-        }
-      }
-    }
-    if (block?.rules) {
-      for (const registration of block.rules) {
-        const syntax = registration.syntax;
-        if (syntax.kind === "frame") {
-          const opens = typeof syntax.open === "string" ? [syntax.open] : syntax.open;
-          for (const open of opens) {
-            blockFrameByOpen[open] = {
-              close: syntax.close,
-              rule: registration.rule,
-              wrapsBlock: syntax.wrapsBlock,
-            };
-          }
-        }
-        else if (syntax.kind === "group") {
-          for (const token of syntax.tokens) {
-            blockGroupedRuleByToken[token] = registration.rule;
-          }
-        }
-        else {
-          blockRuleByLeaf[syntax.token] = registration.rule;
-        }
-        if (registration.project) {
-          blockProjects[registration.rule] = registration.project;
-        }
-        if (registration.inlineContent) {
-          blockInlineContents[registration.rule] = true;
-        }
-        if (registration.definitionKey) {
-          blockDefinitionKeys[registration.rule] = registration.definitionKey;
-        }
-      }
-    }
-    const inline = feature.inline;
-    if (inline?.delimiters) {
-      delimiters.push(...inline.delimiters);
-    }
-    if (inline?.normalize) {
-      inlineNormalizes.push(inline.normalize);
-    }
-    if (inline?.rules) {
-      for (const registration of inline.rules) {
-        inlineRuleProjects[registration.rule] = registration.project;
-      }
-    }
-    if (inline?.structures) {
-      inlineStructures.push(...inline.structures);
-    }
-    if (inline?.tokens) {
-      for (const registration of inline.tokens) {
-        const kind = inlineKind(registration.token);
-        inlineTokenNames[kind] = registration.token;
-        inlineTokenProjects[kind] = registration.project;
-      }
-    }
-    if (inline?.transform) {
-      inlineTransforms.push(inline.transform);
-    }
-    if (inline?.pairs) {
-      tokenPairs.push(...inline.pairs);
+    if (feature.inline) {
+      inlineFeatures.push(feature.inline);
     }
   }
-
-  for (const registration of blockDecorators) {
-    const project = blockProjects[registration.rule];
-    if (!project) {
-      throw new Error(`Cannot decorate unknown block rule ${registration.rule}`);
-    }
-    blockProjects[registration.rule] = registration.decorate(project);
-  }
-
-  // Compile the registered stages into one path; documents never branch on enabled syntax.
-  const resolver = createPairingResolver(delimiters, tokenPairs);
-  const transformInline = composeInlineTransforms(...inlineTransforms, ...inlineNormalizes);
-  const resolveInline: SyntaxProfile["inline"]["resolve"] = transformInline
-    ? (source, tokens, state) => resolver.resolve(
-      source,
-      transformInline(source, tokens, state),
-      state,
-    )
-    : resolver.resolve;
-
-  const blockSyntax: BlockSyntaxSchema = {
-    entryRule: "Document",
-    frameByOpen: blockFrameByOpen,
-    groupedRuleByToken: blockGroupedRuleByToken,
-    ruleByLeaf: blockRuleByLeaf,
-    wrapperRule: "Block",
-  };
 
   return {
-    blockFallbacks,
-    blockInlineContents,
-    blockInterrupts,
-    blockProjects,
-    blockDefinitionKeys,
-    blockRestart(source, lines, changedStart, changedEnd) {
-      let result: number | undefined;
-      for (const restart of blockRestarts) {
-        const candidate = restart(source, lines, changedStart, changedEnd);
-        if (candidate !== void 0 && (result === void 0 || candidate < result)) {
-          result = candidate;
-        }
-      }
-      return result;
-    },
-    blockStarts,
-    blockSyntax,
-    lazyContinuationUnwrappers,
-    inline: {
-      decodeText: semanticText,
-      resolve: resolveInline,
-      ruleProjects: inlineRuleProjects,
-      schema: compileInlineSyntax(inlineStructures, inlineTokenNames),
-      tokenize: tokenizeInline,
-      tokenProjects: inlineTokenProjects,
-    },
+    block: compileBlockProfile(blockFeatures),
+    inline: compileInlineProfile(inlineFeatures, semanticText),
   };
 }

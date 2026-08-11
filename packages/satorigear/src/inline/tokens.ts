@@ -1,5 +1,3 @@
-export { inlineKind } from "./kinds.ts";
-
 export type InlineTokenStream = readonly number[];
 
 // The lexer, resolver, semantic arena, and projector share this one

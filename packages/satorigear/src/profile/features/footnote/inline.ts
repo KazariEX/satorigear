@@ -1,8 +1,8 @@
 import type { FootnoteReference } from "mdast";
+import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
-  inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenFlags,
@@ -18,8 +18,8 @@ import { footnoteLabelAt } from "./shared.ts";
 import type {
   InlineFeature,
   InlineResolutionContext,
-  InlineTransform,
-} from "../../types.ts";
+  InlineTokenRewrite,
+} from "../../../inline/profile.ts";
 
 const bracketOpenKind = inlineKind("BracketOpen");
 const footnoteReferenceKind = inlineKind("FootnoteReference");
@@ -100,7 +100,7 @@ function splitFootnoteTails(
   return result ?? tokens;
 }
 
-const activateFootnoteReferences: InlineTransform = (source, tokens, context) => {
+const activateFootnoteReferences: InlineTokenRewrite = (source, tokens, context) => {
   let result: number[] | undefined;
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const start = inlineTokenStart(tokens, index);
@@ -141,7 +141,7 @@ const activateFootnoteReferences: InlineTransform = (source, tokens, context) =>
   return result ?? tokens;
 };
 
-export const transformInlineFootnotes: InlineTransform = (source, tokens, context) => activateFootnoteReferences(
+export const rewriteFootnoteTokens: InlineTokenRewrite = (source, tokens, context) => activateFootnoteReferences(
   source,
   splitFootnoteTails(source, tokens, context),
   context,

@@ -20,7 +20,7 @@ import {
   parseAttributes,
 } from "../attributes/syntax.ts";
 import { codeFenceAt } from "../code.ts";
-import type { BlockFeature, BlockStart } from "../../types.ts";
+import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
 import type { Attributes } from "../attributes/types.ts";
 import type { BlockComponent } from "./types.ts";
 

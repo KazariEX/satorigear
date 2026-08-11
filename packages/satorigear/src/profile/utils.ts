@@ -1,6 +1,6 @@
+import { inlineKind } from "../inline/kinds.ts";
 import {
   appendInlineToken,
-  inlineKind,
   inlineTokenEnd,
   inlineTokenFlags,
   inlineTokenStart,

@@ -15,7 +15,7 @@ import {
 } from "../../../mdast.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
-import type { BlockFeature } from "../../types.ts";
+import type { BlockFeature } from "../../../block/profile.ts";
 
 interface FootnoteDefinitionFields {
   definitionKey: string;

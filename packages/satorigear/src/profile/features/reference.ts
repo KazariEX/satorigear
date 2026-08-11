@@ -1,10 +1,10 @@
 import type { Definition } from "mdast";
 import { type BlockLine, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
 import { namedToken, structuralToken } from "../../block/tokens.ts";
+import { inlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
-  inlineKind,
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenFlags,
@@ -18,9 +18,8 @@ import { normalizeAssociationLabel, splitReferenceTail } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockToken } from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/pairing.ts";
+import type { InlineResolutionContext, InlineTokenRewrite } from "../../inline/profile.ts";
 import type {
-  InlineResolutionContext,
-  InlineTransform,
   SyntaxFeature,
 } from "../types.ts";
 
@@ -241,7 +240,7 @@ function linkDefinitionAt(
 }
 
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
-const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
+const reassociateReferenceTails: InlineTokenRewrite = (source, tokens, context) => {
   const count = inlineTokenCount(tokens);
   let result: number[] | undefined;
   for (let index = 0; index < count; index++) {
@@ -456,7 +455,7 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    normalize: reassociateReferenceTails,
+    finalizeTokens: reassociateReferenceTails,
     pairs: markdownBracketPairs,
   },
 };

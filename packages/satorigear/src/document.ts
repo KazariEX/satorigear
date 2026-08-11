@@ -2,8 +2,8 @@ import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
 import { type BlockFragment, type BlockProjectionContext, materialize, projectBlock } from "./mdast.ts";
 import { SyntaxState } from "./syntax-state.ts";
-import type { BlockSyntaxArena } from "./block/syntax.ts";
-import type { InlineSyntaxArena } from "./inline/syntax.ts";
+import type { BlockArena } from "./block/arena.ts";
+import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { TextEdit } from "./source-view.ts";
 
@@ -49,7 +49,7 @@ function changedSpanOf(edits: readonly TextEdit[]): EditResult["changedSpan"] {
 }
 
 export class DocumentImpl implements Document {
-  #blockArena: BlockSyntaxArena;
+  #blockArena: BlockArena;
   #blockScanner: BlockScanner;
   #fragmentsByBlockId?: Map<number, BlockFragment>;
   #fragments: BlockFragment[] = [];
@@ -59,11 +59,11 @@ export class DocumentImpl implements Document {
   constructor(
     source: string,
     profile: SyntaxProfile,
-    blockArena: BlockSyntaxArena,
-    inlineArena: InlineSyntaxArena,
+    blockArena: BlockArena,
+    inlineArena: InlineArena,
   ) {
     this.#profile = profile;
-    this.#blockScanner = new BlockScanner(source, profile);
+    this.#blockScanner = new BlockScanner(source, profile.block);
     blockArena.build(this.#blockScanner.tokens);
     this.#blockArena = blockArena;
     this.#syntaxState = new SyntaxState(

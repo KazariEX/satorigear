@@ -1,5 +1,5 @@
 import { blockRules, blockStarts } from "./block.ts";
-import { inlineRules, inlineTokens, transformInlineCarrier } from "./inline.ts";
+import { inlineRules, inlineTokens, rewriteComponentTokens } from "./inline.ts";
 import type { SyntaxFeature } from "../../types.ts";
 
 export const feature: SyntaxFeature = {
@@ -27,7 +27,7 @@ export const feature: SyntaxFeature = {
       },
     ],
     tokens: inlineTokens,
-    transform: transformInlineCarrier,
+    rewriteTokens: rewriteComponentTokens,
     // Component contents form their own Markdown subtree, so delimiters cannot pair across its boundary.
     pairs: [
       {

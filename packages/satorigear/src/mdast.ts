@@ -15,7 +15,7 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
 } from "./inline/tokens.ts";
-import type { BlockSyntaxView } from "./block/syntax.ts";
+import type { BlockSyntaxView } from "./block/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 import type { SyntaxArena } from "./syntax-protocol.ts";
@@ -23,9 +23,9 @@ import type { SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 
 export interface BlockProjectionContext {
   profile: SyntaxProfile;
-  view: BlockSyntaxView;
   source: string;
   syntaxState: SyntaxState;
+  view: BlockSyntaxView;
 }
 
 interface FragmentValue {
@@ -563,7 +563,7 @@ function blockNode(
 ): FragmentNode<TopLevelContent> {
   const arena = context.view.arena;
   const rule = arena.ruleNameOf(nodeId);
-  const project = context.profile.blockProjects[rule];
+  const project = context.profile.block.projects[rule];
   if (!project) {
     throw new Error(`Unexpected block syntax rule: ${rule}`);
   }
