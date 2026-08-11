@@ -26,7 +26,7 @@ import {
   normalizeComponentName,
 } from "../attributes/syntax.ts";
 import type { InlineRuleProjector } from "../../../mdast.ts";
-import type { SyntaxFeature } from "../../types.ts";
+import type { InlineFeature } from "../../types.ts";
 import type { InlineComponent } from "./types.ts";
 
 interface Candidate {
@@ -430,14 +430,14 @@ const projectInlineSpan: InlineRuleProjector = (
   return true;
 };
 
-export const inlineRules: SyntaxFeature["inlineRules"] = [
+export const inlineRules: InlineFeature["rules"] = [
   { rule: "InlineComponent", project: projectInlineComponent },
   { rule: "LinkComponent", project: projectInlineComponent },
   { rule: "InlineSpan", project: projectInlineSpan },
   { rule: "LinkSpan", project: projectInlineSpan },
 ];
 
-export const inlineTokens: SyntaxFeature["inlineTokens"] = [
+export const inlineTokens: InlineFeature["tokens"] = [
   { token: "InlineComponentOpen", project: projectInlineIgnore },
   { token: "InlineComponentLabelOpen", project: projectInlineIgnore },
   { token: "InlineComponentLabelClose", project: projectInlineIgnore },

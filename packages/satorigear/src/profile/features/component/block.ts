@@ -20,7 +20,7 @@ import {
   parseAttributes,
 } from "../attributes/syntax.ts";
 import { codeFenceAt } from "../code.ts";
-import type { BlockStart, SyntaxFeature } from "../../types.ts";
+import type { BlockFeature, BlockStart } from "../../types.ts";
 import type { Attributes } from "../attributes/types.ts";
 import type { BlockComponent } from "./types.ts";
 
@@ -450,14 +450,14 @@ function createBlockStart(shorthand: boolean): BlockStart {
   };
 }
 
-export const blockRules: SyntaxFeature["blockRules"] = [
+export const blockRules: BlockFeature["rules"] = [
   {
     rule: "BlockComponentLabel",
     syntax: {
       kind: "frame",
       open: "BlockComponentLabelOpen",
       close: "BlockComponentLabelClose",
-      topLevel: false,
+      wrapsBlock: false,
     },
     inlineContent: true,
     project(nodeId, offset, tokenBase, context) {
@@ -470,7 +470,7 @@ export const blockRules: SyntaxFeature["blockRules"] = [
       kind: "frame",
       open: "BlockComponentOpen",
       close: "BlockComponentClose",
-      topLevel: true,
+      wrapsBlock: true,
     },
     project(nodeId, offset, tokenBase, context) {
       const open = blockToken(nodeId, tokenBase, "BlockComponentOpen", context);
@@ -501,7 +501,7 @@ export const blockRules: SyntaxFeature["blockRules"] = [
       kind: "frame",
       open: "BlockComponentSlotOpen",
       close: "BlockComponentSlotClose",
-      topLevel: true,
+      wrapsBlock: true,
     },
     project(nodeId, offset, tokenBase, context) {
       const open = blockToken(nodeId, tokenBase, "BlockComponentSlotOpen", context);
@@ -523,13 +523,13 @@ export const blockRules: SyntaxFeature["blockRules"] = [
   },
 ];
 
-export const blockStarts: SyntaxFeature["blockStarts"] = [
+export const blockStarts: BlockFeature["starts"] = [
   {
     codes: [58],
     interrupt(source, line, contentOffset) {
       return (
         blockOpeningAt(source, line, contentOffset, false) !== void 0 ||
-          blockOpeningAt(source, line, contentOffset, true) !== void 0
+        blockOpeningAt(source, line, contentOffset, true) !== void 0
       );
     },
     start: createBlockStart(false),

@@ -178,48 +178,52 @@ function copyRange(target: number[], tokens: InlineTokenStream, start: number, e
 }
 
 export const feature: SyntaxFeature = {
-  blockDecorators: [
-    { rule: "Paragraph", decorate: decorateInlineContainer },
-    { rule: "AtxHeading", decorate: decorateInlineContainer },
-    { rule: "SetextHeading", decorate: decorateInlineContainer },
-    { rule: "UnorderedList", decorate: decorateList },
-    { rule: "OrderedList", decorate: decorateList },
-    { rule: "BlockQuote", decorate: decorateBlockquote },
-  ],
-  inlineTokens: [
-    {
-      token: "Attributes",
-      project(tokenIndex, sourceSpan, accumulator) {
-        const previous = accumulator.target.at(-1) as (PhrasingContent & { attributes?: Attributes }) | undefined;
-        const parsed = parseAttributes(accumulator.context.view.text, inlineTokenStart(accumulator.context.tokens, tokenIndex));
-        if (!previous || !parsed) {
-          return false;
-        }
-        const flags = inlineTokenFlags(accumulator.context.tokens, tokenIndex);
-        const terminal = Boolean(flags & terminalFlag);
-        const detached = Boolean(flags & detachedFlag);
-        if (
-          terminal && (
-            detached ||
-            previous.type === "text" ||
-            hasTerminalAttributes(accumulator.target)
-          )
-        ) {
-          carryTerminalAttributes(accumulator.target, parsed.attributes);
+  block: {
+    decorators: [
+      { rule: "Paragraph", decorate: decorateInlineContainer },
+      { rule: "AtxHeading", decorate: decorateInlineContainer },
+      { rule: "SetextHeading", decorate: decorateInlineContainer },
+      { rule: "UnorderedList", decorate: decorateList },
+      { rule: "OrderedList", decorate: decorateList },
+      { rule: "BlockQuote", decorate: decorateBlockquote },
+    ],
+  },
+  inline: {
+    tokens: [
+      {
+        token: "Attributes",
+        project(tokenIndex, sourceSpan, accumulator) {
+          const previous = accumulator.target.at(-1) as (PhrasingContent & { attributes?: Attributes }) | undefined;
+          const parsed = parseAttributes(accumulator.context.view.text, inlineTokenStart(accumulator.context.tokens, tokenIndex));
+          if (!previous || !parsed) {
+            return false;
+          }
+          const flags = inlineTokenFlags(accumulator.context.tokens, tokenIndex);
+          const terminal = Boolean(flags & terminalFlag);
+          const detached = Boolean(flags & detachedFlag);
+          if (
+            terminal && (
+              detached ||
+              previous.type === "text" ||
+              hasTerminalAttributes(accumulator.target)
+            )
+          ) {
+            carryTerminalAttributes(accumulator.target, parsed.attributes);
+            return true;
+          }
+          if (previous.attributes) {
+            mergeAttributes(previous.attributes, parsed.attributes);
+          }
+          else {
+            previous.attributes = parsed.attributes;
+          }
+          extendSpan(previous, sourceSpan.end);
           return true;
-        }
-        if (previous.attributes) {
-          mergeAttributes(previous.attributes, parsed.attributes);
-        }
-        else {
-          previous.attributes = parsed.attributes;
-        }
-        extendSpan(previous, sourceSpan.end);
-        return true;
+        },
       },
-    },
-  ],
-  inlineTransform: transformInlineAttributes,
+    ],
+    transform: transformInlineAttributes,
+  },
 };
 
 function transformInlineAttributes(source: string, tokens: InlineTokenStream): InlineTokenStream {

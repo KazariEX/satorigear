@@ -16,9 +16,9 @@ import { normalizeAssociationLabel, splitReferenceTail } from "../../utils.ts";
 import { semanticText } from "../text.ts";
 import { footnoteLabelAt } from "./shared.ts";
 import type {
+  InlineFeature,
   InlineResolutionContext,
   InlineTransform,
-  SyntaxFeature,
 } from "../../types.ts";
 
 const bracketOpenKind = inlineKind("BracketOpen");
@@ -147,7 +147,7 @@ export const transformInlineFootnotes: InlineTransform = (source, tokens, contex
   context,
 );
 
-export const inlineTokens: SyntaxFeature["inlineTokens"] = [
+export const inlineTokens: InlineFeature["tokens"] = [
   {
     token: "FootnoteReference",
     project(tokenIndex, sourceSpan, accumulator) {

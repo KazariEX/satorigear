@@ -21,14 +21,26 @@ export type BlockStart = (
   context: BlockScanContext,
 ) => number | undefined;
 
+export type BlockFallback = (
+  source: string,
+  lines: readonly BlockLine[],
+  start: number,
+  tokens: BlockToken[],
+  context: BlockScanContext,
+) => number | undefined;
+
 export type BlockInterrupt = (
   source: string,
   line: BlockLine,
   contentOffset: number,
 ) => boolean;
 
+export type LazyContinuationUnwrapper = (source: string, line: BlockLine) => BlockLine | undefined;
+
 export interface BlockStartRegistration {
   codes: readonly number[];
+  // A container owns the inverse view needed to test its lazy paragraph continuation.
+  unwrapLazyContinuation?: LazyContinuationUnwrapper;
   interrupt?: BlockInterrupt;
   start: BlockStart;
 }
@@ -38,7 +50,7 @@ export type BlockSyntaxRegistration =
     kind: "frame";
     close: string;
     open: string | readonly string[];
-    topLevel: boolean;
+    wrapsBlock: boolean;
   }
   | {
     kind: "group";
@@ -50,21 +62,19 @@ export type BlockSyntaxRegistration =
   };
 
 export interface BlockRuleRegistration {
-  definitionKey?: (token: BlockToken) => string;
-  inlineContent?: true;
-  project?: BlockProjector;
   rule: string;
-  syntax?: BlockSyntaxRegistration;
+  syntax: BlockSyntaxRegistration;
+  project?: BlockProjector;
+  inlineContent?: true;
+  definitionKey?: (token: BlockToken) => string;
 }
 
 export type BlockProjectorDecorator = (project: BlockProjector) => BlockProjector;
 
 export interface BlockDecoratorRegistration {
-  decorate: BlockProjectorDecorator;
   rule: string;
+  decorate: BlockProjectorDecorator;
 }
-
-export type BlockLineUnwrapper = (source: string, line: BlockLine) => BlockLine | undefined;
 
 export type BlockRestart = (
   source: string,
@@ -78,13 +88,13 @@ export interface InlineResolutionContext {
 }
 
 export interface InlineTokenRegistration {
-  project: InlineLeafProjector;
   token: string;
+  project: InlineLeafProjector;
 }
 
 export interface InlineRuleRegistration {
-  project: InlineRuleProjector;
   rule: string;
+  project: InlineRuleProjector;
 }
 
 export type InlineTransform = (
@@ -93,36 +103,40 @@ export type InlineTransform = (
   context: InlineResolutionContext,
 ) => InlineTokenStream;
 
-export interface SyntaxFeature {
-  blockDecorators?: readonly BlockDecoratorRegistration[];
-  blockFallbacks?: readonly BlockStart[];
-  blockRestart?: BlockRestart;
-  blockRules?: readonly BlockRuleRegistration[];
-  blockStarts?: readonly BlockStartRegistration[];
-  blockUnwrappers?: readonly BlockLineUnwrapper[];
-  delimiters?: readonly DelimiterConfig[];
-  // Carrier transforms run before normalizers; both precede generic token pairing.
-  inlineTransform?: InlineTransform;
-  inlineNormalize?: InlineTransform;
-  inlineRules?: readonly InlineRuleRegistration[];
-  inlineStructures?: readonly InlineStructureRegistration[];
-  inlineTokens?: readonly InlineTokenRegistration[];
-  tokenPairs?: readonly PairedTokenConfig<InlineResolutionContext>[];
+export interface BlockFeature {
+  decorators?: readonly BlockDecoratorRegistration[];
+  fallbacks?: readonly BlockFallback[];
+  restart?: BlockRestart;
+  rules?: readonly BlockRuleRegistration[];
+  starts?: readonly BlockStartRegistration[];
 }
 
-export type BlockInterruptDispatch = BlockInterrupt | readonly BlockInterrupt[];
-export type BlockStartDispatch = BlockStart | readonly BlockStart[];
+export interface InlineFeature {
+  delimiters?: readonly DelimiterConfig[];
+  // Carrier transforms run before normalizers; both precede generic token pairing.
+  transform?: InlineTransform;
+  normalize?: InlineTransform;
+  rules?: readonly InlineRuleRegistration[];
+  structures?: readonly InlineStructureRegistration[];
+  tokens?: readonly InlineTokenRegistration[];
+  pairs?: readonly PairedTokenConfig<InlineResolutionContext>[];
+}
+
+export interface SyntaxFeature {
+  block?: BlockFeature;
+  inline?: InlineFeature;
+}
 
 export interface SyntaxProfile {
-  blockFallbacks: readonly BlockStart[];
+  blockFallbacks: readonly BlockFallback[];
   blockInlineContents: Readonly<Record<string, true>>;
-  blockInterrupts: readonly (BlockInterruptDispatch | undefined)[];
+  blockInterrupts: readonly (readonly BlockInterrupt[] | undefined)[];
   blockProjects: Readonly<Record<string, BlockProjector>>;
   blockDefinitionKeys: Readonly<Record<string, (token: BlockToken) => string>>;
   blockRestart: BlockRestart;
-  blockStarts: readonly (BlockStartDispatch | undefined)[];
+  blockStarts: readonly (readonly BlockStart[] | undefined)[];
   blockSyntax: BlockSyntaxSchema;
-  blockUnwrappers: readonly BlockLineUnwrapper[];
+  lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
   decodeText: (value: string) => string;
   inlineRuleProjects: Readonly<Record<string, InlineRuleProjector>>;
   inlineSyntax: InlineSyntaxSchema;

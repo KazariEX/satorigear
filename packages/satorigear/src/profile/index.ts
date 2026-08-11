@@ -1,8 +1,4 @@
-import {
-  createPairingResolver,
-  type DelimiterConfig,
-  type PairedTokenConfig,
-} from "../inline/pairing.ts";
+import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "../inline/pairing.ts";
 import { compileInlineSyntax, type InlineStructureRegistration } from "../inline/syntax.ts";
 import { inlineKind } from "../inline/tokens.ts";
 import { feature as featureAttributes } from "./features/attributes/index.ts";
@@ -28,13 +24,13 @@ import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from ".
 import type { MathOptions } from "./features/math/types.ts";
 import type {
   BlockDecoratorRegistration,
-  BlockInterruptDispatch,
-  BlockLineUnwrapper,
+  BlockFallback,
+  BlockInterrupt,
   BlockRestart,
   BlockStart,
-  BlockStartDispatch,
   InlineResolutionContext,
   InlineTransform,
+  LazyContinuationUnwrapper,
   SyntaxProfile,
 } from "./types.ts";
 
@@ -112,17 +108,17 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   }
 
   const blockDecorators: BlockDecoratorRegistration[] = [];
-  const blockFallbacks: BlockStart[] = [];
+  const blockFallbacks: BlockFallback[] = [];
   const blockInlineContents: Record<string, true> = Object.create(null);
   const blockFrameByOpen: Record<string, BlockSyntaxFrame> = Object.create(null);
   const blockGroupedRuleByToken: Record<string, string> = Object.create(null);
-  const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
+  const blockInterrupts: BlockInterrupt[][] = [];
   const blockRuleByLeaf: Record<string, string> = Object.create(null);
   const blockProjects: Record<string, BlockProjector> = Object.create(null);
   const blockDefinitionKeys: Record<string, (token: BlockToken) => string> = Object.create(null);
   const blockRestarts: BlockRestart[] = [];
-  const blockStarts: (BlockStartDispatch | undefined)[] = [];
-  const blockUnwrappers: BlockLineUnwrapper[] = [];
+  const blockStarts: BlockStart[][] = [];
+  const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
   const delimiters: DelimiterConfig[] = [];
   const inlineNormalizes: InlineTransform[] = [];
   const inlineRuleProjects: Record<string, InlineRuleProjector> = Object.create(null);
@@ -132,54 +128,48 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   const inlineTransforms: InlineTransform[] = [];
   const tokenPairs: PairedTokenConfig<InlineResolutionContext>[] = [];
   for (const feature of features) {
-    if (feature.blockDecorators) {
-      blockDecorators.push(...feature.blockDecorators);
+    const block = feature.block;
+    if (block?.decorators) {
+      blockDecorators.push(...block.decorators);
     }
-    if (feature.blockFallbacks) {
-      blockFallbacks.push(...feature.blockFallbacks);
+    if (block?.fallbacks) {
+      blockFallbacks.push(...block.fallbacks);
     }
-    if (feature.blockRestart) {
-      blockRestarts.push(feature.blockRestart);
+    if (block?.restart) {
+      blockRestarts.push(block.restart);
     }
-    if (feature.blockStarts) {
-      for (const registration of feature.blockStarts) {
+    if (block?.starts) {
+      for (const registration of block.starts) {
+        if (registration.unwrapLazyContinuation) {
+          lazyContinuationUnwrappers.push(registration.unwrapLazyContinuation);
+        }
         for (const code of registration.codes) {
-          const starts = blockStarts[code];
-          blockStarts[code] = starts === void 0
-            ? registration.start
-            : typeof starts === "function"
-              ? [starts, registration.start]
-              : [...starts, registration.start];
+          (blockStarts[code] ??= []).push(registration.start);
           if (registration.interrupt) {
-            const interrupts = blockInterrupts[code];
-            blockInterrupts[code] = interrupts === void 0
-              ? registration.interrupt
-              : typeof interrupts === "function"
-                ? [interrupts, registration.interrupt]
-                : [...interrupts, registration.interrupt];
+            (blockInterrupts[code] ??= []).push(registration.interrupt);
           }
         }
       }
     }
-    if (feature.blockRules) {
-      for (const registration of feature.blockRules) {
+    if (block?.rules) {
+      for (const registration of block.rules) {
         const syntax = registration.syntax;
-        if (syntax?.kind === "frame") {
+        if (syntax.kind === "frame") {
           const opens = typeof syntax.open === "string" ? [syntax.open] : syntax.open;
           for (const open of opens) {
             blockFrameByOpen[open] = {
               close: syntax.close,
               rule: registration.rule,
-              wrapsBlock: syntax.topLevel,
+              wrapsBlock: syntax.wrapsBlock,
             };
           }
         }
-        else if (syntax?.kind === "group") {
+        else if (syntax.kind === "group") {
           for (const token of syntax.tokens) {
             blockGroupedRuleByToken[token] = registration.rule;
           }
         }
-        else if (syntax?.kind === "leaf") {
+        else {
           blockRuleByLeaf[syntax.token] = registration.rule;
         }
         if (registration.project) {
@@ -193,35 +183,33 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
         }
       }
     }
-    if (feature.blockUnwrappers) {
-      blockUnwrappers.push(...feature.blockUnwrappers);
+    const inline = feature.inline;
+    if (inline?.delimiters) {
+      delimiters.push(...inline.delimiters);
     }
-    if (feature.delimiters) {
-      delimiters.push(...feature.delimiters);
+    if (inline?.normalize) {
+      inlineNormalizes.push(inline.normalize);
     }
-    if (feature.inlineNormalize) {
-      inlineNormalizes.push(feature.inlineNormalize);
-    }
-    if (feature.inlineRules) {
-      for (const registration of feature.inlineRules) {
+    if (inline?.rules) {
+      for (const registration of inline.rules) {
         inlineRuleProjects[registration.rule] = registration.project;
       }
     }
-    if (feature.inlineStructures) {
-      inlineStructures.push(...feature.inlineStructures);
+    if (inline?.structures) {
+      inlineStructures.push(...inline.structures);
     }
-    if (feature.inlineTokens) {
-      for (const registration of feature.inlineTokens) {
+    if (inline?.tokens) {
+      for (const registration of inline.tokens) {
         const kind = inlineKind(registration.token);
         inlineTokenNames[kind] = registration.token;
         inlineTokenProjects[kind] = registration.project;
       }
     }
-    if (feature.inlineTransform) {
-      inlineTransforms.push(feature.inlineTransform);
+    if (inline?.transform) {
+      inlineTransforms.push(inline.transform);
     }
-    if (feature.tokenPairs) {
-      tokenPairs.push(...feature.tokenPairs);
+    if (inline?.pairs) {
+      tokenPairs.push(...inline.pairs);
     }
   }
 
@@ -270,7 +258,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     },
     blockStarts,
     blockSyntax,
-    blockUnwrappers,
+    lazyContinuationUnwrappers,
     decodeText: semanticText,
     inlineRuleProjects,
     inlineSyntax: compileInlineSyntax(inlineStructures, inlineTokenNames),

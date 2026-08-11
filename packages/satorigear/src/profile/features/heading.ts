@@ -56,74 +56,76 @@ export function setextMarkerAt(source: string, line: BlockLine): "=" | "-" | und
 }
 
 export const feature: SyntaxFeature = {
-  blockRules: [
-    {
-      rule: "AtxHeading",
-      syntax: {
-        kind: "frame",
-        open: "AtxHeadingOpen",
-        close: "HeadingClose",
-        topLevel: true,
+  block: {
+    rules: [
+      {
+        rule: "AtxHeading",
+        syntax: {
+          kind: "frame",
+          open: "AtxHeadingOpen",
+          close: "HeadingClose",
+          wrapsBlock: true,
+        },
+        inlineContent: true,
+        project(nodeId, offset, tokenBase, context) {
+          const marker = blockToken(nodeId, tokenBase, "AtxHeadingOpen", context);
+          return withSpan<Heading>({
+            type: "heading",
+            depth: tokenEnd(marker) - tokenStart(marker) as Heading["depth"],
+            children: inlineChildren(nodeId, context, true),
+          }, tokenStart(marker), blockEnd(nodeId, offset, context));
+        },
       },
-      inlineContent: true,
-      project(nodeId, offset, tokenBase, context) {
-        const marker = blockToken(nodeId, tokenBase, "AtxHeadingOpen", context);
-        return withSpan<Heading>({
-          type: "heading",
-          depth: tokenEnd(marker) - tokenStart(marker) as Heading["depth"],
-          children: inlineChildren(nodeId, context, true),
-        }, tokenStart(marker), blockEnd(nodeId, offset, context));
+      {
+        rule: "SetextHeading",
+        syntax: {
+          kind: "frame",
+          open: [
+            "SetextHeading1Open",
+            "SetextHeading2Open",
+          ],
+          close: "HeadingClose",
+          wrapsBlock: true,
+        },
+        inlineContent: true,
+        project(nodeId, offset, tokenBase, context) {
+          const levelOne = directBlockToken(nodeId, tokenBase, "SetextHeading1Open", context);
+          if (!levelOne) {
+            blockToken(nodeId, tokenBase, "SetextHeading2Open", context);
+          }
+          const result: Heading = {
+            type: "heading",
+            depth: levelOne ? 1 : 2,
+            children: inlineChildren(nodeId, context),
+          };
+          return withSpan(
+            result,
+            firstChildStart(result),
+            tokenStart(blockToken(nodeId, tokenBase, "HeadingClose", context)),
+          );
+        },
       },
-    },
-    {
-      rule: "SetextHeading",
-      syntax: {
-        kind: "frame",
-        open: [
-          "SetextHeading1Open",
-          "SetextHeading2Open",
-        ],
-        close: "HeadingClose",
-        topLevel: true,
+    ],
+    starts: [
+      {
+        codes: [35],
+        interrupt(source, line) {
+          return !!atxAt(source, line);
+        },
+        start(source, lines, start, out) {
+          const line = lines[start];
+          const atx = atxAt(source, line);
+          if (!atx) {
+            return;
+          }
+          out.push(structuralToken("AtxHeadingOpen", atx.markerOffset, atx.marker));
+          if (atx.contentEnd > atx.contentOffset) {
+            out.push(namedToken("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
+          }
+          out.push(structuralToken("HeadingClose", line.end));
+          return start + 1;
+        },
       },
-      inlineContent: true,
-      project(nodeId, offset, tokenBase, context) {
-        const levelOne = directBlockToken(nodeId, tokenBase, "SetextHeading1Open", context);
-        if (!levelOne) {
-          blockToken(nodeId, tokenBase, "SetextHeading2Open", context);
-        }
-        const result: Heading = {
-          type: "heading",
-          depth: levelOne ? 1 : 2,
-          children: inlineChildren(nodeId, context),
-        };
-        return withSpan(
-          result,
-          firstChildStart(result),
-          tokenStart(blockToken(nodeId, tokenBase, "HeadingClose", context)),
-        );
-      },
-    },
-  ],
-  blockStarts: [
-    {
-      codes: [35],
-      interrupt(source, line) {
-        return !!atxAt(source, line);
-      },
-      start(source, lines, start, out) {
-        const line = lines[start];
-        const atx = atxAt(source, line);
-        if (!atx) {
-          return;
-        }
-        out.push(structuralToken("AtxHeadingOpen", atx.markerOffset, atx.marker));
-        if (atx.contentEnd > atx.contentOffset) {
-          out.push(namedToken("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
-        }
-        out.push(structuralToken("HeadingClose", line.end));
-        return start + 1;
-      },
-    },
-  ],
+    ],
+  },
 };

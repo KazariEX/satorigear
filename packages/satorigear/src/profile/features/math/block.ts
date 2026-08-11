@@ -14,7 +14,7 @@ import {
   withSpan,
 } from "../../../mdast.ts";
 import { semanticText } from "../text.ts";
-import type { SyntaxFeature } from "../../types.ts";
+import type { BlockFeature } from "../../types.ts";
 import type { Math } from "./types.ts";
 
 const mathFenceRule: FenceRule = {
@@ -36,7 +36,7 @@ function mathBlock(value: string): { closed: boolean; node: Math } {
   };
 }
 
-export const blockRules: SyntaxFeature["blockRules"] = [
+export const blockRules: BlockFeature["rules"] = [
   {
     rule: "MathBlock",
     syntax: {
@@ -55,7 +55,7 @@ export const blockRules: SyntaxFeature["blockRules"] = [
   },
 ];
 
-export const blockStarts: SyntaxFeature["blockStarts"] = [
+export const blockStarts: BlockFeature["starts"] = [
   {
     codes: [36],
     interrupt(source, line) {

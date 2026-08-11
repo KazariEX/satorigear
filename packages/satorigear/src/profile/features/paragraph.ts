@@ -25,51 +25,53 @@ function emitParagraph(source: string, lines: readonly BlockLine[], out: BlockTo
 }
 
 export const feature: SyntaxFeature = {
-  blockFallbacks: [
-    (source, lines, start, out, contentOffset, context) => {
-      const paragraph: BlockLine[] = [];
-      let index = start;
-      while (index < lines.length) {
-        const line = lines[index];
-        if (isBlank(source, line)) {
-          break;
-        }
-        if (line.lazy) {
+  block: {
+    fallbacks: [
+      (source, lines, start, out, context) => {
+        const paragraph: BlockLine[] = [];
+        let index = start;
+        while (index < lines.length) {
+          const line = lines[index];
+          if (isBlank(source, line)) {
+            break;
+          }
+          if (line.lazy) {
+            paragraph.push(line);
+            index++;
+            continue;
+          }
+          const setext = setextMarkerAt(source, line);
+          if (paragraph.length > 0 && setext) {
+            out.push(structuralToken(setext === "=" ? "SetextHeading1Open" : "SetextHeading2Open", paragraph[0].start));
+            emitInlineChunks(source, paragraph, out);
+            out.push(structuralToken("HeadingClose", line.end));
+            return index + 1;
+          }
+          if (paragraph.length > 0 && context.startsInterruptingBlock(source, line)) {
+            break;
+          }
           paragraph.push(line);
           index++;
-          continue;
         }
-        const setext = setextMarkerAt(source, line);
-        if (paragraph.length > 0 && setext) {
-          out.push(structuralToken(setext === "=" ? "SetextHeading1Open" : "SetextHeading2Open", paragraph[0].start));
-          emitInlineChunks(source, paragraph, out);
-          out.push(structuralToken("HeadingClose", line.end));
-          return index + 1;
-        }
-        if (paragraph.length > 0 && context.startsInterruptingBlock(source, line)) {
-          break;
-        }
-        paragraph.push(line);
-        index++;
-      }
-      emitParagraph(source, paragraph, out);
-      return index;
-    },
-  ],
-  blockRules: [
-    {
-      rule: "Paragraph",
-      syntax: {
-        kind: "frame",
-        open: "ParagraphOpen",
-        close: "ParagraphClose",
-        topLevel: true,
+        emitParagraph(source, paragraph, out);
+        return index;
       },
-      inlineContent: true,
-      project(nodeId, offset, tokenBase, context) {
-        const result: Paragraph = { type: "paragraph", children: inlineChildren(nodeId, context) };
-        return withSpan(result, firstChildStart(result), blockEnd(nodeId, offset, context));
+    ],
+    rules: [
+      {
+        rule: "Paragraph",
+        syntax: {
+          kind: "frame",
+          open: "ParagraphOpen",
+          close: "ParagraphClose",
+          wrapsBlock: true,
+        },
+        inlineContent: true,
+        project(nodeId, offset, tokenBase, context) {
+          const result: Paragraph = { type: "paragraph", children: inlineChildren(nodeId, context) };
+          return withSpan(result, firstChildStart(result), blockEnd(nodeId, offset, context));
+        },
       },
-    },
-  ],
+    ],
+  },
 };

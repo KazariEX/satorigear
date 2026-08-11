@@ -46,9 +46,6 @@ function profileStarts(
   if (!starts) {
     return;
   }
-  if (typeof starts === "function") {
-    return starts(source, lines, start, out, indent.offset, context);
-  }
   for (const resolve of starts) {
     const end = resolve(source, lines, start, out, indent.offset, context);
     if (end !== void 0) {
@@ -65,9 +62,6 @@ function startsInterruptingBlock(profile: SyntaxProfile, source: string, line: B
   const interrupts = profile.blockInterrupts[source.charCodeAt(indent.offset)];
   if (!interrupts) {
     return false;
-  }
-  if (typeof interrupts === "function") {
-    return interrupts(source, line, indent.offset);
   }
   for (const interrupt of interrupts) {
     if (interrupt(source, line, indent.offset)) {
@@ -92,9 +86,9 @@ function endsWithParagraphLeaf(
   line: BlockLine,
 ): boolean {
   let contentLine = line;
-  for (;;) {
+  while (true) {
     let unwrapped: BlockLine | undefined;
-    for (const unwrap of profile.blockUnwrappers) {
+    for (const unwrap of profile.lazyContinuationUnwrappers) {
       unwrapped = unwrap(source, contentLine);
       if (unwrapped) {
         break;
@@ -121,7 +115,7 @@ function resolveBlock(
     return matchedEnd;
   }
   for (const fallback of profile.blockFallbacks) {
-    const fallbackEnd = fallback(source, lines, start, out, lines[start].start, context);
+    const fallbackEnd = fallback(source, lines, start, out, context);
     if (fallbackEnd !== void 0) {
       return fallbackEnd;
     }

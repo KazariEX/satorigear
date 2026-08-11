@@ -15,7 +15,7 @@ import {
 } from "../../../mdast.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
-import type { SyntaxFeature } from "../../types.ts";
+import type { BlockFeature } from "../../types.ts";
 
 interface FootnoteDefinitionFields {
   definitionKey: string;
@@ -82,14 +82,14 @@ function firstContentLine(line: BlockLine, match: FootnoteDefinitionMatch): Bloc
   return { ...line, start: match.contentOffset, prefixColumns: 0 };
 }
 
-export const blockRules: SyntaxFeature["blockRules"] = [
+export const blockRules: BlockFeature["rules"] = [
   {
     rule: "FootnoteDefinition",
     syntax: {
       kind: "frame",
       open: "FootnoteDefinitionOpen",
       close: "FootnoteDefinitionClose",
-      topLevel: true,
+      wrapsBlock: true,
     },
     project(nodeId, offset, tokenBase, context) {
       const token = blockToken(nodeId, tokenBase, "FootnoteDefinitionOpen", context);
@@ -107,9 +107,13 @@ export const blockRules: SyntaxFeature["blockRules"] = [
   },
 ];
 
-export const blockStarts: SyntaxFeature["blockStarts"] = [
+export const blockStarts: BlockFeature["starts"] = [
   {
     codes: [91],
+    unwrapLazyContinuation(source, line) {
+      const match = definitionAt(source, line);
+      return match ? firstContentLine(line, match) : void 0;
+    },
     interrupt(source, line) {
       return definitionAt(source, line) !== void 0;
     },
@@ -153,12 +157,5 @@ export const blockStarts: SyntaxFeature["blockStarts"] = [
       out.push(structuralToken("FootnoteDefinitionClose", end));
       return index;
     },
-  },
-];
-
-export const blockUnwrappers: SyntaxFeature["blockUnwrappers"] = [
-  (source: string, line: BlockLine): BlockLine | undefined => {
-    const match = definitionAt(source, line);
-    return match ? firstContentLine(line, match) : void 0;
   },
 ];

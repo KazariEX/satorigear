@@ -232,116 +232,120 @@ function tableAlignment(
 }
 
 export const feature: SyntaxFeature = {
-  blockFallbacks: [
-    (source, lines, start, out, contentOffset, context) => {
-      const delimiterLine = lines[start + 1];
-      if (!delimiterLine || context.startsInterruptingBlock(source, delimiterLine)) {
-        return;
-      }
-      const delimiter = delimiterAt(source, delimiterLine);
-      const header = delimiter ? tableCellsAt(source, lines[start], true) : void 0;
-      if (!header || !delimiter || header.length !== delimiter.cells.length) {
-        return;
-      }
+  block: {
+    fallbacks: [
+      (source, lines, start, out, context) => {
+        const delimiterLine = lines[start + 1];
+        if (!delimiterLine || context.startsInterruptingBlock(source, delimiterLine)) {
+          return;
+        }
+        const delimiter = delimiterAt(source, delimiterLine);
+        const header = delimiter ? tableCellsAt(source, lines[start], true) : void 0;
+        if (!header || !delimiter || header.length !== delimiter.cells.length) {
+          return;
+        }
 
-      out.push(structuralToken("TableOpen", header[0].start));
-      emitTableRow(source, lines[start], header, out);
-      for (let index = 0; index < delimiter.cells.length; index++) {
-        const cell = delimiter.cells[index];
-        out.push(namedToken(
-          delimiter.tokens[index],
-          source.slice(cell.start, cell.end),
-          cell.start,
-        ));
-      }
+        out.push(structuralToken("TableOpen", header[0].start));
+        emitTableRow(source, lines[start], header, out);
+        for (let index = 0; index < delimiter.cells.length; index++) {
+          const cell = delimiter.cells[index];
+          out.push(namedToken(
+            delimiter.tokens[index],
+            source.slice(cell.start, cell.end),
+            cell.start,
+          ));
+        }
 
-      let end = start + 2;
-      while (end < lines.length) {
-        const line = lines[end];
-        if (isBlank(source, line) || !lineIndent(source, line) || context.startsInterruptingBlock(source, line)) {
-          break;
+        let end = start + 2;
+        while (end < lines.length) {
+          const line = lines[end];
+          if (isBlank(source, line) || !lineIndent(source, line) || context.startsInterruptingBlock(source, line)) {
+            break;
+          }
+          const cells = tableCellsAt(source, line, false);
+          if (!cells) {
+            break;
+          }
+          emitTableRow(source, line, cells, out);
+          end++;
         }
-        const cells = tableCellsAt(source, line, false);
-        if (!cells) {
-          break;
-        }
-        emitTableRow(source, line, cells, out);
-        end++;
-      }
-      out.push(structuralToken("TableClose", lines[end - 1].end));
-      return end;
-    },
-  ],
-  blockRules: [
-    {
-      rule: "TableCell",
-      syntax: {
-        kind: "frame",
-        open: "TableCellOpen",
-        close: "TableCellClose",
-        topLevel: false,
+        out.push(structuralToken("TableClose", lines[end - 1].end));
+        return end;
       },
-      inlineContent: true,
-    },
-    {
-      rule: "TableRow",
-      syntax: {
-        kind: "frame",
-        open: "TableRowOpen",
-        close: "TableRowClose",
-        topLevel: false,
+    ],
+    rules: [
+      {
+        rule: "TableCell",
+        syntax: {
+          kind: "frame",
+          open: "TableCellOpen",
+          close: "TableCellClose",
+          wrapsBlock: false,
+        },
+        inlineContent: true,
       },
-    },
-    {
-      rule: "TableDelimiter",
-      syntax: {
-        kind: "group",
-        tokens: [
-          "TableAlignNone",
-          "TableAlignLeft",
-          "TableAlignRight",
-          "TableAlignCenter",
-        ],
+      {
+        rule: "TableRow",
+        syntax: {
+          kind: "frame",
+          open: "TableRowOpen",
+          close: "TableRowClose",
+          wrapsBlock: false,
+        },
       },
-    },
-    {
-      rule: "Table",
-      syntax: {
-        kind: "frame",
-        open: "TableOpen",
-        close: "TableClose",
-        topLevel: true,
+      {
+        rule: "TableDelimiter",
+        syntax: {
+          kind: "group",
+          tokens: [
+            "TableAlignNone",
+            "TableAlignLeft",
+            "TableAlignRight",
+            "TableAlignCenter",
+          ],
+        },
       },
-      project(nodeId, offset, tokenBase, context) {
-        const open = blockToken(nodeId, tokenBase, "TableOpen", context);
-        const close = blockToken(nodeId, tokenBase, "TableClose", context);
-        const rows = childRules(nodeId, offset, tokenBase, "TableRow", context).map((row) => (
-          projectRow(row.id, row.offset, row.tokenBase, context)
-        ));
-        const delimiter = childRules(nodeId, offset, tokenBase, "TableDelimiter", context)[0];
-        if (!delimiter) {
-          throw new Error("Table syntax does not contain a delimiter");
-        }
-        return withSpan<Table>({
-          type: "table",
-          align: tableAlignment(delimiter.id, delimiter.tokenBase, context),
-          children: rows,
-        }, tokenStart(open), tokenStart(close));
+      {
+        rule: "Table",
+        syntax: {
+          kind: "frame",
+          open: "TableOpen",
+          close: "TableClose",
+          wrapsBlock: true,
+        },
+        project(nodeId, offset, tokenBase, context) {
+          const open = blockToken(nodeId, tokenBase, "TableOpen", context);
+          const close = blockToken(nodeId, tokenBase, "TableClose", context);
+          const rows = childRules(nodeId, offset, tokenBase, "TableRow", context).map((row) => (
+            projectRow(row.id, row.offset, row.tokenBase, context)
+          ));
+          const delimiter = childRules(nodeId, offset, tokenBase, "TableDelimiter", context)[0];
+          if (!delimiter) {
+            throw new Error("Table syntax does not contain a delimiter");
+          }
+          return withSpan<Table>({
+            type: "table",
+            align: tableAlignment(delimiter.id, delimiter.tokenBase, context),
+            children: rows,
+          }, tokenStart(open), tokenStart(close));
+        },
       },
-    },
-  ],
-  inlineTokens: [
-    {
-      token: "CodeSpan",
-      project(tokenIndex, sourceSpan, accumulator) {
+    ],
+  },
+  inline: {
+    tokens: [
+      {
+        token: "CodeSpan",
+        project(tokenIndex, sourceSpan, accumulator) {
         // GFM removes a pipe escape inside table code spans, while CommonMark code spans preserve it.
-        return projectCodeSpan(
-          tokenIndex,
-          sourceSpan,
-          accumulator,
-          accumulator.context.blockRule === "TableCell",
-        );
+          return projectCodeSpan(
+            tokenIndex,
+            sourceSpan,
+            accumulator,
+            accumulator.context.blockRule === "TableCell",
+          );
+        },
       },
-    },
-  ],
+    ],
+  },
 };

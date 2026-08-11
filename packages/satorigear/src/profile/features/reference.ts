@@ -69,7 +69,7 @@ function linkDefinitionAt(
   let labelHasContent = false;
   let labelStart = offset;
 
-  for (;;) {
+  while (true) {
     const line = lines[lineIndex];
     if (!line || offset >= line.end) {
       if (!line || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
@@ -380,78 +380,82 @@ const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionContext>[
 ];
 
 export const feature: SyntaxFeature = {
-  blockRestart(source, lines, changedStart, changedEnd) {
-    let low = 0;
-    let high = lines.length;
-    const offset = Math.max(0, changedEnd - 1);
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (lines[middle].start <= offset) {
-        low = middle + 1;
+  block: {
+    restart(source, lines, changedStart, changedEnd) {
+      let low = 0;
+      let high = lines.length;
+      const offset = Math.max(0, changedEnd - 1);
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if (lines[middle].start <= offset) {
+          low = middle + 1;
+        }
+        else {
+          high = middle;
+        }
       }
-      else {
-        high = middle;
-      }
-    }
 
-    let candidate: number | undefined;
-    for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
-      const line = lines[index];
-      if (isBlank(source, line)) {
-        break;
+      let candidate: number | undefined;
+      for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
+        const line = lines[index];
+        if (isBlank(source, line)) {
+          break;
+        }
+        const indent = indentOf(source, line, 3);
+        if (source[indent.offset] === "[") {
+          candidate = line.start;
+        }
       }
-      const indent = indentOf(source, line, 3);
-      if (source[indent.offset] === "[") {
-        candidate = line.start;
-      }
-    }
-    return candidate;
+      return candidate;
+    },
+    rules: [
+      {
+        rule: "LinkDefinition",
+        syntax: {
+          kind: "frame",
+          open: "LinkDefinitionOpen",
+          close: "LinkDefinitionClose",
+          wrapsBlock: true,
+        },
+        project(nodeId, offset, tokenBase, context) {
+          const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
+          const fields = linkDefinitionFields(token);
+          return withSpan<Definition>({
+            type: "definition",
+            identifier: fields.definitionKey.toLowerCase(),
+            label: semanticText(fields.label),
+            url: semanticText(fields.destination),
+            title: fields.title === void 0 ? null : semanticText(fields.title),
+          }, token.offset + fields.markerOffset, blockEnd(nodeId, offset, context));
+        },
+        definitionKey(token) {
+          return linkDefinitionFields(token).definitionKey;
+        },
+      },
+    ],
+    starts: [
+      {
+        codes: [91],
+        start(source, lines, start, out) {
+          const definition = linkDefinitionAt(source, lines, start);
+          if (!definition) {
+            return;
+          }
+          const line = lines[start];
+          out.push(linkDefinitionOpen(line.start, definition.fields));
+          for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
+            const current = lines[definitionLine];
+            const end = definitionLine + 1 < definition.end ? current.next : current.end;
+            out.push(namedToken("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+          }
+          out.push(structuralToken("LinkDefinitionClose", lines[definition.end - 1].end));
+          return definition.end;
+        },
+      },
+    ],
   },
-  blockRules: [
-    {
-      rule: "LinkDefinition",
-      syntax: {
-        kind: "frame",
-        open: "LinkDefinitionOpen",
-        close: "LinkDefinitionClose",
-        topLevel: true,
-      },
-      project(nodeId, offset, tokenBase, context) {
-        const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
-        const fields = linkDefinitionFields(token);
-        return withSpan<Definition>({
-          type: "definition",
-          identifier: fields.definitionKey.toLowerCase(),
-          label: semanticText(fields.label),
-          url: semanticText(fields.destination),
-          title: fields.title === void 0 ? null : semanticText(fields.title),
-        }, token.offset + fields.markerOffset, blockEnd(nodeId, offset, context));
-      },
-      definitionKey(token) {
-        return linkDefinitionFields(token).definitionKey;
-      },
-    },
-  ],
-  blockStarts: [
-    {
-      codes: [91],
-      start(source, lines, start, out) {
-        const definition = linkDefinitionAt(source, lines, start);
-        if (!definition) {
-          return;
-        }
-        const line = lines[start];
-        out.push(linkDefinitionOpen(line.start, definition.fields));
-        for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
-          const current = lines[definitionLine];
-          const end = definitionLine + 1 < definition.end ? current.next : current.end;
-          out.push(namedToken("LinkDefinitionChunk", source.slice(current.start, end), current.start));
-        }
-        out.push(structuralToken("LinkDefinitionClose", lines[definition.end - 1].end));
-        return definition.end;
-      },
-    },
-  ],
-  inlineNormalize: reassociateReferenceTails,
-  tokenPairs: markdownBracketPairs,
+  inline: {
+    normalize: reassociateReferenceTails,
+    pairs: markdownBracketPairs,
+  },
 };

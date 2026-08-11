@@ -39,64 +39,66 @@ function unwrapBlockQuote(source: string, line: BlockLine): BlockLine | undefine
 }
 
 export const feature: SyntaxFeature = {
-  blockRules: [
-    {
-      rule: "BlockQuote",
-      syntax: {
-        kind: "frame",
-        open: "BlockQuoteOpen",
-        close: "BlockQuoteClose",
-        topLevel: true,
+  block: {
+    rules: [
+      {
+        rule: "BlockQuote",
+        syntax: {
+          kind: "frame",
+          open: "BlockQuoteOpen",
+          close: "BlockQuoteClose",
+          wrapsBlock: true,
+        },
+        project(nodeId, offset, tokenBase, context) {
+          const result: Blockquote = {
+            type: "blockquote",
+            children: blockChildren(nodeId, offset, tokenBase, context),
+          };
+          const marker = blockToken(nodeId, tokenBase, "BlockQuoteOpen", context);
+          const start = firstNonspace(context.source, tokenStart(marker), lineEnd(context.source, offset));
+          return withSpan(result, start, blockEnd(nodeId, offset, context));
+        },
       },
-      project(nodeId, offset, tokenBase, context) {
-        const result: Blockquote = {
-          type: "blockquote",
-          children: blockChildren(nodeId, offset, tokenBase, context),
-        };
-        const marker = blockToken(nodeId, tokenBase, "BlockQuoteOpen", context);
-        const start = firstNonspace(context.source, tokenStart(marker), lineEnd(context.source, offset));
-        return withSpan(result, start, blockEnd(nodeId, offset, context));
-      },
-    },
-  ],
-  blockStarts: [
-    {
-      codes: [62],
-      interrupt(source, line) {
-        return blockQuoteOffset(source, line) !== void 0;
-      },
-      start(source, lines, start, out, contentOffset, context) {
-        const line = lines[start];
-        if (blockQuoteOffset(source, line) === void 0) {
-          return;
-        }
-        const quoteLines: BlockLine[] = [];
-        let index = start;
-        let lazyParagraph = false;
-        while (index < lines.length) {
-          const contentLine = unwrapBlockQuote(source, lines[index]);
-          if (contentLine) {
-            quoteLines.push(contentLine);
-            lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
+    ],
+    starts: [
+      {
+        codes: [62],
+        unwrapLazyContinuation: unwrapBlockQuote,
+        interrupt(source, line) {
+          return blockQuoteOffset(source, line) !== void 0;
+        },
+        start(source, lines, start, out, contentOffset, context) {
+          const line = lines[start];
+          if (blockQuoteOffset(source, line) === void 0) {
+            return;
+          }
+          const quoteLines: BlockLine[] = [];
+          let index = start;
+          let lazyParagraph = false;
+          while (index < lines.length) {
+            const contentLine = unwrapBlockQuote(source, lines[index]);
+            if (contentLine) {
+              quoteLines.push(contentLine);
+              lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
+              index++;
+              continue;
+            }
+            if (
+              !lazyParagraph ||
+              isBlank(source, lines[index]) ||
+              !lines[index].lazy && context.startsInterruptingBlock(source, lines[index])
+            ) {
+              break;
+            }
+            quoteLines.push({ ...lines[index], lazy: true });
             index++;
-            continue;
           }
-          if (
-            !lazyParagraph ||
-            isBlank(source, lines[index]) ||
-            !lines[index].lazy && context.startsInterruptingBlock(source, lines[index])
-          ) {
-            break;
-          }
-          quoteLines.push({ ...lines[index], lazy: true });
-          index++;
-        }
-        out.push(structuralToken("BlockQuoteOpen", line.start, ">"));
-        context.resolveLines(source, quoteLines, out);
-        out.push(structuralToken("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
-        return index;
+          out.push(structuralToken("BlockQuoteOpen", line.start, ">"));
+          context.resolveLines(source, quoteLines, out);
+          out.push(structuralToken("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
+          return index;
+        },
       },
-    },
-  ],
-  blockUnwrappers: [unwrapBlockQuote],
+    ],
+  },
 };

@@ -168,91 +168,93 @@ const projectInlineImage = projectMedia("image", "direct");
 const projectInlineReferenceImage = projectMedia("image", "reference");
 
 export const feature: SyntaxFeature = {
-  inlineRules: [
-    { rule: "LinkContent", project: projectInlineChildren },
-    { rule: "BracketFallback", project: projectInlineChildren },
-    { rule: "Image", project: projectInlineImage },
-    { rule: "LinkImage", project: projectInlineImage },
-    { rule: "ReferenceImage", project: projectInlineReferenceImage },
-    { rule: "LinkReferenceImage", project: projectInlineReferenceImage },
-    { rule: "Link", project: projectMedia("link", "direct") },
-    { rule: "ReferenceLink", project: projectMedia("link", "reference") },
-  ],
-  inlineStructures: [
-    { kind: "pair", open: "LinkOpen", close: "LinkClose", rule: "Link", entersLink: true },
-    {
-      kind: "pair",
-      open: "ImageLinkOpen",
-      close: "ImageLinkClose",
-      rule: "Image",
-      linkRule: "LinkImage",
-    },
-    {
-      kind: "pair",
-      open: "ReferenceOpen",
-      close: "ReferenceClose",
-      rule: "ReferenceLink",
-      entersLink: true,
-    },
-    {
-      kind: "pair",
-      open: "ImageReferenceOpen",
-      close: "ImageReferenceClose",
-      rule: "ReferenceImage",
-      linkRule: "LinkReferenceImage",
-    },
-    {
-      kind: "fallback",
-      rule: "BracketFallback",
-      tokens: [
-        "ImageOpen",
-        "BracketOpen",
-        "LinkTail",
-        "ReferenceTail",
-        "ShortcutReferenceTail",
-        "ReferenceSeparatorClose",
-        "LinkOpen",
-        "LinkClose",
-        "ImageLinkOpen",
-        "ImageLinkClose",
-        "ReferenceOpen",
-        "ReferenceClose",
-        "ImageReferenceOpen",
-        "ImageReferenceClose",
-      ],
-    },
-  ],
-  inlineTokens: [
-    {
-      token: "Autolink",
-      project(tokenIndex, sourceSpan, accumulator) {
-        const { context } = accumulator;
-        const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-        const label = text.slice(1, -1);
-        appendInline(accumulator, withSpan<Link>({
-          type: "link",
-          url: label.includes(":") ? label : `mailto:${label}`,
-          title: null,
-          children: [
-            withSpan<Text>({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1),
-          ],
-        }, sourceSpan.start, sourceSpan.end));
-        return true;
+  inline: {
+    rules: [
+      { rule: "LinkContent", project: projectInlineChildren },
+      { rule: "BracketFallback", project: projectInlineChildren },
+      { rule: "Image", project: projectInlineImage },
+      { rule: "LinkImage", project: projectInlineImage },
+      { rule: "ReferenceImage", project: projectInlineReferenceImage },
+      { rule: "LinkReferenceImage", project: projectInlineReferenceImage },
+      { rule: "Link", project: projectMedia("link", "direct") },
+      { rule: "ReferenceLink", project: projectMedia("link", "reference") },
+    ],
+    structures: [
+      { kind: "pair", open: "LinkOpen", close: "LinkClose", rule: "Link", entersLink: true },
+      {
+        kind: "pair",
+        open: "ImageLinkOpen",
+        close: "ImageLinkClose",
+        rule: "Image",
+        linkRule: "LinkImage",
       },
-    },
-    { token: "BracketOpen", project: projectInlineText },
-    { token: "ImageOpen", project: projectInlineText },
-    { token: "LinkTail", project: projectInlineText },
-    { token: "ReferenceTail", project: projectInlineText },
-    { token: "ShortcutReferenceTail", project: projectInlineText },
-    { token: "ReferenceSeparatorClose", project: projectInlineText },
-    { token: "LinkOpen", project: projectInlineIgnore },
-    { token: "LinkClose", project: projectInlineIgnore },
-    { token: "ReferenceOpen", project: projectInlineIgnore },
-    { token: "ReferenceClose", project: projectInlineIgnore },
-    { token: "ImageLinkOpen", project: projectInlineIgnore },
-    { token: "ImageLinkClose", project: projectInlineIgnore },
-    { token: "ImageReferenceOpen", project: projectInlineIgnore },
-    { token: "ImageReferenceClose", project: projectInlineIgnore },
-  ],
+      {
+        kind: "pair",
+        open: "ReferenceOpen",
+        close: "ReferenceClose",
+        rule: "ReferenceLink",
+        entersLink: true,
+      },
+      {
+        kind: "pair",
+        open: "ImageReferenceOpen",
+        close: "ImageReferenceClose",
+        rule: "ReferenceImage",
+        linkRule: "LinkReferenceImage",
+      },
+      {
+        kind: "fallback",
+        rule: "BracketFallback",
+        tokens: [
+          "ImageOpen",
+          "BracketOpen",
+          "LinkTail",
+          "ReferenceTail",
+          "ShortcutReferenceTail",
+          "ReferenceSeparatorClose",
+          "LinkOpen",
+          "LinkClose",
+          "ImageLinkOpen",
+          "ImageLinkClose",
+          "ReferenceOpen",
+          "ReferenceClose",
+          "ImageReferenceOpen",
+          "ImageReferenceClose",
+        ],
+      },
+    ],
+    tokens: [
+      {
+        token: "Autolink",
+        project(tokenIndex, sourceSpan, accumulator) {
+          const { context } = accumulator;
+          const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
+          const label = text.slice(1, -1);
+          appendInline(accumulator, withSpan<Link>({
+            type: "link",
+            url: label.includes(":") ? label : `mailto:${label}`,
+            title: null,
+            children: [
+              withSpan<Text>({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1),
+            ],
+          }, sourceSpan.start, sourceSpan.end));
+          return true;
+        },
+      },
+      { token: "BracketOpen", project: projectInlineText },
+      { token: "ImageOpen", project: projectInlineText },
+      { token: "LinkTail", project: projectInlineText },
+      { token: "ReferenceTail", project: projectInlineText },
+      { token: "ShortcutReferenceTail", project: projectInlineText },
+      { token: "ReferenceSeparatorClose", project: projectInlineText },
+      { token: "LinkOpen", project: projectInlineIgnore },
+      { token: "LinkClose", project: projectInlineIgnore },
+      { token: "ReferenceOpen", project: projectInlineIgnore },
+      { token: "ReferenceClose", project: projectInlineIgnore },
+      { token: "ImageLinkOpen", project: projectInlineIgnore },
+      { token: "ImageLinkClose", project: projectInlineIgnore },
+      { token: "ImageReferenceOpen", project: projectInlineIgnore },
+      { token: "ImageReferenceClose", project: projectInlineIgnore },
+    ],
+  },
 };

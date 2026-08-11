@@ -10,7 +10,7 @@ import {
 } from "../../mdast.ts";
 import { projectInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
-import type { SyntaxFeature } from "../types.ts";
+import type { InlineFeature, SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {
   token: "AsteriskRun",
@@ -114,7 +114,7 @@ const projectInlineStrongOrDelete: InlineRuleProjector = (
   return project(nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator);
 };
 
-const inlineTokens: SyntaxFeature["inlineTokens"] = [
+const inlineTokens: InlineFeature["tokens"] = [
   { token: "Delimiter", project: projectInlineText },
   { token: "TildeRun", project: projectInlineText },
   { token: "EmphasisOpen", project: projectInlineIgnore },
@@ -137,29 +137,31 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
   const projectStrong = strikethroughOptions ? projectInlineStrongOrDelete : projectInlineStrong;
 
   return {
-    delimiters,
-    inlineRules: [
-      { rule: "Emphasis", project: projectInlineEmphasis },
-      { rule: "LinkEmphasis", project: projectInlineEmphasis },
-      { rule: "Strong", project: projectStrong },
-      { rule: "LinkStrong", project: projectStrong },
-    ],
-    inlineStructures: [
-      {
-        kind: "pair",
-        open: "EmphasisOpen",
-        close: "EmphasisClose",
-        rule: "Emphasis",
-        linkRule: "LinkEmphasis",
-      },
-      {
-        kind: "pair",
-        open: "StrongOpen",
-        close: "StrongClose",
-        rule: "Strong",
-        linkRule: "LinkStrong",
-      },
-    ],
-    inlineTokens,
+    inline: {
+      delimiters,
+      rules: [
+        { rule: "Emphasis", project: projectInlineEmphasis },
+        { rule: "LinkEmphasis", project: projectInlineEmphasis },
+        { rule: "Strong", project: projectStrong },
+        { rule: "LinkStrong", project: projectStrong },
+      ],
+      structures: [
+        {
+          kind: "pair",
+          open: "EmphasisOpen",
+          close: "EmphasisClose",
+          rule: "Emphasis",
+          linkRule: "LinkEmphasis",
+        },
+        {
+          kind: "pair",
+          open: "StrongOpen",
+          close: "StrongClose",
+          rule: "Strong",
+          linkRule: "LinkStrong",
+        },
+      ],
+      tokens: inlineTokens,
+    },
   };
 }

@@ -29,14 +29,16 @@ export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, a
 };
 
 export const feature: SyntaxFeature = {
-  inlineRules: [
-    { rule: "InlineLines", project: projectInlineChildren },
-    { rule: "InlineLine", project: projectInlineChildren },
-    { rule: "Inline", project: projectInlineChildren },
-  ],
-  inlineTokens: [
-    { token: "Text", project: projectInlineText },
-    { token: "Escape", project: projectInlineText },
-    { token: "Entity", project: projectInlineText },
-  ],
+  inline: {
+    rules: [
+      { rule: "InlineLines", project: projectInlineChildren },
+      { rule: "InlineLine", project: projectInlineChildren },
+      { rule: "Inline", project: projectInlineChildren },
+    ],
+    tokens: [
+      { token: "Text", project: projectInlineText },
+      { token: "Escape", project: projectInlineText },
+      { token: "Entity", project: projectInlineText },
+    ],
+  },
 };

@@ -12,7 +12,7 @@ import {
   tokenizeInline,
 } from "../../../inline/tokens.ts";
 import { appendInline, withSpan } from "../../../mdast.ts";
-import type { SyntaxFeature } from "../../types.ts";
+import type { InlineFeature } from "../../types.ts";
 import type { InlineMath } from "./types.ts";
 
 interface MathRange {
@@ -169,7 +169,7 @@ function mathTextValue(value: string): string {
   return result;
 }
 
-export const inlineTokens: SyntaxFeature["inlineTokens"] = [
+export const inlineTokens: InlineFeature["tokens"] = [
   {
     token: "MathText",
     project(tokenIndex, sourceSpan, accumulator) {

@@ -145,70 +145,74 @@ const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, accumula
 };
 
 export const feature: SyntaxFeature = {
-  blockRules: [
-    {
-      rule: "HtmlBlock",
-      syntax: {
-        kind: "leaf",
-        token: "HtmlBlockToken",
-      },
-      project(nodeId, offset, tokenBase, context) {
-        const end = offset + context.view.arena.lenOf(nodeId);
-        const token = htmlBlockToken(blockToken(nodeId, tokenBase, "HtmlBlockToken", context));
-        let html = normalizeLines(token.text);
-        if (!token.unterminated && html.endsWith("\n")) {
-          html = html.slice(0, -1);
-        }
-        return withSpan<Html>(
-          { type: "html", value: html },
-          offset,
-          html.endsWith("\n") ? end : blockEnd(nodeId, offset, context),
-        );
-      },
-    },
-  ],
-  blockStarts: [
-    {
-      codes: [60],
-      interrupt(source, line) {
-        return !!htmlStartAt(source, line)?.interruptParagraph;
-      },
-      start(source, lines, start, out) {
-        const line = lines[start];
-        const htmlStart = htmlStartAt(source, line);
-        if (!htmlStart) {
-          return;
-        }
-        let end = start + 1;
-        let unterminated = false;
-        if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
-          while (
-            end < lines.length &&
-            !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)
-          ) {
-            end++;
+  block: {
+    rules: [
+      {
+        rule: "HtmlBlock",
+        syntax: {
+          kind: "leaf",
+          token: "HtmlBlockToken",
+        },
+        project(nodeId, offset, tokenBase, context) {
+          const end = offset + context.view.arena.lenOf(nodeId);
+          const token = htmlBlockToken(blockToken(nodeId, tokenBase, "HtmlBlockToken", context));
+          let html = normalizeLines(token.text);
+          if (!token.unterminated && html.endsWith("\n")) {
+            html = html.slice(0, -1);
           }
-          if (end < lines.length) {
-            end++;
-          }
-          else {
-            unterminated = true;
-          }
-        }
-        else if (!htmlStart.terminator) {
-          while (end < lines.length && !isBlank(source, lines[end])) {
-            end++;
-          }
-        }
-        const token = logicalToken("HtmlBlockToken", source, lines, start, end) as HtmlBlockToken;
-        token.unterminated = unterminated;
-        out.push(token);
-        return end;
+          return withSpan<Html>(
+            { type: "html", value: html },
+            offset,
+            html.endsWith("\n") ? end : blockEnd(nodeId, offset, context),
+          );
+        },
       },
-    },
-  ],
-  inlineTokens: [
-    { token: "InlineHtml", project: projectInlineHtml },
-    { token: "HtmlComment", project: projectInlineHtml },
-  ],
+    ],
+    starts: [
+      {
+        codes: [60],
+        interrupt(source, line) {
+          return !!htmlStartAt(source, line)?.interruptParagraph;
+        },
+        start(source, lines, start, out) {
+          const line = lines[start];
+          const htmlStart = htmlStartAt(source, line);
+          if (!htmlStart) {
+            return;
+          }
+          let end = start + 1;
+          let unterminated = false;
+          if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
+            while (
+              end < lines.length &&
+              !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)
+            ) {
+              end++;
+            }
+            if (end < lines.length) {
+              end++;
+            }
+            else {
+              unterminated = true;
+            }
+          }
+          else if (!htmlStart.terminator) {
+            while (end < lines.length && !isBlank(source, lines[end])) {
+              end++;
+            }
+          }
+          const token = logicalToken("HtmlBlockToken", source, lines, start, end) as HtmlBlockToken;
+          token.unterminated = unterminated;
+          out.push(token);
+          return end;
+        },
+      },
+    ],
+  },
+  inline: {
+    tokens: [
+      { token: "InlineHtml", project: projectInlineHtml },
+      { token: "HtmlComment", project: projectInlineHtml },
+    ],
+  },
 };

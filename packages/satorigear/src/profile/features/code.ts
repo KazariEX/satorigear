@@ -116,79 +116,83 @@ function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockProjec
 }
 
 export const feature: SyntaxFeature = {
-  blockFallbacks: [
-    (source, lines, start, out) => {
-      if (indentOf(source, lines[start]).columns < 4) {
-        return;
-      }
-      let end = start + 1;
-      while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
-        end++;
-      }
-      out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
-      return end;
-    },
-  ],
-  blockRules: [
-    {
-      rule: "FencedCode",
-      syntax: {
-        kind: "leaf",
-        token: "FencedCodeBlock",
-      },
-      project(nodeId, offset, tokenBase, context) {
-        const end = offset + context.view.arena.lenOf(nodeId);
-        const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
-        const codeEnd = fence.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end;
-        return withSpan(
-          fence.node,
-          firstNonspace(context.source, offset, lineEnd(context.source, offset)),
-          codeEnd,
-        );
-      },
-    },
-    {
-      rule: "IndentedCodeBlock",
-      syntax: {
-        kind: "leaf",
-        token: "IndentedCodeBlockToken",
-      },
-      project(nodeId, offset, tokenBase, context) {
-        return withSpan(
-          indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),
-          offset,
-          indentedCodeEnd(nodeId, tokenBase, context),
-        );
-      },
-    },
-  ],
-  blockStarts: [
-    {
-      codes: [96, 126],
-      interrupt(source, line) {
-        return !!codeFenceAt(source, line);
-      },
-      start(source, lines, start, out) {
-        const fence = codeFenceAt(source, lines[start]);
-        if (!fence) {
+  block: {
+    fallbacks: [
+      (source, lines, start, out) => {
+        if (indentOf(source, lines[start]).columns < 4) {
           return;
         }
         let end = start + 1;
-        while (end < lines.length && !closesFence(source, lines[end], fence)) {
+        while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
           end++;
         }
-        if (end < lines.length) {
-          end++;
-        }
-        out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
+        out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
         return end;
       },
-    },
-  ],
-  inlineTokens: [
-    {
-      token: "CodeSpan",
-      project: projectCodeSpan,
-    },
-  ],
+    ],
+    rules: [
+      {
+        rule: "FencedCode",
+        syntax: {
+          kind: "leaf",
+          token: "FencedCodeBlock",
+        },
+        project(nodeId, offset, tokenBase, context) {
+          const end = offset + context.view.arena.lenOf(nodeId);
+          const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
+          const codeEnd = fence.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end;
+          return withSpan(
+            fence.node,
+            firstNonspace(context.source, offset, lineEnd(context.source, offset)),
+            codeEnd,
+          );
+        },
+      },
+      {
+        rule: "IndentedCodeBlock",
+        syntax: {
+          kind: "leaf",
+          token: "IndentedCodeBlockToken",
+        },
+        project(nodeId, offset, tokenBase, context) {
+          return withSpan(
+            indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),
+            offset,
+            indentedCodeEnd(nodeId, tokenBase, context),
+          );
+        },
+      },
+    ],
+    starts: [
+      {
+        codes: [96, 126],
+        interrupt(source, line) {
+          return !!codeFenceAt(source, line);
+        },
+        start(source, lines, start, out) {
+          const fence = codeFenceAt(source, lines[start]);
+          if (!fence) {
+            return;
+          }
+          let end = start + 1;
+          while (end < lines.length && !closesFence(source, lines[end], fence)) {
+            end++;
+          }
+          if (end < lines.length) {
+            end++;
+          }
+          out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
+          return end;
+        },
+      },
+    ],
+  },
+  inline: {
+    tokens: [
+      {
+        token: "CodeSpan",
+        project: projectCodeSpan,
+      },
+    ],
+  },
 };
