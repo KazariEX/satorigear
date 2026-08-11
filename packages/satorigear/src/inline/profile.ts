@@ -45,7 +45,7 @@ export interface InlineFeature {
   rules?: readonly InlineRuleRegistration[];
   structures?: readonly InlineStructureRegistration[];
   tokens?: readonly InlineTokenRegistration[];
-  pairs?: readonly PairedTokenConfig<InlineResolutionContext>[];
+  pairs?: readonly PairedTokenConfig[];
 }
 
 export interface InlineProfile {
@@ -57,10 +57,7 @@ export interface InlineProfile {
   tokenProjects: readonly (InlineLeafProjector | undefined)[];
 }
 
-function composeRewrites(rewrites: readonly InlineTokenRewrite[]): InlineTokenRewrite | undefined {
-  if (rewrites.length === 0) {
-    return;
-  }
+function composeRewrites(...rewrites: readonly InlineTokenRewrite[]): InlineTokenRewrite {
   if (rewrites.length === 1) {
     return rewrites[0];
   }
@@ -83,7 +80,7 @@ export function compileInlineProfile(
   const tokenNames: (string | undefined)[] = [];
   const tokenProjects: (InlineLeafProjector | undefined)[] = [];
   const rewrites: InlineTokenRewrite[] = [];
-  const pairs: PairedTokenConfig<InlineResolutionContext>[] = [];
+  const pairs: PairedTokenConfig[] = [];
 
   for (const feature of features) {
     if (feature.delimiters) {
@@ -115,19 +112,13 @@ export function compileInlineProfile(
     }
   }
 
-  const resolver = createPairingResolver(delimiters, pairs);
-  const rewrite = composeRewrites([...rewrites, ...finalizers]);
-  const resolve: InlineTokenRewrite = rewrite
-    ? (source, tokens, context) => resolver.resolve(
-      source,
-      rewrite(source, tokens, context),
-      context,
-    )
-    : resolver.resolve;
-
   return {
     decodeText,
-    resolve,
+    resolve: composeRewrites(
+      ...rewrites,
+      ...finalizers,
+      createPairingResolver(delimiters, pairs),
+    ),
     ruleProjects,
     schema: compileInlineSyntax(structures, tokenNames),
     tokenize: tokenizeInline,

@@ -10,6 +10,7 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
+import type { InlineResolutionContext, InlineTokenRewrite } from "./profile.ts";
 
 export interface DelimiterConfig {
   token: string;
@@ -23,7 +24,7 @@ export interface DelimiterConfig {
   allowIntraword?: boolean;
 }
 
-export interface PairedTokenConfig<State = undefined> {
+export interface PairedTokenConfig {
   opener: string;
   closer: string;
   open?: string;
@@ -35,27 +36,23 @@ export interface PairedTokenConfig<State = undefined> {
     maxCharacters?: number;
     forbidTokens?: readonly string[];
   };
-  activate?: (context: PairedTokenActivationContext<State>) => boolean;
+  activate?: (context: PairedTokenActivationContext) => boolean;
   splitUnmatchedCloser?: (tokens: InlineTokenStream, tokenIndex: number) => InlineTokenStream;
 }
 
-interface PairedTokenActivationContext<State> {
+interface PairedTokenActivationContext {
   source: string;
   tokens: InlineTokenStream;
   openerIndex: number;
   closerIndex: number;
   content: string;
-  state: State;
+  state: InlineResolutionContext;
 }
 
 interface TokenIsolationRange {
   start: number;
   end: number;
   id: number;
-}
-
-interface PairingResolver<State> {
-  resolve: (source: string, tokens: InlineTokenStream, state: State) => InlineTokenStream;
 }
 
 interface CompiledDelimiterConfig {
@@ -89,10 +86,10 @@ interface Replacement {
   kind: number;
 }
 
-interface IndexedPair<State> {
-  activate?: (context: PairedTokenActivationContext<State>) => boolean;
+interface IndexedPair {
+  activate?: (context: PairedTokenActivationContext) => boolean;
   closeKind: number;
-  content?: PairedTokenConfig<State>["content"];
+  content?: PairedTokenConfig["content"];
   deactivatedKinds: readonly number[];
   forbiddenKinds: readonly number[];
   isolateDelimiters?: boolean;
@@ -100,10 +97,10 @@ interface IndexedPair<State> {
   openerKind: number;
 }
 
-interface PairIndex<State> {
-  byCloser: readonly (readonly IndexedPair<State>[] | undefined)[];
+interface PairIndex {
+  byCloser: readonly (readonly IndexedPair[] | undefined)[];
   openerKinds: readonly boolean[];
-  splitByCloser: readonly (PairedTokenConfig<State>["splitUnmatchedCloser"] | undefined)[];
+  splitByCloser: readonly (PairedTokenConfig["splitUnmatchedCloser"] | undefined)[];
 }
 
 interface PairResolution {
@@ -196,10 +193,10 @@ function acceptsContent(
   return hasNonWhitespace;
 }
 
-function indexPairs<State>(configs: readonly PairedTokenConfig<State>[]): PairIndex<State> {
-  const byCloser: IndexedPair<State>[][] = [];
+function indexPairs(configs: readonly PairedTokenConfig[]): PairIndex {
+  const byCloser: IndexedPair[][] = [];
   const openerKinds: boolean[] = [];
-  const splitByCloser: PairedTokenConfig<State>["splitUnmatchedCloser"][] = [];
+  const splitByCloser: PairedTokenConfig["splitUnmatchedCloser"][] = [];
   for (const config of configs) {
     const openerKind = inlineKind(config.opener);
     const closerKind = inlineKind(config.closer);
@@ -223,11 +220,11 @@ function indexPairs<State>(configs: readonly PairedTokenConfig<State>[]): PairIn
   return { byCloser, openerKinds, splitByCloser };
 }
 
-function resolvePairedTokens<State>(
+function resolvePairedTokens(
   source: string,
   tokens: InlineTokenStream,
-  index: PairIndex<State>,
-  state: State,
+  index: PairIndex,
+  state: InlineResolutionContext,
 ): PairResolution {
   const openerStacks: number[][] = [];
   const inactiveBefore: number[] = [];
@@ -539,10 +536,10 @@ function resolveDelimiterRuns(
   return result;
 }
 
-export function createPairingResolver<State = undefined>(
+export function createPairingResolver(
   delimiterConfigs: readonly DelimiterConfig[],
-  pairConfigs: readonly PairedTokenConfig<State>[] = [],
-): PairingResolver<State> {
+  pairConfigs: readonly PairedTokenConfig[] = [],
+): InlineTokenRewrite {
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[inlineKind(config.token)] = {
@@ -570,7 +567,7 @@ export function createPairingResolver<State = undefined>(
     activeKinds[inlineKind(config.closer)] = true;
   }
 
-  const resolve = (source: string, tokens: InlineTokenStream, state: State): InlineTokenStream => {
+  return (source, tokens, state) => {
     const count = inlineTokenCount(tokens);
     let active = false;
     for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
@@ -609,5 +606,4 @@ export function createPairingResolver<State = undefined>(
     const resolvedPairs = applyPairReplacements(expanded ?? tokens, paired.replacements);
     return resolveDelimiterRuns(source, resolvedPairs, delimiterByKind, paired.delimiterIsolations);
   };
-  return { resolve };
 }

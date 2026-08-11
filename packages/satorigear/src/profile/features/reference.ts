@@ -18,7 +18,7 @@ import { normalizeAssociationLabel, splitReferenceTail } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockToken } from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/pairing.ts";
-import type { InlineResolutionContext, InlineTokenRewrite } from "../../inline/profile.ts";
+import type { InlineTokenRewrite } from "../../inline/profile.ts";
 import type {
   SyntaxFeature,
 } from "../types.ts";
@@ -304,7 +304,7 @@ const reassociateReferenceTails: InlineTokenRewrite = (source, tokens, context) 
   return result ?? tokens;
 };
 
-const activateReference: NonNullable<PairedTokenConfig<InlineResolutionContext>["activate"]> = ({
+const activateReference: NonNullable<PairedTokenConfig["activate"]> = ({
   source,
   tokens,
   closerIndex,
@@ -316,7 +316,7 @@ const activateReference: NonNullable<PairedTokenConfig<InlineResolutionContext>[
   return state.hasDefinition(normalizeAssociationLabel(explicit || content));
 };
 
-const markdownBracketPairs: readonly PairedTokenConfig<InlineResolutionContext>[] = [
+const markdownBracketPairs: readonly PairedTokenConfig[] = [
   {
     opener: "BracketOpen",
     closer: "LinkTail",
