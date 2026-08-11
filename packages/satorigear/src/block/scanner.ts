@@ -326,18 +326,27 @@ export class BlockScanner {
     const replacement: BlockToken[] = [];
     const scanned: BlockCheckpoint[] = [];
     let converged = -1;
+    // Old checkpoints and rescanned blocks share source order, so candidates only move forward.
+    let convergenceCandidate = affected;
     resolveLines(this.#profile, this.#context, nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
       const blockStart = scanLines[lineStart].start;
       const blockEnd = scanLines[lineEnd - 1].next;
       if (blockEnd >= changedSpan.end) {
-        const candidate = this.#checkpoints.findIndex((old) => (
-          old.lineStart + delta === blockStart &&
-          old.lineEnd + delta === blockEnd &&
-          old.lineStart >= oldChangedEnd
-        ));
-        if (candidate >= 0 && sameShiftedBlock(this.#tokens, this.#checkpoints[candidate], replacement, tokenStart, tokenEnd, delta)) {
+        const candidateStart = Math.max(oldChangedEnd, blockStart - delta);
+        while (
+          convergenceCandidate < this.#checkpoints.length &&
+          this.#checkpoints[convergenceCandidate].lineStart < candidateStart
+        ) {
+          convergenceCandidate++;
+        }
+        const candidate = this.#checkpoints[convergenceCandidate];
+        if (
+          candidate?.lineStart + delta === blockStart &&
+          candidate.lineEnd + delta === blockEnd &&
+          sameShiftedBlock(this.#tokens, candidate, replacement, tokenStart, tokenEnd, delta)
+        ) {
           replacement.length = tokenStart;
-          converged = candidate;
+          converged = convergenceCandidate;
           return true;
         }
       }
