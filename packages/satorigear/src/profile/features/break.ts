@@ -31,7 +31,7 @@ export const feature: SyntaxFeature = {
           kind: "leaf",
           token: "ThematicBreakToken",
         },
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const end = offset + context.view.arena.lenOf(nodeId);
           return withSpan<ThematicBreak>(
             { type: "thematicBreak" },
@@ -63,7 +63,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: "HardBreak",
-        project(tokenIndex, sourceSpan, accumulator) {
+        build(tokenIndex, sourceSpan, accumulator) {
           appendInline(
             accumulator,
             withSpan<Break>({ type: "break" }, sourceSpan.start, sourceSpan.end),
@@ -74,7 +74,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: "Newline",
-        project(tokenIndex, sourceSpan, accumulator) {
+        build(tokenIndex, sourceSpan, accumulator) {
           appendInline(
             accumulator,
             withSpan<Text>({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end),

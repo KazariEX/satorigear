@@ -2,12 +2,12 @@ import type { AlignType, Table, TableCell, TableRow } from "mdast";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { type BlockToken, namedToken, structuralToken, tokenStart } from "../../block/tokens.ts";
 import {
-  type BlockProjectionContext,
+  type BlockBuildContext,
   blockToken,
   inlineChildren,
   withSpan,
 } from "../../mdast.ts";
-import { projectCodeSpan } from "./code.ts";
+import { buildCodeSpan } from "./code.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface CellRange {
@@ -162,7 +162,7 @@ function childRules(
   offset: number,
   tokenBase: number,
   rule: string,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): RuleLocation[] {
   const arena = context.view.arena;
   const result: RuleLocation[] = [];
@@ -179,11 +179,11 @@ function childRules(
   return result;
 }
 
-function projectCell(
+function buildCell(
   nodeId: number,
   offset: number,
   tokenBase: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): TableCell {
   const open = blockToken(nodeId, tokenBase, "TableCellOpen", context);
   const close = blockToken(nodeId, tokenBase, "TableCellClose", context);
@@ -193,16 +193,16 @@ function projectCell(
   }, tokenStart(open), tokenStart(close));
 }
 
-function projectRow(
+function buildRow(
   nodeId: number,
   offset: number,
   tokenBase: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): TableRow {
   const open = blockToken(nodeId, tokenBase, "TableRowOpen", context);
   const close = blockToken(nodeId, tokenBase, "TableRowClose", context);
   const children = childRules(nodeId, offset, tokenBase, "TableCell", context).map((cell) => (
-    projectCell(cell.id, cell.offset, cell.tokenBase, context)
+    buildCell(cell.id, cell.offset, cell.tokenBase, context)
   ));
   return withSpan<TableRow>({ type: "tableRow", children }, tokenStart(open), tokenStart(close));
 }
@@ -210,7 +210,7 @@ function projectRow(
 function tableAlignment(
   nodeId: number,
   tokenBase: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): AlignType[] {
   const arena = context.view.arena;
   const result: AlignType[] = [];
@@ -310,11 +310,11 @@ export const feature: SyntaxFeature = {
           open: "TableOpen",
           close: "TableClose",
         },
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const open = blockToken(nodeId, tokenBase, "TableOpen", context);
           const close = blockToken(nodeId, tokenBase, "TableClose", context);
           const rows = childRules(nodeId, offset, tokenBase, "TableRow", context).map((row) => (
-            projectRow(row.id, row.offset, row.tokenBase, context)
+            buildRow(row.id, row.offset, row.tokenBase, context)
           ));
           const delimiter = childRules(nodeId, offset, tokenBase, "TableDelimiter", context)[0];
           if (!delimiter) {
@@ -334,9 +334,9 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: "CodeSpan",
-        project(tokenIndex, sourceSpan, accumulator) {
+        build(tokenIndex, sourceSpan, accumulator) {
         // GFM removes a pipe escape inside table code spans, while CommonMark code spans preserve it.
-          return projectCodeSpan(
+          return buildCodeSpan(
             tokenIndex,
             sourceSpan,
             accumulator,

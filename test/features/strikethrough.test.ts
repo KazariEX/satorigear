@@ -16,7 +16,7 @@ const compositeParser = createParser({
 });
 
 describe("strikethrough", () => {
-  it("projects GFM delete nodes with nested inline content", () => {
+  it("builds GFM delete nodes with nested inline content", () => {
     expect(parser.parse("before ~~**deleted** and [linked](url)~~ after").children[0]).toMatchObject({
       type: "paragraph",
       children: [

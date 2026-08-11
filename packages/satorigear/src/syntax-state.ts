@@ -74,7 +74,7 @@ export class SyntaxState {
   #inlineArena: InlineArena;
   #inlineRoots = new Map<number, InlineRoot>();
   #profile: SyntaxProfile;
-  // Blocks own region lifetimes; this index only resolves current arena node IDs during projection.
+  // Blocks own region lifetimes; this index only resolves current arena node IDs while building fragments.
   #regions = new Map<number, InlineRegion>();
   #view: BlockSyntaxView;
 
@@ -259,8 +259,8 @@ export class SyntaxState {
 
       const regionRevisions = regions.map((region) => region.revision);
       // Arena prefix handles may survive token-equivalent edits with different source geometry.
-      // Only the converged suffix is projection-stable without comparing duplicate block text.
-      const projectionStable = (
+      // Only the converged suffix can reuse fragments without comparing duplicate block text.
+      const fragmentStable = (
         blockIndex >= newEnd &&
         previous !== void 0 &&
         isArrayEqual(previous.regionRevisions, regionRevisions)
@@ -269,7 +269,7 @@ export class SyntaxState {
       block.regionRevisions = regionRevisions;
       block.version = previous === void 0
         ? 0
-        : projectionStable ? previous.version : previous.version + 1;
+        : fragmentStable ? previous.version : previous.version + 1;
     }
 
     for (let index = stableBlockCount; index < blocks.length; index++) {
@@ -325,7 +325,7 @@ export class SyntaxState {
     }
     const root = this.#inlineRoots.get(nodeId);
     if (!root) {
-      throw new Error(`Inline region ${nodeId} was projected outside its prepared block batch`);
+      throw new Error(`Inline region ${nodeId} was built outside its prepared block batch`);
     }
     return {
       arena: this.#inlineArena,

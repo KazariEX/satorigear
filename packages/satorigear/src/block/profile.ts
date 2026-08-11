@@ -1,5 +1,5 @@
-import type { BlockProjector } from "../mdast.ts";
-// Block features compile into the immutable scanner, arena, and projection tables shared by a parser.
+import type { BlockNodeBuilder } from "../mdast.ts";
+// Block features compile into the immutable scanner, arena, and node builders shared by a parser.
 import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
 import type { BlockToken } from "./tokens.ts";
@@ -8,7 +8,7 @@ export interface CompiledBlockRule {
   definitionKey?: (token: BlockToken) => string;
   inlineContent: boolean;
   name: string;
-  project?: BlockProjector;
+  build?: BlockNodeBuilder;
 }
 
 export interface BlockSyntaxFrame {
@@ -74,16 +74,16 @@ export type BlockSyntaxRegistration =
 export interface BlockRuleRegistration {
   rule: string;
   syntax: BlockSyntaxRegistration;
-  project?: BlockProjector;
+  build?: BlockNodeBuilder;
   inlineContent?: true;
   definitionKey?: (token: BlockToken) => string;
 }
 
-export type BlockProjectorDecorator = (project: BlockProjector) => BlockProjector;
+export type BlockNodeBuilderDecorator = (build: BlockNodeBuilder) => BlockNodeBuilder;
 
 export interface BlockDecoratorRegistration {
   rule: string;
-  decorate: BlockProjectorDecorator;
+  decorate: BlockNodeBuilderDecorator;
 }
 
 export type BlockRestart = (
@@ -151,7 +151,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
           definitionKey: registration.definitionKey,
           inlineContent: registration.inlineContent === true,
           name: registration.rule,
-          project: registration.project,
+          build: registration.build,
         };
         rules[registration.rule] = rule;
         const syntax = registration.syntax;
@@ -179,11 +179,11 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
 
   for (const registration of decorators) {
     const rule = rules[registration.rule];
-    const project = rule?.project;
-    if (!project) {
+    const build = rule?.build;
+    if (!build) {
       throw new Error(`Cannot decorate unknown block rule ${registration.rule}`);
     }
-    rule.project = registration.decorate(project);
+    rule.build = registration.decorate(build);
   }
 
   return {

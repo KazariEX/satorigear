@@ -6,7 +6,7 @@ const parser = createParser(options);
 const defaultParser = createParser();
 
 describe("table", () => {
-  it("projects aligned GFM tables with inline cell content", () => {
+  it("builds aligned GFM tables with inline cell content", () => {
     const source = "| **name** | value\\|unit |\n| :--- | ---: |\n| alpha | `1` |\n";
     expect(parser.parse(source).children[0]).toEqual({
       type: "table",

@@ -416,7 +416,7 @@ export const feature: SyntaxFeature = {
           open: "LinkDefinitionOpen",
           close: "LinkDefinitionClose",
         },
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
           const fields = linkDefinitionFields(token);
           return withSpan<Definition>({

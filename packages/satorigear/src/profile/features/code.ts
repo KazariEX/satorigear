@@ -12,8 +12,8 @@ import { logicalToken } from "../../block/tokens.ts";
 import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
+  type BlockBuildContext,
   blockEnd,
-  type BlockProjectionContext,
   blockToken,
   firstNonspace,
   type InlineAccumulator,
@@ -47,7 +47,7 @@ function codeSpanValue(value: string): string {
   return result;
 }
 
-export function projectCodeSpan(
+export function buildCodeSpan(
   tokenIndex: number,
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
@@ -99,7 +99,7 @@ function indentedCode(value: string): Code {
   return { type: "code", lang: null, meta: null, value: lines.join("\n") };
 }
 
-function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockProjectionContext): number {
+function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockBuildContext): number {
   const token = blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context);
   const spans = token.ranges ?? [{ offset: token.offset, end: token.offset + token.text.length }];
   for (let index = spans.length - 1; index >= 0; index--) {
@@ -137,7 +137,7 @@ export const feature: SyntaxFeature = {
           kind: "leaf",
           token: "FencedCodeBlock",
         },
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const end = offset + context.view.arena.lenOf(nodeId);
           const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
           const codeEnd = fence.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end;
@@ -154,7 +154,7 @@ export const feature: SyntaxFeature = {
           kind: "leaf",
           token: "IndentedCodeBlockToken",
         },
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           return withSpan(
             indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),
             offset,
@@ -192,7 +192,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: "CodeSpan",
-        project: projectCodeSpan,
+        build: buildCodeSpan,
       },
     ],
   },

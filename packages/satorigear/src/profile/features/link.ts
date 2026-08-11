@@ -2,18 +2,18 @@ import type { Image, ImageReference, Link, LinkReference, PhrasingContent, Text 
 import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
+  buildInlineChildren,
   contentBounds,
   createInlineAccumulator,
   type FragmentNode,
   type InlineAccumulator,
-  type InlineRuleProjector,
+  type InlineNodeBuilder,
   inlineSequence,
   leaf,
-  projectInlineChildren,
   withSpan,
 } from "../../mdast.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
-import { projectInlineText, semanticText } from "./text.ts";
+import { buildInlineText, semanticText } from "./text.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface Reference {
@@ -156,7 +156,7 @@ function linkOrImage(
     : withSpan<Link>({ type: "link", children, ...resource }, sourceSpan.start, sourceSpan.end);
 }
 
-function projectMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineRuleProjector {
+function buildMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineNodeBuilder {
   return (nodeId, offset, endOffset, sourceSpan, accumulator) => {
     appendInline(
       accumulator,
@@ -166,10 +166,10 @@ function projectMedia(media: "image" | "link", resourceKind: "direct" | "referen
   };
 }
 
-const projectInlineImage = projectMedia("image", "direct");
-const projectInlineReferenceImage = projectMedia("image", "reference");
-const projectInlineLink = projectMedia("link", "direct");
-const projectInlineReferenceLink = projectMedia("link", "reference");
+const buildInlineImage = buildMedia("image", "direct");
+const buildInlineReferenceImage = buildMedia("image", "reference");
+const buildInlineLink = buildMedia("link", "direct");
+const buildInlineReferenceLink = buildMedia("link", "reference");
 
 export const feature: SyntaxFeature = {
   inline: {
@@ -178,29 +178,29 @@ export const feature: SyntaxFeature = {
         kind: "pair",
         open: "LinkOpen",
         close: "LinkClose",
-        project: projectInlineLink,
+        build: buildInlineLink,
       },
       {
         kind: "pair",
         open: "ImageLinkOpen",
         close: "ImageLinkClose",
-        project: projectInlineImage,
+        build: buildInlineImage,
       },
       {
         kind: "pair",
         open: "ReferenceOpen",
         close: "ReferenceClose",
-        project: projectInlineReferenceLink,
+        build: buildInlineReferenceLink,
       },
       {
         kind: "pair",
         open: "ImageReferenceOpen",
         close: "ImageReferenceClose",
-        project: projectInlineReferenceImage,
+        build: buildInlineReferenceImage,
       },
       {
         kind: "fallback",
-        project: projectInlineChildren,
+        build: buildInlineChildren,
         tokens: [
           "ImageOpen",
           "BracketOpen",
@@ -221,7 +221,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: "Autolink",
-        project(tokenIndex, sourceSpan, accumulator) {
+        build(tokenIndex, sourceSpan, accumulator) {
           const { context } = accumulator;
           const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
           const label = text.slice(1, -1);
@@ -236,12 +236,12 @@ export const feature: SyntaxFeature = {
           return true;
         },
       },
-      { kind: "leaf", token: "BracketOpen", project: projectInlineText },
-      { kind: "leaf", token: "ImageOpen", project: projectInlineText },
-      { kind: "leaf", token: "LinkTail", project: projectInlineText },
-      { kind: "leaf", token: "ReferenceTail", project: projectInlineText },
-      { kind: "leaf", token: "ShortcutReferenceTail", project: projectInlineText },
-      { kind: "leaf", token: "ReferenceSeparatorClose", project: projectInlineText },
+      { kind: "leaf", token: "BracketOpen", build: buildInlineText },
+      { kind: "leaf", token: "ImageOpen", build: buildInlineText },
+      { kind: "leaf", token: "LinkTail", build: buildInlineText },
+      { kind: "leaf", token: "ReferenceTail", build: buildInlineText },
+      { kind: "leaf", token: "ShortcutReferenceTail", build: buildInlineText },
+      { kind: "leaf", token: "ReferenceSeparatorClose", build: buildInlineText },
     ],
   },
 };

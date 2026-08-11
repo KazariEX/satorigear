@@ -170,7 +170,7 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "leaf",
     token: "MathText",
-    project(tokenIndex, sourceSpan, accumulator) {
+    build(tokenIndex, sourceSpan, accumulator) {
       const { context } = accumulator;
       appendInline(
         accumulator,

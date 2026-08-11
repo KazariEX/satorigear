@@ -143,7 +143,7 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "leaf",
     token: "FootnoteReference",
-    project(tokenIndex, sourceSpan, accumulator) {
+    build(tokenIndex, sourceSpan, accumulator) {
       const { context } = accumulator;
       const source = inlineTokenText(context.view.text, context.tokens, tokenIndex);
       const label = source.slice(2, -1);

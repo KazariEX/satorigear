@@ -90,7 +90,7 @@ export const blockRules: BlockFeature["rules"] = [
       open: "FootnoteDefinitionOpen",
       close: "FootnoteDefinitionClose",
     },
-    project(nodeId, offset, tokenBase, context) {
+    build(nodeId, offset, tokenBase, context) {
       const token = blockToken(nodeId, tokenBase, "FootnoteDefinitionOpen", context);
       const fields = definitionFields(token);
       return withSpan<FootnoteDefinition>({

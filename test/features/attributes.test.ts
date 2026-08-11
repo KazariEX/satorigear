@@ -165,7 +165,7 @@ describe("attributes", () => {
     expectTypeOf(parser.createDocument("")).toEqualTypeOf<Document>();
   });
 
-  it("keeps full and incremental projection identical", () => {
+  it("keeps full and incremental ASTs identical", () => {
     const document = parser.createDocument("**text**{.old}\n");
     const start = document.source.indexOf("old");
     document.edit([{ start, end: start + 3, text: "new bright" }]);

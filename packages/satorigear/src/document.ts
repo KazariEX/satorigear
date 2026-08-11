@@ -1,6 +1,6 @@
 import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
-import { type BlockFragment, type BlockProjectionContext, materialize, projectBlock } from "./mdast.ts";
+import { type BlockBuildContext, type BlockFragment, buildBlockFragment, materialize } from "./mdast.ts";
 import { SyntaxState } from "./syntax-state.ts";
 import type { BlockArena, BlockHandle } from "./block/arena.ts";
 import type { InlineArena } from "./inline/arena.ts";
@@ -107,7 +107,7 @@ export class DocumentImpl implements Document {
     return { changedSpan: applied.changedSpan };
   }
 
-  #projectBlocks(): BlockFragment[] {
+  #buildBlockFragments(): BlockFragment[] {
     const previousFragments = this.#previousFragments;
     if (this.#fragments.length > 0 && previousFragments === void 0) {
       return this.#fragments;
@@ -117,18 +117,18 @@ export class DocumentImpl implements Document {
     const changedBlocks = previousFragments === void 0
       ? blocks
       : blocks.filter((block) => previousFragments.get(block.handle)?.version !== block.version);
-    const context: BlockProjectionContext = {
+    const context: BlockBuildContext = {
       profile: this.#profile,
       source: this.source,
       syntaxState: this.#syntaxState,
       view: this.#syntaxState.blockView(),
     };
-    // Changed regions share one projection workspace; no arena reference escapes the resulting fragments.
+    // Changed regions share one build workspace; no arena reference escapes the resulting fragments.
     this.#syntaxState.prepareInline(changedBlocks);
 
     const nextFragments = blocks.map((block) => {
       const previous = previousFragments?.get(block.handle);
-      const fragment = previous?.version === block.version ? previous : projectBlock(block, context);
+      const fragment = previous?.version === block.version ? previous : buildBlockFragment(block, context);
       fragment.offset = block.offset;
       return fragment;
     });
@@ -139,6 +139,6 @@ export class DocumentImpl implements Document {
   }
 
   snapshot(): Root {
-    return materialize(this.#projectBlocks(), this.source.length, this.#blockScanner.locator());
+    return materialize(this.#buildBlockFragments(), this.source.length, this.#blockScanner.locator());
   }
 }

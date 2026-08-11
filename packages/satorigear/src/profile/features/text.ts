@@ -3,7 +3,7 @@ import type { Text } from "mdast";
 import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
-  type InlineLeafProjector,
+  type InlineLeafBuilder,
   withSpan,
 } from "../../mdast.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -17,7 +17,7 @@ export function semanticText(value: string): string {
   return value.replace(semanticCharacter, (match, escaped) => escaped ?? decodeHTMLStrict(match));
 }
 
-export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, accumulator) => {
+export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, accumulator) => {
   const { context } = accumulator;
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   appendInline(
@@ -30,9 +30,9 @@ export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, a
 export const feature: SyntaxFeature = {
   inline: {
     syntax: [
-      { kind: "leaf", token: "Text", project: projectInlineText },
-      { kind: "leaf", token: "Escape", project: projectInlineText },
-      { kind: "leaf", token: "Entity", project: projectInlineText },
+      { kind: "leaf", token: "Text", build: buildInlineText },
+      { kind: "leaf", token: "Escape", build: buildInlineText },
+      { kind: "leaf", token: "Entity", build: buildInlineText },
     ],
   },
 };

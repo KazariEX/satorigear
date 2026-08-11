@@ -47,7 +47,7 @@ for (let kind = 1; kind < names.length; kind++) {
   kinds[names[kind]] = kind;
 }
 
-// Raw lexing, feature rewrites, pairing, and projection share this stable vocabulary.
+// Raw lexing, feature rewrites, pairing, and node building share this stable vocabulary.
 export function inlineKind(name: string): number {
   const kind = kinds[name];
   if (kind === void 0) {

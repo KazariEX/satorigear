@@ -49,7 +49,7 @@ describe("component", () => {
     });
   });
 
-  it("projects fenced block components with normalized names and attributes", () => {
+  it("builds fenced block components with normalized names and attributes", () => {
     const source = "::AlertBox[**Warning**]{kind=notice disabled disabled=\"true\" .wide .bright #first #last}\nbody\n::\n";
     expect(component(source)).toEqual({
       type: "blockComponent",
@@ -157,7 +157,7 @@ Body
     }
   });
 
-  it("projects explicit default and named slots as template components", () => {
+  it("builds explicit default and named slots as template components", () => {
     const source = `::card
 #default
 Body
@@ -283,7 +283,7 @@ End
     });
   });
 
-  it("projects inline leaf, container, props-only and nested components", () => {
+  it("builds inline leaf, container, props-only and nested components", () => {
     const source = "before :Icon :Badge[**New :Dot**]{:items=[\"a\",\"b\"]} :Card{disabled} after\n";
     expect(parser.parse(source).children[0]).toMatchObject({
       type: "paragraph",
@@ -496,7 +496,7 @@ End
     expectTypeOf(defaultParser.createDocument("")).toEqualTypeOf<Document>();
   });
 
-  it("keeps full and incremental projection identical", () => {
+  it("keeps full and incremental ASTs identical", () => {
     const document = parser.createDocument("::Card{tone=old}\nHello :Badge[old]\n::\n");
     const edit = (batch: TextEdit[]): void => {
       document.edit(batch);

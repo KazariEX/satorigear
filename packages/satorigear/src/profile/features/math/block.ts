@@ -43,7 +43,7 @@ export const blockRules: BlockFeature["rules"] = [
       kind: "leaf",
       token: "MathBlockToken",
     },
-    project(nodeId, offset, tokenBase, context) {
+    build(nodeId, offset, tokenBase, context) {
       const end = offset + context.view.arena.lenOf(nodeId);
       const math = mathBlock(blockToken(nodeId, tokenBase, "MathBlockToken", context).text);
       return withSpan(

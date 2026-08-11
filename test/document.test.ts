@@ -194,7 +194,7 @@ describe("markdown document", () => {
     expect(split.snapshot()).toEqual(parser.parse(split.source));
   });
 
-  it("reprojects the block touching a stable-prefix boundary", () => {
+  it("rebuilds the block touching a stable-prefix boundary", () => {
     const document = parser.createDocument("-1<.  \r\n>> ");
     document.snapshot();
     document.edit([

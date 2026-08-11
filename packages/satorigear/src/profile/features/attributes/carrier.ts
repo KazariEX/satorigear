@@ -2,7 +2,7 @@ import type { PhrasingContent } from "mdast";
 import { assignAttribute } from "./syntax.ts";
 import type { Attributes } from "./types.ts";
 
-// Projection-local children carry terminal attributes to block decorators without exposing AST state.
+// Build-local children carry terminal attributes to block decorators without exposing AST state.
 const terminalAttributes = Symbol("terminalAttributes");
 
 type AttributeChildren = PhrasingContent[] & {

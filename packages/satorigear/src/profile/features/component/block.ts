@@ -5,7 +5,7 @@ import { type BlockLine, lineIndent } from "../../../block/lines.ts";
 import { logicalToken, namedToken, structuralToken, tokenEnd, tokenStart } from "../../../block/tokens.ts";
 import {
   blockChildren,
-  type BlockProjector,
+  type BlockNodeBuilder,
   blockToken,
   directBlockToken,
   type FragmentNode,
@@ -389,7 +389,7 @@ function directRule(
   nodeId: number,
   tokenBase: number,
   rule: string,
-  context: Parameters<BlockProjector>[3],
+  context: Parameters<BlockNodeBuilder>[3],
 ): { id: number; tokenBase: number } | undefined {
   const arena = context.view.arena;
   for (let index = 0; index < arena.childCount(nodeId); index++) {
@@ -406,7 +406,7 @@ function directRule(
 function blockLabel(
   nodeId: number,
   tokenBase: number,
-  context: Parameters<BlockProjector>[3],
+  context: Parameters<BlockNodeBuilder>[3],
 ): FragmentNode<Paragraph> {
   const open = blockToken(nodeId, tokenBase, "BlockComponentLabelOpen", context);
   const close = blockToken(nodeId, tokenBase, "BlockComponentLabelClose", context);
@@ -459,7 +459,7 @@ export const blockRules: BlockFeature["rules"] = [
       close: "BlockComponentLabelClose",
     },
     inlineContent: true,
-    project(nodeId, offset, tokenBase, context) {
+    build(nodeId, offset, tokenBase, context) {
       return blockLabel(nodeId, tokenBase, context);
     },
   },
@@ -470,7 +470,7 @@ export const blockRules: BlockFeature["rules"] = [
       open: "BlockComponentOpen",
       close: "BlockComponentClose",
     },
-    project(nodeId, offset, tokenBase, context) {
+    build(nodeId, offset, tokenBase, context) {
       const open = blockToken(nodeId, tokenBase, "BlockComponentOpen", context);
       const close = blockToken(nodeId, tokenBase, "BlockComponentClose", context);
       const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
@@ -500,7 +500,7 @@ export const blockRules: BlockFeature["rules"] = [
       open: "BlockComponentSlotOpen",
       close: "BlockComponentSlotClose",
     },
-    project(nodeId, offset, tokenBase, context) {
+    build(nodeId, offset, tokenBase, context) {
       const open = blockToken(nodeId, tokenBase, "BlockComponentSlotOpen", context);
       const close = blockToken(nodeId, tokenBase, "BlockComponentSlotClose", context);
       const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);

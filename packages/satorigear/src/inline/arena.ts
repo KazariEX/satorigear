@@ -6,7 +6,7 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
-import type { InlineRuleProjector } from "../mdast.ts";
+import type { InlineNodeBuilder } from "../mdast.ts";
 import type { InlineSyntaxSchema } from "./profile.ts";
 
 function leaf(tokenIndex: number): number {
@@ -23,7 +23,7 @@ export class InlineArena {
   #kidCount = 0;
   #nodeCount = 0;
   #packedTokens: number[] = [];
-  #projects: (InlineRuleProjector | undefined)[] = [];
+  #builders: (InlineNodeBuilder | undefined)[] = [];
   #schema: InlineSyntaxSchema;
   #scratch: number[][] = [];
   #starts: number[] = [];
@@ -54,14 +54,14 @@ export class InlineArena {
   }
 
   node(
-    project: InlineRuleProjector | undefined,
+    build: InlineNodeBuilder | undefined,
     start: number,
     end: number,
     children: readonly number[],
     childCount: number,
   ): number {
     const id = this.#nodeCount++;
-    this.#projects[id] = project;
+    this.#builders[id] = build;
     this.#starts[id] = start;
     this.#ends[id] = end;
     this.#childStarts[id] = this.#kidCount;
@@ -73,13 +73,13 @@ export class InlineArena {
   }
 
   singleNode(
-    project: InlineRuleProjector,
+    build: InlineNodeBuilder,
     start: number,
     end: number,
     child: number,
   ): number {
     const id = this.#nodeCount++;
-    this.#projects[id] = project;
+    this.#builders[id] = build;
     this.#starts[id] = start;
     this.#ends[id] = end;
     this.#childStarts[id] = this.#kidCount;
@@ -126,8 +126,8 @@ export class InlineArena {
     return this.#ends[id] - this.#starts[id];
   }
 
-  projectOf(id: number): InlineRuleProjector | undefined {
-    return this.#projects[id];
+  builderOf(id: number): InlineNodeBuilder | undefined {
+    return this.#builders[id];
   }
 }
 
@@ -178,7 +178,7 @@ function semanticNode(
     }
     return {
       id: arena.node(
-        container.project,
+        container.build,
         inlineTokenStart(tokens, index),
         inlineTokenEnd(tokens, next - 1),
         children,
@@ -214,7 +214,7 @@ function semanticNode(
   children.push(leaf(content.next));
   return {
     id: arena.node(
-      pair.project,
+      pair.build,
       inlineTokenStart(tokens, index),
       inlineTokenEnd(tokens, content.next),
       children,
@@ -249,11 +249,11 @@ function parseItems(
       index = semantic.next;
     }
     else {
-      const fallbackProject = schema.fallbackProjectByKind[kind];
-      item = fallbackProject === void 0
+      const fallbackBuilder = schema.fallbackBuilderByKind[kind];
+      item = fallbackBuilder === void 0
         ? leaf(index)
         : arena.singleNode(
-          fallbackProject,
+          fallbackBuilder,
           inlineTokenStart(tokens, index),
           inlineTokenEnd(tokens, index),
           leaf(index),

@@ -1,8 +1,8 @@
 import { inlineKind } from "./kinds.ts";
 import { tokenizeInline } from "./lexer.ts";
 import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
-import type { InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
-// Inline features compile into one token pipeline and the arena/projection tables that consume it.
+import type { InlineLeafBuilder, InlineNodeBuilder } from "../mdast.ts";
+// Inline features compile into one token pipeline and the arena/build tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
 
 type InlineTokenizer = (source: string) => InlineTokenStream;
@@ -22,47 +22,47 @@ export type InlineSyntaxDefinition =
   | {
     kind: "leaf";
     token: string;
-    project: InlineLeafProjector;
+    build: InlineLeafBuilder;
   }
   | {
     kind: "container";
     close: string;
     contentOpen: string;
     token: string;
-    project: InlineRuleProjector;
+    build: InlineNodeBuilder;
   }
   | {
     kind: "fallback";
     tokens: readonly string[];
-    project: InlineRuleProjector;
+    build: InlineNodeBuilder;
   }
   | {
     kind: "pair";
     close: string;
     open: string;
-    project: InlineRuleProjector;
+    build: InlineNodeBuilder;
   };
 
 interface InlinePair {
   closeKind: number;
-  project: InlineRuleProjector;
+  build: InlineNodeBuilder;
 }
 
 interface InlineContainer {
   closeKind: number;
   contentOpenKind: number;
-  project: InlineRuleProjector;
+  build: InlineNodeBuilder;
 }
 
 export interface InlineSyntaxSchema {
   containerByKind: readonly (InlineContainer | undefined)[];
-  fallbackProjectByKind: readonly (InlineRuleProjector | undefined)[];
+  fallbackBuilderByKind: readonly (InlineNodeBuilder | undefined)[];
   pairByOpenKind: readonly (InlinePair | undefined)[];
 }
 
 interface InlineSyntaxCompilation {
   schema: InlineSyntaxSchema;
-  tokenProjects: readonly (InlineLeafProjector | undefined)[];
+  tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
 }
 
 export interface InlineResolutionDefinition {
@@ -82,33 +82,33 @@ export interface InlineProfile {
   resolve: InlineTokenTransform;
   schema: InlineSyntaxSchema;
   tokenize: InlineTokenizer;
-  tokenProjects: readonly (InlineLeafProjector | undefined)[];
+  tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
 }
 
-const ignoreInlineToken: InlineLeafProjector = () => false;
+const ignoreInlineToken: InlineLeafBuilder = () => false;
 
 function compileInlineSyntax(
   definitions: readonly InlineSyntaxDefinition[],
 ): InlineSyntaxCompilation {
-  const tokenProjects: (InlineLeafProjector | undefined)[] = [];
+  const tokenBuilders: (InlineLeafBuilder | undefined)[] = [];
   const containerByKind: (InlineContainer | undefined)[] = [];
-  const fallbackProjectByKind: (InlineRuleProjector | undefined)[] = [];
+  const fallbackBuilderByKind: (InlineNodeBuilder | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
-  const registerToken = (token: string, project: InlineLeafProjector): number => {
+  const registerToken = (token: string, build: InlineLeafBuilder): number => {
     const kind = inlineKind(token);
-    tokenProjects[kind] = project;
+    tokenBuilders[kind] = build;
     return kind;
   };
 
   for (const definition of definitions) {
     if (definition.kind === "leaf") {
-      registerToken(definition.token, definition.project);
+      registerToken(definition.token, definition.build);
       continue;
     }
 
     if (definition.kind === "fallback") {
       for (const token of definition.tokens) {
-        fallbackProjectByKind[inlineKind(token)] = definition.project;
+        fallbackBuilderByKind[inlineKind(token)] = definition.build;
       }
       continue;
     }
@@ -118,7 +118,7 @@ function compileInlineSyntax(
       containerByKind[tokenKind] = {
         closeKind: registerToken(definition.close, ignoreInlineToken),
         contentOpenKind: registerToken(definition.contentOpen, ignoreInlineToken),
-        project: definition.project,
+        build: definition.build,
       };
       continue;
     }
@@ -126,17 +126,17 @@ function compileInlineSyntax(
     const openKind = registerToken(definition.open, ignoreInlineToken);
     pairByOpenKind[openKind] = {
       closeKind: registerToken(definition.close, ignoreInlineToken),
-      project: definition.project,
+      build: definition.build,
     };
   }
 
   return {
     schema: {
       containerByKind,
-      fallbackProjectByKind,
+      fallbackBuilderByKind,
       pairByOpenKind,
     },
-    tokenProjects,
+    tokenBuilders,
   };
 }
 

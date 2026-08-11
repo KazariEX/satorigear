@@ -20,7 +20,7 @@ import {
   takeTerminalAttributes,
 } from "./carrier.ts";
 import { attributesEnd, parseAttributes } from "./syntax.ts";
-import type { BlockProjectorDecorator } from "../../../block/profile.ts";
+import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "./types.ts";
 
@@ -36,8 +36,8 @@ const textKind = inlineKind("Text");
 const detachedFlag = 4;
 const terminalFlag = 8;
 
-const decorateInlineContainer: BlockProjectorDecorator = (project) => (nodeId, offset, tokenBase, context) => {
-  const result = project(nodeId, offset, tokenBase, context) as FragmentNode<Paragraph | Heading>;
+const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
+  const result = build(nodeId, offset, tokenBase, context) as FragmentNode<Paragraph | Heading>;
   const attributes = takeTerminalAttributes(result.children);
   if (attributes) {
     result.attributes = attributes;
@@ -45,8 +45,8 @@ const decorateInlineContainer: BlockProjectorDecorator = (project) => (nodeId, o
   return result;
 };
 
-const decorateList: BlockProjectorDecorator = (project) => (nodeId, offset, tokenBase, context) => {
-  const result = project(nodeId, offset, tokenBase, context) as FragmentNode<List>;
+const decorateList: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
+  const result = build(nodeId, offset, tokenBase, context) as FragmentNode<List>;
   if (!result.spread) {
     for (const item of result.children) {
       const paragraph = !item.spread && item.children.length === 1 && item.children[0].type === "paragraph"
@@ -61,8 +61,8 @@ const decorateList: BlockProjectorDecorator = (project) => (nodeId, offset, toke
   return result;
 };
 
-const decorateBlockquote: BlockProjectorDecorator = (project) => (nodeId, offset, tokenBase, context) => {
-  const result = project(nodeId, offset, tokenBase, context) as FragmentNode<Blockquote>;
+const decorateBlockquote: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
+  const result = build(nodeId, offset, tokenBase, context) as FragmentNode<Blockquote>;
   const paragraph = result.children.length === 1 && result.children[0].type === "paragraph"
     ? result.children[0]
     : void 0;
@@ -195,7 +195,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: "Attributes",
-        project(tokenIndex, sourceSpan, accumulator) {
+        build(tokenIndex, sourceSpan, accumulator) {
           const previous = accumulator.target.at(-1) as (PhrasingContent & { attributes?: Attributes }) | undefined;
           const parsed = parseAttributes(accumulator.context.view.text, inlineTokenStart(accumulator.context.tokens, tokenIndex));
           if (!previous || !parsed) {

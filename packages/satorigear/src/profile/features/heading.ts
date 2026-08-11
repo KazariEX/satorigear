@@ -66,7 +66,7 @@ export const feature: SyntaxFeature = {
           close: "HeadingClose",
         },
         inlineContent: true,
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const marker = blockToken(nodeId, tokenBase, "AtxHeadingOpen", context);
           return withSpan<Heading>({
             type: "heading",
@@ -86,7 +86,7 @@ export const feature: SyntaxFeature = {
           close: "HeadingClose",
         },
         inlineContent: true,
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const levelOne = directBlockToken(nodeId, tokenBase, "SetextHeading1Open", context);
           if (!levelOne) {
             blockToken(nodeId, tokenBase, "SetextHeading2Open", context);

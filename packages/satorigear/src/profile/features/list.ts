@@ -8,10 +8,10 @@ import {
 } from "../../block/lines.ts";
 import { structuralToken, tokenEnd, tokenStart } from "../../block/tokens.ts";
 import {
+  type BlockBuildContext,
   blockChildren,
   blockEnd,
-  type BlockProjectionContext,
-  type BlockProjector,
+  type BlockNodeBuilder,
   blockToken,
   lastChildEnd,
   payloadBounds,
@@ -174,7 +174,7 @@ function childrenSpread(
   offset: number,
   tokenBase: number,
   stripBlockQuotes: boolean,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
   nestedRule?: string,
 ): boolean {
   const arena = context.view.arena;
@@ -205,7 +205,7 @@ function listItem(
   nodeId: number,
   offset: number,
   tokenBase: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): ListItem {
   const rule = context.view.arena.ruleNameOf(nodeId);
   if (rule !== "OrderedListItem" && rule !== "UnorderedListItem") {
@@ -226,7 +226,7 @@ function listItem(
   return withSpan(result, tokenStart(marker), lastChildEnd(result, blockEnd(nodeId, offset, context)));
 }
 
-function projectList(ordered: boolean): BlockProjector {
+function buildList(ordered: boolean): BlockNodeBuilder {
   return (nodeId, offset, tokenBase, context) => {
     const arena = context.view.arena;
     const itemRule = ordered ? "OrderedListItem" : "UnorderedListItem";
@@ -281,7 +281,7 @@ export const feature: SyntaxFeature = {
           open: "UnorderedListOpen",
           close: "UnorderedListClose",
         },
-        project: projectList(false),
+        build: buildList(false),
       },
       {
         rule: "OrderedList",
@@ -290,7 +290,7 @@ export const feature: SyntaxFeature = {
           open: "OrderedListOpen",
           close: "OrderedListClose",
         },
-        project: projectList(true),
+        build: buildList(true),
       },
     ],
     starts: [

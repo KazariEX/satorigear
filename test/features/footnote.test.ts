@@ -7,7 +7,7 @@ const defaultParser = createParser();
 const disabledParser = createParser({ footnote: false });
 
 describe("footnote", () => {
-  it("projects references and definitions as mdast associations", () => {
+  it("builds references and definitions as mdast associations", () => {
     const source = "A note[^alpha].\n\n[^alpha]: **bold** note.\n";
     expect(parser.parse(source).children).toMatchObject([
       {

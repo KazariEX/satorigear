@@ -21,7 +21,7 @@ import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
 import type { SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 
-export interface BlockProjectionContext {
+export interface BlockBuildContext {
   profile: SyntaxProfile;
   source: string;
   syntaxState: SyntaxState;
@@ -39,45 +39,45 @@ export type FragmentNode<T extends object = Node> = T & FragmentValue;
 
 export interface BlockFragment {
   node: FragmentNode<TopLevelContent>;
-  // Origin belongs to the cached projection; offset moves so positions can shift without rebuilding nodes.
+  // Origin belongs to the cached fragment; offset moves so positions can shift without rebuilding nodes.
   offset: number;
   origin: number;
   version: number;
 }
 
-// Core owns projection state and traversal; profiles supply every syntax-specific node constructor.
-export type BlockProjector = (
+// Core owns fragment state and traversal; profiles supply every syntax-specific node builder.
+export type BlockNodeBuilder = (
   nodeId: number,
   offset: number,
   tokenBase: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ) => FragmentNode<TopLevelContent>;
 
-export interface InlineProjectionContext {
+export interface InlineBuildContext {
   arena: InlineArena;
   blockRule: string;
   decodeText: (value: string) => string;
   source: string;
   tokenBase: number;
-  tokenProjects: readonly (InlineLeafProjector | undefined)[];
+  tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
   tokens: InlineTokenStream;
   view: SourceView;
 }
 
 export interface InlineAccumulator {
-  context: InlineProjectionContext;
+  context: InlineBuildContext;
   gapEnd: number;
   gapStart: number;
   target: PhrasingContent[];
 }
 
-export type InlineLeafProjector = (
+export type InlineLeafBuilder = (
   tokenIndex: number,
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
 ) => boolean;
 
-export type InlineRuleProjector = (
+export type InlineNodeBuilder = (
   nodeId: number,
   offset: number,
   endOffset: number,
@@ -85,7 +85,7 @@ export type InlineRuleProjector = (
   accumulator: InlineAccumulator,
 ) => boolean;
 
-export const projectInlineChildren: InlineRuleProjector = (
+export const buildInlineChildren: InlineNodeBuilder = (
   nodeId,
   offset,
   endOffset,
@@ -105,7 +105,7 @@ export function extendSpan(value: object, end: number): void {
   fragment.endOffset = Math.max(fragment.endOffset, end);
 }
 
-export function blockEnd(nodeId: number, offset: number, context: BlockProjectionContext): number {
+export function blockEnd(nodeId: number, offset: number, context: BlockBuildContext): number {
   let end = offset + context.view.arena.lenOf(nodeId);
   if (end > offset && context.source[end - 1] === "\n") {
     end--;
@@ -116,7 +116,7 @@ export function blockEnd(nodeId: number, offset: number, context: BlockProjectio
   return end;
 }
 
-function inlineTokenIndex(context: InlineProjectionContext, index: number): number {
+function inlineTokenIndex(context: InlineBuildContext, index: number): number {
   const tokenIndex = index - context.tokenBase;
   if (tokenIndex < 0 || tokenIndex >= inlineTokenCount(context.tokens)) {
     throw new Error("inline arena returned a leaf outside its token stream");
@@ -175,7 +175,7 @@ export function firstNonspace(source: string, start: number, end: number): numbe
 export function directLeaf(
   nodeId: number,
   tokenType: string,
-  context: InlineProjectionContext,
+  context: InlineBuildContext,
 ): number | undefined {
   const { arena } = context;
   const childCount = arena.childCount(nodeId);
@@ -189,7 +189,7 @@ export function directLeaf(
   }
 }
 
-export function leaf(nodeId: number, tokenType: string, context: InlineProjectionContext): number {
+export function leaf(nodeId: number, tokenType: string, context: InlineBuildContext): number {
   const result = directLeaf(nodeId, tokenType, context);
   if (result === void 0) {
     throw new Error(`Expected inline syntax to contain ${tokenType}`);
@@ -201,7 +201,7 @@ export function directBlockToken(
   nodeId: number,
   tokenBase: number,
   tokenType: string,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): BlockToken | undefined {
   const arena = context.view.arena;
   const childCount = arena.childCount(nodeId);
@@ -220,7 +220,7 @@ export function blockToken(
   nodeId: number,
   tokenBase: number,
   tokenType: string,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): BlockToken {
   const token = directBlockToken(nodeId, tokenBase, tokenType, context);
   if (!token) {
@@ -233,7 +233,7 @@ export function payloadBounds(
   nodeId: number,
   offset: number,
   tokenBase: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): SourceSpan {
   const arena = context.view.arena;
   const result = { start: offset + arena.lenOf(nodeId), end: offset };
@@ -288,7 +288,7 @@ function appendPhrasing(target: PhrasingContent[], value: PhrasingContent): void
 }
 
 export function createInlineAccumulator(
-  context: InlineProjectionContext,
+  context: InlineBuildContext,
   target: PhrasingContent[],
 ): InlineAccumulator {
   return { context, gapEnd: -1, gapStart: -1, target };
@@ -345,18 +345,18 @@ function appendInlineLeaf(
   accumulator: InlineAccumulator,
 ): boolean {
   const { context } = accumulator;
-  const project = context.tokenProjects[inlineTokenKind(context.tokens, tokenIndex)];
-  if (!project) {
+  const build = context.tokenBuilders[inlineTokenKind(context.tokens, tokenIndex)];
+  if (!build) {
     throw new Error(`Unexpected inline token kind ${inlineTokenKind(context.tokens, tokenIndex)}`);
   }
-  return project(tokenIndex, sourceSpan, accumulator);
+  return build(tokenIndex, sourceSpan, accumulator);
 }
 
 export function contentBounds(
   nodeId: number,
   openType: string,
   closeType: string,
-  context: InlineProjectionContext,
+  context: InlineBuildContext,
 ): [number, number] {
   return [
     inlineTokenEnd(context.tokens, leaf(nodeId, openType, context)),
@@ -422,16 +422,16 @@ function appendInlineNode(
   accumulator: InlineAccumulator,
 ): boolean {
   const { context } = accumulator;
-  const project = context.arena.projectOf(nodeId);
-  if (!project) {
+  const build = context.arena.builderOf(nodeId);
+  if (!build) {
     throw new Error("Unexpected inline syntax rule");
   }
-  return project(nodeId, offset, endOffset, sourceSpan, accumulator);
+  return build(nodeId, offset, endOffset, sourceSpan, accumulator);
 }
 
 export function inlineChildren(
   nodeId: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
   allowEmpty = false,
 ): PhrasingContent[] {
   const inline = context.syntaxState.inlineForBlock(nodeId);
@@ -442,13 +442,13 @@ export function inlineChildren(
     }
     throw new Error(`Expected ${rule} syntax to contain InlineLines`);
   }
-  const inlineContext: InlineProjectionContext = {
+  const inlineContext: InlineBuildContext = {
     arena: inline.arena,
     blockRule: inline.blockRule,
     decodeText: context.profile.inline.decodeText,
     source: context.source,
     tokenBase: inline.rootTokenBase,
-    tokenProjects: context.profile.inline.tokenProjects,
+    tokenBuilders: context.profile.inline.tokenBuilders,
     tokens: inline.tokens,
     view: inline.view,
   };
@@ -475,7 +475,7 @@ export function blockChildren(
   nodeId: number,
   offset: number,
   tokenBase: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): (BlockContent | DefinitionContent)[] {
   const arena = context.view.arena;
   const children: (BlockContent | DefinitionContent)[] = [];
@@ -498,20 +498,20 @@ function blockNode(
   nodeId: number,
   offset: number,
   tokenBase: number,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): FragmentNode<TopLevelContent> {
   const arena = context.view.arena;
   const rule = arena.ruleOf(nodeId);
-  const project = rule.project;
-  if (!project) {
+  const build = rule.build;
+  if (!build) {
     throw new Error(`Unexpected block syntax rule: ${rule.name}`);
   }
-  return project(nodeId, offset, tokenBase, context);
+  return build(nodeId, offset, tokenBase, context);
 }
 
-export function projectBlock(
+export function buildBlockFragment(
   block: SyntaxBlock,
-  context: BlockProjectionContext,
+  context: BlockBuildContext,
 ): BlockFragment {
   const node = blockNode(block.handle.id, block.offset, block.tokenBase, context);
   return {

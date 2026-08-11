@@ -3,11 +3,11 @@ import {
   appendInline,
   contentBounds,
   createInlineAccumulator,
-  type InlineRuleProjector,
+  type InlineNodeBuilder,
   inlineSequence,
   withSpan,
 } from "../../mdast.ts";
-import { projectInlineText } from "./text.ts";
+import { buildInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
 import type { InlineSyntaxDefinition } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -45,7 +45,7 @@ export interface StrikethroughOptions {
 
 type Formatting = Delete | Emphasis | Strong;
 
-function projectFormatting(type: Formatting["type"], boundary: "Emphasis" | "Strong"): InlineRuleProjector {
+function buildFormatting(type: Formatting["type"], boundary: "Emphasis" | "Strong"): InlineNodeBuilder {
   const open = `${boundary}Open`;
   const close = `${boundary}Close`;
   return (nodeId, offset, endOffset, sourceSpan, accumulator) => {
@@ -61,26 +61,26 @@ function projectFormatting(type: Formatting["type"], boundary: "Emphasis" | "Str
   };
 }
 
-const projectInlineEmphasis = projectFormatting("emphasis", "Emphasis");
-const projectInlineStrong = projectFormatting("strong", "Strong");
-const projectInlineDelete = projectFormatting("delete", "Strong");
+const buildInlineEmphasis = buildFormatting("emphasis", "Emphasis");
+const buildInlineStrong = buildFormatting("strong", "Strong");
+const buildInlineDelete = buildFormatting("delete", "Strong");
 
-const projectInlineStrongOrDelete: InlineRuleProjector = (
+const buildInlineStrongOrDelete: InlineNodeBuilder = (
   nodeId,
   offset,
   endOffset,
   sourceSpan,
   accumulator,
 ) => {
-  const project = accumulator.context.source[sourceSpan.start] === "~"
-    ? projectInlineDelete
-    : projectInlineStrong;
-  return project(nodeId, offset, endOffset, sourceSpan, accumulator);
+  const build = accumulator.context.source[sourceSpan.start] === "~"
+    ? buildInlineDelete
+    : buildInlineStrong;
+  return build(nodeId, offset, endOffset, sourceSpan, accumulator);
 };
 
 const inlineSyntax: readonly InlineSyntaxDefinition[] = [
-  { kind: "leaf", token: "Delimiter", project: projectInlineText },
-  { kind: "leaf", token: "TildeRun", project: projectInlineText },
+  { kind: "leaf", token: "Delimiter", build: buildInlineText },
+  { kind: "leaf", token: "TildeRun", build: buildInlineText },
 ];
 
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {
@@ -94,7 +94,7 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
   }
 
   // Reuse the double-delimiter structure so enabling `~` does not add another semantic rule.
-  const projectStrong = strikethroughOptions ? projectInlineStrongOrDelete : projectInlineStrong;
+  const buildStrong = strikethroughOptions ? buildInlineStrongOrDelete : buildInlineStrong;
 
   return {
     inline: {
@@ -105,13 +105,13 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
           kind: "pair",
           open: "EmphasisOpen",
           close: "EmphasisClose",
-          project: projectInlineEmphasis,
+          build: buildInlineEmphasis,
         },
         {
           kind: "pair",
           open: "StrongOpen",
           close: "StrongClose",
-          project: projectStrong,
+          build: buildStrong,
         },
       ],
     },

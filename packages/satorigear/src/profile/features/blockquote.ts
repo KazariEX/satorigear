@@ -48,7 +48,7 @@ export const feature: SyntaxFeature = {
           open: "BlockQuoteOpen",
           close: "BlockQuoteClose",
         },
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const result: Blockquote = {
             type: "blockquote",
             children: blockChildren(nodeId, offset, tokenBase, context),

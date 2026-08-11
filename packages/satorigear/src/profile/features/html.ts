@@ -6,7 +6,7 @@ import {
   appendInline,
   blockEnd,
   blockToken,
-  type InlineLeafProjector,
+  type InlineLeafBuilder,
   normalizeLines,
   withSpan,
 } from "../../mdast.ts";
@@ -17,7 +17,7 @@ interface HtmlStart {
   terminator?: string;
 }
 
-// Scanning owns block classification; projection only needs to preserve an unfinished terminator block.
+// Scanning owns block classification; node building only preserves an unfinished terminator block.
 interface HtmlBlockToken extends BlockToken {
   unterminated: boolean;
 }
@@ -134,7 +134,7 @@ function htmlBlockToken(token: BlockToken): HtmlBlockToken {
   return result as HtmlBlockToken;
 }
 
-const projectInlineHtml: InlineLeafProjector = (tokenIndex, sourceSpan, accumulator) => {
+const buildInlineHtml: InlineLeafBuilder = (tokenIndex, sourceSpan, accumulator) => {
   const { context } = accumulator;
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   appendInline(
@@ -153,7 +153,7 @@ export const feature: SyntaxFeature = {
           kind: "leaf",
           token: "HtmlBlockToken",
         },
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const end = offset + context.view.arena.lenOf(nodeId);
           const token = htmlBlockToken(blockToken(nodeId, tokenBase, "HtmlBlockToken", context));
           let html = normalizeLines(token.text);
@@ -211,8 +211,8 @@ export const feature: SyntaxFeature = {
   },
   inline: {
     syntax: [
-      { kind: "leaf", token: "InlineHtml", project: projectInlineHtml },
-      { kind: "leaf", token: "HtmlComment", project: projectInlineHtml },
+      { kind: "leaf", token: "InlineHtml", build: buildInlineHtml },
+      { kind: "leaf", token: "HtmlComment", build: buildInlineHtml },
     ],
   },
 };

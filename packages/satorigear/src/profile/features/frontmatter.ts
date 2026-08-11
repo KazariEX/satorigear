@@ -60,7 +60,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
             kind: "leaf",
             token: "FrontmatterToken",
           },
-          project(nodeId, offset, tokenBase, context) {
+          build(nodeId, offset, tokenBase, context) {
             const token = blockToken(nodeId, tokenBase, "FrontmatterToken", context);
             const ranges = token.ranges;
             if (!ranges || ranges.length < 2) {

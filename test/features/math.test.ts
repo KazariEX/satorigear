@@ -12,7 +12,7 @@ const componentParser = createParser({
 const defaultParser = createParser();
 
 describe("math", () => {
-  it("projects inline math with exact dollar runs", () => {
+  it("builds inline math with exact dollar runs", () => {
     expect(parser.parse("before $ a $ and $$b$$ after").children[0]).toMatchObject({
       type: "paragraph",
       children: [
@@ -102,7 +102,7 @@ describe("math", () => {
     });
   });
 
-  it("projects fenced math with metadata and indentation", () => {
+  it("builds fenced math with metadata and indentation", () => {
     const source = "  $$ a&amp;\\*\n  x + y\n  $$$  \n";
     expect(parser.parse(source).children[0]).toEqual({
       type: "math",

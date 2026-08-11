@@ -66,7 +66,7 @@ export const feature: SyntaxFeature = {
           close: "ParagraphClose",
         },
         inlineContent: true,
-        project(nodeId, offset, tokenBase, context) {
+        build(nodeId, offset, tokenBase, context) {
           const result: Paragraph = { type: "paragraph", children: inlineChildren(nodeId, context) };
           return withSpan(result, firstChildStart(result), blockEnd(nodeId, offset, context));
         },

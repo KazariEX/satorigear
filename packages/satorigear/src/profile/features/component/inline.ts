@@ -25,7 +25,7 @@ import {
   normalizeComponentName,
 } from "../attributes/syntax.ts";
 import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
-import type { InlineRuleProjector } from "../../../mdast.ts";
+import type { InlineNodeBuilder } from "../../../mdast.ts";
 import type { InlineComponent } from "./types.ts";
 
 interface Candidate {
@@ -356,7 +356,7 @@ export function transformComponentTokens(
   return result;
 }
 
-const projectInlineComponent: InlineRuleProjector = (
+const buildInlineComponent: InlineNodeBuilder = (
   nodeId,
   offset,
   endOffset,
@@ -396,7 +396,7 @@ const projectInlineComponent: InlineRuleProjector = (
   return true;
 };
 
-const projectInlineSpan: InlineRuleProjector = (
+const buildInlineSpan: InlineNodeBuilder = (
   nodeId,
   offset,
   endOffset,
@@ -431,12 +431,12 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
     token: "InlineComponentOpen",
     contentOpen: "InlineComponentLabelOpen",
     close: "InlineComponentLabelClose",
-    project: projectInlineComponent,
+    build: buildInlineComponent,
   },
   {
     kind: "pair",
     open: "InlineSpanOpen",
     close: "InlineSpanClose",
-    project: projectInlineSpan,
+    build: buildInlineSpan,
   },
 ];
