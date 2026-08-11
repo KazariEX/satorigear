@@ -376,8 +376,8 @@ const projectInlineComponent: InlineRuleProjector = (
     const [start, end] = contentBounds(
       nodeId,
       tokenBase,
-      ["InlineComponentLabelOpen"],
-      ["InlineComponentLabelClose"],
+      "InlineComponentLabelOpen",
+      "InlineComponentLabelClose",
       context,
     );
     inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
@@ -411,8 +411,8 @@ const projectInlineSpan: InlineRuleProjector = (
   const [start, end] = contentBounds(
     nodeId,
     tokenBase,
-    ["InlineSpanOpen"],
-    ["InlineSpanClose"],
+    "InlineSpanOpen",
+    "InlineSpanClose",
     context,
   );
   const children: PhrasingContent[] = [];

@@ -201,23 +201,6 @@ export function leaf(nodeId: number, tokenBase: number, tokenType: string, conte
   return result;
 }
 
-export function leafOfTypes(
-  nodeId: number,
-  tokenBase: number,
-  tokenTypes: readonly string[],
-  context: InlineProjectionContext,
-): number {
-  const { arena } = context;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const entry = arena.childAt(nodeId, index);
-    if (entry < 0 && tokenTypes.includes(arena.leafTokenType(entry, tokenBase))) {
-      return inlineTokenIndex(context, arena.leafToken(entry, tokenBase));
-    }
-  }
-  throw new Error(`Expected ${context.arena.ruleNameOf(nodeId)} syntax to contain one of: ${tokenTypes.join(", ")}`);
-}
-
 export function directBlockToken(
   nodeId: number,
   tokenBase: number,
@@ -378,13 +361,13 @@ function appendInlineLeaf(
 export function contentBounds(
   nodeId: number,
   tokenBase: number,
-  openTypes: readonly string[],
-  closeTypes: readonly string[],
+  openType: string,
+  closeType: string,
   context: InlineProjectionContext,
 ): [number, number] {
   return [
-    inlineTokenEnd(context.tokens, leafOfTypes(nodeId, tokenBase, openTypes, context)),
-    inlineTokenStart(context.tokens, leafOfTypes(nodeId, tokenBase, closeTypes, context)),
+    inlineTokenEnd(context.tokens, leaf(nodeId, tokenBase, openType, context)),
+    inlineTokenStart(context.tokens, leaf(nodeId, tokenBase, closeType, context)),
   ];
 }
 

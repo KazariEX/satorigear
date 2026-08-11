@@ -138,7 +138,13 @@ function linkOrImage(
   const referenceNode = resourceKind === "reference";
   const prefix = image ? "Image" : "";
   const resourcePrefix = referenceNode ? "Reference" : "Link";
-  const [start, end] = contentBounds(nodeId, tokenBase, [`${prefix}${resourcePrefix}Open`], [`${prefix}${resourcePrefix}Close`], context);
+  const [start, end] = contentBounds(
+    nodeId,
+    tokenBase,
+    `${prefix + resourcePrefix}Open`,
+    `${prefix + resourcePrefix}Close`,
+    context,
+  );
   const children: PhrasingContent[] = [];
   inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
   if (referenceNode) {

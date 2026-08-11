@@ -47,8 +47,8 @@ export interface StrikethroughOptions {
 type Formatting = Delete | Emphasis | Strong;
 
 function projectFormatting(type: Formatting["type"], boundary: "Emphasis" | "Strong"): InlineRuleProjector {
-  const open = [`${boundary}Open`];
-  const close = [`${boundary}Close`];
+  const open = `${boundary}Open`;
+  const close = `${boundary}Close`;
   return (nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator) => {
     const context = accumulator.context;
     const [start, end] = contentBounds(nodeId, tokenBase, open, close, context);
