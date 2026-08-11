@@ -20,8 +20,5 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
-      - name: Prepare Vendor
-        run: pnpm run prepare:vendor
-
       - name: Run Tests
         run: pnpm run test
