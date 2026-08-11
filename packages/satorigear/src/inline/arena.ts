@@ -48,7 +48,7 @@ export class InlineArena implements SyntaxArena {
     let tokenStart = 0;
     for (let index = 0; index < segments.length; index++) {
       const tokenEnd = tokenStart + segments[index].length / inlineTokenStride;
-      roots[index] = buildLines(this, this.#schema, this.#tokens, tokenStart, tokenEnd);
+      roots[index] = buildRoot(this, this.#schema, this.#tokens, tokenStart, tokenEnd);
       tokenStart = tokenEnd;
     }
   }
@@ -181,7 +181,6 @@ function semanticNode(
         end,
         container.closeKind,
         inLink,
-        false,
         scratchDepth + 1,
       );
       if (
@@ -222,7 +221,6 @@ function semanticNode(
     end,
     pair.closeKind,
     inLink || pair.entersLink,
-    false,
     scratchDepth + 1,
   );
   if (
@@ -258,7 +256,6 @@ function parseItems(
   end: number,
   closeKind: number | undefined,
   inLink: boolean,
-  stopAtNewline = false,
   scratchDepth = 0,
 ): ParseResult {
   const children = arena.scratch(scratchDepth);
@@ -266,12 +263,8 @@ function parseItems(
   let index = start;
   while (index < end) {
     const kind = inlineTokenKind(tokens, index);
-    if (kind === closeKind || (stopAtNewline && kind === schema.newlineKind)) {
+    if (kind === closeKind) {
       break;
-    }
-    if (kind === schema.newlineKind) {
-      children[childCount++] = leaf(index++);
-      continue;
     }
 
     const semantic = semanticNode(arena, schema, tokens, index, end, inLink, scratchDepth);
@@ -293,58 +286,30 @@ function parseItems(
         );
       index++;
     }
-    const tokenBase = arena.entryTokenBase(item);
-    children[childCount++] = arena.singleNode(
-      inLink ? schema.linkContentRuleId : schema.inlineRuleId,
-      arena.entryStart(item),
-      arena.entryEnd(item),
-      tokenBase,
-      item,
-    );
+    children[childCount++] = item;
   }
   return { childCount, children, next: index };
 }
 
-function buildLines(
+function buildRoot(
   arena: InlineArena,
   schema: InlineSyntaxSchema,
   tokens: InlineTokenStream,
   start: number,
   end: number,
 ): number {
-  const children = arena.scratch(0);
-  let childCount = 0;
-  let index = start;
-  while (index < end) {
-    const content = parseItems(arena, schema, tokens, index, end, void 0, false, true, 1);
-    if (content.childCount > 0) {
-      const first = content.children[0];
-      const last = content.children[content.childCount - 1];
-      children[childCount++] = arena.node(
-        schema.inlineLineRuleId,
-        arena.entryStart(first),
-        arena.entryEnd(last),
-        arena.entryTokenBase(first),
-        content.children,
-        content.childCount,
-      );
-    }
-    index = content.next;
-    if (index < end && inlineTokenKind(tokens, index) === schema.newlineKind) {
-      children[childCount++] = leaf(index++);
-    }
+  const content = parseItems(arena, schema, tokens, start, end, void 0, false);
+  if (content.childCount === 0) {
+    return arena.node(schema.inlineLinesRuleId, 0, 0, start, content.children, 0);
   }
-  if (childCount === 0) {
-    return arena.node(schema.inlineLinesRuleId, 0, 0, start, children, 0);
-  }
-  const first = children[0];
-  const last = children[childCount - 1];
+  const first = content.children[0];
+  const last = content.children[content.childCount - 1];
   return arena.node(
     schema.inlineLinesRuleId,
     arena.entryStart(first),
     arena.entryEnd(last),
     arena.entryTokenBase(first),
-    children,
-    childCount,
+    content.children,
+    content.childCount,
   );
 }

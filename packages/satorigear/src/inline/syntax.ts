@@ -39,11 +39,7 @@ interface InlineContainer {
 export interface InlineSyntaxSchema {
   containerByKind: readonly (InlineContainer | undefined)[];
   fallbackRuleByKind: readonly (number | undefined)[];
-  inlineLineRuleId: number;
   inlineLinesRuleId: number;
-  inlineRuleId: number;
-  linkContentRuleId: number;
-  newlineKind: number;
   pairByOpenKind: readonly (InlinePair | undefined)[];
   ruleNames: readonly string[];
   tokenNames: readonly (string | undefined)[];
@@ -104,11 +100,7 @@ export function compileInlineSyntax(
   return {
     containerByKind,
     fallbackRuleByKind,
-    inlineLineRuleId: ruleId("InlineLine"),
     inlineLinesRuleId: ruleId("InlineLines"),
-    inlineRuleId: ruleId("Inline"),
-    linkContentRuleId: ruleId("LinkContent"),
-    newlineKind,
     pairByOpenKind,
     ruleNames,
     tokenNames: compiledTokenNames,

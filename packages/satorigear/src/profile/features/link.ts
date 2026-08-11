@@ -176,7 +176,6 @@ const projectInlineReferenceImage = projectMedia("image", "reference");
 export const feature: SyntaxFeature = {
   inline: {
     rules: [
-      { rule: "LinkContent", project: projectInlineChildren },
       { rule: "BracketFallback", project: projectInlineChildren },
       { rule: "Image", project: projectInlineImage },
       { rule: "LinkImage", project: projectInlineImage },

@@ -4,7 +4,6 @@ import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
   type InlineLeafProjector,
-  projectInlineChildren,
   withSpan,
 } from "../../mdast.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -30,11 +29,6 @@ export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, a
 
 export const feature: SyntaxFeature = {
   inline: {
-    rules: [
-      { rule: "InlineLines", project: projectInlineChildren },
-      { rule: "InlineLine", project: projectInlineChildren },
-      { rule: "Inline", project: projectInlineChildren },
-    ],
     tokens: [
       { token: "Text", project: projectInlineText },
       { token: "Escape", project: projectInlineText },
