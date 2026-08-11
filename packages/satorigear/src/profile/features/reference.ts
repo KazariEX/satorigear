@@ -32,6 +32,11 @@ interface LinkDefinitionFields {
   title: string | undefined;
 }
 
+const referenceTailKind = inlineKind("ReferenceTail");
+const bracketOpenKind = inlineKind("BracketOpen");
+const shortcutTailKind = inlineKind("ShortcutReferenceTail");
+const imageOpenKind = inlineKind("ImageOpen");
+
 interface LinkDefinitionOpenToken extends BlockToken {
   linkDefinition: LinkDefinitionFields;
 }
@@ -237,16 +242,12 @@ function linkDefinitionAt(
 
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
 const reassociateReferenceTails: InlineTransform = (source, tokens, context) => {
-  const referenceTail = inlineKind("ReferenceTail");
-  const bracketOpen = inlineKind("BracketOpen");
-  const shortcutTail = inlineKind("ShortcutReferenceTail");
-  const imageOpen = inlineKind("ImageOpen");
   const count = inlineTokenCount(tokens);
   let result: number[] | undefined;
   for (let index = 0; index < count; index++) {
     const kind = inlineTokenKind(tokens, index);
-    const label = kind === referenceTail ? inlineTokenText(source, tokens, index).slice(2, -1) : "";
-    if (kind !== referenceTail || context.hasDefinition(normalizeAssociationLabel(label))) {
+    const label = kind === referenceTailKind ? inlineTokenText(source, tokens, index).slice(2, -1) : "";
+    if (kind !== referenceTailKind || context.hasDefinition(normalizeAssociationLabel(label))) {
       if (result) {
         copyInlineToken(result, tokens, index);
       }
@@ -255,7 +256,7 @@ const reassociateReferenceTails: InlineTransform = (source, tokens, context) => 
     const openerIndex = index + 1;
     if (
       openerIndex >= count ||
-      inlineTokenKind(tokens, openerIndex) !== bracketOpen ||
+      inlineTokenKind(tokens, openerIndex) !== bracketOpenKind ||
       inlineTokenStart(tokens, openerIndex) !== inlineTokenEnd(tokens, index)
     ) {
       if (result) {
@@ -265,9 +266,9 @@ const reassociateReferenceTails: InlineTransform = (source, tokens, context) => 
     }
     let closerIndex = index + 2;
     let nested = false;
-    while (closerIndex < count && inlineTokenKind(tokens, closerIndex) !== shortcutTail) {
+    while (closerIndex < count && inlineTokenKind(tokens, closerIndex) !== shortcutTailKind) {
       const closerKind = inlineTokenKind(tokens, closerIndex);
-      nested ||= closerKind === bracketOpen || closerKind === imageOpen;
+      nested ||= closerKind === bracketOpenKind || closerKind === imageOpenKind;
       closerIndex++;
     }
     if (closerIndex === count || nested) {
@@ -294,7 +295,7 @@ const reassociateReferenceTails: InlineTransform = (source, tokens, context) => 
     const offset = inlineTokenEnd(tokens, index) - 1;
     appendInlineToken(
       result,
-      referenceTail,
+      referenceTailKind,
       offset,
       inlineTokenEnd(tokens, closerIndex),
       inlineTokenFlags(tokens, index),

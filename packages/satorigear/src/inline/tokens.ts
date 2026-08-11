@@ -1,14 +1,12 @@
 import * as generatedInline from "../generated/inline.ts";
 
+export { inlineKind } from "./kinds.ts";
+
 export type InlineTokenStream = readonly number[];
 
 // The generated lexer, resolver, semantic arena, and projector share this one
 // region-local record layout. Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = generatedInline.packedTokenStride;
-
-export function inlineKind(type: string): number {
-  return generatedInline.tokenKind(type);
-}
 
 export function tokenizeInline(source: string): InlineTokenStream {
   return generatedInline.tokenizePacked(source);

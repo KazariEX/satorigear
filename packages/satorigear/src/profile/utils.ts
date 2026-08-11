@@ -7,6 +7,11 @@ import {
   type InlineTokenStream,
 } from "../inline/tokens.ts";
 
+const referenceSeparatorCloseKind = inlineKind("ReferenceSeparatorClose");
+const bracketOpenKind = inlineKind("BracketOpen");
+const textKind = inlineKind("Text");
+const shortcutReferenceTailKind = inlineKind("ShortcutReferenceTail");
+
 export function normalizeAssociationLabel(label: string): string {
   return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();
 }
@@ -16,11 +21,11 @@ export function splitReferenceTail(tokens: InlineTokenStream, index: number): In
   const end = inlineTokenEnd(tokens, index);
   const flags = inlineTokenFlags(tokens, index);
   const result: number[] = [];
-  appendInlineToken(result, inlineKind("ReferenceSeparatorClose"), start, start + 1, flags);
-  appendInlineToken(result, inlineKind("BracketOpen"), start + 1, start + 2);
+  appendInlineToken(result, referenceSeparatorCloseKind, start, start + 1, flags);
+  appendInlineToken(result, bracketOpenKind, start + 1, start + 2);
   if (end > start + 3) {
-    appendInlineToken(result, inlineKind("Text"), start + 2, end - 1);
+    appendInlineToken(result, textKind, start + 2, end - 1);
   }
-  appendInlineToken(result, inlineKind("ShortcutReferenceTail"), end - 1, end);
+  appendInlineToken(result, shortcutReferenceTailKind, end - 1, end);
   return result;
 }

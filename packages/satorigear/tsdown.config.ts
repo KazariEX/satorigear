@@ -3,6 +3,22 @@ import { join } from "node:path";
 import { minify } from "rolldown/utils";
 import { defineConfig } from "tsdown";
 import { grammar as grammarInline } from "./src/grammars/inline.ts";
+import { inlineKind } from "./src/inline/kinds.ts";
+
+function verifyInlineKinds(source: string): void {
+  const generated = Object.fromEntries(
+    [...source.matchAll(/case "([^"]*)": return (\d+);/g)].map((match) => [match[1], Number(match[2])]),
+  );
+  const fallback = Number(/K_NAMED_FALLBACK = (\d+);/.exec(source)?.[1]);
+  for (const [name, kind] of Object.entries(generated)) {
+    if (inlineKind(name) !== kind) {
+      throw new Error(`Generated inline kind for ${name} does not match the runtime registry`);
+    }
+  }
+  if (inlineKind("InlineBoundary") !== fallback) {
+    throw new Error("InlineBoundary does not match the generated fallback kind");
+  }
+}
 
 export default defineConfig({
   exports: true,
@@ -12,7 +28,7 @@ export default defineConfig({
       groups: [
         {
           name: "generated/inline",
-          test: /[\\/]src[\\/]generated[\\/]inline\.ts$/,
+          test: /[\\/]src[\\/](?:generated[\\/]inline|inline[\\/]kinds)\.ts$/,
         },
       ],
     },
@@ -25,9 +41,9 @@ export default defineConfig({
         const { emitJsPackedLexer } = await import("monogram/emit-parser.ts" as any);
 
         const generated = join(import.meta.dirname, "src/generated");
-        const modules = [
-          { name: "inline.ts", source: emitJsPackedLexer(grammarInline) },
-        ];
+        const inline = emitJsPackedLexer(grammarInline);
+        verifyInlineKinds(inline);
+        const modules = [{ name: "inline.ts", source: inline }];
 
         await mkdir(generated, { recursive: true });
         await Promise.all(
