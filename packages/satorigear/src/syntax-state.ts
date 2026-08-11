@@ -169,7 +169,7 @@ export class SyntaxState {
     const rootChildCount = arena.childCount(root.id);
     for (let index = stableBlockCount; index < rootChildCount; index++) {
       const childId = arena.childAt(root.id, index);
-      if (childId < 0 || arena.ruleNameOf(childId) !== "Block") {
+      if (childId < 0 || !view.arena.isBlock(childId)) {
         continue;
       }
       const offset = root.offset + arena.childRelAt(root.id, index);

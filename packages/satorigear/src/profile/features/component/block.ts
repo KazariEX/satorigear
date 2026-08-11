@@ -457,7 +457,6 @@ export const blockRules: BlockFeature["rules"] = [
       kind: "frame",
       open: "BlockComponentLabelOpen",
       close: "BlockComponentLabelClose",
-      wrapsBlock: false,
     },
     inlineContent: true,
     project(nodeId, offset, tokenBase, context) {
@@ -467,10 +466,9 @@ export const blockRules: BlockFeature["rules"] = [
   {
     rule: "BlockComponent",
     syntax: {
-      kind: "frame",
+      kind: "block",
       open: "BlockComponentOpen",
       close: "BlockComponentClose",
-      wrapsBlock: true,
     },
     project(nodeId, offset, tokenBase, context) {
       const open = blockToken(nodeId, tokenBase, "BlockComponentOpen", context);
@@ -498,10 +496,9 @@ export const blockRules: BlockFeature["rules"] = [
   {
     rule: "BlockComponentSlot",
     syntax: {
-      kind: "frame",
+      kind: "block",
       open: "BlockComponentSlotOpen",
       close: "BlockComponentSlotClose",
-      wrapsBlock: true,
     },
     project(nodeId, offset, tokenBase, context) {
       const open = blockToken(nodeId, tokenBase, "BlockComponentSlotOpen", context);

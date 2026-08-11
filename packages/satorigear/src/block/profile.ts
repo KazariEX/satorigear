@@ -40,10 +40,9 @@ export interface BlockStartRegistration {
 
 export type BlockSyntaxRegistration =
   | {
-    kind: "frame";
+    kind: "block" | "frame";
     close: string;
     open: string | readonly string[];
-    wrapsBlock: boolean;
   }
   | {
     kind: "group";
@@ -136,13 +135,13 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     if (feature.rules) {
       for (const registration of feature.rules) {
         const syntax = registration.syntax;
-        if (syntax.kind === "frame") {
+        if (syntax.kind === "block" || syntax.kind === "frame") {
           const opens = typeof syntax.open === "string" ? [syntax.open] : syntax.open;
           for (const open of opens) {
             frameByOpen[open] = {
+              block: syntax.kind === "block",
               close: syntax.close,
               rule: registration.rule,
-              wrapsBlock: syntax.wrapsBlock,
             };
           }
         }
@@ -151,7 +150,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
             groupedRuleByToken[token] = registration.rule;
           }
         }
-        else {
+        else if (syntax.kind === "leaf") {
           ruleByLeaf[syntax.token] = registration.rule;
         }
         if (registration.project) {
@@ -197,7 +196,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
       frameByOpen,
       groupedRuleByToken,
       ruleByLeaf,
-      wrapperRule: "Block",
     },
     starts,
   };

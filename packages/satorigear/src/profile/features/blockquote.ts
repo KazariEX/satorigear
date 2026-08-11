@@ -44,10 +44,9 @@ export const feature: SyntaxFeature = {
       {
         rule: "BlockQuote",
         syntax: {
-          kind: "frame",
+          kind: "block",
           open: "BlockQuoteOpen",
           close: "BlockQuoteClose",
-          wrapsBlock: true,
         },
         project(nodeId, offset, tokenBase, context) {
           const result: Blockquote = {

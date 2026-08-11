@@ -280,7 +280,6 @@ export const feature: SyntaxFeature = {
           kind: "frame",
           open: "TableCellOpen",
           close: "TableCellClose",
-          wrapsBlock: false,
         },
         inlineContent: true,
       },
@@ -290,7 +289,6 @@ export const feature: SyntaxFeature = {
           kind: "frame",
           open: "TableRowOpen",
           close: "TableRowClose",
-          wrapsBlock: false,
         },
       },
       {
@@ -308,10 +306,9 @@ export const feature: SyntaxFeature = {
       {
         rule: "Table",
         syntax: {
-          kind: "frame",
+          kind: "block",
           open: "TableOpen",
           close: "TableClose",
-          wrapsBlock: true,
         },
         project(nodeId, offset, tokenBase, context) {
           const open = blockToken(nodeId, tokenBase, "TableOpen", context);

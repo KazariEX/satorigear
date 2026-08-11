@@ -61,10 +61,9 @@ export const feature: SyntaxFeature = {
       {
         rule: "AtxHeading",
         syntax: {
-          kind: "frame",
+          kind: "block",
           open: "AtxHeadingOpen",
           close: "HeadingClose",
-          wrapsBlock: true,
         },
         inlineContent: true,
         project(nodeId, offset, tokenBase, context) {
@@ -79,13 +78,12 @@ export const feature: SyntaxFeature = {
       {
         rule: "SetextHeading",
         syntax: {
-          kind: "frame",
+          kind: "block",
           open: [
             "SetextHeading1Open",
             "SetextHeading2Open",
           ],
           close: "HeadingClose",
-          wrapsBlock: true,
         },
         inlineContent: true,
         project(nodeId, offset, tokenBase, context) {

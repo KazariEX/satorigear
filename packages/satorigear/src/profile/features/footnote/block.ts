@@ -86,10 +86,9 @@ export const blockRules: BlockFeature["rules"] = [
   {
     rule: "FootnoteDefinition",
     syntax: {
-      kind: "frame",
+      kind: "block",
       open: "FootnoteDefinitionOpen",
       close: "FootnoteDefinitionClose",
-      wrapsBlock: true,
     },
     project(nodeId, offset, tokenBase, context) {
       const token = blockToken(nodeId, tokenBase, "FootnoteDefinitionOpen", context);

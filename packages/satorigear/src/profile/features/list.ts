@@ -173,16 +173,21 @@ function childrenSpread(
   nodeId: number,
   offset: number,
   tokenBase: number,
-  childRule: string,
   stripBlockQuotes: boolean,
   context: BlockProjectionContext,
+  nestedRule?: string,
 ): boolean {
   const arena = context.view.arena;
   let previous: { end: number; start: number } | undefined;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const childId = arena.childAt(nodeId, index);
-    if (childId < 0 || arena.ruleNameOf(childId) !== childRule) {
+    if (
+      childId < 0 ||
+      (nestedRule === void 0
+        ? !arena.isBlock(childId)
+        : arena.ruleNameOf(childId) !== nestedRule)
+    ) {
       continue;
     }
     const childOffset = offset + arena.childRelAt(nodeId, index);
@@ -214,7 +219,7 @@ function listItem(
   );
   const result: ListItem = {
     type: "listItem",
-    spread: childrenSpread(nodeId, offset, tokenBase, "Block", true, context),
+    spread: childrenSpread(nodeId, offset, tokenBase, true, context),
     checked: null,
     children: blockChildren(nodeId, offset, tokenBase, context),
   };
@@ -243,7 +248,7 @@ function projectList(ordered: boolean): BlockProjector {
       type: "list",
       ordered,
       start: ordered ? Number.parseInt(listMarker.text, 10) : null,
-      spread: childrenSpread(nodeId, offset, tokenBase, itemRule, false, context),
+      spread: childrenSpread(nodeId, offset, tokenBase, false, context, itemRule),
       children: items,
     };
     return withSpan(result, tokenStart(listMarker), lastChildEnd(result, tokenEnd(listMarker)));
@@ -259,7 +264,6 @@ export const feature: SyntaxFeature = {
           kind: "frame",
           open: "UnorderedItemOpen",
           close: "UnorderedItemClose",
-          wrapsBlock: false,
         },
       },
       {
@@ -268,26 +272,23 @@ export const feature: SyntaxFeature = {
           kind: "frame",
           open: "OrderedItemOpen",
           close: "OrderedItemClose",
-          wrapsBlock: false,
         },
       },
       {
         rule: "UnorderedList",
         syntax: {
-          kind: "frame",
+          kind: "block",
           open: "UnorderedListOpen",
           close: "UnorderedListClose",
-          wrapsBlock: true,
         },
         project: projectList(false),
       },
       {
         rule: "OrderedList",
         syntax: {
-          kind: "frame",
+          kind: "block",
           open: "OrderedListOpen",
           close: "OrderedListClose",
-          wrapsBlock: true,
         },
         project: projectList(true),
       },

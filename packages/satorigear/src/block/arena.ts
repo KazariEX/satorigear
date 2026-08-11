@@ -3,7 +3,7 @@ import type { SyntaxArena } from "../syntax-protocol.ts";
 import type { BlockSyntaxFrame, BlockSyntaxSchema } from "./syntax.ts";
 
 export interface BlockSyntaxView {
-  readonly arena: SyntaxArena;
+  readonly arena: BlockArena;
   readonly blockHandles: readonly BlockHandle[];
   readonly root: {
     id: number;
@@ -57,6 +57,7 @@ export class BlockArena implements SyntaxArena {
   #edgeStarts: number[] = [0];
   #freeEdges: FreeEdgeRange[] = [];
   #freeIds: number[] = [];
+  #blockNodes: boolean[] = [false];
   #lengths: number[] = [0];
   #nodeCount = 1;
   #releaseStack: number[] = [];
@@ -144,7 +145,7 @@ export class BlockArena implements SyntaxArena {
     };
   }
 
-  #allocate(rule: string, children: readonly number[]): number {
+  #allocate(rule: string, children: readonly number[], block = false): number {
     const id = this.#freeIds.pop() ?? this.#nodeCount++;
     const first = children[0];
     const last = children.at(-1);
@@ -163,6 +164,7 @@ export class BlockArena implements SyntaxArena {
       this.#edges[edge + 2] = this.#entryTokenStart(entry) - tokenBase;
     }
     this.#lengths[id] = end - start;
+    this.#blockNodes[id] = block;
     this.#rules[id] = rule;
     this.#buildStarts[id] = start;
     this.#buildEnds[id] = end;
@@ -201,9 +203,9 @@ export class BlockArena implements SyntaxArena {
 
   #buildRange(start: number, end: number): BlockRecord[] {
     const document: Frame = {
+      block: false,
       close: "",
       rule: this.#schema.entryRule,
-      wrapsBlock: false,
       children: [],
     };
     const stack = [document];
@@ -234,17 +236,14 @@ export class BlockArena implements SyntaxArena {
       if (current.close === token.type) {
         current.children.push(leaf(index));
         stack.pop();
-        const id = this.#allocate(current.rule, current.children);
-        stack.at(-1)!.children.push(
-          current.wrapsBlock ? this.#allocate(this.#schema.wrapperRule, [id]) : id,
-        );
+        const id = this.#allocate(current.rule, current.children, current.block);
+        stack.at(-1)!.children.push(id);
         continue;
       }
 
       const leafRule = this.#schema.ruleByLeaf[token.type];
       if (leafRule !== void 0) {
-        const id = this.#allocate(leafRule, [leaf(index)]);
-        current.children.push(this.#allocate(this.#schema.wrapperRule, [id]));
+        current.children.push(this.#allocate(leafRule, [leaf(index)], true));
         continue;
       }
 
@@ -368,6 +367,10 @@ export class BlockArena implements SyntaxArena {
 
   lenOf(id: number): number {
     return this.#lengths[id];
+  }
+
+  isBlock(id: number): boolean {
+    return this.#blockNodes[id];
   }
 
   ruleNameOf(id: number): string {

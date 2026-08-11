@@ -495,8 +495,8 @@ export function blockChildren(
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const childId = arena.childAt(nodeId, index);
-    if (childId >= 0 && arena.ruleNameOf(childId) === "Block") {
-      children.push(blockContent(
+    if (childId >= 0 && context.view.arena.isBlock(childId)) {
+      children.push(blockNode(
         childId,
         offset + arena.childRelAt(nodeId, index),
         tokenBase + arena.childTokRelAt(nodeId, index),
@@ -505,37 +505,6 @@ export function blockChildren(
     }
   }
   return children;
-}
-
-function blockContent(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockProjectionContext,
-): FragmentNode<TopLevelContent> {
-  const arena = context.view.arena;
-  const rule = arena.ruleNameOf(nodeId);
-  if (rule !== "Block") {
-    throw new Error(`Expected Block syntax, received ${rule}`);
-  }
-  let contentId = -1;
-  let contentOffset = 0;
-  let contentTokenBase = 0;
-  let nodeCount = 0;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const childId = arena.childAt(nodeId, index);
-    if (childId >= 0) {
-      contentId = childId;
-      contentOffset = offset + arena.childRelAt(nodeId, index);
-      contentTokenBase = tokenBase + arena.childTokRelAt(nodeId, index);
-      nodeCount++;
-    }
-  }
-  if (nodeCount !== 1) {
-    throw new Error(`Expected Block syntax to contain one node, received ${nodeCount}`);
-  }
-  return blockNode(contentId, contentOffset, contentTokenBase, context);
 }
 
 function blockNode(
@@ -557,7 +526,7 @@ export function projectBlock(
   block: SyntaxBlock,
   context: BlockProjectionContext,
 ): BlockFragment {
-  const node = blockContent(block.handle.id, block.offset, block.tokenBase, context);
+  const node = blockNode(block.handle.id, block.offset, block.tokenBase, context);
   return {
     node,
     offset: block.offset,
