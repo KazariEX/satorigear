@@ -11,7 +11,7 @@ import {
   inlineTokenText,
 } from "../../../inline/tokens.ts";
 import { appendInline, withSpan } from "../../../mdast.ts";
-import type { InlineFeature, InlineResolutionContext } from "../../../inline/profile.ts";
+import type { InlineSyntaxDefinition, InlineTokenTransform } from "../../../inline/profile.ts";
 import type { InlineMath } from "./types.ts";
 
 interface MathRange {
@@ -112,44 +112,41 @@ function copyRange(
   }
 }
 
-export function rewriteMathTokens(
-  singleDollarTextMath: boolean,
-  source: string,
-  tokens: InlineTokenStream,
-  context: InlineResolutionContext,
-): InlineTokenStream {
-  const minimum = singleDollarTextMath ? 1 : 2;
-  let segmentSource = source;
-  let segmentStart = 0;
-  let segmentTokens = tokens;
-  let result: number[] | undefined;
-  while (true) {
-    const range = firstMathRange(segmentSource, segmentTokens, minimum);
-    if (!range) {
-      if (!result) {
-        return tokens;
+export function createMathTokensTransform(singleDollarTextMath: boolean): InlineTokenTransform {
+  return (source, tokens, context) => {
+    const minimum = singleDollarTextMath ? 1 : 2;
+    let segmentSource = source;
+    let segmentStart = 0;
+    let segmentTokens = tokens;
+    let result: number[] | undefined;
+    while (true) {
+      const range = firstMathRange(segmentSource, segmentTokens, minimum);
+      if (!range) {
+        if (!result) {
+          return tokens;
+        }
+        copyRange(result, segmentTokens, 0, segmentSource.length, segmentStart);
+        return result;
       }
-      copyRange(result, segmentTokens, 0, segmentSource.length, segmentStart);
-      return result;
-    }
 
-    result ??= [];
-    copyRange(result, segmentTokens, 0, range.start, segmentStart);
-    appendInlineToken(
-      result,
-      mathTextKind,
-      segmentStart + range.start,
-      segmentStart + range.end,
-      range.flags,
-    );
-    segmentStart += range.end;
-    if (segmentStart === source.length) {
-      return result;
+      result ??= [];
+      copyRange(result, segmentTokens, 0, range.start, segmentStart);
+      appendInlineToken(
+        result,
+        mathTextKind,
+        segmentStart + range.start,
+        segmentStart + range.end,
+        range.flags,
+      );
+      segmentStart += range.end;
+      if (segmentStart === source.length) {
+        return result;
+      }
+      // The closer can cut through a token formed before math claimed its contents.
+      segmentSource = source.slice(segmentStart);
+      segmentTokens = context.tokenize(segmentSource);
     }
-    // The closer can cut through a token formed before math claimed its contents.
-    segmentSource = source.slice(segmentStart);
-    segmentTokens = context.tokenize(segmentSource);
-  }
+  };
 }
 
 function mathTextValue(value: string): string {
@@ -169,8 +166,9 @@ function mathTextValue(value: string): string {
   return result;
 }
 
-export const inlineTokens: InlineFeature["tokens"] = [
+export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
+    kind: "leaf",
     token: "MathText",
     project(tokenIndex, sourceSpan, accumulator) {
       const { context } = accumulator;

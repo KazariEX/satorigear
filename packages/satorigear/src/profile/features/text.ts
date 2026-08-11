@@ -29,10 +29,10 @@ export const projectInlineText: InlineLeafProjector = (tokenIndex, sourceSpan, a
 
 export const feature: SyntaxFeature = {
   inline: {
-    tokens: [
-      { token: "Text", project: projectInlineText },
-      { token: "Escape", project: projectInlineText },
-      { token: "Entity", project: projectInlineText },
+    syntax: [
+      { kind: "leaf", token: "Text", project: projectInlineText },
+      { kind: "leaf", token: "Escape", project: projectInlineText },
+      { kind: "leaf", token: "Entity", project: projectInlineText },
     ],
   },
 };

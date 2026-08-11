@@ -59,8 +59,9 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    tokens: [
+    syntax: [
       {
+        kind: "leaf",
         token: "HardBreak",
         project(tokenIndex, sourceSpan, accumulator) {
           appendInline(
@@ -71,6 +72,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
+        kind: "leaf",
         token: "Newline",
         project(tokenIndex, sourceSpan, accumulator) {
           appendInline(

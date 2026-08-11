@@ -5,12 +5,11 @@ import {
   createInlineAccumulator,
   type InlineRuleProjector,
   inlineSequence,
-  projectInlineIgnore,
   withSpan,
 } from "../../mdast.ts";
 import { projectInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
-import type { InlineFeature } from "../../inline/profile.ts";
+import type { InlineSyntaxDefinition } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {
@@ -80,13 +79,9 @@ const projectInlineStrongOrDelete: InlineRuleProjector = (
   return project(nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator);
 };
 
-const inlineTokens: InlineFeature["tokens"] = [
-  { token: "Delimiter", project: projectInlineText },
-  { token: "TildeRun", project: projectInlineText },
-  { token: "EmphasisOpen", project: projectInlineIgnore },
-  { token: "EmphasisClose", project: projectInlineIgnore },
-  { token: "StrongOpen", project: projectInlineIgnore },
-  { token: "StrongClose", project: projectInlineIgnore },
+const inlineSyntax: readonly InlineSyntaxDefinition[] = [
+  { kind: "leaf", token: "Delimiter", project: projectInlineText },
+  { kind: "leaf", token: "TildeRun", project: projectInlineText },
 ];
 
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {
@@ -104,20 +99,16 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
 
   return {
     inline: {
-      delimiters,
-      rules: [
-        { rule: "Emphasis", project: projectInlineEmphasis },
-        { rule: "LinkEmphasis", project: projectInlineEmphasis },
-        { rule: "Strong", project: projectStrong },
-        { rule: "LinkStrong", project: projectStrong },
-      ],
-      structures: [
+      resolution: { delimiters },
+      syntax: [
+        ...inlineSyntax,
         {
           kind: "pair",
           open: "EmphasisOpen",
           close: "EmphasisClose",
           rule: "Emphasis",
           linkRule: "LinkEmphasis",
+          project: projectInlineEmphasis,
         },
         {
           kind: "pair",
@@ -125,9 +116,9 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
           close: "StrongClose",
           rule: "Strong",
           linkRule: "LinkStrong",
+          project: projectStrong,
         },
       ],
-      tokens: inlineTokens,
     },
   };
 }

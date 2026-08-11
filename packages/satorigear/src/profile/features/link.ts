@@ -10,7 +10,6 @@ import {
   inlineSequence,
   leaf,
   projectInlineChildren,
-  projectInlineIgnore,
   withSpan,
 } from "../../mdast.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
@@ -172,26 +171,27 @@ function projectMedia(media: "image" | "link", resourceKind: "direct" | "referen
 
 const projectInlineImage = projectMedia("image", "direct");
 const projectInlineReferenceImage = projectMedia("image", "reference");
+const projectInlineLink = projectMedia("link", "direct");
+const projectInlineReferenceLink = projectMedia("link", "reference");
 
 export const feature: SyntaxFeature = {
   inline: {
-    rules: [
-      { rule: "BracketFallback", project: projectInlineChildren },
-      { rule: "Image", project: projectInlineImage },
-      { rule: "LinkImage", project: projectInlineImage },
-      { rule: "ReferenceImage", project: projectInlineReferenceImage },
-      { rule: "LinkReferenceImage", project: projectInlineReferenceImage },
-      { rule: "Link", project: projectMedia("link", "direct") },
-      { rule: "ReferenceLink", project: projectMedia("link", "reference") },
-    ],
-    structures: [
-      { kind: "pair", open: "LinkOpen", close: "LinkClose", rule: "Link", entersLink: true },
+    syntax: [
+      {
+        kind: "pair",
+        open: "LinkOpen",
+        close: "LinkClose",
+        rule: "Link",
+        entersLink: true,
+        project: projectInlineLink,
+      },
       {
         kind: "pair",
         open: "ImageLinkOpen",
         close: "ImageLinkClose",
         rule: "Image",
         linkRule: "LinkImage",
+        project: projectInlineImage,
       },
       {
         kind: "pair",
@@ -199,6 +199,7 @@ export const feature: SyntaxFeature = {
         close: "ReferenceClose",
         rule: "ReferenceLink",
         entersLink: true,
+        project: projectInlineReferenceLink,
       },
       {
         kind: "pair",
@@ -206,10 +207,12 @@ export const feature: SyntaxFeature = {
         close: "ImageReferenceClose",
         rule: "ReferenceImage",
         linkRule: "LinkReferenceImage",
+        project: projectInlineReferenceImage,
       },
       {
         kind: "fallback",
         rule: "BracketFallback",
+        project: projectInlineChildren,
         tokens: [
           "ImageOpen",
           "BracketOpen",
@@ -227,9 +230,8 @@ export const feature: SyntaxFeature = {
           "ImageReferenceClose",
         ],
       },
-    ],
-    tokens: [
       {
+        kind: "leaf",
         token: "Autolink",
         project(tokenIndex, sourceSpan, accumulator) {
           const { context } = accumulator;
@@ -246,20 +248,12 @@ export const feature: SyntaxFeature = {
           return true;
         },
       },
-      { token: "BracketOpen", project: projectInlineText },
-      { token: "ImageOpen", project: projectInlineText },
-      { token: "LinkTail", project: projectInlineText },
-      { token: "ReferenceTail", project: projectInlineText },
-      { token: "ShortcutReferenceTail", project: projectInlineText },
-      { token: "ReferenceSeparatorClose", project: projectInlineText },
-      { token: "LinkOpen", project: projectInlineIgnore },
-      { token: "LinkClose", project: projectInlineIgnore },
-      { token: "ReferenceOpen", project: projectInlineIgnore },
-      { token: "ReferenceClose", project: projectInlineIgnore },
-      { token: "ImageLinkOpen", project: projectInlineIgnore },
-      { token: "ImageLinkClose", project: projectInlineIgnore },
-      { token: "ImageReferenceOpen", project: projectInlineIgnore },
-      { token: "ImageReferenceClose", project: projectInlineIgnore },
+      { kind: "leaf", token: "BracketOpen", project: projectInlineText },
+      { kind: "leaf", token: "ImageOpen", project: projectInlineText },
+      { kind: "leaf", token: "LinkTail", project: projectInlineText },
+      { kind: "leaf", token: "ReferenceTail", project: projectInlineText },
+      { kind: "leaf", token: "ShortcutReferenceTail", project: projectInlineText },
+      { kind: "leaf", token: "ReferenceSeparatorClose", project: projectInlineText },
     ],
   },
 };

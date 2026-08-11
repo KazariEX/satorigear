@@ -15,11 +15,7 @@ import { appendInline, withSpan } from "../../../mdast.ts";
 import { normalizeAssociationLabel, splitReferenceTail } from "../../utils.ts";
 import { semanticText } from "../text.ts";
 import { footnoteLabelAt } from "./shared.ts";
-import type {
-  InlineFeature,
-  InlineResolutionContext,
-  InlineTokenRewrite,
-} from "../../../inline/profile.ts";
+import type { InlineSyntaxDefinition, InlineTokenTransform } from "../../../inline/profile.ts";
 
 const bracketOpenKind = inlineKind("BracketOpen");
 const footnoteReferenceKind = inlineKind("FootnoteReference");
@@ -46,11 +42,7 @@ function closerIndex(tokens: InlineTokenStream, start: number, end: number): num
   return -1;
 }
 
-function splitFootnoteTails(
-  source: string,
-  tokens: InlineTokenStream,
-  context: InlineResolutionContext,
-): InlineTokenStream {
+const splitFootnoteTails: InlineTokenTransform = (source, tokens, context) => {
   // A ReferenceTail owns both the previous `]` and the next label; active footnotes need that boundary back.
   let activeFootnoteEnd = -1;
   let result: number[] | undefined;
@@ -98,9 +90,9 @@ function splitFootnoteTails(
     activeFootnoteEnd = -1;
   }
   return result ?? tokens;
-}
+};
 
-const activateFootnoteReferences: InlineTokenRewrite = (source, tokens, context) => {
+const activateFootnoteReferences: InlineTokenTransform = (source, tokens, context) => {
   let result: number[] | undefined;
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const start = inlineTokenStart(tokens, index);
@@ -141,14 +133,15 @@ const activateFootnoteReferences: InlineTokenRewrite = (source, tokens, context)
   return result ?? tokens;
 };
 
-export const rewriteFootnoteTokens: InlineTokenRewrite = (source, tokens, context) => activateFootnoteReferences(
+export const transformFootnoteTokens: InlineTokenTransform = (source, tokens, context) => activateFootnoteReferences(
   source,
   splitFootnoteTails(source, tokens, context),
   context,
 );
 
-export const inlineTokens: InlineFeature["tokens"] = [
+export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
+    kind: "leaf",
     token: "FootnoteReference",
     project(tokenIndex, sourceSpan, accumulator) {
       const { context } = accumulator;

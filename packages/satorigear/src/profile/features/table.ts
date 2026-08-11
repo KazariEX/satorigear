@@ -330,8 +330,9 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    tokens: [
+    syntax: [
       {
+        kind: "leaf",
         token: "CodeSpan",
         project(tokenIndex, sourceSpan, accumulator) {
         // GFM removes a pipe escape inside table code spans, while CommonMark code spans preserve it.

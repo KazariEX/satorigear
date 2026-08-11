@@ -1,63 +1,192 @@
 import { inlineKind } from "./kinds.ts";
 import { tokenizeInline } from "./lexer.ts";
-import {
-  createPairingResolver,
-  type DelimiterConfig,
-  type PairedTokenConfig,
-} from "./pairing.ts";
-import {
-  compileInlineSyntax,
-  type InlineStructureRegistration,
-  type InlineSyntaxSchema,
-} from "./syntax.ts";
+import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
 import type { InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 // Inline features compile into one token pipeline and the arena/projection tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
 
-export type InlineTokenizer = (source: string) => InlineTokenStream;
+type InlineTokenizer = (source: string) => InlineTokenStream;
 
 export interface InlineResolutionContext {
   hasDefinition: (key: string) => boolean;
   tokenize: InlineTokenizer;
 }
 
-export interface InlineTokenRegistration {
-  token: string;
-  project: InlineLeafProjector;
-}
-
-export interface InlineRuleRegistration {
-  rule: string;
-  project: InlineRuleProjector;
-}
-
-export type InlineTokenRewrite = (
+export type InlineTokenTransform = (
   source: string,
   tokens: InlineTokenStream,
   context: InlineResolutionContext,
 ) => InlineTokenStream;
 
-export interface InlineFeature {
+export type InlineSyntaxDefinition =
+  | {
+    kind: "leaf";
+    token: string;
+    project: InlineLeafProjector;
+  }
+  | {
+    kind: "container";
+    close: string;
+    contentOpen: string;
+    linkRule?: string;
+    rule: string;
+    token: string;
+    project: InlineRuleProjector;
+  }
+  | {
+    kind: "fallback";
+    rule: string;
+    tokens: readonly string[];
+    project: InlineRuleProjector;
+  }
+  | {
+    kind: "pair";
+    close: string;
+    entersLink?: true;
+    linkRule?: string;
+    open: string;
+    rule: string;
+    project: InlineRuleProjector;
+  };
+
+interface InlinePair {
+  closeKind: number;
+  entersLink: boolean;
+  linkRuleId: number;
+  ruleId: number;
+}
+
+interface InlineContainer {
+  closeKind: number;
+  contentOpenKind: number;
+  linkRuleId: number;
+  ruleId: number;
+}
+
+export interface InlineSyntaxSchema {
+  containerByKind: readonly (InlineContainer | undefined)[];
+  fallbackRuleByKind: readonly (number | undefined)[];
+  inlineLinesRuleId: number;
+  pairByOpenKind: readonly (InlinePair | undefined)[];
+  ruleNames: readonly string[];
+  tokenNames: readonly (string | undefined)[];
+}
+
+interface InlineSyntaxCompilation {
+  ruleProjects: Readonly<Record<string, InlineRuleProjector>>;
+  schema: InlineSyntaxSchema;
+  tokenProjects: readonly (InlineLeafProjector | undefined)[];
+}
+
+export interface InlineResolutionDefinition {
   delimiters?: readonly DelimiterConfig[];
-  // Feature rewrites run in registration order; finalizers then prepare the stream for pairing.
-  rewriteTokens?: InlineTokenRewrite;
-  finalizeTokens?: InlineTokenRewrite;
-  rules?: readonly InlineRuleRegistration[];
-  structures?: readonly InlineStructureRegistration[];
-  tokens?: readonly InlineTokenRegistration[];
   pairs?: readonly PairedTokenConfig[];
+  postTransform?: InlineTokenTransform;
+  transform?: InlineTokenTransform;
+}
+
+export interface InlineFeature {
+  resolution?: InlineResolutionDefinition;
+  syntax?: readonly InlineSyntaxDefinition[];
 }
 
 export interface InlineProfile {
   decodeText: (value: string) => string;
-  resolve: InlineTokenRewrite;
+  resolve: InlineTokenTransform;
   ruleProjects: Readonly<Record<string, InlineRuleProjector>>;
   schema: InlineSyntaxSchema;
   tokenize: InlineTokenizer;
   tokenProjects: readonly (InlineLeafProjector | undefined)[];
 }
 
-function composeRewrites(...rewrites: readonly InlineTokenRewrite[]): InlineTokenRewrite {
+const ignoreInlineToken: InlineLeafProjector = () => false;
+
+function compileInlineSyntax(
+  definitions: readonly InlineSyntaxDefinition[],
+): InlineSyntaxCompilation {
+  const tokenNames: (string | undefined)[] = [];
+  const tokenProjects: (InlineLeafProjector | undefined)[] = [];
+  const ruleProjects: Record<string, InlineRuleProjector> = Object.create(null);
+  const ruleNames: string[] = [];
+  const ruleIds = new Map<string, number>();
+  const ruleId = (name: string): number => {
+    let id = ruleIds.get(name);
+    if (id === void 0) {
+      id = ruleNames.length;
+      ruleIds.set(name, id);
+      ruleNames.push(name);
+    }
+    return id;
+  };
+  const containerByKind: (InlineContainer | undefined)[] = [];
+  const fallbackRuleByKind: (number | undefined)[] = [];
+  const pairByOpenKind: (InlinePair | undefined)[] = [];
+  const registerToken = (token: string, project: InlineLeafProjector): number => {
+    const kind = inlineKind(token);
+    tokenNames[kind] = token;
+    tokenProjects[kind] = project;
+    return kind;
+  };
+
+  for (const definition of definitions) {
+    if (definition.kind === "leaf") {
+      registerToken(definition.token, definition.project);
+      continue;
+    }
+
+    const definitionRuleId = ruleId(definition.rule);
+    ruleProjects[definition.rule] = definition.project;
+    if (definition.kind === "fallback") {
+      for (const token of definition.tokens) {
+        fallbackRuleByKind[inlineKind(token)] = definitionRuleId;
+      }
+      continue;
+    }
+
+    const linkRuleId = definition.linkRule === void 0
+      ? definitionRuleId
+      : ruleId(definition.linkRule);
+    if (definition.linkRule !== void 0) {
+      ruleProjects[definition.linkRule] = definition.project;
+    }
+    if (definition.kind === "container") {
+      const tokenKind = registerToken(definition.token, ignoreInlineToken);
+      containerByKind[tokenKind] = {
+        closeKind: registerToken(definition.close, ignoreInlineToken),
+        contentOpenKind: registerToken(definition.contentOpen, ignoreInlineToken),
+        linkRuleId,
+        ruleId: definitionRuleId,
+      };
+      continue;
+    }
+
+    const openKind = registerToken(definition.open, ignoreInlineToken);
+    pairByOpenKind[openKind] = {
+      closeKind: registerToken(definition.close, ignoreInlineToken),
+      entersLink: definition.entersLink === true,
+      linkRuleId,
+      ruleId: definitionRuleId,
+    };
+  }
+
+  const newlineKind = inlineKind("Newline");
+  tokenNames[newlineKind] = "Newline";
+
+  return {
+    ruleProjects,
+    schema: {
+      containerByKind,
+      fallbackRuleByKind,
+      inlineLinesRuleId: ruleId("InlineLines"),
+      pairByOpenKind,
+      ruleNames,
+      tokenNames,
+    },
+    tokenProjects,
+  };
+}
+
+function composeTransforms(...rewrites: readonly InlineTokenTransform[]): InlineTokenTransform {
   if (rewrites.length === 1) {
     return rewrites[0];
   }
@@ -74,54 +203,41 @@ export function compileInlineProfile(
   decodeText: (value: string) => string,
 ): InlineProfile {
   const delimiters: DelimiterConfig[] = [];
-  const finalizers: InlineTokenRewrite[] = [];
-  const ruleProjects: Record<string, InlineRuleProjector> = Object.create(null);
-  const structures: InlineStructureRegistration[] = [];
-  const tokenNames: (string | undefined)[] = [];
-  const tokenProjects: (InlineLeafProjector | undefined)[] = [];
-  const rewrites: InlineTokenRewrite[] = [];
+  const syntax: InlineSyntaxDefinition[] = [];
   const pairs: PairedTokenConfig[] = [];
+  const postTransforms: InlineTokenTransform[] = [];
+  const transforms: InlineTokenTransform[] = [];
 
   for (const feature of features) {
-    if (feature.delimiters) {
-      delimiters.push(...feature.delimiters);
+    if (feature.syntax) {
+      syntax.push(...feature.syntax);
     }
-    if (feature.finalizeTokens) {
-      finalizers.push(feature.finalizeTokens);
-    }
-    if (feature.rules) {
-      for (const registration of feature.rules) {
-        ruleProjects[registration.rule] = registration.project;
+    const resolution = feature.resolution;
+    if (resolution) {
+      if (resolution.delimiters) {
+        delimiters.push(...resolution.delimiters);
       }
-    }
-    if (feature.structures) {
-      structures.push(...feature.structures);
-    }
-    if (feature.tokens) {
-      for (const registration of feature.tokens) {
-        const kind = inlineKind(registration.token);
-        tokenNames[kind] = registration.token;
-        tokenProjects[kind] = registration.project;
+      if (resolution.pairs) {
+        pairs.push(...resolution.pairs);
       }
-    }
-    if (feature.rewriteTokens) {
-      rewrites.push(feature.rewriteTokens);
-    }
-    if (feature.pairs) {
-      pairs.push(...feature.pairs);
+      if (resolution.transform) {
+        transforms.push(resolution.transform);
+      }
+      if (resolution.postTransform) {
+        postTransforms.push(resolution.postTransform);
+      }
     }
   }
+  const compiledSyntax = compileInlineSyntax(syntax);
 
   return {
+    ...compiledSyntax,
     decodeText,
-    resolve: composeRewrites(
-      ...rewrites,
-      ...finalizers,
+    resolve: composeTransforms(
+      ...transforms,
+      ...postTransforms,
       createPairingResolver(delimiters, pairs),
     ),
-    ruleProjects,
-    schema: compileInlineSyntax(structures, tokenNames),
     tokenize: tokenizeInline,
-    tokenProjects,
   };
 }

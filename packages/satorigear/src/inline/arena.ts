@@ -6,7 +6,7 @@ import {
   inlineTokenStride,
 } from "./tokens.ts";
 import type { SyntaxArena } from "../syntax-protocol.ts";
-import type { InlineSyntaxSchema } from "./syntax.ts";
+import type { InlineSyntaxSchema } from "./profile.ts";
 
 function leaf(tokenIndex: number): number {
   return ~tokenIndex;

@@ -1,6 +1,6 @@
 import { type BlockToken, type BlockTokenChange, tokenEnd, tokenStart } from "./tokens.ts";
 import type { SyntaxArena } from "../syntax-protocol.ts";
-import type { BlockSyntaxFrame, BlockSyntaxSchema } from "./syntax.ts";
+import type { BlockSyntaxFrame, BlockSyntaxSchema } from "./profile.ts";
 
 export interface BlockSyntaxView {
   readonly arena: BlockArena;

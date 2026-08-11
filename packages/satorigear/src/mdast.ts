@@ -96,8 +96,6 @@ export const projectInlineChildren: InlineRuleProjector = (
   accumulator,
 ) => inlineSequence(nodeId, offset, tokenBase, accumulator);
 
-export const projectInlineIgnore: InlineLeafProjector = () => false;
-
 export function withSpan<const T extends object>(value: T, start: number, end: number): FragmentNode<T> {
   const fragment = value as FragmentNode<T>;
   fragment.startOffset = start;

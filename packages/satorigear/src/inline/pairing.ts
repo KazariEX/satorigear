@@ -11,7 +11,7 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
-import type { InlineResolutionContext, InlineTokenRewrite } from "./profile.ts";
+import type { InlineResolutionContext, InlineTokenTransform } from "./profile.ts";
 
 export interface DelimiterConfig {
   token: string;
@@ -550,7 +550,7 @@ function resolveDelimiterRuns(
 export function createPairingResolver(
   delimiterConfigs: readonly DelimiterConfig[],
   pairConfigs: readonly PairedTokenConfig[] = [],
-): InlineTokenRewrite {
+): InlineTokenTransform {
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[inlineKind(config.token)] = {

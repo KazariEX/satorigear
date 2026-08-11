@@ -2,8 +2,20 @@ import type { BlockProjector } from "../mdast.ts";
 // Block features compile into the immutable scanner, arena, and projection tables shared by a parser.
 import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
-import type { BlockSyntaxFrame, BlockSyntaxSchema } from "./syntax.ts";
 import type { BlockToken } from "./tokens.ts";
+
+export interface BlockSyntaxFrame {
+  block: boolean;
+  close: string;
+  rule: string;
+}
+
+export interface BlockSyntaxSchema {
+  entryRule: string;
+  frameByOpen: Readonly<Record<string, BlockSyntaxFrame | undefined>>;
+  groupedRuleByToken: Readonly<Record<string, string | undefined>>;
+  ruleByLeaf: Readonly<Record<string, string | undefined>>;
+}
 
 export type BlockStart = (
   source: string,

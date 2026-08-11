@@ -17,7 +17,6 @@ import {
   directLeaf,
   inlineSequence,
   lineEnd,
-  projectInlineIgnore,
   withSpan,
 } from "../../../mdast.ts";
 import {
@@ -25,7 +24,7 @@ import {
   componentNameEnd,
   normalizeComponentName,
 } from "../attributes/syntax.ts";
-import type { InlineFeature } from "../../../inline/profile.ts";
+import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
 import type { InlineRuleProjector } from "../../../mdast.ts";
 import type { InlineComponent } from "./types.ts";
 
@@ -344,7 +343,7 @@ function emitRange(
 }
 
 // Reclassify CommonMark bracket/text tokens as explicit semantic carriers.
-export function rewriteComponentTokens(
+export function transformComponentTokens(
   source: string,
   tokens: InlineTokenStream,
 ): InlineTokenStream {
@@ -430,17 +429,22 @@ const projectInlineSpan: InlineRuleProjector = (
   return true;
 };
 
-export const inlineRules: InlineFeature["rules"] = [
-  { rule: "InlineComponent", project: projectInlineComponent },
-  { rule: "LinkComponent", project: projectInlineComponent },
-  { rule: "InlineSpan", project: projectInlineSpan },
-  { rule: "LinkSpan", project: projectInlineSpan },
-];
-
-export const inlineTokens: InlineFeature["tokens"] = [
-  { token: "InlineComponentOpen", project: projectInlineIgnore },
-  { token: "InlineComponentLabelOpen", project: projectInlineIgnore },
-  { token: "InlineComponentLabelClose", project: projectInlineIgnore },
-  { token: "InlineSpanOpen", project: projectInlineIgnore },
-  { token: "InlineSpanClose", project: projectInlineIgnore },
+export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
+  {
+    kind: "container",
+    token: "InlineComponentOpen",
+    contentOpen: "InlineComponentLabelOpen",
+    close: "InlineComponentLabelClose",
+    rule: "InlineComponent",
+    linkRule: "LinkComponent",
+    project: projectInlineComponent,
+  },
+  {
+    kind: "pair",
+    open: "InlineSpanOpen",
+    close: "InlineSpanClose",
+    rule: "InlineSpan",
+    linkRule: "LinkSpan",
+    project: projectInlineSpan,
+  },
 ];

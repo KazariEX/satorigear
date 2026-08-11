@@ -18,7 +18,7 @@ import { normalizeAssociationLabel, splitReferenceTail } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockToken } from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/pairing.ts";
-import type { InlineTokenRewrite } from "../../inline/profile.ts";
+import type { InlineTokenTransform } from "../../inline/profile.ts";
 import type {
   SyntaxFeature,
 } from "../types.ts";
@@ -240,7 +240,7 @@ function linkDefinitionAt(
 }
 
 // Recover the one-token overlap between adjacent full-reference candidates before pairing.
-const reassociateReferenceTails: InlineTokenRewrite = (source, tokens, context) => {
+const reassociateReferenceTails: InlineTokenTransform = (source, tokens, context) => {
   const count = inlineTokenCount(tokens);
   let result: number[] | undefined;
   for (let index = 0; index < count; index++) {
@@ -454,7 +454,9 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    finalizeTokens: reassociateReferenceTails,
-    pairs: markdownBracketPairs,
+    resolution: {
+      postTransform: reassociateReferenceTails,
+      pairs: markdownBracketPairs,
+    },
   },
 };

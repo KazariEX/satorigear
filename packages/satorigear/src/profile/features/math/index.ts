@@ -1,5 +1,5 @@
 import { blockRules, blockStarts } from "./block.ts";
-import { inlineTokens, rewriteMathTokens } from "./inline.ts";
+import { createMathTokensTransform, inlineSyntax } from "./inline.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { MathOptions } from "./types.ts";
 
@@ -11,8 +11,10 @@ export function feature(options: true | MathOptions): SyntaxFeature {
       starts: blockStarts,
     },
     inline: {
-      tokens: inlineTokens,
-      rewriteTokens: rewriteMathTokens.bind(void 0, singleDollarTextMath),
+      resolution: {
+        transform: createMathTokensTransform(singleDollarTextMath),
+      },
+      syntax: inlineSyntax,
     },
   };
 }

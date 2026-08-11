@@ -188,8 +188,9 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    tokens: [
+    syntax: [
       {
+        kind: "leaf",
         token: "CodeSpan",
         project: projectCodeSpan,
       },

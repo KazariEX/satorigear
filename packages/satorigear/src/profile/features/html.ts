@@ -210,9 +210,9 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    tokens: [
-      { token: "InlineHtml", project: projectInlineHtml },
-      { token: "HtmlComment", project: projectInlineHtml },
+    syntax: [
+      { kind: "leaf", token: "InlineHtml", project: projectInlineHtml },
+      { kind: "leaf", token: "HtmlComment", project: projectInlineHtml },
     ],
   },
 };

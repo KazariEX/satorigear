@@ -190,8 +190,10 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    tokens: [
+    resolution: { transform: transformAttributeTokens },
+    syntax: [
       {
+        kind: "leaf",
         token: "Attributes",
         project(tokenIndex, sourceSpan, accumulator) {
           const previous = accumulator.target.at(-1) as (PhrasingContent & { attributes?: Attributes }) | undefined;
@@ -223,11 +225,10 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    rewriteTokens: rewriteAttributeTokens,
   },
 };
 
-function rewriteAttributeTokens(source: string, tokens: InlineTokenStream): InlineTokenStream {
+function transformAttributeTokens(source: string, tokens: InlineTokenStream): InlineTokenStream {
   const ranges = rangesOf(source, tokens);
   if (ranges.length === 0) {
     return tokens;
