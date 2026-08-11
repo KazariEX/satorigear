@@ -13,7 +13,6 @@ export interface SyntaxBlock {
   offset: number;
   regions: readonly InlineRegion[];
   regionRevisions: readonly number[];
-  source: string;
   tokenBase: number;
   version: number;
 }
@@ -182,7 +181,6 @@ export class SyntaxState {
         offset,
         regions: emptyArray,
         regionRevisions: emptyArray,
-        source: source.slice(offset, offset + arena.lenOf(childId)),
         tokenBase,
         version: 0,
       });
@@ -261,15 +259,18 @@ export class SyntaxState {
       }
 
       const regionRevisions = regions.map((region) => region.revision);
-      const unchanged = (
-        previous?.source === block.source &&
+      // Arena prefix handles may survive token-equivalent edits with different source geometry.
+      // Only the converged suffix is projection-stable without comparing duplicate block text.
+      const projectionStable = (
+        blockIndex >= newEnd &&
+        previous !== void 0 &&
         isArrayEqual(previous.regionRevisions, regionRevisions)
       );
       block.regions = regions;
       block.regionRevisions = regionRevisions;
       block.version = previous === void 0
         ? 0
-        : unchanged ? previous.version : previous.version + 1;
+        : projectionStable ? previous.version : previous.version + 1;
     }
 
     for (let index = stableBlockCount; index < blocks.length; index++) {
