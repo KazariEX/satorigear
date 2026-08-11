@@ -7,10 +7,8 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const vendor = join(root, "vendors/monogram");
 const patches = [
-  join(root, "patches/0.external-token-parser.patch"),
   join(root, "patches/2.delimited-span-lexing.patch"),
   join(root, "patches/3.hard-break-lexing.patch"),
-  join(root, "patches/4.parser-arena-allocation.patch"),
   join(root, "patches/9.emitted-newline-lexer.patch"),
   join(root, "patches/11.emitted-lexer-state-pruning.patch"),
   join(root, "patches/12.packed-token-lexer.patch"),

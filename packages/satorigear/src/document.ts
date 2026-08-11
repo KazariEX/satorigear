@@ -48,15 +48,6 @@ function changedSpanOf(edits: readonly TextEdit[]): EditResult["changedSpan"] {
   return { start: edits[0].start, end: changedEnd };
 }
 
-function sequentialEdits(edits: readonly TextEdit[]): TextEdit[] {
-  let delta = 0;
-  return edits.map((edit) => {
-    const result = { start: edit.start + delta, end: edit.end + delta, text: edit.text };
-    delta += edit.text.length - (edit.end - edit.start);
-    return result;
-  });
-}
-
 export class DocumentImpl implements Document {
   #blockScanner: BlockScanner;
   #blockSyntax: BlockSyntaxDocument;
@@ -73,10 +64,10 @@ export class DocumentImpl implements Document {
   ) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(source, profile);
-    this.#blockSyntax = blockParser.parse(source, this.#blockScanner.tokens);
+    this.#blockSyntax = blockParser.parse(this.#blockScanner.tokens);
     this.#syntaxState = new SyntaxState(
       source,
-      this.#blockSyntax.view(this.#blockScanner.tokens),
+      this.#blockSyntax.view(),
       profile,
       inlineArena,
     );
@@ -102,10 +93,9 @@ export class DocumentImpl implements Document {
       this.#fragmentsByBlockId = fragmentsByBlockId;
     }
 
-    const { change } = this.#blockScanner.edit(edits);
-    // The emitted parser applies edits sequentially; SyntaxState maps the original batch onto existing regions.
-    this.#blockSyntax.edit(sequentialEdits(edits), change);
-    this.#syntaxState.update(this.source, this.#blockSyntax.view(this.#blockScanner.tokens));
+    const blockEdit = this.#blockScanner.edit(edits);
+    this.#blockSyntax.update(this.#blockScanner.tokens, blockEdit.change);
+    this.#syntaxState.update(this.source, this.#blockSyntax.view());
 
     return {
       changedSpan: changedSpanOf(edits),

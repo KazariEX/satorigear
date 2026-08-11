@@ -2,9 +2,7 @@ diff --git a/src/emit-lexer.ts b/src/emit-lexer.ts
 index c9f2921..89a5c93 100644
 --- a/src/emit-lexer.ts
 +++ b/src/emit-lexer.ts
-@@ -7,10 +7,10 @@
- // matching); regex-vs-division context and paren-head tracking are baked to int-table
- // loads on the token's interned k/t.
+@@ -9,6 +9,6 @@
  //
 -// Scope: grammars WITHOUT markup / indent / newline modes (those state machines stay
 -// interpreter-only for now) — emitLexer returns null for them and the caller falls back
@@ -15,11 +13,7 @@ index c9f2921..89a5c93 100644
 +// stream is REQUIRED to be identical to createLexer's (same fields, same errors);
 +// test/emit-lexer-verify.ts gates it.
  import type { CstGrammar, TokenDecl } from './types.ts';
- import { collectLiterals, isKeywordLiteral } from './grammar-utils.ts';
- import {
-@@ -46,8 +46,11 @@ const nonAsciiWsConsume = (v: string, cont: boolean, indent: string): string =>
-   `${indent}if (${v} > 127 && lxNonAsciiWs(${v})) { LX_WS.lastIndex = pos; const m = LX_WS.exec(source); if (m !== null) { if (/[\\n\\r\\u2028\\u2029]/.test(m[0])) pendingNl = true; pos += m[0].length;${cont ? ' continue;' : ''} } }`;
-
+@@ -48,4 +48,7 @@ const nonAsciiWsConsume = (v: string, cont: boolean, indent: string): string =>
  export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | null {
 -  // Out of scope: the markup / indentation / newline state machines.
 -  if (grammar.markup || grammar.indent || grammar.newline) return null;
@@ -29,32 +23,22 @@ index c9f2921..89a5c93 100644
 +  // Newline-only grammars need no stack when comments and flow suspension are absent.
 +  if (grammar.markup || grammar.indent || newline?.comment || flowOpen.length > 0 || flowClose.length > 0) return null;
    if (grammar.tokens.some(t => tokenBlockPatternSource(t) || t.blockOnly)) return null;
-
-   const out: string[] = [];
-@@ -81,6 +84,9 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
-
-   const regexCtx = grammar.tokens.find(t => t.regexContext)?.regexContext;
+@@ -83,2 +86,5 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    const kOf = (name: string) => st.typeKind.get(name) ?? st.KIND_NAMED_FALLBACK;
 +  const kNewline = newline ? kOf(newline.token) : -1;
 +  const hardBreak = newline?.hardBreak;
 +  const kHardBreak = hardBreak ? kOf(hardBreak.token) : -1;
    const tOf = (text: string) => (isKeywordLiteral(text) ? st.kwLitKind.get(text) : st.puLitKind.get(text)) ?? 0;
-   let tSize = 1;
-   for (const v of st.kwLitKind.values()) tSize = Math.max(tSize, v + 1);
-@@ -102,23 +108,57 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
-   // The scan matchers (template token excluded — its state machine is below), in
-   // declaration order, with their baked regexes and per-matcher facts.
+@@ -104,3 +110,3 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    const matchers = grammar.tokens
 -    .filter(t => t.name !== templateToken?.name)
 +    .filter(t => t.name !== templateToken?.name && t.name !== newline?.token)
      .map((t, idx) => ({
-       decl: t,
-       name: t.name,
+@@ -109,2 +115,3 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
        re: `LXRE_${idx}_${t.name.replace(/[^A-Za-z0-9_]/g, '_')}`,
 +      spanFn: `lxSpan_${idx}_${t.name.replace(/[^A-Za-z0-9_]/g, '_')}`,
        pattern: tokenPatternSource(t),
-       flags: tokenPatternHasStartAnchor(t) ? 'ym' : 'y',
-       skip: t.flags.includes('skip'),
+@@ -113,3 +120,8 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
        isRegex: t.flags.includes('regex'),
 -      first: tokenPatternFirstCharSet(t),
 +      first: t.delimitedSpan
@@ -64,11 +48,11 @@ index c9f2921..89a5c93 100644
 +          }
 +        : tokenPatternFirstCharSet(t),
        k: kOf(t.name),
-       identLike: identLike.has(t.name),
+@@ -117,2 +129,3 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
        loop: tokenPatternCharLoop(t),
 +      span: t.delimitedSpan,
      }));
-
+@@ -120,3 +133,30 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    emit(`// ── Emitted lexer (emit-lexer.ts): specialized tokenize for this grammar ──`);
 -  for (const m of matchers) emit(`const ${m.re} = new RegExp(${J(`(?:${m.pattern})`)}, ${J(m.flags)});`);
 +  for (const m of matchers) {
@@ -100,41 +84,25 @@ index c9f2921..89a5c93 100644
 +    }
 +  }
    emit(`const LX_WS = /\\s+/y;`);
-   emit(NON_ASCII_WS_FN);
-   emit(`// window-truncation retry: a matcher failing at the WINDOW edge is not a lex`);
-@@ -256,7 +296,7 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
-   // — no per-token object, no text slice: text is materialized from the source span only
-   // when a CST leaf is built. Flag bits: 1 = newlineBefore (the only stamp this emitted
+@@ -258,3 +298,3 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    // lexer ever sets; comment/multilineFlow stamps belong to fallback-only grammars).
 -  emit(`function tokenize(source: string) {`);
 +  emit(`function lexSource(source: string) {`);
    emit(`  docPieces = [source]; docPieceOff = [0]; docLen = source.length;`);
-   emit(`  docFlat = source; docCur = 0;`);
-   emit(`  tokN = 0;`);
-@@ -288,6 +328,10 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
-   emit(`  const n = source.length;`);
-   emit(`  let pos = startPos;`);
+@@ -290,2 +330,6 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    emit(`  let pendingNl = false;`);
 +  if (newline) {
 +    emit(`  let lineStart = srcBase === 0;`);
 +    emit(`  let emittedContent = pvK >= 0;`);
 +  }
    emit(`  let extraFl = 0;`);
-   emit(`  let lastBangWasPostfix = false;`);
-   emit(`  let lastCloseWasParenHead = false;`);
-@@ -310,6 +354,9 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
-   emit(`    tkDp[tokN] = templateStack.length;`);
-   emit(`    tkPd[tokN] = parenHeadStack.length;`);
+@@ -312,2 +356,5 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    emit(`    pendingNl = false;`);
 +  if (newline) {
 +    emit(`    if (k !== ${kNewline}) emittedContent = true;`);
 +  }
    emit(`    pvK = k; pvT = t;`);
-   emit(`    tokN++;`);
-   emit(`    // Resync: adopt the OLD suffix from this aligned token on. Sound iff the old`);
-@@ -385,19 +432,71 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
-     // emitted FOR it (the old stream's persisted entry survives via the shift;
-     // keeping the window's copy too double-reports the same character)`);
+@@ -387,15 +434,67 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    emit(resyncRetractLine('    '));
 +  if (newline) {
 +    emit(`    if (lineStart) {`);
@@ -214,11 +182,7 @@ index c9f2921..89a5c93 100644
 +    emit(`${nonAsciiWsConsume('cc', true, '    ')}`);
 +  }
    if (templateToken) {
-     const tplCloseT = kwFirstCcs.has(tplInterpClose.charCodeAt(0)) ? 'lexKwT(source, startPos, r.end)' : '0';
-     const tplOpenT = kwFirstCcs.has(tplOpen.charCodeAt(0)) ? 'lexKwT(source, startPos, r.end)' : '0';
-@@ -464,6 +563,17 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
-   const nonAsciiMatchers = matchers.filter(m => m.first && m.first.nonAscii);
-
+@@ -466,2 +565,13 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    const emitMatcherTry = (m: (typeof matchers)[number], ind: string) => {
 +    if (m.span) {
 +      emit(`${ind}{ const _e = ${m.spanFn}(source, pos);`);
@@ -232,15 +196,11 @@ index c9f2921..89a5c93 100644
 +      return;
 +    }
      emit(`${ind}${m.re}.lastIndex = pos;`);
-     emit(`${ind}{ const m = ${m.re}.exec(source);`);
-     emit(`${ind}  if (m !== null) {`);
 diff --git a/src/emit-parser.ts b/src/emit-parser.ts
-index e5facbd..e256442 100644
+index 74feb92..e120549 100644
 --- a/src/emit-parser.ts
 +++ b/src/emit-parser.ts
-@@ -1158,9 +1158,8 @@ function emitJsParserCore(grammar: CstGrammar, lexSrc: string | null, externalOn
-
-   // ── Header: imports + baked tables + grammar-lite ──
+@@ -1149,5 +1149,4 @@ export function emitJsParser(grammar: CstGrammar, lexSrc: string | null): string
    e.emit(`// GENERATED by src/emit-parser.ts — do not edit. Specialized parser for grammar ${J(grammar.name ?? '')}.`);
 -  // The lexer: EMITTED (specialized, standalone — see emit-lexer.ts) when the grammar
 -  // is a plain token stream; the data-driven createLexer runtime otherwise
@@ -248,23 +208,14 @@ index e5facbd..e256442 100644
 +  // The lexer: EMITTED (specialized, standalone — see emit-lexer.ts) for token streams
 +  // and the simple newline-only mode; the data-driven createLexer runtime otherwise.
    // `lexSrc` is handed in by the Target façade (emitParser reuses emitLexer) — see emit.ts.
-   const st = a.symtab;
-   e.externalOnly = externalOnly;
-@@ -2652,7 +2651,7 @@ function visitCore(entry: number, fns: _VisitFns, charBase?: number, tokBase?: n
-
- // Parse to the ARENA: returns the root node id.
+@@ -2623,3 +2622,3 @@ function visitCore(entry: number, fns: _VisitFns, charBase?: number, tokBase?: n
  function lexInto(source: string) {
 -${e.soa ? `  tokenize(source);
 +${e.soa ? `  lexSource(source);
    docEmptyPops = lexEmptyPops.slice();` : String.raw`  docPieces = [source]; docPieceOff = [0]; docLen = source.length; docFlat = source; docCur = 0;
-   const _toks = tokenize(source);
-   const _n = _toks.length;
-@@ -4207,7 +4206,13 @@ ${e.externalOnly ? '' : '  }'}
- }
-
-
--${e.externalOnly ? '' : String.raw`export { tokenize };
-+${e.externalOnly ? '' : String.raw`${e.soa ? `export function tokenize(source: string) {
+@@ -4054,2 +4053,8 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+-export { tokenize };
++${e.soa ? `export function tokenize(source: string) {
 +  activate(docDefault);
 +  lexSource(source);
 +  const tokens = new Array(tokN);
@@ -272,5 +223,3 @@ index e5facbd..e256442 100644
 +  return tokens;
 +}` : 'export { tokenize };'}
  // ── Module-level API: the DEFAULT document (one shared session; tokenize and the
- // raw tree/tokenAt views read the ACTIVE doc — they are gate/debug surfaces) ──
- export function parse(source: string, entryRule?: string) { activate(docDefault); return parseCore(source, entryRule); }

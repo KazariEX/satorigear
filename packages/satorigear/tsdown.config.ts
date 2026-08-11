@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { minify } from "rolldown/utils";
 import { defineConfig } from "tsdown";
+import { emitBlockSyntaxSchema } from "./src/block/generate.ts";
 import { grammar as grammarBlock } from "./src/grammars/block.ts";
 import { grammar as grammarInline } from "./src/grammars/inline.ts";
 
@@ -27,11 +28,11 @@ export default defineConfig({
       name: "emit-parser",
       async buildStart() {
         // keep the generator outside tsconfig graph to avoid TS6133 error
-        const { emitJsExternalParser, emitJsPackedLexer } = await import("monogram/emit-parser.ts" as any);
+        const { emitJsPackedLexer } = await import("monogram/emit-parser.ts" as any);
 
         const generated = join(import.meta.dirname, "src/generated");
         const modules = [
-          { name: "blocks.ts", source: emitJsExternalParser(grammarBlock) },
+          { name: "blocks.ts", source: emitBlockSyntaxSchema(grammarBlock) },
           { name: "inline.ts", source: emitJsPackedLexer(grammarInline) },
         ];
 

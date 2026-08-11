@@ -96,6 +96,6 @@ index e256442..dd99341 100644
 +}`;
 +}
 +
- export function emitJsExternalParser(grammar: CstGrammar): string {
-   return emitJsParserCore(grammar, null, true);
- }
+ export function emitJsParser(grammar: CstGrammar, lexSrc: string | null): string {
+   // [Await]/[Yield] context: name-fork the body-reachable rule closure into $A/$Y/$AY
+   // families (see await-yield-fork.ts). No-op for a grammar with no ctx markers. Done
