@@ -6,7 +6,6 @@ import type { BlockArenaChange, BlockHandle, BlockSyntaxView } from "./block/are
 import type { BlockToken } from "./block/tokens.ts";
 import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
-import type { SyntaxArena } from "./syntax-protocol.ts";
 
 export interface SyntaxBlock {
   handle: BlockHandle;
@@ -18,7 +17,7 @@ export interface SyntaxBlock {
 }
 
 export interface MarkdownInlineSyntax {
-  arena: SyntaxArena;
+  arena: InlineArena;
   blockRule: string;
   rootId: number;
   rootOffset: number;
@@ -50,7 +49,7 @@ function appendTokenSpans(spans: SourceSpan[], token: BlockToken): void {
 
 function inlineSpansOf(
   view: BlockSyntaxView,
-  arena: SyntaxArena,
+  arena: BlockSyntaxView["arena"],
   nodeId: number,
   tokenBase: number,
 ): SourceSpan[] {

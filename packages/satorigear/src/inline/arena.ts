@@ -5,7 +5,6 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
-import type { SyntaxArena } from "../syntax-protocol.ts";
 import type { InlineSyntaxSchema } from "./profile.ts";
 
 function leaf(tokenIndex: number): number {
@@ -14,7 +13,7 @@ function leaf(tokenIndex: number): number {
 
 // Pair resolution has already made nesting unambiguous; this arena records that semantic tree
 // directly instead of asking a second parser to rediscover it.
-export class InlineArena implements SyntaxArena {
+export class InlineArena {
   #childCounts: number[] = [];
   #childStarts: number[] = [];
   #children: number[] = [];
@@ -26,7 +25,6 @@ export class InlineArena implements SyntaxArena {
   #schema: InlineSyntaxSchema;
   #scratch: number[][] = [];
   #starts: number[] = [];
-  #tokenBases: number[] = [];
   #tokens: InlineTokenStream = [];
 
   constructor(schema: InlineSyntaxSchema) {
@@ -57,7 +55,6 @@ export class InlineArena implements SyntaxArena {
     ruleId: number,
     start: number,
     end: number,
-    tokenBase: number,
     children: readonly number[],
     childCount: number,
   ): number {
@@ -65,7 +62,6 @@ export class InlineArena implements SyntaxArena {
     this.#ruleIds[id] = ruleId;
     this.#starts[id] = start;
     this.#ends[id] = end;
-    this.#tokenBases[id] = tokenBase;
     this.#childStarts[id] = this.#kidCount;
     this.#childCounts[id] = childCount;
     for (let index = 0; index < childCount; index++) {
@@ -78,14 +74,12 @@ export class InlineArena implements SyntaxArena {
     ruleId: number,
     start: number,
     end: number,
-    tokenBase: number,
     child: number,
   ): number {
     const id = this.#nodeCount++;
     this.#ruleIds[id] = ruleId;
     this.#starts[id] = start;
     this.#ends[id] = end;
-    this.#tokenBases[id] = tokenBase;
     this.#childStarts[id] = this.#kidCount;
     this.#childCounts[id] = 1;
     this.#children[this.#kidCount++] = child;
@@ -105,10 +99,6 @@ export class InlineArena implements SyntaxArena {
     return entry < 0 ? inlineTokenStart(this.#tokens, ~entry) : this.#starts[entry];
   }
 
-  entryTokenBase(entry: number): number {
-    return entry < 0 ? ~entry : this.#tokenBases[entry];
-  }
-
   childAt(id: number, index: number): number {
     return this.#children[this.#childStarts[id] + index];
   }
@@ -120,10 +110,6 @@ export class InlineArena implements SyntaxArena {
   childRelAt(id: number, index: number): number {
     const child = this.childAt(id, index);
     return this.entryStart(child) - this.#starts[id];
-  }
-
-  childTokRelAt(id: number, index: number): number {
-    return this.entryTokenBase(this.childAt(id, index)) - this.#tokenBases[id];
   }
 
   leafToken(entry: number): number {
@@ -143,8 +129,8 @@ export class InlineArena implements SyntaxArena {
     return this.#ends[id] - this.#starts[id];
   }
 
-  ruleNameOf(id: number): string {
-    return this.#schema.ruleNames[this.#ruleIds[id]];
+  ruleIdOf(id: number): number {
+    return this.#ruleIds[id];
   }
 }
 
@@ -187,8 +173,7 @@ function semanticNode(
         content.next >= end ||
         inlineTokenKind(tokens, content.next) !== container.closeKind
       ) {
-        const name = schema.tokenNames[kind] ?? "inline token";
-        throw new Error(`Resolved inline stream did not close ${name}`);
+        throw new Error(`Resolved inline stream did not close token kind ${kind}`);
       }
       for (let child = 0; child < content.childCount; child++) {
         children.push(content.children[child]);
@@ -201,7 +186,6 @@ function semanticNode(
         inLink ? container.linkRuleId : container.ruleId,
         inlineTokenStart(tokens, index),
         inlineTokenEnd(tokens, next - 1),
-        index,
         children,
         children.length,
       ),
@@ -227,8 +211,7 @@ function semanticNode(
     content.next >= end ||
     inlineTokenKind(tokens, content.next) !== pair.closeKind
   ) {
-    const name = schema.tokenNames[kind] ?? "inline token";
-    throw new Error(`Resolved inline stream did not close ${name}`);
+    throw new Error(`Resolved inline stream did not close token kind ${kind}`);
   }
   const children = [leaf(index)];
   for (let child = 0; child < content.childCount; child++) {
@@ -240,7 +223,6 @@ function semanticNode(
       inLink ? pair.linkRuleId : pair.ruleId,
       inlineTokenStart(tokens, index),
       inlineTokenEnd(tokens, content.next),
-      index,
       children,
       children.length,
     ),
@@ -281,7 +263,6 @@ function parseItems(
           fallbackRule,
           inlineTokenStart(tokens, index),
           inlineTokenEnd(tokens, index),
-          index,
           leaf(index),
         );
       index++;
@@ -300,7 +281,7 @@ function buildRoot(
 ): number {
   const content = parseItems(arena, schema, tokens, start, end, void 0, false);
   if (content.childCount === 0) {
-    return arena.node(schema.inlineLinesRuleId, 0, 0, start, content.children, 0);
+    return arena.node(schema.inlineLinesRuleId, 0, 0, content.children, 0);
   }
   const first = content.children[0];
   const last = content.children[content.childCount - 1];
@@ -308,7 +289,6 @@ function buildRoot(
     schema.inlineLinesRuleId,
     arena.entryStart(first),
     arena.entryEnd(last),
-    arena.entryTokenBase(first),
     content.children,
     content.childCount,
   );

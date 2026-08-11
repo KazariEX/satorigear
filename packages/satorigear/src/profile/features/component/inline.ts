@@ -359,27 +359,25 @@ export function transformComponentTokens(
 const projectInlineComponent: InlineRuleProjector = (
   nodeId,
   offset,
-  tokenBase,
   endOffset,
   sourceSpan,
   accumulator,
 ) => {
   const { context } = accumulator;
-  const open = directLeaf(nodeId, tokenBase, "InlineComponentOpen", context);
+  const open = directLeaf(nodeId, "InlineComponentOpen", context);
   if (open === void 0) {
     throw new Error("InlineComponent does not contain an opener");
   }
   const children: PhrasingContent[] = [];
-  const labelOpen = directLeaf(nodeId, tokenBase, "InlineComponentLabelOpen", context);
+  const labelOpen = directLeaf(nodeId, "InlineComponentLabelOpen", context);
   if (labelOpen !== void 0) {
     const [start, end] = contentBounds(
       nodeId,
-      tokenBase,
       "InlineComponentLabelOpen",
       "InlineComponentLabelClose",
       context,
     );
-    inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
+    inlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
   }
   const text = context.view.text.slice(
     inlineTokenStart(context.tokens, open) + 1,
@@ -401,7 +399,6 @@ const projectInlineComponent: InlineRuleProjector = (
 const projectInlineSpan: InlineRuleProjector = (
   nodeId,
   offset,
-  tokenBase,
   endOffset,
   sourceSpan,
   accumulator,
@@ -409,13 +406,12 @@ const projectInlineSpan: InlineRuleProjector = (
   const { context } = accumulator;
   const [start, end] = contentBounds(
     nodeId,
-    tokenBase,
     "InlineSpanOpen",
     "InlineSpanClose",
     context,
   );
   const children: PhrasingContent[] = [];
-  inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
+  inlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
   const value: InlineComponent = {
     type: "inlineComponent",
     name: "span",

@@ -48,11 +48,11 @@ type Formatting = Delete | Emphasis | Strong;
 function projectFormatting(type: Formatting["type"], boundary: "Emphasis" | "Strong"): InlineRuleProjector {
   const open = `${boundary}Open`;
   const close = `${boundary}Close`;
-  return (nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator) => {
+  return (nodeId, offset, endOffset, sourceSpan, accumulator) => {
     const context = accumulator.context;
-    const [start, end] = contentBounds(nodeId, tokenBase, open, close, context);
+    const [start, end] = contentBounds(nodeId, open, close, context);
     const children: PhrasingContent[] = [];
-    inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
+    inlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
     appendInline(
       accumulator,
       withSpan<Formatting>({ type, children }, sourceSpan.start, sourceSpan.end),
@@ -68,7 +68,6 @@ const projectInlineDelete = projectFormatting("delete", "Strong");
 const projectInlineStrongOrDelete: InlineRuleProjector = (
   nodeId,
   offset,
-  tokenBase,
   endOffset,
   sourceSpan,
   accumulator,
@@ -76,7 +75,7 @@ const projectInlineStrongOrDelete: InlineRuleProjector = (
   const project = accumulator.context.source[sourceSpan.start] === "~"
     ? projectInlineDelete
     : projectInlineStrong;
-  return project(nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator);
+  return project(nodeId, offset, endOffset, sourceSpan, accumulator);
 };
 
 const inlineSyntax: readonly InlineSyntaxDefinition[] = [

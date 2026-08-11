@@ -16,9 +16,9 @@ import {
   type InlineTokenStream,
 } from "./inline/tokens.ts";
 import type { BlockSyntaxView } from "./block/arena.ts";
+import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
-import type { SyntaxArena } from "./syntax-protocol.ts";
 import type { SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 
 export interface BlockProjectionContext {
@@ -54,10 +54,10 @@ export type BlockProjector = (
 ) => FragmentNode<TopLevelContent>;
 
 export interface InlineProjectionContext {
-  arena: SyntaxArena;
+  arena: InlineArena;
   blockRule: string;
   decodeText: (value: string) => string;
-  ruleProjects: Readonly<Record<string, InlineRuleProjector>>;
+  ruleProjects: readonly (InlineRuleProjector | undefined)[];
   source: string;
   tokenBase: number;
   tokenProjects: readonly (InlineLeafProjector | undefined)[];
@@ -81,7 +81,6 @@ export type InlineLeafProjector = (
 export type InlineRuleProjector = (
   nodeId: number,
   offset: number,
-  tokenBase: number,
   endOffset: number,
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
@@ -90,11 +89,10 @@ export type InlineRuleProjector = (
 export const projectInlineChildren: InlineRuleProjector = (
   nodeId,
   offset,
-  tokenBase,
   endOffset,
   sourceSpan,
   accumulator,
-) => inlineSequence(nodeId, offset, tokenBase, accumulator);
+) => inlineSequence(nodeId, offset, accumulator);
 
 export function withSpan<const T extends object>(value: T, start: number, end: number): FragmentNode<T> {
   const fragment = value as FragmentNode<T>;
@@ -177,7 +175,6 @@ export function firstNonspace(source: string, start: number, end: number): numbe
 
 export function directLeaf(
   nodeId: number,
-  tokenBase: number,
   tokenType: string,
   context: InlineProjectionContext,
 ): number | undefined {
@@ -185,16 +182,18 @@ export function directLeaf(
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
-    if (entry < 0 && arena.leafTokenType(entry, tokenBase) === tokenType) {
-      return inlineTokenIndex(context, arena.leafToken(entry, tokenBase));
+    if (
+      entry < 0 && arena.leafTokenType(entry) === tokenType
+    ) {
+      return inlineTokenIndex(context, arena.leafToken(entry));
     }
   }
 }
 
-export function leaf(nodeId: number, tokenBase: number, tokenType: string, context: InlineProjectionContext): number {
-  const result = directLeaf(nodeId, tokenBase, tokenType, context);
+export function leaf(nodeId: number, tokenType: string, context: InlineProjectionContext): number {
+  const result = directLeaf(nodeId, tokenType, context);
   if (result === void 0) {
-    throw new Error(`Expected ${context.arena.ruleNameOf(nodeId)} syntax to contain ${tokenType}`);
+    throw new Error(`Expected inline rule ${context.arena.ruleIdOf(nodeId)} to contain ${tokenType}`);
   }
   return result;
 }
@@ -342,8 +341,6 @@ export function appendInline(
 }
 
 function appendInlineLeaf(
-  entry: number,
-  tokenBase: number,
   tokenIndex: number,
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
@@ -351,21 +348,20 @@ function appendInlineLeaf(
   const { context } = accumulator;
   const project = context.tokenProjects[inlineTokenKind(context.tokens, tokenIndex)];
   if (!project) {
-    throw new Error(`Unexpected inline token: ${context.arena.leafTokenType(entry, tokenBase)}`);
+    throw new Error(`Unexpected inline token kind ${inlineTokenKind(context.tokens, tokenIndex)}`);
   }
   return project(tokenIndex, sourceSpan, accumulator);
 }
 
 export function contentBounds(
   nodeId: number,
-  tokenBase: number,
   openType: string,
   closeType: string,
   context: InlineProjectionContext,
 ): [number, number] {
   return [
-    inlineTokenEnd(context.tokens, leaf(nodeId, tokenBase, openType, context)),
-    inlineTokenStart(context.tokens, leaf(nodeId, tokenBase, closeType, context)),
+    inlineTokenEnd(context.tokens, leaf(nodeId, openType, context)),
+    inlineTokenStart(context.tokens, leaf(nodeId, closeType, context)),
   ];
 }
 
@@ -380,7 +376,6 @@ function trailingWhitespaceStart(value: string): number {
 export function inlineSequence(
   nodeId: number,
   offset: number,
-  tokenBase: number,
   accumulator: InlineAccumulator,
   start?: number,
   end?: number,
@@ -392,22 +387,21 @@ export function inlineSequence(
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
-    const tokenIndex = entry < 0 ? inlineTokenIndex(context, arena.leafToken(entry, tokenBase)) : void 0;
+    const tokenIndex = entry < 0 ? inlineTokenIndex(context, arena.leafToken(entry)) : void 0;
     const childOffset = tokenIndex !== void 0
       ? inlineTokenStart(context.tokens, tokenIndex)
       : offset + arena.childRelAt(nodeId, index);
     const childEnd = tokenIndex !== void 0
       ? inlineTokenEnd(context.tokens, tokenIndex)
       : childOffset + arena.lenOf(entry);
-    const childTokenBase = tokenIndex !== void 0 ? tokenBase : tokenBase + arena.childTokRelAt(nodeId, index);
     const sourceSpan = context.view.mapSpan(childOffset, childEnd);
     if (cursor !== void 0 && childOffset > cursor) {
       accumulator.gapStart = cursor;
       accumulator.gapEnd = childOffset;
     }
     const childEmitted = tokenIndex !== void 0
-      ? appendInlineLeaf(entry, tokenBase, tokenIndex, sourceSpan, accumulator)
-      : appendInlineNode(entry, childOffset, childTokenBase, childEnd, sourceSpan, accumulator);
+      ? appendInlineLeaf(tokenIndex, sourceSpan, accumulator)
+      : appendInlineNode(entry, childOffset, childEnd, sourceSpan, accumulator);
     if (!childEmitted) {
       continue;
     }
@@ -424,18 +418,17 @@ export function inlineSequence(
 function appendInlineNode(
   nodeId: number,
   offset: number,
-  tokenBase: number,
   endOffset: number,
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
 ): boolean {
   const { context } = accumulator;
-  const rule = context.arena.ruleNameOf(nodeId);
+  const rule = context.arena.ruleIdOf(nodeId);
   const project = context.ruleProjects[rule];
   if (!project) {
     throw new Error(`Unexpected inline syntax rule: ${rule}`);
   }
-  return project(nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator);
+  return project(nodeId, offset, endOffset, sourceSpan, accumulator);
 }
 
 export function inlineChildren(
@@ -466,7 +459,6 @@ export function inlineChildren(
   inlineSequence(
     inline.rootId,
     inline.rootOffset,
-    inline.rootTokenBase,
     createInlineAccumulator(inlineContext, result),
   );
   const last = result.at(-1);

@@ -68,12 +68,11 @@ export interface InlineSyntaxSchema {
   fallbackRuleByKind: readonly (number | undefined)[];
   inlineLinesRuleId: number;
   pairByOpenKind: readonly (InlinePair | undefined)[];
-  ruleNames: readonly string[];
   tokenNames: readonly (string | undefined)[];
 }
 
 interface InlineSyntaxCompilation {
-  ruleProjects: Readonly<Record<string, InlineRuleProjector>>;
+  ruleProjects: readonly (InlineRuleProjector | undefined)[];
   schema: InlineSyntaxSchema;
   tokenProjects: readonly (InlineLeafProjector | undefined)[];
 }
@@ -93,7 +92,7 @@ export interface InlineFeature {
 export interface InlineProfile {
   decodeText: (value: string) => string;
   resolve: InlineTokenTransform;
-  ruleProjects: Readonly<Record<string, InlineRuleProjector>>;
+  ruleProjects: readonly (InlineRuleProjector | undefined)[];
   schema: InlineSyntaxSchema;
   tokenize: InlineTokenizer;
   tokenProjects: readonly (InlineLeafProjector | undefined)[];
@@ -106,15 +105,13 @@ function compileInlineSyntax(
 ): InlineSyntaxCompilation {
   const tokenNames: (string | undefined)[] = [];
   const tokenProjects: (InlineLeafProjector | undefined)[] = [];
-  const ruleProjects: Record<string, InlineRuleProjector> = Object.create(null);
-  const ruleNames: string[] = [];
+  const ruleProjects: (InlineRuleProjector | undefined)[] = [];
   const ruleIds = new Map<string, number>();
   const ruleId = (name: string): number => {
     let id = ruleIds.get(name);
     if (id === void 0) {
-      id = ruleNames.length;
+      id = ruleIds.size;
       ruleIds.set(name, id);
-      ruleNames.push(name);
     }
     return id;
   };
@@ -135,7 +132,7 @@ function compileInlineSyntax(
     }
 
     const definitionRuleId = ruleId(definition.rule);
-    ruleProjects[definition.rule] = definition.project;
+    ruleProjects[definitionRuleId] = definition.project;
     if (definition.kind === "fallback") {
       for (const token of definition.tokens) {
         fallbackRuleByKind[inlineKind(token)] = definitionRuleId;
@@ -147,7 +144,7 @@ function compileInlineSyntax(
       ? definitionRuleId
       : ruleId(definition.linkRule);
     if (definition.linkRule !== void 0) {
-      ruleProjects[definition.linkRule] = definition.project;
+      ruleProjects[linkRuleId] = definition.project;
     }
     if (definition.kind === "container") {
       const tokenKind = registerToken(definition.token, ignoreInlineToken);
@@ -169,9 +166,6 @@ function compileInlineSyntax(
     };
   }
 
-  const newlineKind = inlineKind("Newline");
-  tokenNames[newlineKind] = "Newline";
-
   return {
     ruleProjects,
     schema: {
@@ -179,7 +173,6 @@ function compileInlineSyntax(
       fallbackRuleByKind,
       inlineLinesRuleId: ruleId("InlineLines"),
       pairByOpenKind,
-      ruleNames,
       tokenNames,
     },
     tokenProjects,

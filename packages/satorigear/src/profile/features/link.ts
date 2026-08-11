@@ -85,13 +85,12 @@ function destinationTitle(bodySource: string): Resource {
 
 function reference(
   nodeId: number,
-  tokenBase: number,
   syntaxStart: number,
   syntaxEnd: number,
   context: InlineAccumulator["context"],
   image: boolean,
 ): Reference {
-  const close = leaf(nodeId, tokenBase, image ? "ImageReferenceClose" : "ReferenceClose", context);
+  const close = leaf(nodeId, image ? "ImageReferenceClose" : "ReferenceClose", context);
   const closeText = inlineTokenText(context.view.text, context.tokens, close);
   const text = context.view.text.slice(syntaxStart, syntaxEnd);
   const content = text.slice(image ? 2 : 1, text.length - closeText.length);
@@ -126,7 +125,6 @@ function phrasingText(children: readonly PhrasingContent[]): string {
 function linkOrImage(
   nodeId: number,
   offset: number,
-  tokenBase: number,
   endOffset: number,
   sourceSpan: { end: number; start: number },
   context: InlineAccumulator["context"],
@@ -139,20 +137,19 @@ function linkOrImage(
   const resourcePrefix = referenceNode ? "Reference" : "Link";
   const [start, end] = contentBounds(
     nodeId,
-    tokenBase,
     `${prefix + resourcePrefix}Open`,
     `${prefix + resourcePrefix}Close`,
     context,
   );
   const children: PhrasingContent[] = [];
-  inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
+  inlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
   if (referenceNode) {
-    const association = reference(nodeId, tokenBase, offset, endOffset, context, image);
+    const association = reference(nodeId, offset, endOffset, context, image);
     return image
       ? withSpan<ImageReference>({ type: "imageReference", alt: phrasingText(children), ...association }, sourceSpan.start, sourceSpan.end)
       : withSpan<LinkReference>({ type: "linkReference", children, ...association }, sourceSpan.start, sourceSpan.end);
   }
-  const closeIndex = leaf(nodeId, tokenBase, `${prefix}LinkClose`, context);
+  const closeIndex = leaf(nodeId, `${prefix}LinkClose`, context);
   const resource = destinationTitle(inlineTokenText(context.view.text, context.tokens, closeIndex).slice(2, -1));
   return image
     ? withSpan<Image>({ type: "image", alt: phrasingText(children), ...resource }, sourceSpan.start, sourceSpan.end)
@@ -160,10 +157,10 @@ function linkOrImage(
 }
 
 function projectMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineRuleProjector {
-  return (nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator) => {
+  return (nodeId, offset, endOffset, sourceSpan, accumulator) => {
     appendInline(
       accumulator,
-      linkOrImage(nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator.context, media, resourceKind),
+      linkOrImage(nodeId, offset, endOffset, sourceSpan, accumulator.context, media, resourceKind),
     );
     return true;
   };
