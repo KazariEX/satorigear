@@ -65,6 +65,32 @@ describe("markdown document", () => {
     });
   });
 
+  it("matches complete parses while appending streamed chunks", () => {
+    const streamParser = createParser({ footnote: true, frontmatter: true, math: true });
+    const document = streamParser.createDocument("");
+    const chunks = [
+      "---\n",
+      "title: stream\n",
+      "---\n\n",
+      "[target]",
+      "\n\n[target]: /url",
+      "\r",
+      "\n\n[^note]",
+      "\n\n[^note]: streamed",
+      "\n\n$$\nx",
+      "\n$$\n",
+      "\n### repeated\n",
+      "\nbody\n",
+      "\n### repeated\n",
+    ];
+
+    for (const text of chunks) {
+      const start = document.source.length;
+      document.edit([{ start, end: start, text }]);
+      expect(document.snapshot()).toEqual(streamParser.parse(document.source));
+    }
+  });
+
   it("reassociates adjacent references when a definition becomes available", () => {
     const document = parser.createDocument("[foo][bar][baz]\n\n[baz]: /baz\n");
     document.snapshot();
@@ -166,6 +192,17 @@ describe("markdown document", () => {
     expect(split.snapshot()).toEqual(parser.parse(split.source));
     split.edit([{ start: 0, end: 0, text: "\n" }]);
     expect(split.snapshot()).toEqual(parser.parse(split.source));
+  });
+
+  it("reprojects the block touching a stable-prefix boundary", () => {
+    const document = parser.createDocument("-1<.  \r\n>> ");
+    document.snapshot();
+    document.edit([
+      { start: 10, end: 10, text: "\n" },
+      { start: 10, end: 10, text: "`" },
+    ]);
+
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
   });
 
   it("updates HTML block termination", () => {

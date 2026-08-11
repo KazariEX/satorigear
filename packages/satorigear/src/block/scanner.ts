@@ -15,6 +15,11 @@ export interface BlockScanContext {
   resolveLines: (source: string, lines: readonly BlockLine[], tokens: BlockToken[]) => void;
 }
 
+export interface BlockScanChange {
+  stablePrefixEnd: number;
+  tokenChange: BlockTokenChange;
+}
+
 function profileStarts(
   profile: BlockProfile,
   context: BlockScanContext,
@@ -305,7 +310,7 @@ export class BlockScanner {
     return createForwardLocator(lines, sourceLength, trailingLineEnding);
   }
 
-  edit(nextSource: string, changedSpan: SourceSpan, oldChangedEnd: number): BlockTokenChange {
+  edit(nextSource: string, changedSpan: SourceSpan, oldChangedEnd: number): BlockScanChange {
     const previousSource = this.#source;
     const delta = nextSource.length - previousSource.length;
 
@@ -391,6 +396,10 @@ export class BlockScanner {
     this.#source = nextSource;
     this.#lines = nextLines;
     this.#checkpoints = [...prefixCheckpoints, ...scannedCheckpoints, ...suffixCheckpoints];
-    return tokenChange;
+
+    return {
+      stablePrefixEnd: restartOffset,
+      tokenChange,
+    };
   }
 }

@@ -96,9 +96,13 @@ export class DocumentImpl implements Document {
       this.#fragmentsByBlockId = fragmentsByBlockId;
     }
 
-    const tokenChange = this.#blockScanner.edit(applied.source, applied.changedSpan, applied.oldChangedEnd);
+    const { stablePrefixEnd, tokenChange } = this.#blockScanner.edit(
+      applied.source,
+      applied.changedSpan,
+      applied.oldChangedEnd,
+    );
     this.#blockArena.update(this.#blockScanner.tokens, tokenChange);
-    this.#syntaxState.update(this.source, this.#blockArena.view());
+    this.#syntaxState.update(this.source, this.#blockArena.view(), stablePrefixEnd);
 
     return { changedSpan: applied.changedSpan };
   }

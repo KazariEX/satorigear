@@ -1,10 +1,7 @@
+import { emptyArray, emptySet } from "../primitives.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
 import type { InlineProfile, InlineResolutionContext } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
-
-// Most regions consult no definitions, so they share one immutable empty dependency set.
-const noDefinitionDependencies: ReadonlySet<string> = new Set();
-const emptyTokens: InlineTokenStream = [];
 
 interface DefinitionContext extends InlineResolutionContext {
   definitions: ReadonlySet<string>;
@@ -52,7 +49,7 @@ export class InlineRegion {
   }
 
   get tokens(): InlineTokenStream {
-    return this.#tokens ?? emptyTokens;
+    return this.#tokens ?? emptyArray;
   }
 
   update(
@@ -66,6 +63,12 @@ export class InlineRegion {
     }
     this.revision++;
     return this;
+  }
+
+  updateDefinitions(definitions: ReadonlySet<string>): void {
+    if (this.#updateTokens(this.view.text, definitions)) {
+      this.revision++;
+    }
   }
 
   #dependenciesChanged(definitions: ReadonlySet<string>): boolean {
@@ -107,7 +110,7 @@ export class InlineRegion {
     const tokens = this.#syntax.resolve(source, rawTokens, context);
 
     this.#tokenSource = source;
-    this.#definitionDependencies = context.dependencies ?? noDefinitionDependencies;
+    this.#definitionDependencies = context.dependencies ?? emptySet;
     this.#definitions = definitions;
     this.#rawTokens = rawTokens;
     this.#tokens = tokens;

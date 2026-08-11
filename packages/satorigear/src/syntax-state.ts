@@ -1,5 +1,6 @@
 import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
 import { inlineTokenCount, inlineTokenStart, type InlineTokenStream } from "./inline/tokens.ts";
+import { emptySet, isArrayEqual, isSetEqual } from "./primitives.ts";
 import {
   createSourceView,
   type SourceSpan,
@@ -36,6 +37,11 @@ interface InlineRoot {
   tokenBase: number;
 }
 
+interface BlockDefinition {
+  blockIndex: number;
+  key: string;
+}
+
 function appendTokenSpans(spans: SourceSpan[], token: BlockToken): void {
   if (token.ranges?.length) {
     for (const range of token.ranges) {
@@ -67,12 +73,10 @@ function inlineSpansOf(
   return spans;
 }
 
-function sameNumbers(left: readonly number[], right: readonly number[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
 export class SyntaxState {
-  #blocks: readonly SyntaxBlock[] = [];
+  #blocks: SyntaxBlock[] = [];
+  #definitionEntries?: BlockDefinition[];
+  #definitions: ReadonlySet<string> = emptySet;
   #inlineArena: InlineArena;
   #inlineRoots = new Map<number, InlineRoot>();
   #profile: SyntaxProfile;
@@ -95,22 +99,51 @@ export class SyntaxState {
     return this.#blocks;
   }
 
-  update(source: string, view: BlockSyntaxView): void {
+  update(source: string, view: BlockSyntaxView, stablePrefixEnd = 0): void {
     const arena = view.arena;
+    const previousBlocks = this.#blocks;
+    const initializing = previousBlocks.length === 0;
+    // The scanner restart is a semantic boundary; blocks before it retain source and arena identity.
+    let prefixLength = 0;
+    while (
+      prefixLength < previousBlocks.length &&
+      previousBlocks[prefixLength].offset < stablePrefixEnd
+    ) {
+      prefixLength++;
+    }
+    const blocks: SyntaxBlock[] = prefixLength === 0 ? [] : previousBlocks.slice(0, prefixLength);
+    const previousDefinitionEntries = this.#definitionEntries;
+    let stableDefinitionCount = 0;
     const definitions = new Set<string>();
+    // Sparse ownership records restore global definitions without revisiting stable block subtrees.
+    if (previousDefinitionEntries) {
+      while (
+        stableDefinitionCount < previousDefinitionEntries.length &&
+        previousDefinitionEntries[stableDefinitionCount].blockIndex < prefixLength
+      ) {
+        stableDefinitionCount++;
+      }
+      for (let index = 0; index < stableDefinitionCount; index++) {
+        definitions.add(previousDefinitionEntries[index].key);
+      }
+    }
+
     const bindings: InlineRegionBinding[] = [];
     const stableRegionIds = new Set<number>();
-    const blocks: SyntaxBlock[] = [];
+    let tailDefinitionEntries: BlockDefinition[] | undefined;
     const collect = (
       nodeId: number,
       offset: number,
       tokenBase: number,
+      blockIndex: number,
       regionIds: number[],
     ): void => {
       const rule = arena.ruleNameOf(nodeId);
       const definitionKey = this.#profile.block.definitionKeys[rule];
       if (definitionKey) {
-        definitions.add(definitionKey(view.tokenAt(tokenBase)));
+        const key = definitionKey(view.tokenAt(tokenBase));
+        (tailDefinitionEntries ??= []).push({ blockIndex, key });
+        definitions.add(key);
       }
       if (this.#profile.block.inlineContents[rule]) {
         const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
@@ -134,6 +167,7 @@ export class SyntaxState {
             child,
             offset + arena.childRelAt(nodeId, index),
             tokenBase + arena.childTokRelAt(nodeId, index),
+            blockIndex,
             regionIds,
           );
         }
@@ -141,7 +175,7 @@ export class SyntaxState {
     };
     const root = view.root;
     const rootChildCount = arena.childCount(root.id);
-    for (let index = 0; index < rootChildCount; index++) {
+    for (let index = prefixLength; index < rootChildCount; index++) {
       const childId = arena.childAt(root.id, index);
       if (childId < 0 || arena.ruleNameOf(childId) !== "Block") {
         continue;
@@ -149,8 +183,7 @@ export class SyntaxState {
       const offset = root.offset + arena.childRelAt(root.id, index);
       const tokenBase = root.tokenBase + arena.childTokRelAt(root.id, index);
       const regionIds: number[] = [];
-      collect(childId, offset, tokenBase, regionIds);
-      // Allocate each block record once; region revisions are filled after all regions resolve.
+      collect(childId, offset, tokenBase, blocks.length, regionIds);
       blocks.push({
         id: childId,
         offset,
@@ -163,13 +196,57 @@ export class SyntaxState {
     }
 
     // Inline resolution starts after the full definition map is known; later definitions affect earlier uses.
-    const regions = new Map<number, InlineRegion>();
-    const available: InlineRegion[] = [];
-    for (const region of this.#regions.values()) {
-      if (!stableRegionIds.has(region.id)) {
-        available.push(region);
+    const definitionsChanged = prefixLength > 0 && !isSetEqual(this.#definitions, definitions);
+    if (definitionsChanged) {
+      for (let index = 0; index < prefixLength; index++) {
+        const block = blocks[index];
+        const revisions = new Array<number>(block.regionIds.length);
+        for (let regionIndex = 0; regionIndex < block.regionIds.length; regionIndex++) {
+          const id = block.regionIds[regionIndex];
+          const region = this.#regions.get(id);
+          if (!region) {
+            throw new Error(`Stable block references missing inline region ${id}`);
+          }
+          region.updateDefinitions(definitions);
+          revisions[regionIndex] = region.revision;
+        }
+        if (!isArrayEqual(block.regionRevisions, revisions)) {
+          block.regionRevisions = revisions;
+          block.version++;
+        }
       }
     }
+
+    let oldTailRegionIds: Set<number> | undefined;
+    const available: InlineRegion[] = [];
+    // Tail arena IDs may be reassigned; unmatched old regions remain candidates for proximity rebinding.
+    if (prefixLength > 0) {
+      oldTailRegionIds = new Set<number>();
+      for (let index = prefixLength; index < previousBlocks.length; index++) {
+        for (const id of previousBlocks[index].regionIds) {
+          if (oldTailRegionIds.has(id)) {
+            continue;
+          }
+          oldTailRegionIds.add(id);
+          const region = this.#regions.get(id);
+          if (!region) {
+            throw new Error(`Replaced block references missing inline region ${id}`);
+          }
+          if (!stableRegionIds.has(id)) {
+            available.push(region);
+          }
+        }
+      }
+    }
+    else if (!initializing) {
+      for (const region of this.#regions.values()) {
+        if (!stableRegionIds.has(region.id)) {
+          available.push(region);
+        }
+      }
+    }
+
+    const tailRegions = new Map<number, InlineRegion>();
     for (const binding of bindings) {
       let previous = this.#regions.get(binding.id);
       if (!previous) {
@@ -193,13 +270,21 @@ export class SyntaxState {
       const region = previous
         ? previous.update(binding, definitions)
         : new InlineRegion(this.#profile.inline, binding, definitions);
-      regions.set(binding.id, region);
+      tailRegions.set(binding.id, region);
     }
-    const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));
-    for (const block of blocks) {
-      const previous = previousBlocks.get(block.id);
+
+    let previousTailBlocks: Map<number, SyntaxBlock> | undefined;
+    if (!initializing) {
+      previousTailBlocks = new Map<number, SyntaxBlock>();
+      for (let index = prefixLength; index < previousBlocks.length; index++) {
+        previousTailBlocks.set(previousBlocks[index].id, previousBlocks[index]);
+      }
+    }
+    for (let index = prefixLength; index < blocks.length; index++) {
+      const block = blocks[index];
+      const previous = previousTailBlocks?.get(block.id);
       const regionRevisions = block.regionIds.map((id) => {
-        const region = regions.get(id);
+        const region = tailRegions.get(id);
         if (!region) {
           throw new Error(`Block references missing inline region ${id}`);
         }
@@ -207,15 +292,39 @@ export class SyntaxState {
       });
       const unchanged = (
         previous?.source === block.source &&
-        sameNumbers(previous.regionIds, block.regionIds) &&
-        sameNumbers(previous.regionRevisions, regionRevisions)
+        isArrayEqual(previous.regionIds, block.regionIds) &&
+        isArrayEqual(previous.regionRevisions, regionRevisions)
       );
       block.regionRevisions = regionRevisions;
       block.version = unchanged ? previous.version : (previous?.version ?? -1) + 1;
     }
+
+    if (prefixLength === 0) {
+      this.#regions = tailRegions;
+    }
+    else if (oldTailRegionIds) {
+      // Commit the rebuilt tail while leaving stable prefix regions in the existing map.
+      for (const id of oldTailRegionIds) {
+        this.#regions.delete(id);
+      }
+      for (const [id, region] of tailRegions) {
+        this.#regions.set(id, region);
+      }
+    }
     this.#view = view;
     this.#blocks = blocks;
-    this.#regions = regions;
+    if (stableDefinitionCount === 0) {
+      this.#definitionEntries = tailDefinitionEntries;
+    }
+    else if (previousDefinitionEntries) {
+      previousDefinitionEntries.length = stableDefinitionCount;
+      if (tailDefinitionEntries) {
+        for (const entry of tailDefinitionEntries) {
+          previousDefinitionEntries.push(entry);
+        }
+      }
+    }
+    this.#definitions = definitions;
   }
 
   blockView(): BlockSyntaxView {

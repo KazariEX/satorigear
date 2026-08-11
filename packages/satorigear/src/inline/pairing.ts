@@ -1,3 +1,4 @@
+import { emptyArray } from "../primitives.ts";
 import { inlineKind } from "./kinds.ts";
 import {
   appendInlineToken,
@@ -123,7 +124,6 @@ const enum Flanking {
 
 const whitespace = /\s/u;
 const punctuation = /[\p{P}\p{S}]/u;
-const noDelimiterIsolations: readonly TokenIsolationRange[] = [];
 
 function characterBefore(source: string, offset: number): string {
   if (offset <= 0) {
@@ -597,7 +597,7 @@ export function createPairingResolver(
 
     if (!(activePhases & Phase.Pair)) {
       return activePhases & Phase.Delimiter
-        ? resolveDelimiterRuns(source, tokens, delimiterByKind, noDelimiterIsolations)
+        ? resolveDelimiterRuns(source, tokens, delimiterByKind, emptyArray)
         : tokens;
     }
 
