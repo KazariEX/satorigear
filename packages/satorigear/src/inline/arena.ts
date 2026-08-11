@@ -277,12 +277,12 @@ function buildRoot(
 ): number {
   const content = parseItems(arena, schema, tokens, start, end, void 0, false);
   if (content.childCount === 0) {
-    return arena.node(schema.inlineLinesRuleId, 0, 0, content.children, 0);
+    return arena.node(-1, 0, 0, content.children, 0);
   }
   const first = content.children[0];
   const last = content.children[content.childCount - 1];
   return arena.node(
-    schema.inlineLinesRuleId,
+    -1,
     arena.entryStart(first),
     arena.entryEnd(last),
     content.children,

@@ -4,17 +4,23 @@ import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
 import type { BlockToken } from "./tokens.ts";
 
+export interface CompiledBlockRule {
+  definitionKey?: (token: BlockToken) => string;
+  inlineContent: boolean;
+  name: string;
+  project?: BlockProjector;
+}
+
 export interface BlockSyntaxFrame {
   block: boolean;
   close: string;
-  rule: string;
+  rule: CompiledBlockRule;
 }
 
 export interface BlockSyntaxSchema {
-  entryRule: string;
   frameByOpen: Readonly<Record<string, BlockSyntaxFrame | undefined>>;
-  groupedRuleByToken: Readonly<Record<string, string | undefined>>;
-  ruleByLeaf: Readonly<Record<string, string | undefined>>;
+  groupedRuleByToken: Readonly<Record<string, CompiledBlockRule | undefined>>;
+  ruleByLeaf: Readonly<Record<string, CompiledBlockRule | undefined>>;
 }
 
 export type BlockStart = (
@@ -96,12 +102,9 @@ export interface BlockFeature {
 }
 
 export interface BlockProfile {
-  definitionKeys: Readonly<Record<string, (token: BlockToken) => string>>;
   fallbacks: readonly BlockFallback[];
-  inlineContents: Readonly<Record<string, true>>;
   interrupts: readonly (readonly BlockInterrupt[] | undefined)[];
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
-  projects: Readonly<Record<string, BlockProjector>>;
   restart: BlockRestart;
   schema: BlockSyntaxSchema;
   starts: readonly (readonly BlockStart[] | undefined)[];
@@ -110,13 +113,11 @@ export interface BlockProfile {
 export function compileBlockProfile(features: readonly BlockFeature[]): BlockProfile {
   const decorators: BlockDecoratorRegistration[] = [];
   const fallbacks: BlockFallback[] = [];
-  const inlineContents: Record<string, true> = Object.create(null);
   const frameByOpen: Record<string, BlockSyntaxFrame> = Object.create(null);
-  const groupedRuleByToken: Record<string, string> = Object.create(null);
+  const groupedRuleByToken: Record<string, CompiledBlockRule> = Object.create(null);
   const interrupts: BlockInterrupt[][] = [];
-  const ruleByLeaf: Record<string, string> = Object.create(null);
-  const projects: Record<string, BlockProjector> = Object.create(null);
-  const definitionKeys: Record<string, (token: BlockToken) => string> = Object.create(null);
+  const ruleByLeaf: Record<string, CompiledBlockRule> = Object.create(null);
+  const rules: Record<string, CompiledBlockRule> = Object.create(null);
   const restarts: BlockRestart[] = [];
   const starts: BlockStart[][] = [];
   const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
@@ -146,6 +147,13 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     }
     if (feature.rules) {
       for (const registration of feature.rules) {
+        const rule: CompiledBlockRule = {
+          definitionKey: registration.definitionKey,
+          inlineContent: registration.inlineContent === true,
+          name: registration.rule,
+          project: registration.project,
+        };
+        rules[registration.rule] = rule;
         const syntax = registration.syntax;
         if (syntax.kind === "block" || syntax.kind === "frame") {
           const opens = typeof syntax.open === "string" ? [syntax.open] : syntax.open;
@@ -153,46 +161,35 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
             frameByOpen[open] = {
               block: syntax.kind === "block",
               close: syntax.close,
-              rule: registration.rule,
+              rule,
             };
           }
         }
         else if (syntax.kind === "group") {
           for (const token of syntax.tokens) {
-            groupedRuleByToken[token] = registration.rule;
+            groupedRuleByToken[token] = rule;
           }
         }
         else if (syntax.kind === "leaf") {
-          ruleByLeaf[syntax.token] = registration.rule;
-        }
-        if (registration.project) {
-          projects[registration.rule] = registration.project;
-        }
-        if (registration.inlineContent) {
-          inlineContents[registration.rule] = true;
-        }
-        if (registration.definitionKey) {
-          definitionKeys[registration.rule] = registration.definitionKey;
+          ruleByLeaf[syntax.token] = rule;
         }
       }
     }
   }
 
   for (const registration of decorators) {
-    const project = projects[registration.rule];
+    const rule = rules[registration.rule];
+    const project = rule?.project;
     if (!project) {
       throw new Error(`Cannot decorate unknown block rule ${registration.rule}`);
     }
-    projects[registration.rule] = registration.decorate(project);
+    rule.project = registration.decorate(project);
   }
 
   return {
-    definitionKeys,
     fallbacks,
-    inlineContents,
     interrupts,
     lazyContinuationUnwrappers,
-    projects,
     restart(source, lines, changedStart, changedEnd) {
       let result: number | undefined;
       for (const restart of restarts) {
@@ -204,7 +201,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
       return result;
     },
     schema: {
-      entryRule: "Document",
       frameByOpen,
       groupedRuleByToken,
       ruleByLeaf,

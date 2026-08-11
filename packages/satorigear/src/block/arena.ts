@@ -1,5 +1,5 @@
 import { type BlockToken, type BlockTokenChange, tokenEnd, tokenStart } from "./tokens.ts";
-import type { BlockSyntaxFrame, BlockSyntaxSchema } from "./profile.ts";
+import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
 
 export interface BlockSyntaxView {
   readonly arena: BlockArena;
@@ -29,8 +29,11 @@ interface BlockRecord extends BlockHandle {
   tokenStart: number;
 }
 
-interface Frame extends BlockSyntaxFrame {
+interface Frame {
+  block: boolean;
+  close: string;
   children: number[];
+  rule?: CompiledBlockRule;
 }
 
 interface FreeEdgeRange {
@@ -60,13 +63,13 @@ export class BlockArena {
   #lengths: number[] = [0];
   #nodeCount = 1;
   #releaseStack: number[] = [];
-  #rules: string[];
+  #rules: CompiledBlockRule[];
   #schema: BlockSyntaxSchema;
   #tokens: readonly BlockToken[] = [];
   root = 0;
 
   constructor(schema: BlockSyntaxSchema) {
-    this.#rules = [schema.entryRule];
+    this.#rules = [];
     this.#schema = schema;
   }
 
@@ -144,7 +147,7 @@ export class BlockArena {
     };
   }
 
-  #allocate(rule: string, children: readonly number[], block = false): number {
+  #allocate(rule: CompiledBlockRule, children: readonly number[], block = false): number {
     const id = this.#freeIds.pop() ?? this.#nodeCount++;
     const first = children[0];
     const last = children.at(-1);
@@ -204,7 +207,6 @@ export class BlockArena {
     const document: Frame = {
       block: false,
       close: "",
-      rule: this.#schema.entryRule,
       children: [],
     };
     const stack = [document];
@@ -235,7 +237,7 @@ export class BlockArena {
       if (current.close === token.type) {
         current.children.push(leaf(index));
         stack.pop();
-        const id = this.#allocate(current.rule, current.children, current.block);
+        const id = this.#allocate(current.rule!, current.children, current.block);
         stack.at(-1)!.children.push(id);
         continue;
       }
@@ -250,7 +252,7 @@ export class BlockArena {
     }
 
     if (stack.length !== 1) {
-      throw new Error(`Block token stream did not close ${stack.at(-1)!.rule}`);
+      throw new Error(`Block token stream did not close ${stack.at(-1)!.rule?.name}`);
     }
     return document.children.map((id) => ({
       id,
@@ -373,6 +375,10 @@ export class BlockArena {
   }
 
   ruleNameOf(id: number): string {
+    return this.#rules[id].name;
+  }
+
+  ruleOf(id: number): CompiledBlockRule {
     return this.#rules[id];
   }
 }

@@ -129,19 +129,19 @@ export class SyntaxState {
       tokenBase: number,
       blockIndex: number,
     ): void => {
-      const rule = arena.ruleNameOf(nodeId);
-      const definitionKey = this.#profile.block.definitionKeys[rule];
+      const rule = arena.ruleOf(nodeId);
+      const definitionKey = rule.definitionKey;
       if (definitionKey) {
         const key = definitionKey(view.tokenAt(tokenBase));
         (tailDefinitionEntries ??= []).push({ blockIndex, key });
         availableDefinitions.add(key);
       }
-      if (this.#profile.block.inlineContents[rule]) {
+      if (rule.inlineContent) {
         const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
         if (spans.length > 0) {
           bindings.push({
             id: nodeId,
-            rule,
+            rule: rule.name,
             span: { start: offset, end: offset + arena.lenOf(nodeId) },
             view: createSourceView(source, spans),
           });

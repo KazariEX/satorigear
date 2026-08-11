@@ -66,7 +66,6 @@ interface InlineContainer {
 export interface InlineSyntaxSchema {
   containerByKind: readonly (InlineContainer | undefined)[];
   fallbackRuleByKind: readonly (number | undefined)[];
-  inlineLinesRuleId: number;
   pairByOpenKind: readonly (InlinePair | undefined)[];
 }
 
@@ -168,7 +167,6 @@ function compileInlineSyntax(
     schema: {
       containerByKind,
       fallbackRuleByKind,
-      inlineLinesRuleId: ruleId("InlineLines"),
       pairByOpenKind,
     },
     tokenProjects,

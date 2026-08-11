@@ -504,10 +504,10 @@ function blockNode(
   context: BlockProjectionContext,
 ): FragmentNode<TopLevelContent> {
   const arena = context.view.arena;
-  const rule = arena.ruleNameOf(nodeId);
-  const project = context.profile.block.projects[rule];
+  const rule = arena.ruleOf(nodeId);
+  const project = rule.project;
   if (!project) {
-    throw new Error(`Unexpected block syntax rule: ${rule}`);
+    throw new Error(`Unexpected block syntax rule: ${rule.name}`);
   }
   return project(nodeId, offset, tokenBase, context);
 }
