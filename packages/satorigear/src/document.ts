@@ -5,13 +5,10 @@ import { SyntaxState } from "./syntax-state.ts";
 import type { BlockArena } from "./block/arena.ts";
 import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
-import type { TextEdit } from "./source-view.ts";
+import type { SourceSpan, TextEdit } from "./source-view.ts";
 
 export interface EditResult {
-  changedSpan: {
-    end: number;
-    start: number;
-  };
+  changedSpan: SourceSpan;
 }
 
 export interface Document {
@@ -21,31 +18,36 @@ export interface Document {
   snapshot: () => Root;
 }
 
-function validateEdits(source: string, edits: readonly TextEdit[]): void {
-  let previousEnd = 0;
-  for (const [index, edit] of edits.entries()) {
-    if (edit.start < 0 || edit.end < edit.start || edit.end > source.length) {
-      throw new RangeError(`Markdown edit [${edit.start}, ${edit.end}) is outside the document`);
-    }
-    if (index > 0 && edit.start < previousEnd) {
-      throw new RangeError("Markdown edits must be sorted and must not overlap");
-    }
-    previousEnd = edit.end;
-  }
+interface AppliedEdits {
+  changedSpan: SourceSpan;
+  oldChangedEnd: number;
+  source: string;
 }
 
-function changedSpanOf(edits: readonly TextEdit[]): EditResult["changedSpan"] {
-  if (edits.length === 0) {
-    return { start: 0, end: 0 };
-  }
-
+// Edit coordinates refer to the old source, so application and damage calculation share one forward pass.
+function applyEdits(source: string, edits: readonly TextEdit[]): AppliedEdits {
+  const parts: string[] = [];
+  let cursor = 0;
   let delta = 0;
   let changedEnd = edits[0].start;
   for (const edit of edits) {
+    if (edit.start < 0 || edit.end < edit.start || edit.end > source.length) {
+      throw new RangeError(`Markdown edit [${edit.start}, ${edit.end}) is outside the document`);
+    }
+    if (edit.start < cursor) {
+      throw new RangeError("Markdown edits must be sorted and must not overlap");
+    }
+    parts.push(source.slice(cursor, edit.start), edit.text);
     changedEnd = edit.start + delta + edit.text.length;
     delta += edit.text.length - (edit.end - edit.start);
+    cursor = edit.end;
   }
-  return { start: edits[0].start, end: changedEnd };
+  parts.push(source.slice(cursor));
+  return {
+    changedSpan: { start: edits[0].start, end: changedEnd },
+    oldChangedEnd: cursor,
+    source: parts.join(""),
+  };
 }
 
 export class DocumentImpl implements Document {
@@ -79,10 +81,10 @@ export class DocumentImpl implements Document {
   }
 
   edit(edits: readonly TextEdit[]): EditResult {
-    validateEdits(this.source, edits);
     if (edits.length === 0) {
       return { changedSpan: { start: 0, end: 0 } };
     }
+    const applied = applyEdits(this.source, edits);
 
     if (this.#fragments.length > 0 && this.#fragmentsByBlockId === void 0) {
       // Preserve fragment identity before the syntax update changes block order and offsets.
@@ -94,13 +96,11 @@ export class DocumentImpl implements Document {
       this.#fragmentsByBlockId = fragmentsByBlockId;
     }
 
-    const blockEdit = this.#blockScanner.edit(edits);
-    this.#blockArena.update(this.#blockScanner.tokens, blockEdit.change);
+    const tokenChange = this.#blockScanner.edit(applied.source, applied.changedSpan, applied.oldChangedEnd);
+    this.#blockArena.update(this.#blockScanner.tokens, tokenChange);
     this.#syntaxState.update(this.source, this.#blockArena.view());
 
-    return {
-      changedSpan: changedSpanOf(edits),
-    };
+    return { changedSpan: applied.changedSpan };
   }
 
   #projectBlocks(): BlockFragment[] {

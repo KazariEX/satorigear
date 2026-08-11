@@ -126,34 +126,30 @@ export function tokenEqualsAfterShift(previous: BlockToken, next: BlockToken, de
 
 export function createTokenChange(
   previous: readonly BlockToken[],
-  next: readonly BlockToken[],
+  oldStart: number,
+  oldEnd: number,
+  replacement: readonly BlockToken[],
   delta: number,
 ): BlockTokenChange {
-  if (previous.length === 0) {
-    return { oldStart: 0, oldEnd: 0, tokens: next };
-  }
-  if (next.length === 0) {
-    return { oldStart: 0, oldEnd: previous.length, tokens: next };
-  }
-
-  const common = Math.min(previous.length, next.length);
+  // The scanner already identified the surgical window; only narrow changes within that window.
+  const common = Math.min(oldEnd - oldStart, replacement.length);
   let start = 0;
   while (
     start < common &&
-    tokenEqualsAfterShift(previous[start], next[start], 0)
+    tokenEqualsAfterShift(previous[oldStart + start], replacement[start], 0)
   ) {
     start++;
   }
   let suffix = 0;
   while (
     suffix < common - start &&
-    tokenEqualsAfterShift(previous[previous.length - 1 - suffix], next[next.length - 1 - suffix], delta)
+    tokenEqualsAfterShift(previous[oldEnd - 1 - suffix], replacement[replacement.length - 1 - suffix], delta)
   ) {
     suffix++;
   }
   return {
-    oldStart: start,
-    oldEnd: previous.length - suffix,
-    tokens: next.slice(start, next.length - suffix),
+    oldStart: oldStart + start,
+    oldEnd: oldEnd - suffix,
+    tokens: replacement.slice(start, replacement.length - suffix),
   };
 }

@@ -6,7 +6,7 @@ import {
   createTokenChange,
   tokenEqualsAfterShift,
 } from "./tokens.ts";
-import type { SourceLocation, TextEdit } from "../source-view.ts";
+import type { SourceLocation, SourceSpan } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanContext {
@@ -136,10 +136,6 @@ interface BlockCheckpoint {
   tokenStart: number;
 }
 
-interface BlockEditResult {
-  change: BlockTokenChange;
-}
-
 function resolveLines(
   profile: BlockProfile,
   context: BlockScanContext,
@@ -169,20 +165,6 @@ function createBlockScanContext(profile: BlockProfile): BlockScanContext {
     resolveLines: (source, lines, tokens) => resolveLines(profile, context, source, lines, tokens),
   };
   return context;
-}
-
-function applyBlockEdits(source: string, edits: readonly TextEdit[]): string {
-  const parts: string[] = [];
-  let cursor = 0;
-  for (const [index, edit] of edits.entries()) {
-    if (edit.start < cursor || edit.start > edit.end || edit.end > source.length) {
-      throw new RangeError(`Invalid block edit #${index}: [${edit.start}, ${edit.end})`);
-    }
-    parts.push(source.slice(cursor, edit.start), edit.text);
-    cursor = edit.end;
-  }
-  parts.push(source.slice(cursor));
-  return parts.join("");
 }
 
 function shiftedLine(line: BlockLine, delta: number): BlockLine {
@@ -315,33 +297,19 @@ export class BlockScanner {
     return createForwardLocator(lines, sourceLength, trailingLineEnding);
   }
 
-  edit(edits: readonly TextEdit[]): BlockEditResult {
-    if (edits.length === 0) {
-      return {
-        change: { oldStart: 0, oldEnd: 0, tokens: [] },
-      };
-    }
+  edit(nextSource: string, changedSpan: SourceSpan, oldChangedEnd: number): BlockTokenChange {
     const previousSource = this.#source;
-    const nextSource = applyBlockEdits(previousSource, edits);
-    const firstEdit = edits[0];
-    const lastEdit = edits.at(-1)!;
     const delta = nextSource.length - previousSource.length;
-    let changedEnd = firstEdit.start;
-    let precedingDelta = 0;
-    for (const edit of edits) {
-      changedEnd = edit.start + precedingDelta + edit.text.length;
-      precedingDelta += edit.text.length - (edit.end - edit.start);
-    }
 
-    let affected = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineEnd >= firstEdit.start);
+    let affected = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineEnd >= changedSpan.start);
     if (affected < 0) {
       affected = Math.max(0, this.#checkpoints.length - 1);
     }
-    let restart = this.#checkpoints[affected]?.lineStart > firstEdit.start ? -1 : Math.max(0, affected - 1);
+    let restart = this.#checkpoints[affected]?.lineStart > changedSpan.start ? -1 : Math.max(0, affected - 1);
     const initialRestartOffset = this.#checkpoints[restart]?.lineStart ?? 0;
-    const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, lastEdit.end, delta);
-    const profileRestart = this.#profile.restart(nextSource, nextLines, firstEdit.start, changedEnd);
-    if (profileRestart !== void 0 && profileRestart < firstEdit.start) {
+    const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, oldChangedEnd, delta);
+    const profileRestart = this.#profile.restart(nextSource, nextLines, changedSpan.start, changedSpan.end);
+    if (profileRestart !== void 0 && profileRestart < changedSpan.start) {
       const candidate = this.#checkpoints.findIndex((checkpoint) => (
         checkpoint.lineStart <= profileRestart &&
         checkpoint.lineEnd > profileRestart
@@ -361,11 +329,11 @@ export class BlockScanner {
     resolveLines(this.#profile, this.#context, nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
       const blockStart = scanLines[lineStart].start;
       const blockEnd = scanLines[lineEnd - 1].next;
-      if (blockEnd >= changedEnd) {
+      if (blockEnd >= changedSpan.end) {
         const candidate = this.#checkpoints.findIndex((old) => (
           old.lineStart + delta === blockStart &&
           old.lineEnd + delta === blockEnd &&
-          old.lineStart >= lastEdit.end
+          old.lineStart >= oldChangedEnd
         ));
         if (candidate >= 0 && sameShiftedBlock(this.#tokens, this.#checkpoints[candidate], replacement, tokenStart, tokenEnd, delta)) {
           replacement.length = tokenStart;
@@ -380,6 +348,13 @@ export class BlockScanner {
     const oldTokenEnd = converged < 0 ? this.#tokens.length : this.#checkpoints[converged].tokenStart;
     const tokenDelta = replacement.length - (oldTokenEnd - oldTokenStart);
     const previousTokens = this.#tokens;
+    const tokenChange = createTokenChange(
+      previousTokens,
+      oldTokenStart,
+      oldTokenEnd,
+      replacement,
+      delta,
+    );
     const suffix = delta === 0
       ? previousTokens.slice(oldTokenEnd)
       : previousTokens.slice(oldTokenEnd).map((token) => createShiftedToken(token, delta));
@@ -399,8 +374,6 @@ export class BlockScanner {
     this.#source = nextSource;
     this.#lines = nextLines;
     this.#checkpoints = [...prefixCheckpoints, ...scannedCheckpoints, ...suffixCheckpoints];
-    return {
-      change: createTokenChange(previousTokens, this.#tokens, delta),
-    };
+    return tokenChange;
   }
 }
