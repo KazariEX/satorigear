@@ -109,10 +109,21 @@ interface PairResolution {
   delimiterIsolations: TokenIsolationRange[];
 }
 
+// eslint-disable-next-line no-restricted-syntax
+const enum Phase {
+  Pair = 1,
+  Delimiter = 2,
+}
+
+// eslint-disable-next-line no-restricted-syntax
+const enum Flanking {
+  Open = 1,
+  Close = 2,
+}
+
 const whitespace = /\s/u;
 const punctuation = /[\p{P}\p{S}]/u;
-const canOpenFlag = 1;
-const canCloseFlag = 2;
+const noDelimiterIsolations: readonly TokenIsolationRange[] = [];
 
 function characterBefore(source: string, offset: number): string {
   if (offset <= 0) {
@@ -143,11 +154,11 @@ function flanking(source: string, start: number, end: number, config: CompiledDe
   const left = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
   const right = !beforeWhitespace && (!beforePunctuation || afterWhitespace || afterPunctuation);
   if (config.allowIntraword !== false) {
-    return (left ? canOpenFlag : 0) | (right ? canCloseFlag : 0);
+    return (left ? Flanking.Open : 0) | (right ? Flanking.Close : 0);
   }
   const canOpen = left && (!right || beforePunctuation);
   const canClose = right && (!left || afterPunctuation);
-  return (canOpen ? canOpenFlag : 0) | (canClose ? canCloseFlag : 0);
+  return (canOpen ? Flanking.Open : 0) | (canClose ? Flanking.Close : 0);
 }
 
 function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
@@ -475,8 +486,8 @@ function resolveDelimiterRuns(
       scope: -1,
       previous: -1,
       next: -1,
-      canOpen: Boolean(flags & canOpenFlag),
-      canClose: Boolean(flags & canCloseFlag),
+      canOpen: Boolean(flags & Flanking.Open),
+      canClose: Boolean(flags & Flanking.Close),
     });
   }
   if (runs.length === 0) {
@@ -558,26 +569,36 @@ export function createPairingResolver(
     };
   });
   const pairIndex = indexPairs(pairConfigs);
-  const activeKinds: boolean[] = [];
+  const phasesByKind: number[] = [];
   for (const config of delimiterConfigs) {
-    activeKinds[inlineKind(config.token)] = true;
+    const kind = inlineKind(config.token);
+    phasesByKind[kind] |= Phase.Delimiter;
   }
   for (const config of pairConfigs) {
-    activeKinds[inlineKind(config.opener)] = true;
-    activeKinds[inlineKind(config.closer)] = true;
+    const openerKind = inlineKind(config.opener);
+    const closerKind = inlineKind(config.closer);
+    phasesByKind[openerKind] |= Phase.Pair;
+    phasesByKind[closerKind] |= Phase.Pair;
   }
 
   return (source, tokens, state) => {
     const count = inlineTokenCount(tokens);
-    let active = false;
+    let activePhases = 0;
     for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-      if (activeKinds[inlineTokenKind(tokens, tokenIndex)]) {
-        active = true;
+      const phases = phasesByKind[inlineTokenKind(tokens, tokenIndex)];
+      if (phases === void 0) {
+        continue;
+      }
+      activePhases |= phases;
+      if (activePhases === (Phase.Pair | Phase.Delimiter)) {
         break;
       }
     }
-    if (!active) {
-      return tokens;
+
+    if (!(activePhases & Phase.Pair)) {
+      return activePhases & Phase.Delimiter
+        ? resolveDelimiterRuns(source, tokens, delimiterByKind, noDelimiterIsolations)
+        : tokens;
     }
 
     let paired = resolvePairedTokens(source, tokens, pairIndex, state);
@@ -601,9 +622,12 @@ export function createPairingResolver(
       }
     }
     if (expanded) {
+      // Splitting an unmatched closer changes token boundaries, so pair the expanded stream again.
       paired = resolvePairedTokens(source, expanded, pairIndex, state);
     }
     const resolvedPairs = applyPairReplacements(expanded ?? tokens, paired.replacements);
-    return resolveDelimiterRuns(source, resolvedPairs, delimiterByKind, paired.delimiterIsolations);
+    return activePhases & Phase.Delimiter
+      ? resolveDelimiterRuns(source, resolvedPairs, delimiterByKind, paired.delimiterIsolations)
+      : resolvedPairs;
   };
 }
