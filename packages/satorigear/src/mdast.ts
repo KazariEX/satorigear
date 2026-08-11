@@ -57,7 +57,6 @@ export interface InlineProjectionContext {
   arena: InlineArena;
   blockRule: string;
   decodeText: (value: string) => string;
-  ruleProjects: readonly (InlineRuleProjector | undefined)[];
   source: string;
   tokenBase: number;
   tokenProjects: readonly (InlineLeafProjector | undefined)[];
@@ -193,7 +192,7 @@ export function directLeaf(
 export function leaf(nodeId: number, tokenType: string, context: InlineProjectionContext): number {
   const result = directLeaf(nodeId, tokenType, context);
   if (result === void 0) {
-    throw new Error(`Expected inline rule ${context.arena.ruleIdOf(nodeId)} to contain ${tokenType}`);
+    throw new Error(`Expected inline syntax to contain ${tokenType}`);
   }
   return result;
 }
@@ -423,10 +422,9 @@ function appendInlineNode(
   accumulator: InlineAccumulator,
 ): boolean {
   const { context } = accumulator;
-  const rule = context.arena.ruleIdOf(nodeId);
-  const project = context.ruleProjects[rule];
+  const project = context.arena.projectOf(nodeId);
   if (!project) {
-    throw new Error(`Unexpected inline syntax rule: ${rule}`);
+    throw new Error("Unexpected inline syntax rule");
   }
   return project(nodeId, offset, endOffset, sourceSpan, accumulator);
 }
@@ -448,7 +446,6 @@ export function inlineChildren(
     arena: inline.arena,
     blockRule: inline.blockRule,
     decodeText: context.profile.inline.decodeText,
-    ruleProjects: context.profile.inline.ruleProjects,
     source: context.source,
     tokenBase: inline.rootTokenBase,
     tokenProjects: context.profile.inline.tokenProjects,

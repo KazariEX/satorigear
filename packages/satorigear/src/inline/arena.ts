@@ -6,6 +6,7 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
+import type { InlineRuleProjector } from "../mdast.ts";
 import type { InlineSyntaxSchema } from "./profile.ts";
 
 function leaf(tokenIndex: number): number {
@@ -22,7 +23,7 @@ export class InlineArena {
   #kidCount = 0;
   #nodeCount = 0;
   #packedTokens: number[] = [];
-  #ruleIds: number[] = [];
+  #projects: (InlineRuleProjector | undefined)[] = [];
   #schema: InlineSyntaxSchema;
   #scratch: number[][] = [];
   #starts: number[] = [];
@@ -53,14 +54,14 @@ export class InlineArena {
   }
 
   node(
-    ruleId: number,
+    project: InlineRuleProjector | undefined,
     start: number,
     end: number,
     children: readonly number[],
     childCount: number,
   ): number {
     const id = this.#nodeCount++;
-    this.#ruleIds[id] = ruleId;
+    this.#projects[id] = project;
     this.#starts[id] = start;
     this.#ends[id] = end;
     this.#childStarts[id] = this.#kidCount;
@@ -72,13 +73,13 @@ export class InlineArena {
   }
 
   singleNode(
-    ruleId: number,
+    project: InlineRuleProjector,
     start: number,
     end: number,
     child: number,
   ): number {
     const id = this.#nodeCount++;
-    this.#ruleIds[id] = ruleId;
+    this.#projects[id] = project;
     this.#starts[id] = start;
     this.#ends[id] = end;
     this.#childStarts[id] = this.#kidCount;
@@ -125,8 +126,8 @@ export class InlineArena {
     return this.#ends[id] - this.#starts[id];
   }
 
-  ruleIdOf(id: number): number {
-    return this.#ruleIds[id];
+  projectOf(id: number): InlineRuleProjector | undefined {
+    return this.#projects[id];
   }
 }
 
@@ -142,7 +143,6 @@ function semanticNode(
   tokens: InlineTokenStream,
   index: number,
   end: number,
-  inLink: boolean,
   scratchDepth: number,
 ): { id: number; next: number } | undefined {
   const kind = inlineTokenKind(tokens, index);
@@ -162,7 +162,6 @@ function semanticNode(
         next + 1,
         end,
         container.closeKind,
-        inLink,
         scratchDepth + 1,
       );
       if (
@@ -179,7 +178,7 @@ function semanticNode(
     }
     return {
       id: arena.node(
-        inLink ? container.linkRuleId : container.ruleId,
+        container.project,
         inlineTokenStart(tokens, index),
         inlineTokenEnd(tokens, next - 1),
         children,
@@ -200,7 +199,6 @@ function semanticNode(
     index + 1,
     end,
     pair.closeKind,
-    inLink || pair.entersLink,
     scratchDepth + 1,
   );
   if (
@@ -216,7 +214,7 @@ function semanticNode(
   children.push(leaf(content.next));
   return {
     id: arena.node(
-      inLink ? pair.linkRuleId : pair.ruleId,
+      pair.project,
       inlineTokenStart(tokens, index),
       inlineTokenEnd(tokens, content.next),
       children,
@@ -233,7 +231,6 @@ function parseItems(
   start: number,
   end: number,
   closeKind: number | undefined,
-  inLink: boolean,
   scratchDepth = 0,
 ): ParseResult {
   const children = arena.scratch(scratchDepth);
@@ -245,18 +242,18 @@ function parseItems(
       break;
     }
 
-    const semantic = semanticNode(arena, schema, tokens, index, end, inLink, scratchDepth);
+    const semantic = semanticNode(arena, schema, tokens, index, end, scratchDepth);
     let item: number;
     if (semantic) {
       item = semantic.id;
       index = semantic.next;
     }
     else {
-      const fallbackRule = schema.fallbackRuleByKind[kind];
-      item = fallbackRule === void 0
+      const fallbackProject = schema.fallbackProjectByKind[kind];
+      item = fallbackProject === void 0
         ? leaf(index)
         : arena.singleNode(
-          fallbackRule,
+          fallbackProject,
           inlineTokenStart(tokens, index),
           inlineTokenEnd(tokens, index),
           leaf(index),
@@ -275,14 +272,14 @@ function buildRoot(
   start: number,
   end: number,
 ): number {
-  const content = parseItems(arena, schema, tokens, start, end, void 0, false);
+  const content = parseItems(arena, schema, tokens, start, end, void 0);
   if (content.childCount === 0) {
-    return arena.node(-1, 0, 0, content.children, 0);
+    return arena.node(void 0, 0, 0, content.children, 0);
   }
   const first = content.children[0];
   const last = content.children[content.childCount - 1];
   return arena.node(
-    -1,
+    void 0,
     arena.entryStart(first),
     arena.entryEnd(last),
     content.children,

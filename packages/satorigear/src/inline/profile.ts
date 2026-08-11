@@ -28,49 +28,39 @@ export type InlineSyntaxDefinition =
     kind: "container";
     close: string;
     contentOpen: string;
-    linkRule?: string;
-    rule: string;
     token: string;
     project: InlineRuleProjector;
   }
   | {
     kind: "fallback";
-    rule: string;
     tokens: readonly string[];
     project: InlineRuleProjector;
   }
   | {
     kind: "pair";
     close: string;
-    entersLink?: true;
-    linkRule?: string;
     open: string;
-    rule: string;
     project: InlineRuleProjector;
   };
 
 interface InlinePair {
   closeKind: number;
-  entersLink: boolean;
-  linkRuleId: number;
-  ruleId: number;
+  project: InlineRuleProjector;
 }
 
 interface InlineContainer {
   closeKind: number;
   contentOpenKind: number;
-  linkRuleId: number;
-  ruleId: number;
+  project: InlineRuleProjector;
 }
 
 export interface InlineSyntaxSchema {
   containerByKind: readonly (InlineContainer | undefined)[];
-  fallbackRuleByKind: readonly (number | undefined)[];
+  fallbackProjectByKind: readonly (InlineRuleProjector | undefined)[];
   pairByOpenKind: readonly (InlinePair | undefined)[];
 }
 
 interface InlineSyntaxCompilation {
-  ruleProjects: readonly (InlineRuleProjector | undefined)[];
   schema: InlineSyntaxSchema;
   tokenProjects: readonly (InlineLeafProjector | undefined)[];
 }
@@ -90,7 +80,6 @@ export interface InlineFeature {
 export interface InlineProfile {
   decodeText: (value: string) => string;
   resolve: InlineTokenTransform;
-  ruleProjects: readonly (InlineRuleProjector | undefined)[];
   schema: InlineSyntaxSchema;
   tokenize: InlineTokenizer;
   tokenProjects: readonly (InlineLeafProjector | undefined)[];
@@ -102,18 +91,8 @@ function compileInlineSyntax(
   definitions: readonly InlineSyntaxDefinition[],
 ): InlineSyntaxCompilation {
   const tokenProjects: (InlineLeafProjector | undefined)[] = [];
-  const ruleProjects: (InlineRuleProjector | undefined)[] = [];
-  const ruleIds = new Map<string, number>();
-  const ruleId = (name: string): number => {
-    let id = ruleIds.get(name);
-    if (id === void 0) {
-      id = ruleIds.size;
-      ruleIds.set(name, id);
-    }
-    return id;
-  };
   const containerByKind: (InlineContainer | undefined)[] = [];
-  const fallbackRuleByKind: (number | undefined)[] = [];
+  const fallbackProjectByKind: (InlineRuleProjector | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
   const registerToken = (token: string, project: InlineLeafProjector): number => {
     const kind = inlineKind(token);
@@ -127,28 +106,19 @@ function compileInlineSyntax(
       continue;
     }
 
-    const definitionRuleId = ruleId(definition.rule);
-    ruleProjects[definitionRuleId] = definition.project;
     if (definition.kind === "fallback") {
       for (const token of definition.tokens) {
-        fallbackRuleByKind[inlineKind(token)] = definitionRuleId;
+        fallbackProjectByKind[inlineKind(token)] = definition.project;
       }
       continue;
     }
 
-    const linkRuleId = definition.linkRule === void 0
-      ? definitionRuleId
-      : ruleId(definition.linkRule);
-    if (definition.linkRule !== void 0) {
-      ruleProjects[linkRuleId] = definition.project;
-    }
     if (definition.kind === "container") {
       const tokenKind = registerToken(definition.token, ignoreInlineToken);
       containerByKind[tokenKind] = {
         closeKind: registerToken(definition.close, ignoreInlineToken),
         contentOpenKind: registerToken(definition.contentOpen, ignoreInlineToken),
-        linkRuleId,
-        ruleId: definitionRuleId,
+        project: definition.project,
       };
       continue;
     }
@@ -156,17 +126,14 @@ function compileInlineSyntax(
     const openKind = registerToken(definition.open, ignoreInlineToken);
     pairByOpenKind[openKind] = {
       closeKind: registerToken(definition.close, ignoreInlineToken),
-      entersLink: definition.entersLink === true,
-      linkRuleId,
-      ruleId: definitionRuleId,
+      project: definition.project,
     };
   }
 
   return {
-    ruleProjects,
     schema: {
       containerByKind,
-      fallbackRuleByKind,
+      fallbackProjectByKind,
       pairByOpenKind,
     },
     tokenProjects,

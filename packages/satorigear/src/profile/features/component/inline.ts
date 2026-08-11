@@ -431,16 +431,12 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
     token: "InlineComponentOpen",
     contentOpen: "InlineComponentLabelOpen",
     close: "InlineComponentLabelClose",
-    rule: "InlineComponent",
-    linkRule: "LinkComponent",
     project: projectInlineComponent,
   },
   {
     kind: "pair",
     open: "InlineSpanOpen",
     close: "InlineSpanClose",
-    rule: "InlineSpan",
-    linkRule: "LinkSpan",
     project: projectInlineSpan,
   },
 ];
