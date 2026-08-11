@@ -15,27 +15,6 @@ export interface BlockScanContext {
   resolveLines: (source: string, lines: readonly BlockLine[], tokens: BlockToken[]) => void;
 }
 
-function linesOf(source: string): BlockLine[] {
-  const lines: BlockLine[] = [];
-  let start = 0;
-  while (start < source.length) {
-    let end = start;
-    while (end < source.length && source[end] !== "\n" && source[end] !== "\r") {
-      end++;
-    }
-    let next = end;
-    if (source[next] === "\r") {
-      next += source[next + 1] === "\n" ? 2 : 1;
-    }
-    else if (source[next] === "\n") {
-      next++;
-    }
-    lines.push({ start, end, next });
-    start = next;
-  }
-  return lines;
-}
-
 function profileStarts(
   profile: BlockProfile,
   context: BlockScanContext,
@@ -167,12 +146,39 @@ function createBlockScanContext(profile: BlockProfile): BlockScanContext {
   return context;
 }
 
-function shiftedLine(line: BlockLine, delta: number): BlockLine {
-  return { start: line.start + delta, end: line.end + delta, next: line.next + delta };
+function lineIndexAtOrAfter(lines: readonly BlockLine[], offset: number): number {
+  let low = 0;
+  let high = lines.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (lines[middle].start < offset) {
+      low = middle + 1;
+    }
+    else {
+      high = middle;
+    }
+  }
+  return low;
 }
 
-function shiftedLines(source: string, offset: number): BlockLine[] {
-  return linesOf(source).map((line) => shiftedLine(line, offset));
+function linesOf(source: string, start = 0, limit = source.length): BlockLine[] {
+  const lines: BlockLine[] = [];
+  while (start < limit) {
+    let end = start;
+    while (end < limit && source[end] !== "\n" && source[end] !== "\r") {
+      end++;
+    }
+    let next = end;
+    if (next < limit && source[next] === "\r") {
+      next += next + 1 < limit && source[next + 1] === "\n" ? 2 : 1;
+    }
+    else if (next < limit && source[next] === "\n") {
+      next++;
+    }
+    lines.push({ start, end, next });
+    start = next;
+  }
+  return lines;
 }
 
 function updatePhysicalLines(
@@ -182,18 +188,20 @@ function updatePhysicalLines(
   oldDamageEnd: number,
   delta: number,
 ): BlockLine[] {
-  let suffix = previous.findIndex((line) => line.start > oldDamageEnd);
-  if (suffix >= 0) {
-    suffix = Math.min(previous.length, suffix + 1);
-  }
-  else {
-    suffix = previous.length;
-  }
+  // Rebuild one following line so edits at line-ending boundaries cannot retain stale geometry.
+  const suffix = Math.min(previous.length, lineIndexAtOrAfter(previous, oldDamageEnd + 1) + 1);
   const oldSuffixOffset = previous[suffix]?.start ?? nextSource.length - delta;
   const newSuffixOffset = oldSuffixOffset + delta;
-  const prefix = previous.filter((line) => line.start < restartOffset);
-  const changed = shiftedLines(nextSource.slice(restartOffset, newSuffixOffset), restartOffset);
-  const unchanged = previous.slice(suffix).map((line) => shiftedLine(line, delta));
+  const prefix = previous.slice(0, lineIndexAtOrAfter(previous, restartOffset));
+  const changed = linesOf(nextSource, restartOffset, newSuffixOffset);
+  const suffixLines = previous.slice(suffix);
+  const unchanged = delta === 0
+    ? suffixLines
+    : suffixLines.map((line) => ({
+      start: line.start + delta,
+      end: line.end + delta,
+      next: line.next + delta,
+    }));
   return [...prefix, ...changed, ...unchanged];
 }
 
