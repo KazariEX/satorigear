@@ -2,7 +2,7 @@ import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
 import { type BlockFragment, type BlockProjectionContext, materialize, projectBlock } from "./mdast.ts";
 import { SyntaxState } from "./syntax-state.ts";
-import type { BlockSyntaxDocument, BlockSyntaxParser } from "./block/syntax.ts";
+import type { BlockSyntaxArena } from "./block/syntax.ts";
 import type { InlineSyntaxArena } from "./inline/syntax.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { TextEdit } from "./source-view.ts";
@@ -49,8 +49,8 @@ function changedSpanOf(edits: readonly TextEdit[]): EditResult["changedSpan"] {
 }
 
 export class DocumentImpl implements Document {
+  #blockArena: BlockSyntaxArena;
   #blockScanner: BlockScanner;
-  #blockSyntax: BlockSyntaxDocument;
   #fragmentsByBlockId?: Map<number, BlockFragment>;
   #fragments: BlockFragment[] = [];
   #profile: SyntaxProfile;
@@ -59,15 +59,16 @@ export class DocumentImpl implements Document {
   constructor(
     source: string,
     profile: SyntaxProfile,
-    blockParser: BlockSyntaxParser,
+    blockArena: BlockSyntaxArena,
     inlineArena: InlineSyntaxArena,
   ) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(source, profile);
-    this.#blockSyntax = blockParser.parse(this.#blockScanner.tokens);
+    blockArena.build(this.#blockScanner.tokens);
+    this.#blockArena = blockArena;
     this.#syntaxState = new SyntaxState(
       source,
-      this.#blockSyntax.view(),
+      this.#blockArena.view(),
       profile,
       inlineArena,
     );
@@ -94,8 +95,8 @@ export class DocumentImpl implements Document {
     }
 
     const blockEdit = this.#blockScanner.edit(edits);
-    this.#blockSyntax.update(this.#blockScanner.tokens, blockEdit.change);
-    this.#syntaxState.update(this.source, this.#blockSyntax.view());
+    this.#blockArena.update(this.#blockScanner.tokens, blockEdit.change);
+    this.#syntaxState.update(this.source, this.#blockArena.view());
 
     return {
       changedSpan: changedSpanOf(edits),

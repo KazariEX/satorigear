@@ -17,15 +17,6 @@ export interface BlockSyntaxSchema {
   wrapperRule: string;
 }
 
-export interface BlockSyntaxDocument {
-  update: (tokens: readonly BlockToken[], change: BlockTokenChange) => void;
-  view: () => BlockSyntaxView;
-}
-
-export interface BlockSyntaxParser {
-  parse: (tokens: readonly BlockToken[]) => BlockSyntaxDocument;
-}
-
 interface BlockRecord {
   id: number;
   tokenEnd: number;
@@ -46,14 +37,15 @@ function leaf(tokenIndex: number): number {
 }
 
 // Relative edges make unchanged top-level trees independent of later source and token shifts.
-// Node slots and one flat edge arena are document-owned, reclaimed, and reused across edits.
-class BlockSyntaxArena implements SyntaxArena {
+// The workspace reclaims ranges across edits and retains array capacity across one-shot documents.
+export class BlockSyntaxArena implements SyntaxArena {
   #blockRecords: BlockRecord[] = [];
   #buildEnds: number[] = [];
   #buildStarts: number[] = [];
   #buildTokenEnds: number[] = [];
   #buildTokenStarts: number[] = [];
   #edgeCounts: number[] = [0];
+  #edgeLength = 0;
   #edges: number[] = [];
   #edgeStarts: number[] = [0];
   #freeEdges: FreeEdgeRange[] = [];
@@ -63,15 +55,41 @@ class BlockSyntaxArena implements SyntaxArena {
   #releaseStack: number[] = [];
   #rules: string[];
   #schema: BlockSyntaxSchema;
-  #tokens: readonly BlockToken[];
+  #tokens: readonly BlockToken[] = [];
   root = 0;
 
-  constructor(tokens: readonly BlockToken[], schema: BlockSyntaxSchema) {
+  constructor(schema: BlockSyntaxSchema) {
     this.#rules = [schema.entryRule];
     this.#schema = schema;
+  }
+
+  build(tokens: readonly BlockToken[]): void {
+    // One-shot parses reuse array capacity, but no node identity survives across documents.
+    this.#edgeLength = 0;
+    this.#freeEdges.length = 0;
+    this.#freeIds.length = 0;
+    this.#nodeCount = 1;
     this.#tokens = tokens;
     this.#blockRecords = this.#buildRange(0, tokens.length);
     this.#rebuildRoot();
+  }
+
+  view(): BlockSyntaxView {
+    return {
+      arena: this,
+      root: {
+        id: this.root,
+        offset: this.#tokens[0] ? tokenStart(this.#tokens[0]) : 0,
+        tokenBase: 0,
+      },
+      tokenAt: (index) => {
+        const token = this.#tokens[index];
+        if (!token) {
+          throw new Error("block arena returned a leaf outside its token stream");
+        }
+        return token;
+      },
+    };
   }
 
   update(tokens: readonly BlockToken[], change: BlockTokenChange): void {
@@ -152,7 +170,8 @@ class BlockSyntaxArena implements SyntaxArena {
       }
     }
     if (selected < 0) {
-      const start = this.#edges.length / 3;
+      const start = this.#edgeLength;
+      this.#edgeLength += count;
       return start;
     }
     const range = this.#freeEdges[selected];
@@ -341,36 +360,4 @@ class BlockSyntaxArena implements SyntaxArena {
   ruleNameOf(id: number): string {
     return this.#rules[id];
   }
-}
-
-export function createBlockSyntaxParser(schema: BlockSyntaxSchema): BlockSyntaxParser {
-  return {
-    parse(tokens) {
-      const arena = new BlockSyntaxArena(tokens, schema);
-      let currentTokens = tokens;
-      return {
-        update(nextTokens, change) {
-          currentTokens = nextTokens;
-          arena.update(nextTokens, change);
-        },
-        view() {
-          return {
-            arena,
-            root: {
-              id: arena.root,
-              offset: currentTokens[0] ? tokenStart(currentTokens[0]) : 0,
-              tokenBase: 0,
-            },
-            tokenAt(index: number) {
-              const token = currentTokens[index];
-              if (!token) {
-                throw new Error("block arena returned a leaf outside its token stream");
-              }
-              return token;
-            },
-          };
-        },
-      };
-    },
-  };
 }
