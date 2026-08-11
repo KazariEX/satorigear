@@ -1,5 +1,4 @@
 import { type BlockToken, type BlockTokenChange, tokenEnd, tokenStart } from "./tokens.ts";
-import type { SyntaxArena } from "../syntax-protocol.ts";
 import type { BlockSyntaxFrame, BlockSyntaxSchema } from "./profile.ts";
 
 export interface BlockSyntaxView {
@@ -45,7 +44,7 @@ function leaf(tokenIndex: number): number {
 
 // Relative edges make unchanged top-level trees independent of later source and token shifts.
 // The workspace reclaims ranges across edits and retains array capacity across one-shot documents.
-export class BlockArena implements SyntaxArena {
+export class BlockArena {
   #blockRecords: BlockRecord[] = [];
   #buildEnds: number[] = [];
   #buildStarts: number[] = [];
