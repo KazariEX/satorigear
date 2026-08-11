@@ -12,7 +12,7 @@ import {
   type InlineTokenStream,
   setInlineTokenFlags,
 } from "../../../inline/tokens.ts";
-import { extendSpan, type FragmentNode, lineEnd } from "../../../mdast.ts";
+import { extendSpan, lineEnd, type SpannedNode } from "../../../mdast.ts";
 import {
   carryTerminalAttributes,
   hasTerminalAttributes,
@@ -37,7 +37,7 @@ const detachedFlag = 4;
 const terminalFlag = 8;
 
 const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
-  const result = build(nodeId, offset, tokenBase, context) as FragmentNode<Paragraph | Heading>;
+  const result = build(nodeId, offset, tokenBase, context) as SpannedNode<Paragraph | Heading>;
   const attributes = takeTerminalAttributes(result.children);
   if (attributes) {
     result.attributes = attributes;
@@ -46,7 +46,7 @@ const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (nodeId, o
 };
 
 const decorateList: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
-  const result = build(nodeId, offset, tokenBase, context) as FragmentNode<List>;
+  const result = build(nodeId, offset, tokenBase, context) as SpannedNode<List>;
   if (!result.spread) {
     for (const item of result.children) {
       const paragraph = !item.spread && item.children.length === 1 && item.children[0].type === "paragraph"
@@ -62,7 +62,7 @@ const decorateList: BlockNodeBuilderDecorator = (build) => (nodeId, offset, toke
 };
 
 const decorateBlockquote: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
-  const result = build(nodeId, offset, tokenBase, context) as FragmentNode<Blockquote>;
+  const result = build(nodeId, offset, tokenBase, context) as SpannedNode<Blockquote>;
   const paragraph = result.children.length === 1 && result.children[0].type === "paragraph"
     ? result.children[0]
     : void 0;

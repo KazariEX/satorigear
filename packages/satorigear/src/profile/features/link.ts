@@ -5,11 +5,11 @@ import {
   buildInlineChildren,
   contentBounds,
   createInlineAccumulator,
-  type FragmentNode,
   type InlineAccumulator,
   type InlineNodeBuilder,
   inlineSequence,
   leaf,
+  type SpannedNode,
   withSpan,
 } from "../../mdast.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
@@ -130,7 +130,7 @@ function linkOrImage(
   context: InlineAccumulator["context"],
   media: "image" | "link",
   resourceKind: "direct" | "reference",
-): FragmentNode<Image | ImageReference | Link | LinkReference> {
+): SpannedNode<Image | ImageReference | Link | LinkReference> {
   const image = media === "image";
   const referenceNode = resourceKind === "reference";
   const prefix = image ? "Image" : "";

@@ -19,7 +19,25 @@ import type { BlockSyntaxView } from "./block/arena.ts";
 import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
-import type { SyntaxBlock, SyntaxState } from "./syntax-state.ts";
+import type { SyntaxState } from "./syntax-state.ts";
+
+// Builders store source offsets in the final position slot. One-shot output resolves it in place;
+// incremental documents retain it as the immutable span of a cached block fragment.
+interface SpannedValue {
+  [key: string]: unknown;
+  children?: SpannedValue[];
+  position: SourceSpan;
+}
+
+export type SpannedNode<T extends object = Node> = T & SpannedValue;
+
+export interface BlockFragment {
+  node: SpannedNode<TopLevelContent>;
+  // Origin belongs to the cached fragment; offset moves so positions can shift without rebuilding nodes.
+  offset: number;
+  origin: number;
+  version: number;
+}
 
 export interface BlockBuildContext {
   profile: SyntaxProfile;
@@ -28,30 +46,13 @@ export interface BlockBuildContext {
   view: BlockSyntaxView;
 }
 
-interface FragmentValue {
-  [key: string]: unknown;
-  children?: FragmentValue[];
-  endOffset: number;
-  startOffset: number;
-}
-
-export type FragmentNode<T extends object = Node> = T & FragmentValue;
-
-export interface BlockFragment {
-  node: FragmentNode<TopLevelContent>;
-  // Origin belongs to the cached fragment; offset moves so positions can shift without rebuilding nodes.
-  offset: number;
-  origin: number;
-  version: number;
-}
-
 // Core owns fragment state and traversal; profiles supply every syntax-specific node builder.
 export type BlockNodeBuilder = (
   nodeId: number,
   offset: number,
   tokenBase: number,
   context: BlockBuildContext,
-) => FragmentNode<TopLevelContent>;
+) => SpannedNode<TopLevelContent>;
 
 export interface InlineBuildContext {
   arena: InlineArena;
@@ -93,16 +94,15 @@ export const buildInlineChildren: InlineNodeBuilder = (
   accumulator,
 ) => inlineSequence(nodeId, offset, accumulator);
 
-export function withSpan<const T extends object>(value: T, start: number, end: number): FragmentNode<T> {
-  const fragment = value as FragmentNode<T>;
-  fragment.startOffset = start;
-  fragment.endOffset = end;
-  return fragment;
+export function withSpan<const T extends object>(value: T, start: number, end: number): SpannedNode<T> {
+  const node = value as SpannedNode<T>;
+  node.position = { start, end };
+  return node;
 }
 
 export function extendSpan(value: object, end: number): void {
-  const fragment = value as FragmentValue;
-  fragment.endOffset = Math.max(fragment.endOffset, end);
+  const node = value as SpannedValue;
+  node.position.end = Math.max(node.position.end, end);
 }
 
 export function blockEnd(nodeId: number, offset: number, context: BlockBuildContext): number {
@@ -157,12 +157,12 @@ export function firstChildStart(value: { children: readonly object[] }): number 
   if (!first) {
     throw new Error("mdast container unexpectedly has no children");
   }
-  return (first as FragmentValue).startOffset;
+  return (first as SpannedValue).position.start;
 }
 
 export function lastChildEnd(value: { children: readonly object[] }, emptyEnd: number): number {
   const last = value.children.at(-1);
-  return last ? (last as FragmentValue).endOffset : emptyEnd;
+  return last ? (last as SpannedValue).position.end : emptyEnd;
 }
 
 export function firstNonspace(source: string, start: number, end: number): number {
@@ -279,8 +279,8 @@ function appendText(target: PhrasingContent[], value: string, start: number, end
 
 function appendPhrasing(target: PhrasingContent[], value: PhrasingContent): void {
   if (value.type === "text") {
-    const fragment = value as PhrasingContent & FragmentValue;
-    appendText(target, value.value, fragment.startOffset, fragment.endOffset);
+    const node = value as PhrasingContent & SpannedValue;
+    appendText(target, value.value, node.position.start, node.position.end);
   }
   else {
     target.push(value);
@@ -309,10 +309,10 @@ function appendInlineGap(accumulator: InlineAccumulator, start: number, end: num
 
 export function appendInline(
   accumulator: InlineAccumulator,
-  value: FragmentNode<PhrasingContent>,
+  value: SpannedNode<PhrasingContent>,
 ): void {
   const { context, target } = accumulator;
-  const nextLineOffset = value.startOffset;
+  const nextLineOffset = value.position.start;
   const newline = value.type === "text" && value.value.startsWith("\n");
   if (accumulator.gapStart >= 0) {
     if (!newline) {
@@ -331,7 +331,7 @@ export function appendInline(
       extendSpan(previous, lineStart(context.source, nextLineOffset));
       return;
     }
-    (value as PhrasingContent & FragmentValue).startOffset = lineEndingStart(context.source, nextLineOffset);
+    (value as unknown as SpannedValue).position.start = lineEndingStart(context.source, nextLineOffset);
     if (previous?.type === "text") {
       previous.value = previous.value.slice(0, trailingWhitespaceStart(previous.value));
     }
@@ -463,7 +463,7 @@ export function inlineChildren(
     const end = trailingWhitespaceStart(last.value);
     const removed = last.value.length - end;
     last.value = last.value.slice(0, end);
-    (last as PhrasingContent & FragmentValue).endOffset -= removed;
+    (last as unknown as SpannedValue).position.end -= removed;
     if (!last.value) {
       result.pop();
     }
@@ -483,7 +483,7 @@ export function blockChildren(
   for (let index = 0; index < childCount; index++) {
     const childId = arena.childAt(nodeId, index);
     if (childId >= 0 && context.view.arena.isBlock(childId)) {
-      children.push(blockNode(
+      children.push(buildBlockNode(
         childId,
         offset + arena.childRelAt(nodeId, index),
         tokenBase + arena.childTokRelAt(nodeId, index),
@@ -494,12 +494,12 @@ export function blockChildren(
   return children;
 }
 
-function blockNode(
+export function buildBlockNode(
   nodeId: number,
   offset: number,
   tokenBase: number,
   context: BlockBuildContext,
-): FragmentNode<TopLevelContent> {
+): SpannedNode<TopLevelContent> {
   const arena = context.view.arena;
   const rule = arena.ruleOf(nodeId);
   const build = rule.build;
@@ -509,29 +509,44 @@ function blockNode(
   return build(nodeId, offset, tokenBase, context);
 }
 
-export function buildBlockFragment(
-  block: SyntaxBlock,
-  context: BlockBuildContext,
-): BlockFragment {
-  const node = blockNode(block.handle.id, block.offset, block.tokenBase, context);
+function positionNode(value: SpannedValue, point: (offset: number) => SourceLocation): void {
+  const position = value.position;
+  const start = point(position.start);
+  for (const child of value.children ?? []) {
+    positionNode(child, point);
+  }
+  (value as unknown as Node).position = {
+    start,
+    end: point(position.end),
+  };
+}
+
+export function buildRoot(
+  nodes: SpannedNode<TopLevelContent>[],
+  sourceLength: number,
+  locate: (offset: number) => SourceLocation,
+): Root {
+  const start = locate(0);
+  for (let index = 0; index < nodes.length; index++) {
+    positionNode(nodes[index], locate);
+  }
   return {
-    node,
-    offset: block.offset,
-    origin: block.offset,
-    version: block.version,
+    type: "root",
+    children: nodes,
+    position: { start, end: locate(sourceLength) },
   };
 }
 
 function materializeNode(
-  value: FragmentValue,
+  value: SpannedValue,
   shift: number,
   point: (offset: number) => SourceLocation,
 ): Node {
   const result = {} as Node & Record<string, unknown>;
   // Preserve start → children → end order for the tokenizer's forward source locator.
-  const start = point(shift + value.startOffset);
+  const start = point(shift + value.position.start);
   for (const key in value) {
-    if (key !== "startOffset" && key !== "endOffset" && key !== "children") {
+    if (key !== "children" && key !== "position") {
       result[key] = value[key];
     }
   }
@@ -545,7 +560,7 @@ function materializeNode(
   }
   result.position = {
     start,
-    end: point(shift + value.endOffset),
+    end: point(shift + value.position.end),
   };
   return result;
 }

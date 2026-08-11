@@ -8,8 +8,8 @@ import {
   type BlockNodeBuilder,
   blockToken,
   directBlockToken,
-  type FragmentNode,
   inlineChildren,
+  type SpannedNode,
   withSpan,
 } from "../../../mdast.ts";
 import {
@@ -407,7 +407,7 @@ function blockLabel(
   nodeId: number,
   tokenBase: number,
   context: Parameters<BlockNodeBuilder>[3],
-): FragmentNode<Paragraph> {
+): SpannedNode<Paragraph> {
   const open = blockToken(nodeId, tokenBase, "BlockComponentLabelOpen", context);
   const close = blockToken(nodeId, tokenBase, "BlockComponentLabelClose", context);
   return withSpan<Paragraph>({

@@ -1,6 +1,12 @@
 import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
-import { type BlockBuildContext, type BlockFragment, buildBlockFragment, materialize } from "./mdast.ts";
+import {
+  type BlockBuildContext,
+  type BlockFragment,
+  buildBlockNode,
+  buildRoot,
+  materialize,
+} from "./mdast.ts";
 import { SyntaxState } from "./syntax-state.ts";
 import type { BlockArena, BlockHandle } from "./block/arena.ts";
 import type { InlineArena } from "./inline/arena.ts";
@@ -107,6 +113,15 @@ export class DocumentImpl implements Document {
     return { changedSpan: applied.changedSpan };
   }
 
+  #createBuildContext(): BlockBuildContext {
+    return {
+      profile: this.#profile,
+      source: this.source,
+      syntaxState: this.#syntaxState,
+      view: this.#syntaxState.blockView(),
+    };
+  }
+
   #buildBlockFragments(): BlockFragment[] {
     const previousFragments = this.#previousFragments;
     if (this.#fragments.length > 0 && previousFragments === void 0) {
@@ -117,18 +132,20 @@ export class DocumentImpl implements Document {
     const changedBlocks = previousFragments === void 0
       ? blocks
       : blocks.filter((block) => previousFragments.get(block.handle)?.version !== block.version);
-    const context: BlockBuildContext = {
-      profile: this.#profile,
-      source: this.source,
-      syntaxState: this.#syntaxState,
-      view: this.#syntaxState.blockView(),
-    };
+    const context = this.#createBuildContext();
     // Changed regions share one build workspace; no arena reference escapes the resulting fragments.
     this.#syntaxState.prepareInline(changedBlocks);
 
     const nextFragments = blocks.map((block) => {
       const previous = previousFragments?.get(block.handle);
-      const fragment = previous?.version === block.version ? previous : buildBlockFragment(block, context);
+      const fragment = previous?.version === block.version
+        ? previous
+        : {
+          node: buildBlockNode(block.handle.id, block.offset, block.tokenBase, context),
+          offset: block.offset,
+          origin: block.offset,
+          version: block.version,
+        };
       fragment.offset = block.offset;
       return fragment;
     });
@@ -136,6 +153,23 @@ export class DocumentImpl implements Document {
     this.#previousFragments = void 0;
     this.#fragments = nextFragments;
     return nextFragments;
+  }
+
+  build(): Root {
+    const blocks = this.#syntaxState.blocks();
+    const context = this.#createBuildContext();
+    this.#syntaxState.prepareInline(blocks);
+
+    return buildRoot(
+      blocks.map((block) => buildBlockNode(
+        block.handle.id,
+        block.offset,
+        block.tokenBase,
+        context,
+      )),
+      this.source.length,
+      this.#blockScanner.locator(),
+    );
   }
 
   snapshot(): Root {

@@ -22,6 +22,6 @@ export function createParser(options?: SyntaxOptions): Parser {
       new BlockArena(profile.block.schema),
       new InlineArena(profile.inline.schema),
     ),
-    parse: (source) => new DocumentImpl(source, profile, blockArena, inlineArena).snapshot(),
+    parse: (source) => new DocumentImpl(source, profile, blockArena, inlineArena).build(),
   };
 }
