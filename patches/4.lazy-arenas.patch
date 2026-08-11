@@ -1,8 +1,8 @@
 diff --git a/src/emit-parser.ts b/src/emit-parser.ts
-index 880256a..499c18c 100644
+index c0a3b2c..39e46cf 100644
 --- a/src/emit-parser.ts
 +++ b/src/emit-parser.ts
-@@ -2332,6 +2332,10 @@ function emitMixfixLed(e: Emitter, a: ReturnType<typeof analyze>, fnName: string
+@@ -2351,6 +2351,10 @@ function emitMixfixLed(e: Emitter, a: ReturnType<typeof analyze>, fnName: string
  // Emit parseRuleEntry (memo + context handling for pratt/left-rec rules, mirrors
  // parseRule's pratt/left-rec branch) and the parse() driver.
  function emitDriver(e: Emitter, a: ReturnType<typeof analyze>, entry: string) {
@@ -13,7 +13,7 @@ index 880256a..499c18c 100644
    e.emit(String.raw`
  // parseRule for a pratt/left-rec rule: memo + context + suppress, then the core.
  // The memo is per-rule arrays indexed by start pos (lazily sized to the token count,
-@@ -3551,21 +3555,45 @@ ${e.soa ? '  parenCachePos: number; parenCacheStack: boolean[];' : ''}
+@@ -3580,21 +3584,45 @@ ${e.lexerState ? '  parenCachePos: number; parenCacheStack: boolean[];' : ''}
    altCap: number; altN: number;
  };
  type Handle = { d: Doc; gen: number; root: number; errors: Diag[] };
@@ -73,7 +73,7 @@ index 880256a..499c18c 100644
      memoNode: [], memoEnd: [], memoExt: [], memoGen: [], memoGenCur: 0,
      docDiags: [], docLex: [], docPar: [],
      docPieces: null, docPieceOff: null, docLen: 0, docFlat: null, docCur: 0,
-@@ -4189,7 +4217,7 @@ export function visit(entry: number, fns: _VisitFns, charBase?: number, tokBase?
+@@ -4194,7 +4222,7 @@ export function visit(entry: number, fns: _VisitFns, charBase?: number, tokBase?
  // the previous tree; the next edit falls back to a full re-parse internally. Only
  // parse() re-opening the document invalidates old handles (they throw).
  export function createParser() {
@@ -81,4 +81,4 @@ index 880256a..499c18c 100644
 +  const d = makeDoc(16, 32, 64);
    let gen = 0;
    let entryUsed: string | undefined;
-   let externalUsed = false;
+ ${e.externalOnly ? '' : '  let externalUsed = false;'}

@@ -27,11 +27,11 @@ export default defineConfig({
       name: "emit-parser",
       async buildStart() {
         // keep the generator outside tsconfig graph to avoid TS6133 error
-        const { emitJsLexer, emitJsPackedLexer, emitJsParser } = await import("monogram/emit-parser.ts" as any);
+        const { emitJsExternalParser, emitJsPackedLexer } = await import("monogram/emit-parser.ts" as any);
 
         const generated = join(import.meta.dirname, "src/generated");
         const modules = [
-          { name: "blocks.ts", source: emitJsParser(grammarBlock, emitJsLexer(grammarBlock)) },
+          { name: "blocks.ts", source: emitJsExternalParser(grammarBlock) },
           { name: "inline.ts", source: emitJsPackedLexer(grammarInline) },
         ];
 

@@ -7,14 +7,12 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const vendor = join(root, "vendors/monogram");
 const patches = [
-  join(root, "patches/0.external-token-input.patch"),
-  join(root, "patches/1.external-token-edits.patch"),
+  join(root, "patches/0.external-token-parser.patch"),
   join(root, "patches/2.delimited-spans.patch"),
   join(root, "patches/3.hard-breaks.patch"),
   join(root, "patches/4.lazy-arenas.patch"),
   join(root, "patches/5.capacity-growth.patch"),
   join(root, "patches/9.inline-lexer-emission.patch"),
-  join(root, "patches/10.external-token-kind-dispatch.patch"),
   join(root, "patches/11.emitted-lexer-feature-pruning.patch"),
   join(root, "patches/12.packed-lexer-output.patch"),
 ];

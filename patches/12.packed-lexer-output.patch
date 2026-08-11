@@ -1,12 +1,11 @@
 diff --git a/src/emit-parser.ts b/src/emit-parser.ts
-index 20df7c3..5305316 100644
+index e256442..dd99341 100644
 --- a/src/emit-parser.ts
 +++ b/src/emit-parser.ts
-@@ -1115,4 +1115,94 @@ export function emitJsLexer(grammar: CstGrammar): string | null {
+@@ -1118,6 +1118,96 @@ export function emitJsLexer(grammar: CstGrammar): string | null {
    });
  }
--
-+
+
 +export function emitJsPackedLexer(grammar: CstGrammar): string {
 +  grammar = withAwaitYield(grammar);
 +  const a = analyze(grammar);
@@ -97,4 +96,6 @@ index 20df7c3..5305316 100644
 +}`;
 +}
 +
- export function emitJsParser(grammar: CstGrammar, lexSrc: string | null): string {
+ export function emitJsExternalParser(grammar: CstGrammar): string {
+   return emitJsParserCore(grammar, null, true);
+ }

@@ -1,12 +1,16 @@
 diff --git a/src/emit-lexer.ts b/src/emit-lexer.ts
+index 89a5c93..c67095b 100644
 --- a/src/emit-lexer.ts
 +++ b/src/emit-lexer.ts
-@@ -85,3 +85,4 @@
+@@ -83,6 +83,7 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
+   const tplEscapeValid = templateToken ? tokenEscapeValidPatternSource(templateToken) : undefined;
+
    const regexCtx = grammar.tokens.find(t => t.regexContext)?.regexContext;
 +  const tracksValueContext = templateToken !== undefined || grammar.tokens.some(t => t.flags.includes('regex'));
    const kOf = (name: string) => st.typeKind.get(name) ?? st.KIND_NAMED_FALLBACK;
    const kNewline = newline ? kOf(newline.token) : -1;
-@@ -333,10 +334,12 @@
+   const hardBreak = newline?.hardBreak;
+@@ -333,10 +334,12 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
      emit(`  let emittedContent = pvK >= 0;`);
    }
    emit(`  let extraFl = 0;`);
@@ -23,7 +27,7 @@ diff --git a/src/emit-lexer.ts b/src/emit-lexer.ts
    emit(`  let wndPtr = wndPtr0;`);
    emit(`  let wndHit = -1;`);
    emit(`  lexEmptyPops.length = 0;`);
-@@ -351,8 +354,8 @@
+@@ -351,8 +354,8 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    emit(`    tkK[tokN] = k; tkT[tokN] = t; tkOff[tokN] = off; tkEnd[tokN] = end;`);
    emit(`    tkFl[tokN] = (pendingNl ? 1 : 0) | extraFl;`);
    emit(`    extraFl = 0;`);
@@ -34,7 +38,7 @@ diff --git a/src/emit-lexer.ts b/src/emit-lexer.ts
    emit(`    pendingNl = false;`);
    if (newline) {
      emit(`    if (k !== ${kNewline}) emittedContent = true;`);
-@@ -388,8 +391,8 @@
+@@ -388,8 +391,8 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    emit(`            // it may sit inside the edit (newline removed/added without moving any`);
    emit(`            // token bytes), and parsers read these flags (sameLine / commentBefore)`);
    emit(`            && altFl![wndPtr] === tkFl[tokN - 1]`);
@@ -45,7 +49,7 @@ diff --git a/src/emit-lexer.ts b/src/emit-lexer.ts
    emit(`            && !(k === K_PUNCT && (t === ${tLParen} || t === ${tRParen}))) {`);
    emit(`          const q = altPd![wndPtr];`);
    emit(`          if (q < dmgMinOld) dmgMinOld = q;`);
-@@ -416,17 +419,19 @@
+@@ -416,17 +419,19 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    emit(`      }`);
    emit(`    }`);
    emit(`  }`);
@@ -76,7 +80,7 @@ diff --git a/src/emit-lexer.ts b/src/emit-lexer.ts
    emit(`  while (pos < n) {`);
    emit(`    // resync retracts the duplicated token push — and any lexer diagnostics
      // emitted FOR it (the old stream's persisted entry survives via the shift;
-@@ -598,12 +603,12 @@
+@@ -598,12 +603,12 @@ export function emitSoaLexer(grammar: CstGrammar, st: LexerSymtab): string | nul
    };
    const emitPunct = (lit: string, ind: string) => {
      // Chars 1..len-1 already known to match when this leaf is reached via the chain below.

@@ -1,8 +1,8 @@
 diff --git a/src/emit-parser.ts b/src/emit-parser.ts
-index 499c18c..8ee4f6c 100644
+index 39e46cf..e5facbd 100644
 --- a/src/emit-parser.ts
 +++ b/src/emit-parser.ts
-@@ -1453,8 +1453,12 @@ let negFrom = 0x7fffffff;
+@@ -1472,8 +1472,12 @@ let negFrom = 0x7fffffff;
  function toff(i: number) { const v = tkOff[i]; return v < 0 ? v + srcLenP1 : v; }
  function tend(i: number) { const v = tkEnd[i]; return v < 0 ? v + srcLenP1 : v; }
  ${e.soa ? '' : 'let tkText: string[] = [];   // fallback-lexer text column (synthetic tokens are not source spans)'}
@@ -17,7 +17,7 @@ index 499c18c..8ee4f6c 100644
    const k = new ${K_ARR}(tkCap); k.set(tkK); tkK = k;
    const t = new ${T_ARR}(tkCap); t.set(tkT); tkT = t;
    const o = new Int32Array(tkCap); o.set(tkOff); tkOff = o;
-@@ -1542,7 +1546,9 @@ let sc = new Int32Array(4096);
+@@ -1561,7 +1565,9 @@ let sc = new Int32Array(4096);
  let scCap = 4096;
  let scn = 0;
  function growRows() {
@@ -28,7 +28,7 @@ index 499c18c..8ee4f6c 100644
    const r = new Uint16Array(rowCap); r.set(rowRule); rowRule = r;
    const l = new Int32Array(rowCap); l.set(rowLen); rowLen = l;
    const tl = new Int32Array(rowCap); tl.set(rowTokLen); rowTokLen = tl;
-@@ -1557,7 +1563,7 @@ function growRows() {
+@@ -1576,7 +1582,7 @@ function growRows() {
    const at = new Int32Array(rowCap); at.set(absTok); absTok = at;
  }
  function growKids(n: number) {
@@ -37,7 +37,7 @@ index 499c18c..8ee4f6c 100644
    const k = new Int32Array(kidCap); k.set(kids.subarray(0, kidN)); kids = k;
    const r = new Int32Array(kidCap); r.set(kidRel.subarray(0, kidN)); kidRel = r;
    const t = new Int32Array(kidCap); t.set(kidTokRel.subarray(0, kidN)); kidTokRel = t;
-@@ -2629,7 +2635,7 @@ ${e.soa ? `  tokenize(source);
+@@ -2650,7 +2656,7 @@ ${e.soa ? `  tokenize(source);
    docEmptyPops = lexEmptyPops.slice();` : String.raw`  docPieces = [source]; docPieceOff = [0]; docLen = source.length; docFlat = source; docCur = 0;
    const _toks = tokenize(source);
    const _n = _toks.length;
@@ -46,7 +46,7 @@ index 499c18c..8ee4f6c 100644
    tkText.length = 0;
    for (let _i = 0; _i < _n; _i++) {
      const _t = _toks[_i];
-@@ -2668,7 +2674,7 @@ function tokensInto(source: string, tokens: readonly ExternalToken[]) {
+@@ -2697,7 +2703,7 @@ function tokensInto(source: string, tokens: readonly ExternalToken[]) {
    srcLenP1 = source.length + 1;
    negFrom = 0x7fffffff;
    const n = tokens.length;
@@ -55,16 +55,16 @@ index 499c18c..8ee4f6c 100644
  ${e.soa ? '' : '  tkText.length = 0;'}
    for (let i = 0; i < n; i++) {
      writeExternalToken(i, tokens[i]);
-@@ -3835,7 +3841,7 @@ function editCore(entryRule: string | undefined, edits: readonly Edit[] | undefi
+@@ -3836,7 +3842,7 @@ ${e.externalOnly ? '' : '  if (tokenChange !== null) {'}
      const inserted = change.tokens.length;
      const oldTokenCount = tokN;
      const newTokenCount = oldTokenCount - (oldEnd - oldStart) + inserted;
 -    while (tkCap < newTokenCount + 1) growTok();
 +    if (tkCap < newTokenCount + 1) growTok(newTokenCount + 1);
- 
+
      // Keep the unchanged suffix EOF-relative. Updating srcLenP1 below then shifts
      // every retained suffix span by charDelta without walking the suffix.
-@@ -3995,7 +4001,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
+@@ -3996,7 +4002,7 @@ ${e.soa ? String.raw`  // ── M1: WINDOWED re-lex ──
    tokenDelta = (B + 1 + W) - R;
    // ── splice: old[0..B] + window[0..W) + old[R..oN), then shift the suffix spans ──
    const nN = B + 1 + W + (oN - R);
