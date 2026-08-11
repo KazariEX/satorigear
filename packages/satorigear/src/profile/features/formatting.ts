@@ -44,62 +44,27 @@ export interface StrikethroughOptions {
   singleTilde?: boolean;
 }
 
-const projectInlineEmphasis: InlineRuleProjector = (
-  nodeId,
-  offset,
-  tokenBase,
-  endOffset,
-  sourceSpan,
-  accumulator,
-) => {
-  const context = accumulator.context;
-  const [start, end] = contentBounds(nodeId, tokenBase, ["EmphasisOpen"], ["EmphasisClose"], context);
-  const children: PhrasingContent[] = [];
-  inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
-  appendInline(
-    accumulator,
-    withSpan<Emphasis>({ type: "emphasis", children }, sourceSpan.start, sourceSpan.end),
-  );
-  return true;
-};
+type Formatting = Delete | Emphasis | Strong;
 
-const projectInlineStrong: InlineRuleProjector = (
-  nodeId,
-  offset,
-  tokenBase,
-  endOffset,
-  sourceSpan,
-  accumulator,
-) => {
-  const context = accumulator.context;
-  const [start, end] = contentBounds(nodeId, tokenBase, ["StrongOpen"], ["StrongClose"], context);
-  const children: PhrasingContent[] = [];
-  inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
-  appendInline(
-    accumulator,
-    withSpan<Strong>({ type: "strong", children }, sourceSpan.start, sourceSpan.end),
-  );
-  return true;
-};
+function projectFormatting(type: Formatting["type"], boundary: "Emphasis" | "Strong"): InlineRuleProjector {
+  const open = [`${boundary}Open`];
+  const close = [`${boundary}Close`];
+  return (nodeId, offset, tokenBase, endOffset, sourceSpan, accumulator) => {
+    const context = accumulator.context;
+    const [start, end] = contentBounds(nodeId, tokenBase, open, close, context);
+    const children: PhrasingContent[] = [];
+    inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
+    appendInline(
+      accumulator,
+      withSpan<Formatting>({ type, children }, sourceSpan.start, sourceSpan.end),
+    );
+    return true;
+  };
+}
 
-const projectInlineDelete: InlineRuleProjector = (
-  nodeId,
-  offset,
-  tokenBase,
-  endOffset,
-  sourceSpan,
-  accumulator,
-) => {
-  const context = accumulator.context;
-  const [start, end] = contentBounds(nodeId, tokenBase, ["StrongOpen"], ["StrongClose"], context);
-  const children: PhrasingContent[] = [];
-  inlineSequence(nodeId, offset, tokenBase, createInlineAccumulator(context, children), start, end);
-  appendInline(
-    accumulator,
-    withSpan<Delete>({ type: "delete", children }, sourceSpan.start, sourceSpan.end),
-  );
-  return true;
-};
+const projectInlineEmphasis = projectFormatting("emphasis", "Emphasis");
+const projectInlineStrong = projectFormatting("strong", "Strong");
+const projectInlineDelete = projectFormatting("delete", "Strong");
 
 const projectInlineStrongOrDelete: InlineRuleProjector = (
   nodeId,
