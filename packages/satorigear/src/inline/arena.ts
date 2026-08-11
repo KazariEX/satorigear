@@ -1,3 +1,4 @@
+import { inlineKindName } from "./kinds.ts";
 import {
   inlineTokenEnd,
   inlineTokenKind,
@@ -117,12 +118,7 @@ export class InlineArena {
   }
 
   leafTokenType(entry: number): string {
-    const kind = inlineTokenKind(this.#tokens, ~entry);
-    const name = this.#schema.tokenNames[kind];
-    if (name === void 0) {
-      throw new Error(`Unknown inline token kind ${kind}`);
-    }
-    return name;
+    return inlineKindName(inlineTokenKind(this.#tokens, ~entry));
   }
 
   lenOf(id: number): number {

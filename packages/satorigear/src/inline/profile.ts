@@ -68,7 +68,6 @@ export interface InlineSyntaxSchema {
   fallbackRuleByKind: readonly (number | undefined)[];
   inlineLinesRuleId: number;
   pairByOpenKind: readonly (InlinePair | undefined)[];
-  tokenNames: readonly (string | undefined)[];
 }
 
 interface InlineSyntaxCompilation {
@@ -103,7 +102,6 @@ const ignoreInlineToken: InlineLeafProjector = () => false;
 function compileInlineSyntax(
   definitions: readonly InlineSyntaxDefinition[],
 ): InlineSyntaxCompilation {
-  const tokenNames: (string | undefined)[] = [];
   const tokenProjects: (InlineLeafProjector | undefined)[] = [];
   const ruleProjects: (InlineRuleProjector | undefined)[] = [];
   const ruleIds = new Map<string, number>();
@@ -120,7 +118,6 @@ function compileInlineSyntax(
   const pairByOpenKind: (InlinePair | undefined)[] = [];
   const registerToken = (token: string, project: InlineLeafProjector): number => {
     const kind = inlineKind(token);
-    tokenNames[kind] = token;
     tokenProjects[kind] = project;
     return kind;
   };
@@ -173,7 +170,6 @@ function compileInlineSyntax(
       fallbackRuleByKind,
       inlineLinesRuleId: ruleId("InlineLines"),
       pairByOpenKind,
-      tokenNames,
     },
     tokenProjects,
   };
