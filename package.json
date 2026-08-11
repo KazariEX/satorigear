@@ -7,7 +7,6 @@
     "dev": "pnpm --filter satorigear... --parallel dev",
     "prepare": "zin link satorigear",
     "prepare:corpus": "node scripts/corpus.ts",
-    "prepare:vendor": "node scripts/vendor.ts",
     "release": "bumpp -r --no-push -c \"release: v%s\"",
     "test": "vitest",
     "typecheck": "tsc",

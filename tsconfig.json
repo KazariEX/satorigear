@@ -3,11 +3,6 @@
   "compilerOptions": {
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "paths": {
-      "monogram/*": [
-        "./vendors/monogram/src/*"
-      ]
-    },
     "types": [
       "node"
     ],
