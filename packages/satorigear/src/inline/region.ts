@@ -1,9 +1,6 @@
-import {
-  type InlineTokenStream,
-  tokenizeInline,
-} from "./tokens.ts";
 import type { InlineResolutionContext, SyntaxProfile } from "../profile/types.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
+import type { InlineTokenStream } from "./tokens.ts";
 
 // Most regions consult no definitions, so they share one immutable empty dependency set.
 const noDefinitionDependencies: ReadonlySet<string> = new Set();
@@ -32,7 +29,7 @@ export class InlineRegion {
   #definitions?: ReadonlySet<string>;
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
-  #resolveInline: SyntaxProfile["resolveInline"];
+  #syntax: SyntaxProfile["inline"];
   #tokenSource?: string;
   #tokens?: InlineTokenStream;
   id: number;
@@ -42,11 +39,11 @@ export class InlineRegion {
   view: SourceView;
 
   constructor(
-    resolveInline: SyntaxProfile["resolveInline"],
+    syntax: SyntaxProfile["inline"],
     binding: InlineRegionBinding,
     definitions: ReadonlySet<string>,
   ) {
-    this.#resolveInline = resolveInline;
+    this.#syntax = syntax;
     this.id = binding.id;
     this.rule = binding.rule;
     this.span = binding.span;
@@ -99,11 +96,15 @@ export class InlineRegion {
       return false;
     }
 
-    const context: DefinitionContext = { definitions, hasDefinition };
+    const context: DefinitionContext = {
+      definitions,
+      hasDefinition,
+      tokenize: this.#syntax.tokenize,
+    };
     const rawTokens = source === this.#tokenSource && this.#rawTokens
       ? this.#rawTokens
-      : tokenizeInline(source);
-    const tokens = this.#resolveInline(source, rawTokens, context);
+      : this.#syntax.tokenize(source);
+    const tokens = this.#syntax.resolve(source, rawTokens, context);
 
     this.#tokenSource = source;
     this.#definitionDependencies = context.dependencies ?? noDefinitionDependencies;

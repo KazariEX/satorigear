@@ -1,3 +1,4 @@
+import { tokenizeInline } from "../inline/lexer.ts";
 import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "../inline/pairing.ts";
 import { compileInlineSyntax, type InlineStructureRegistration } from "../inline/syntax.ts";
 import { inlineKind } from "../inline/tokens.ts";
@@ -224,7 +225,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   // Compile the registered stages into one path; documents never branch on enabled syntax.
   const resolver = createPairingResolver(delimiters, tokenPairs);
   const transformInline = composeInlineTransforms(...inlineTransforms, ...inlineNormalizes);
-  const resolveInline: SyntaxProfile["resolveInline"] = transformInline
+  const resolveInline: SyntaxProfile["inline"]["resolve"] = transformInline
     ? (source, tokens, state) => resolver.resolve(
       source,
       transformInline(source, tokens, state),
@@ -259,10 +260,13 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     blockStarts,
     blockSyntax,
     lazyContinuationUnwrappers,
-    decodeText: semanticText,
-    inlineRuleProjects,
-    inlineSyntax: compileInlineSyntax(inlineStructures, inlineTokenNames),
-    inlineTokenProjects,
-    resolveInline,
+    inline: {
+      decodeText: semanticText,
+      resolve: resolveInline,
+      ruleProjects: inlineRuleProjects,
+      schema: compileInlineSyntax(inlineStructures, inlineTokenNames),
+      tokenize: tokenizeInline,
+      tokenProjects: inlineTokenProjects,
+    },
   };
 }

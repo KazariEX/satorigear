@@ -14,13 +14,13 @@ export function createParser(options?: SyntaxOptions): Parser {
   // Snapshots own no arena references, so one-shot parses can reuse both workspaces.
   // Incremental documents receive independent workspaces below.
   const blockArena = new BlockSyntaxArena(profile.blockSyntax);
-  const inlineArena = new InlineSyntaxArena(profile.inlineSyntax);
+  const inlineArena = new InlineSyntaxArena(profile.inline.schema);
   return {
     createDocument: (source) => new DocumentImpl(
       source,
       profile,
       new BlockSyntaxArena(profile.blockSyntax),
-      new InlineSyntaxArena(profile.inlineSyntax),
+      new InlineSyntaxArena(profile.inline.schema),
     ),
     parse: (source) => new DocumentImpl(source, profile, blockArena, inlineArena).snapshot(),
   };

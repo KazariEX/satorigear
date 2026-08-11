@@ -83,8 +83,11 @@ export type BlockRestart = (
   changedEnd: number,
 ) => number | undefined;
 
+export type InlineTokenizer = (source: string) => InlineTokenStream;
+
 export interface InlineResolutionContext {
   hasDefinition: (key: string) => boolean;
+  tokenize: InlineTokenizer;
 }
 
 export interface InlineTokenRegistration {
@@ -102,6 +105,15 @@ export type InlineTransform = (
   tokens: InlineTokenStream,
   context: InlineResolutionContext,
 ) => InlineTokenStream;
+
+export interface CompiledInlineSyntax {
+  decodeText: (value: string) => string;
+  resolve: InlineTransform;
+  ruleProjects: Readonly<Record<string, InlineRuleProjector>>;
+  schema: InlineSyntaxSchema;
+  tokenize: InlineTokenizer;
+  tokenProjects: readonly (InlineLeafProjector | undefined)[];
+}
 
 export interface BlockFeature {
   decorators?: readonly BlockDecoratorRegistration[];
@@ -137,9 +149,5 @@ export interface SyntaxProfile {
   blockStarts: readonly (readonly BlockStart[] | undefined)[];
   blockSyntax: BlockSyntaxSchema;
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
-  decodeText: (value: string) => string;
-  inlineRuleProjects: Readonly<Record<string, InlineRuleProjector>>;
-  inlineSyntax: InlineSyntaxSchema;
-  inlineTokenProjects: readonly (InlineLeafProjector | undefined)[];
-  resolveInline: InlineTransform;
+  inline: CompiledInlineSyntax;
 }

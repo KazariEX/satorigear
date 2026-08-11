@@ -9,10 +9,9 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
   inlineTokenText,
-  tokenizeInline,
 } from "../../../inline/tokens.ts";
 import { appendInline, withSpan } from "../../../mdast.ts";
-import type { InlineFeature } from "../../types.ts";
+import type { InlineFeature, InlineResolutionContext } from "../../types.ts";
 import type { InlineMath } from "./types.ts";
 
 interface MathRange {
@@ -117,6 +116,7 @@ export function transformInlineMath(
   singleDollarTextMath: boolean,
   source: string,
   tokens: InlineTokenStream,
+  context: InlineResolutionContext,
 ): InlineTokenStream {
   const minimum = singleDollarTextMath ? 1 : 2;
   let segmentSource = source;
@@ -148,7 +148,7 @@ export function transformInlineMath(
     }
     // The closer can cut through a token formed before math claimed its contents.
     segmentSource = source.slice(segmentStart);
-    segmentTokens = tokenizeInline(segmentSource);
+    segmentTokens = context.tokenize(segmentSource);
   }
 }
 

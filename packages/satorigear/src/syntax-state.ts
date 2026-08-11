@@ -192,7 +192,7 @@ export class SyntaxState {
       }
       const region = previous
         ? previous.update(binding, definitions)
-        : new InlineRegion(this.#profile.resolveInline, binding, definitions);
+        : new InlineRegion(this.#profile.inline, binding, definitions);
       regions.set(binding.id, region);
     }
     const previousBlocks = new Map(this.#blocks.map((block) => [block.id, block]));

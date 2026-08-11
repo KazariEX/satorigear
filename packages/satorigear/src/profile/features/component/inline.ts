@@ -343,7 +343,7 @@ function emitRange(
   copyRange(target, tokens, cursor, end, inLinkLabel, normalClosers);
 }
 
-// Reclassify CommonMark bracket/text tokens as the explicit carriers consumed by the shared grammar.
+// Reclassify CommonMark bracket/text tokens as explicit semantic carriers.
 export function transformInlineCarrier(
   source: string,
   tokens: InlineTokenStream,

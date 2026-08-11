@@ -1,7 +1,6 @@
 const fallbackKind = 44;
 
-// Stable kinds let the resolver and semantic arena outlive the generated lexer that
-// currently produces them. The build verifies this registry against generated output.
+// Stable kinds are the compact protocol shared by the lexer, resolver, and semantic arena.
 export function inlineKind(type: string): number {
   switch (type) {
     case "": return 1;

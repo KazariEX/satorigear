@@ -124,7 +124,7 @@ export function blockEnd(nodeId: number, offset: number, context: BlockProjectio
 function inlineTokenIndex(context: InlineProjectionContext, index: number): number {
   const tokenIndex = index - context.tokenBase;
   if (tokenIndex < 0 || tokenIndex >= inlineTokenCount(context.tokens)) {
-    throw new Error("emitted parser returned a leaf outside its token stream");
+    throw new Error("inline arena returned a leaf outside its token stream");
   }
   return tokenIndex;
 }
@@ -473,11 +473,11 @@ export function inlineChildren(
   const inlineContext: InlineProjectionContext = {
     arena: inline.arena,
     blockRule: inline.blockRule,
-    decodeText: context.profile.decodeText,
-    ruleProjects: context.profile.inlineRuleProjects,
+    decodeText: context.profile.inline.decodeText,
+    ruleProjects: context.profile.inline.ruleProjects,
     source: context.source,
     tokenBase: inline.rootTokenBase,
-    tokenProjects: context.profile.inlineTokenProjects,
+    tokenProjects: context.profile.inline.tokenProjects,
     tokens: inline.tokens,
     view: inline.view,
   };

@@ -133,7 +133,7 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
     );
   }
 
-  // Reuse the double-delimiter rules so enabling `~` does not grow the generated parser.
+  // Reuse the double-delimiter structure so enabling `~` does not add another semantic rule.
   const projectStrong = strikethroughOptions ? projectInlineStrongOrDelete : projectInlineStrong;
 
   return {
