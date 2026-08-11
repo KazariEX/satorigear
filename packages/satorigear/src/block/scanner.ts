@@ -138,10 +138,6 @@ interface BlockCheckpoint {
 
 interface BlockEditResult {
   change: BlockTokenChange;
-  scannedRange: {
-    end: number;
-    start: number;
-  };
 }
 
 function resolveLines(
@@ -321,7 +317,9 @@ export class BlockScanner {
 
   edit(edits: readonly TextEdit[]): BlockEditResult {
     if (edits.length === 0) {
-      return { change: { oldStart: 0, oldEnd: 0, tokens: [] }, scannedRange: { start: 0, end: 0 } };
+      return {
+        change: { oldStart: 0, oldEnd: 0, tokens: [] },
+      };
     }
     const previousSource = this.#source;
     const nextSource = applyBlockEdits(previousSource, edits);
@@ -360,7 +358,6 @@ export class BlockScanner {
     const replacement: BlockToken[] = [];
     const scanned: BlockCheckpoint[] = [];
     let converged = -1;
-    let scannedEnd = nextSource.length;
     resolveLines(this.#profile, this.#context, nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
       const blockStart = scanLines[lineStart].start;
       const blockEnd = scanLines[lineEnd - 1].next;
@@ -373,7 +370,6 @@ export class BlockScanner {
         if (candidate >= 0 && sameShiftedBlock(this.#tokens, this.#checkpoints[candidate], replacement, tokenStart, tokenEnd, delta)) {
           replacement.length = tokenStart;
           converged = candidate;
-          scannedEnd = blockEnd;
           return true;
         }
       }
@@ -405,7 +401,6 @@ export class BlockScanner {
     this.#checkpoints = [...prefixCheckpoints, ...scannedCheckpoints, ...suffixCheckpoints];
     return {
       change: createTokenChange(previousTokens, this.#tokens, delta),
-      scannedRange: { start: restartOffset, end: scannedEnd },
     };
   }
 }
