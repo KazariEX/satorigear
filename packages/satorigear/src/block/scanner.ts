@@ -16,7 +16,7 @@ export interface BlockScanContext {
 }
 
 export interface BlockScanChange {
-  stablePrefixEnd: number;
+  stableBlockCount: number;
   tokenChange: BlockTokenChange;
 }
 
@@ -398,7 +398,7 @@ export class BlockScanner {
     this.#checkpoints = [...prefixCheckpoints, ...scannedCheckpoints, ...suffixCheckpoints];
 
     return {
-      stablePrefixEnd: restartOffset,
+      stableBlockCount: Math.max(0, restart),
       tokenChange,
     };
   }

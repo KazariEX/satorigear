@@ -557,7 +557,7 @@ export function projectBlock(
   block: SyntaxBlock,
   context: BlockProjectionContext,
 ): BlockFragment {
-  const node = blockContent(block.id, block.offset, block.tokenBase, context);
+  const node = blockContent(block.handle.id, block.offset, block.tokenBase, context);
   return {
     node,
     offset: block.offset,

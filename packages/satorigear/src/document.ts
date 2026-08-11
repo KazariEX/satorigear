@@ -2,7 +2,7 @@ import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
 import { type BlockFragment, type BlockProjectionContext, materialize, projectBlock } from "./mdast.ts";
 import { SyntaxState } from "./syntax-state.ts";
-import type { BlockArena } from "./block/arena.ts";
+import type { BlockArena, BlockHandle } from "./block/arena.ts";
 import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceSpan, TextEdit } from "./source-view.ts";
@@ -53,8 +53,8 @@ function applyEdits(source: string, edits: readonly TextEdit[]): AppliedEdits {
 export class DocumentImpl implements Document {
   #blockArena: BlockArena;
   #blockScanner: BlockScanner;
-  #fragmentsByBlockId?: Map<number, BlockFragment>;
   #fragments: BlockFragment[] = [];
+  #previousFragments?: Map<BlockHandle, BlockFragment>;
   #profile: SyntaxProfile;
   #syntaxState: SyntaxState;
 
@@ -86,29 +86,29 @@ export class DocumentImpl implements Document {
     }
     const applied = applyEdits(this.source, edits);
 
-    if (this.#fragments.length > 0 && this.#fragmentsByBlockId === void 0) {
+    if (this.#fragments.length > 0 && this.#previousFragments === void 0) {
       // Preserve fragment identity before the syntax update changes block order and offsets.
       const blocks = this.#syntaxState.blocks();
-      const fragmentsByBlockId = new Map<number, BlockFragment>();
+      const fragments = new Map<BlockHandle, BlockFragment>();
       for (let index = 0; index < blocks.length; index++) {
-        fragmentsByBlockId.set(blocks[index].id, this.#fragments[index]);
+        fragments.set(blocks[index].handle, this.#fragments[index]);
       }
-      this.#fragmentsByBlockId = fragmentsByBlockId;
+      this.#previousFragments = fragments;
     }
 
-    const { stablePrefixEnd, tokenChange } = this.#blockScanner.edit(
+    const { stableBlockCount, tokenChange } = this.#blockScanner.edit(
       applied.source,
       applied.changedSpan,
       applied.oldChangedEnd,
     );
-    this.#blockArena.update(this.#blockScanner.tokens, tokenChange);
-    this.#syntaxState.update(this.source, this.#blockArena.view(), stablePrefixEnd);
+    const arenaChange = this.#blockArena.update(this.#blockScanner.tokens, tokenChange);
+    this.#syntaxState.update(this.source, this.#blockArena.view(), arenaChange, stableBlockCount);
 
     return { changedSpan: applied.changedSpan };
   }
 
   #projectBlocks(): BlockFragment[] {
-    const previousFragments = this.#fragmentsByBlockId;
+    const previousFragments = this.#previousFragments;
     if (this.#fragments.length > 0 && previousFragments === void 0) {
       return this.#fragments;
     }
@@ -116,7 +116,7 @@ export class DocumentImpl implements Document {
     const blocks = this.#syntaxState.blocks();
     const changedBlocks = previousFragments === void 0
       ? blocks
-      : blocks.filter((block) => previousFragments.get(block.id)?.version !== block.version);
+      : blocks.filter((block) => previousFragments.get(block.handle)?.version !== block.version);
     const context: BlockProjectionContext = {
       profile: this.#profile,
       source: this.source,
@@ -127,13 +127,13 @@ export class DocumentImpl implements Document {
     this.#syntaxState.prepareInline(changedBlocks);
 
     const nextFragments = blocks.map((block) => {
-      const previous = previousFragments?.get(block.id);
+      const previous = previousFragments?.get(block.handle);
       const fragment = previous?.version === block.version ? previous : projectBlock(block, context);
       fragment.offset = block.offset;
       return fragment;
     });
 
-    this.#fragmentsByBlockId = void 0;
+    this.#previousFragments = void 0;
     this.#fragments = nextFragments;
     return nextFragments;
   }

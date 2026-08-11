@@ -4,6 +4,7 @@ import type { BlockSyntaxFrame, BlockSyntaxSchema } from "./syntax.ts";
 
 export interface BlockSyntaxView {
   readonly arena: SyntaxArena;
+  readonly blockHandles: readonly BlockHandle[];
   readonly root: {
     id: number;
     offset: number;
@@ -12,8 +13,19 @@ export interface BlockSyntaxView {
   tokenAt: (index: number) => BlockToken;
 }
 
-interface BlockRecord {
-  id: number;
+// Object identity remains stable for unchanged top-level blocks while released numeric IDs may be reused.
+export interface BlockHandle {
+  readonly id: number;
+}
+
+export interface BlockArenaChange {
+  // Arena surgery replaces old [oldStart, oldEnd) with new [oldStart, newEnd).
+  readonly newEnd: number;
+  readonly oldEnd: number;
+  readonly oldStart: number;
+}
+
+interface BlockRecord extends BlockHandle {
   tokenEnd: number;
   tokenStart: number;
 }
@@ -72,6 +84,7 @@ export class BlockArena implements SyntaxArena {
   view(): BlockSyntaxView {
     return {
       arena: this,
+      blockHandles: this.#blockRecords,
       root: {
         id: this.root,
         offset: this.#tokens[0] ? tokenStart(this.#tokens[0]) : 0,
@@ -87,7 +100,7 @@ export class BlockArena implements SyntaxArena {
     };
   }
 
-  update(tokens: readonly BlockToken[], change: BlockTokenChange): void {
+  update(tokens: readonly BlockToken[], change: BlockTokenChange): BlockArenaChange {
     const previous = this.#blockRecords;
     // Token damage can begin inside a block, so widen it to complete top-level records.
     let prefixEnd = 0;
@@ -124,6 +137,11 @@ export class BlockArena implements SyntaxArena {
       ...suffix,
     ];
     this.#rebuildRoot();
+    return {
+      newEnd: prefixEnd + changed.length,
+      oldEnd: suffixStart,
+      oldStart: prefixEnd,
+    };
   }
 
   #allocate(rule: string, children: readonly number[]): number {
