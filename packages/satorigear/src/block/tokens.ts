@@ -6,13 +6,8 @@ export interface BlockTokenRange {
 }
 
 export interface BlockToken {
-  commentBefore: boolean;
-  k: number;
-  multilineFlowBefore: boolean;
-  newlineBefore: boolean;
   offset: number;
   ranges?: BlockTokenRange[];
-  t: number;
   text: string;
   type: string;
 }
@@ -36,11 +31,6 @@ export function namedToken(type: string, text: string, offset: number, ranges?: 
     type,
     text,
     offset,
-    k: 0,
-    t: 0,
-    newlineBefore: false,
-    commentBefore: false,
-    multilineFlowBefore: false,
     ...(ranges?.length ? { ranges } : {}),
   };
 }
@@ -107,13 +97,7 @@ export function createShiftedToken(token: BlockToken, delta: number): BlockToken
 }
 
 export function tokenEqualsAfterShift(previous: BlockToken, next: BlockToken, delta: number): boolean {
-  if (
-    previous.type !== next.type ||
-    previous.text !== next.text ||
-    previous.newlineBefore !== next.newlineBefore ||
-    previous.commentBefore !== next.commentBefore ||
-    previous.multilineFlowBefore !== next.multilineFlowBefore
-  ) {
+  if (previous.type !== next.type || previous.text !== next.text) {
     return false;
   }
 
