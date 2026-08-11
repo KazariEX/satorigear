@@ -154,14 +154,6 @@ interface ParseResult {
   next: number;
 }
 
-function startToken(arena: InlineArena, entry: number): number {
-  if (entry < 0) {
-    return ~entry;
-  }
-  const child = arena.childAt(entry, 0);
-  return child < 0 ? arena.leafToken(child) : startToken(arena, child);
-}
-
 function semanticNode(
   arena: InlineArena,
   schema: InlineSyntaxSchema,
@@ -301,7 +293,7 @@ function parseItems(
         );
       index++;
     }
-    const tokenBase = startToken(arena, item);
+    const tokenBase = arena.entryTokenBase(item);
     children[childCount++] = arena.singleNode(
       inLink ? schema.linkContentRuleId : schema.inlineRuleId,
       arena.entryStart(item),
@@ -332,7 +324,7 @@ function buildLines(
         schema.inlineLineRuleId,
         arena.entryStart(first),
         arena.entryEnd(last),
-        startToken(arena, first),
+        arena.entryTokenBase(first),
         content.children,
         content.childCount,
       );
@@ -351,7 +343,7 @@ function buildLines(
     schema.inlineLinesRuleId,
     arena.entryStart(first),
     arena.entryEnd(last),
-    startToken(arena, first),
+    arena.entryTokenBase(first),
     children,
     childCount,
   );
