@@ -2,8 +2,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { minify } from "rolldown/utils";
 import { defineConfig } from "tsdown";
-import { emitBlockSyntaxSchema } from "./src/block/generate.ts";
-import { grammar as grammarBlock } from "./src/grammars/block.ts";
 import { grammar as grammarInline } from "./src/grammars/inline.ts";
 
 export default defineConfig({
@@ -12,10 +10,6 @@ export default defineConfig({
   outputOptions: {
     codeSplitting: {
       groups: [
-        {
-          name: "generated/blocks",
-          test: /[\\/]src[\\/]generated[\\/]blocks\.ts$/,
-        },
         {
           name: "generated/inline",
           test: /[\\/]src[\\/]generated[\\/]inline\.ts$/,
@@ -32,7 +26,6 @@ export default defineConfig({
 
         const generated = join(import.meta.dirname, "src/generated");
         const modules = [
-          { name: "blocks.ts", source: emitBlockSyntaxSchema(grammarBlock) },
           { name: "inline.ts", source: emitJsPackedLexer(grammarInline) },
         ];
 

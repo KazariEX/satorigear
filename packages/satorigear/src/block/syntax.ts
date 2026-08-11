@@ -1,8 +1,21 @@
-import { type BlockSyntaxFrame, blockSyntaxSchema } from "../generated/blocks.ts";
 import { type BlockToken, type BlockTokenChange, tokenEnd, tokenStart } from "./tokens.ts";
 import type { SyntaxArena, SyntaxArenaView } from "../syntax-protocol.ts";
 
 export type BlockSyntaxView = SyntaxArenaView<BlockToken>;
+
+export interface BlockSyntaxFrame {
+  close: string;
+  rule: string;
+  wrapsBlock: boolean;
+}
+
+export interface BlockSyntaxSchema {
+  entryRule: string;
+  frameByOpen: Readonly<Record<string, BlockSyntaxFrame | undefined>>;
+  groupedRuleByToken: Readonly<Record<string, string | undefined>>;
+  ruleByLeaf: Readonly<Record<string, string | undefined>>;
+  wrapperRule: string;
+}
 
 export interface BlockSyntaxDocument {
   update: (tokens: readonly BlockToken[], change: BlockTokenChange) => void;
@@ -48,11 +61,14 @@ class BlockSyntaxArena implements SyntaxArena {
   #lengths: number[] = [0];
   #nodeCount = 1;
   #releaseStack: number[] = [];
-  #rules: string[] = [blockSyntaxSchema.entryRule];
+  #rules: string[];
+  #schema: BlockSyntaxSchema;
   #tokens: readonly BlockToken[];
   root = 0;
 
-  constructor(tokens: readonly BlockToken[]) {
+  constructor(tokens: readonly BlockToken[], schema: BlockSyntaxSchema) {
+    this.#rules = [schema.entryRule];
+    this.#schema = schema;
     this.#tokens = tokens;
     this.#blockRecords = this.#buildRange(0, tokens.length);
     this.#rebuildRoot();
@@ -154,7 +170,7 @@ class BlockSyntaxArena implements SyntaxArena {
   #buildRange(start: number, end: number): BlockRecord[] {
     const document: Frame = {
       close: "",
-      rule: blockSyntaxSchema.entryRule,
+      rule: this.#schema.entryRule,
       wrapsBlock: false,
       children: [],
     };
@@ -163,20 +179,20 @@ class BlockSyntaxArena implements SyntaxArena {
     for (let index = start; index < end; index++) {
       const token = this.#tokens[index];
       const current = stack.at(-1)!;
-      const spec = blockSyntaxSchema.frameByOpen[token.type];
+      const spec = this.#schema.frameByOpen[token.type];
       if (spec !== void 0) {
         stack.push({ ...spec, children: [leaf(index)] });
         continue;
       }
 
-      const groupedRule = blockSyntaxSchema.groupedRuleByToken[token.type];
+      const groupedRule = this.#schema.groupedRuleByToken[token.type];
       if (groupedRule !== void 0) {
         const children: number[] = [];
         do {
           children.push(leaf(index++));
         } while (
           index < end &&
-          blockSyntaxSchema.groupedRuleByToken[this.#tokens[index].type] === groupedRule
+          this.#schema.groupedRuleByToken[this.#tokens[index].type] === groupedRule
         );
         index--;
         current.children.push(this.#allocate(groupedRule, children));
@@ -188,15 +204,15 @@ class BlockSyntaxArena implements SyntaxArena {
         stack.pop();
         const id = this.#allocate(current.rule, current.children);
         stack.at(-1)!.children.push(
-          current.wrapsBlock ? this.#allocate(blockSyntaxSchema.wrapperRule, [id]) : id,
+          current.wrapsBlock ? this.#allocate(this.#schema.wrapperRule, [id]) : id,
         );
         continue;
       }
 
-      const leafRule = blockSyntaxSchema.ruleByLeaf[token.type];
+      const leafRule = this.#schema.ruleByLeaf[token.type];
       if (leafRule !== void 0) {
         const id = this.#allocate(leafRule, [leaf(index)]);
-        current.children.push(this.#allocate(blockSyntaxSchema.wrapperRule, [id]));
+        current.children.push(this.#allocate(this.#schema.wrapperRule, [id]));
         continue;
       }
 
@@ -327,10 +343,10 @@ class BlockSyntaxArena implements SyntaxArena {
   }
 }
 
-export function createBlockSyntaxParser(): BlockSyntaxParser {
+export function createBlockSyntaxParser(schema: BlockSyntaxSchema): BlockSyntaxParser {
   return {
     parse(tokens) {
-      const arena = new BlockSyntaxArena(tokens);
+      const arena = new BlockSyntaxArena(tokens, schema);
       let currentTokens = tokens;
       return {
         update(nextTokens, change) {

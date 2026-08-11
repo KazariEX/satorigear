@@ -252,8 +252,44 @@ function projectList(ordered: boolean): BlockProjector {
 
 export const feature: SyntaxFeature = {
   blockRules: [
-    { rule: "UnorderedList", project: projectList(false) },
-    { rule: "OrderedList", project: projectList(true) },
+    {
+      rule: "UnorderedListItem",
+      syntax: {
+        kind: "frame",
+        open: "UnorderedItemOpen",
+        close: "UnorderedItemClose",
+        topLevel: false,
+      },
+    },
+    {
+      rule: "OrderedListItem",
+      syntax: {
+        kind: "frame",
+        open: "OrderedItemOpen",
+        close: "OrderedItemClose",
+        topLevel: false,
+      },
+    },
+    {
+      rule: "UnorderedList",
+      syntax: {
+        kind: "frame",
+        open: "UnorderedListOpen",
+        close: "UnorderedListClose",
+        topLevel: true,
+      },
+      project: projectList(false),
+    },
+    {
+      rule: "OrderedList",
+      syntax: {
+        kind: "frame",
+        open: "OrderedListOpen",
+        close: "OrderedListClose",
+        topLevel: true,
+      },
+      project: projectList(true),
+    },
   ],
   blockStarts: [
     {

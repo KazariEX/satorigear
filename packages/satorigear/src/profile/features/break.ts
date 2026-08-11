@@ -26,6 +26,10 @@ export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "ThematicBreak",
+      syntax: {
+        kind: "leaf",
+        token: "ThematicBreakToken",
+      },
       project(nodeId, offset, tokenBase, context) {
         const end = offset + context.view.arena.lenOf(nodeId);
         return withSpan<ThematicBreak>(

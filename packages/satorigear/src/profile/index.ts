@@ -22,6 +22,7 @@ import { feature as featureParagraph } from "./features/paragraph.ts";
 import { feature as featureReference } from "./features/reference.ts";
 import { feature as featureTable } from "./features/table.ts";
 import { feature as featureText, semanticText } from "./features/text.ts";
+import type { BlockSyntaxFrame, BlockSyntaxSchema } from "../block/syntax.ts";
 import type { BlockToken } from "../block/tokens.ts";
 import type { BlockProjector, InlineLeafProjector, InlineRuleProjector } from "../mdast.ts";
 import type { MathOptions } from "./features/math/types.ts";
@@ -113,7 +114,10 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
   const blockDecorators: BlockDecoratorRegistration[] = [];
   const blockFallbacks: BlockStart[] = [];
   const blockInlineContents: Record<string, true> = Object.create(null);
+  const blockFrameByOpen: Record<string, BlockSyntaxFrame> = Object.create(null);
+  const blockGroupedRuleByToken: Record<string, string> = Object.create(null);
   const blockInterrupts: (BlockInterruptDispatch | undefined)[] = [];
+  const blockRuleByLeaf: Record<string, string> = Object.create(null);
   const blockProjects: Record<string, BlockProjector> = Object.create(null);
   const blockDefinitionKeys: Record<string, (token: BlockToken) => string> = Object.create(null);
   const blockRestarts: BlockRestart[] = [];
@@ -159,6 +163,25 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     }
     if (feature.blockRules) {
       for (const registration of feature.blockRules) {
+        const syntax = registration.syntax;
+        if (syntax?.kind === "frame") {
+          const opens = typeof syntax.open === "string" ? [syntax.open] : syntax.open;
+          for (const open of opens) {
+            blockFrameByOpen[open] = {
+              close: syntax.close,
+              rule: registration.rule,
+              wrapsBlock: syntax.topLevel,
+            };
+          }
+        }
+        else if (syntax?.kind === "group") {
+          for (const token of syntax.tokens) {
+            blockGroupedRuleByToken[token] = registration.rule;
+          }
+        }
+        else if (syntax?.kind === "leaf") {
+          blockRuleByLeaf[syntax.token] = registration.rule;
+        }
         if (registration.project) {
           blockProjects[registration.rule] = registration.project;
         }
@@ -221,6 +244,14 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
     )
     : resolver.resolve;
 
+  const blockSyntax: BlockSyntaxSchema = {
+    entryRule: "Document",
+    frameByOpen: blockFrameByOpen,
+    groupedRuleByToken: blockGroupedRuleByToken,
+    ruleByLeaf: blockRuleByLeaf,
+    wrapperRule: "Block",
+  };
+
   return {
     blockFallbacks,
     blockInlineContents,
@@ -238,6 +269,7 @@ export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
       return result;
     },
     blockStarts,
+    blockSyntax,
     blockUnwrappers,
     decodeText: semanticText,
     inlineRuleProjects,

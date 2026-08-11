@@ -410,6 +410,12 @@ export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "LinkDefinition",
+      syntax: {
+        kind: "frame",
+        open: "LinkDefinitionOpen",
+        close: "LinkDefinitionClose",
+        topLevel: true,
+      },
       project(nodeId, offset, tokenBase, context) {
         const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
         const fields = linkDefinitionFields(token);

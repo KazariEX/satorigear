@@ -85,6 +85,12 @@ function firstContentLine(line: BlockLine, match: FootnoteDefinitionMatch): Bloc
 export const blockRules: SyntaxFeature["blockRules"] = [
   {
     rule: "FootnoteDefinition",
+    syntax: {
+      kind: "frame",
+      open: "FootnoteDefinitionOpen",
+      close: "FootnoteDefinitionClose",
+      topLevel: true,
+    },
     project(nodeId, offset, tokenBase, context) {
       const token = blockToken(nodeId, tokenBase, "FootnoteDefinitionOpen", context);
       const fields = definitionFields(token);

@@ -275,10 +275,43 @@ export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "TableCell",
+      syntax: {
+        kind: "frame",
+        open: "TableCellOpen",
+        close: "TableCellClose",
+        topLevel: false,
+      },
       inlineContent: true,
     },
     {
+      rule: "TableRow",
+      syntax: {
+        kind: "frame",
+        open: "TableRowOpen",
+        close: "TableRowClose",
+        topLevel: false,
+      },
+    },
+    {
+      rule: "TableDelimiter",
+      syntax: {
+        kind: "group",
+        tokens: [
+          "TableAlignNone",
+          "TableAlignLeft",
+          "TableAlignRight",
+          "TableAlignCenter",
+        ],
+      },
+    },
+    {
       rule: "Table",
+      syntax: {
+        kind: "frame",
+        open: "TableOpen",
+        close: "TableClose",
+        topLevel: true,
+      },
       project(nodeId, offset, tokenBase, context) {
         const open = blockToken(nodeId, tokenBase, "TableOpen", context);
         const close = blockToken(nodeId, tokenBase, "TableClose", context);

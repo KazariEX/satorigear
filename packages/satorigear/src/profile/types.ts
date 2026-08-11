@@ -1,4 +1,5 @@
 import type { BlockLine } from "../block/lines.ts";
+import type { BlockSyntaxSchema } from "../block/syntax.ts";
 import type { BlockToken } from "../block/tokens.ts";
 import type { DelimiterConfig, PairedTokenConfig } from "../inline/pairing.ts";
 import type { InlineStructureRegistration, InlineSyntaxSchema } from "../inline/syntax.ts";
@@ -32,11 +33,28 @@ export interface BlockStartRegistration {
   start: BlockStart;
 }
 
+export type BlockSyntaxRegistration =
+  | {
+    kind: "frame";
+    close: string;
+    open: string | readonly string[];
+    topLevel: boolean;
+  }
+  | {
+    kind: "group";
+    tokens: readonly string[];
+  }
+  | {
+    kind: "leaf";
+    token: string;
+  };
+
 export interface BlockRuleRegistration {
   definitionKey?: (token: BlockToken) => string;
   inlineContent?: true;
   project?: BlockProjector;
   rule: string;
+  syntax?: BlockSyntaxRegistration;
 }
 
 export type BlockProjectorDecorator = (project: BlockProjector) => BlockProjector;
@@ -103,6 +121,7 @@ export interface SyntaxProfile {
   blockDefinitionKeys: Readonly<Record<string, (token: BlockToken) => string>>;
   blockRestart: BlockRestart;
   blockStarts: readonly (BlockStartDispatch | undefined)[];
+  blockSyntax: BlockSyntaxSchema;
   blockUnwrappers: readonly BlockLineUnwrapper[];
   decodeText: (value: string) => string;
   inlineRuleProjects: Readonly<Record<string, InlineRuleProjector>>;

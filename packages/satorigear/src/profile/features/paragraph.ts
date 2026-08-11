@@ -59,6 +59,12 @@ export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "Paragraph",
+      syntax: {
+        kind: "frame",
+        open: "ParagraphOpen",
+        close: "ParagraphClose",
+        topLevel: true,
+      },
       inlineContent: true,
       project(nodeId, offset, tokenBase, context) {
         const result: Paragraph = { type: "paragraph", children: inlineChildren(nodeId, context) };

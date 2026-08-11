@@ -453,6 +453,12 @@ function createBlockStart(shorthand: boolean): BlockStart {
 export const blockRules: SyntaxFeature["blockRules"] = [
   {
     rule: "BlockComponentLabel",
+    syntax: {
+      kind: "frame",
+      open: "BlockComponentLabelOpen",
+      close: "BlockComponentLabelClose",
+      topLevel: false,
+    },
     inlineContent: true,
     project(nodeId, offset, tokenBase, context) {
       return blockLabel(nodeId, tokenBase, context);
@@ -460,6 +466,12 @@ export const blockRules: SyntaxFeature["blockRules"] = [
   },
   {
     rule: "BlockComponent",
+    syntax: {
+      kind: "frame",
+      open: "BlockComponentOpen",
+      close: "BlockComponentClose",
+      topLevel: true,
+    },
     project(nodeId, offset, tokenBase, context) {
       const open = blockToken(nodeId, tokenBase, "BlockComponentOpen", context);
       const close = blockToken(nodeId, tokenBase, "BlockComponentClose", context);
@@ -485,6 +497,12 @@ export const blockRules: SyntaxFeature["blockRules"] = [
   },
   {
     rule: "BlockComponentSlot",
+    syntax: {
+      kind: "frame",
+      open: "BlockComponentSlotOpen",
+      close: "BlockComponentSlotClose",
+      topLevel: true,
+    },
     project(nodeId, offset, tokenBase, context) {
       const open = blockToken(nodeId, tokenBase, "BlockComponentSlotOpen", context);
       const close = blockToken(nodeId, tokenBase, "BlockComponentSlotClose", context);

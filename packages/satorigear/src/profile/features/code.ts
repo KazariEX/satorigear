@@ -132,6 +132,10 @@ export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "FencedCode",
+      syntax: {
+        kind: "leaf",
+        token: "FencedCodeBlock",
+      },
       project(nodeId, offset, tokenBase, context) {
         const end = offset + context.view.arena.lenOf(nodeId);
         const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
@@ -145,6 +149,10 @@ export const feature: SyntaxFeature = {
     },
     {
       rule: "IndentedCodeBlock",
+      syntax: {
+        kind: "leaf",
+        token: "IndentedCodeBlockToken",
+      },
       project(nodeId, offset, tokenBase, context) {
         return withSpan(
           indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),

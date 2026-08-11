@@ -59,6 +59,12 @@ export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "AtxHeading",
+      syntax: {
+        kind: "frame",
+        open: "AtxHeadingOpen",
+        close: "HeadingClose",
+        topLevel: true,
+      },
       inlineContent: true,
       project(nodeId, offset, tokenBase, context) {
         const marker = blockToken(nodeId, tokenBase, "AtxHeadingOpen", context);
@@ -71,6 +77,15 @@ export const feature: SyntaxFeature = {
     },
     {
       rule: "SetextHeading",
+      syntax: {
+        kind: "frame",
+        open: [
+          "SetextHeading1Open",
+          "SetextHeading2Open",
+        ],
+        close: "HeadingClose",
+        topLevel: true,
+      },
       inlineContent: true,
       project(nodeId, offset, tokenBase, context) {
         const levelOne = directBlockToken(nodeId, tokenBase, "SetextHeading1Open", context);

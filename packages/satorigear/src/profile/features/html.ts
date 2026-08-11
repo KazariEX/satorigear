@@ -148,6 +148,10 @@ export const feature: SyntaxFeature = {
   blockRules: [
     {
       rule: "HtmlBlock",
+      syntax: {
+        kind: "leaf",
+        token: "HtmlBlockToken",
+      },
       project(nodeId, offset, tokenBase, context) {
         const end = offset + context.view.arena.lenOf(nodeId);
         const token = htmlBlockToken(blockToken(nodeId, tokenBase, "HtmlBlockToken", context));
