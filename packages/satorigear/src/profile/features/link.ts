@@ -1,5 +1,4 @@
 import type { Image, ImageReference, Link, LinkReference, PhrasingContent, Text } from "mdast";
-import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
   buildInlineChildren,
@@ -9,9 +8,9 @@ import {
   type InlineNodeBuilder,
   inlineSequence,
   leaf,
-  type SpannedNode,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/inline.ts";
+import { type SpannedNode, withSpan } from "../../fragment/node.ts";
+import { inlineTokenText } from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { buildInlineText, semanticText } from "./text.ts";
 import type { SyntaxFeature } from "../types.ts";

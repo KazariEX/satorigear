@@ -5,10 +5,9 @@ import {
   blockEnd,
   blockToken,
   directBlockToken,
-  firstChildStart,
-  inlineChildren,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/block.ts";
+import { inlineChildren } from "../../fragment/inline.ts";
+import { firstChildStart, withSpan } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 function atxAt(source: string, line: BlockLine): {

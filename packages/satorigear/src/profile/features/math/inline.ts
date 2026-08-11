@@ -1,3 +1,5 @@
+import { appendInline } from "../../../fragment/inline.ts";
+import { withSpan } from "../../../fragment/node.ts";
 import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -10,7 +12,6 @@ import {
   type InlineTokenStream,
   inlineTokenText,
 } from "../../../inline/tokens.ts";
-import { appendInline, withSpan } from "../../../mdast.ts";
 import type { InlineSyntaxDefinition, InlineTokenTransform } from "../../../inline/profile.ts";
 import type { InlineMath } from "./types.ts";
 

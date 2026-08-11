@@ -1,15 +1,14 @@
 import type { Html } from "mdast";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { type BlockToken, logicalToken } from "../../block/tokens.ts";
-import { inlineTokenText } from "../../inline/tokens.ts";
 import {
-  appendInline,
   blockEnd,
   blockToken,
-  type InlineLeafBuilder,
   normalizeLines,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/block.ts";
+import { appendInline, type InlineLeafBuilder } from "../../fragment/inline.ts";
+import { withSpan } from "../../fragment/node.ts";
+import { inlineTokenText } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface HtmlStart {

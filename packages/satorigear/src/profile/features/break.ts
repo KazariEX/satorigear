@@ -1,6 +1,8 @@
 import type { Break, Text, ThematicBreak } from "mdast";
 import { namedToken } from "../../block/tokens.ts";
-import { appendInline, blockEnd, firstNonspace, withSpan } from "../../mdast.ts";
+import { blockEnd, firstNonspace } from "../../fragment/block.ts";
+import { appendInline } from "../../fragment/inline.ts";
+import { withSpan } from "../../fragment/node.ts";
 import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 

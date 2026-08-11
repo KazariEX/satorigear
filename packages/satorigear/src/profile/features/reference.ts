@@ -1,6 +1,8 @@
 import type { Definition } from "mdast";
 import { type BlockLine, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
 import { namedToken, structuralToken } from "../../block/tokens.ts";
+import { blockEnd, blockToken } from "../../fragment/block.ts";
+import { withSpan } from "../../fragment/node.ts";
 import { inlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -13,7 +15,6 @@ import {
   inlineTokenStride,
   inlineTokenText,
 } from "../../inline/tokens.ts";
-import { blockEnd, blockToken, withSpan } from "../../mdast.ts";
 import { normalizeAssociationLabel, splitReferenceTail } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockToken } from "../../block/tokens.ts";

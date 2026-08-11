@@ -5,8 +5,8 @@ import {
   createInlineAccumulator,
   type InlineNodeBuilder,
   inlineSequence,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/inline.ts";
+import { withSpan } from "../../fragment/node.ts";
 import { buildInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
 import type { InlineSyntaxDefinition } from "../../inline/profile.ts";

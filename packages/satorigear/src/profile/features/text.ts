@@ -1,11 +1,11 @@
 import { decodeHTMLStrict } from "entities";
 import type { Text } from "mdast";
-import { inlineTokenText } from "../../inline/tokens.ts";
 import {
   appendInline,
   type InlineLeafBuilder,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/inline.ts";
+import { withSpan } from "../../fragment/node.ts";
+import { inlineTokenText } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;

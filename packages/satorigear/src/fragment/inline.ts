@@ -1,58 +1,15 @@
-import type {
-  BlockContent,
-  DefinitionContent,
-  Node,
-  PhrasingContent,
-  Root,
-  Text,
-  TopLevelContent,
-} from "mdast";
-import { type BlockToken, tokenEnd, tokenStart } from "./block/tokens.ts";
+import type { PhrasingContent, Text } from "mdast";
 import {
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
-} from "./inline/tokens.ts";
-import type { BlockSyntaxView } from "./block/arena.ts";
-import type { InlineArena } from "./inline/arena.ts";
-import type { SyntaxProfile } from "./profile/types.ts";
-import type { SourceLocation, SourceSpan, SourceView } from "./source-view.ts";
-import type { SyntaxState } from "./syntax-state.ts";
-
-// Builders store source offsets in the final position slot. One-shot output resolves it in place;
-// incremental documents retain it as the immutable span of a cached block fragment.
-interface SpannedValue {
-  [key: string]: unknown;
-  children?: SpannedValue[];
-  position: SourceSpan;
-}
-
-export type SpannedNode<T extends object = Node> = T & SpannedValue;
-
-export interface BlockFragment {
-  node: SpannedNode<TopLevelContent>;
-  // Origin belongs to the cached fragment; offset moves so positions can shift without rebuilding nodes.
-  offset: number;
-  origin: number;
-  version: number;
-}
-
-export interface BlockBuildContext {
-  profile: SyntaxProfile;
-  source: string;
-  syntaxState: SyntaxState;
-  view: BlockSyntaxView;
-}
-
-// Core owns fragment state and traversal; profiles supply every syntax-specific node builder.
-export type BlockNodeBuilder = (
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockBuildContext,
-) => SpannedNode<TopLevelContent>;
+} from "../inline/tokens.ts";
+import { extendSpan, type SpannedNode, type SpannedValue, withSpan } from "./node.ts";
+import type { InlineArena } from "../inline/arena.ts";
+import type { SourceSpan, SourceView } from "../source-view.ts";
+import type { BlockBuildContext } from "./block.ts";
 
 export interface InlineBuildContext {
   arena: InlineArena;
@@ -94,28 +51,6 @@ export const buildInlineChildren: InlineNodeBuilder = (
   accumulator,
 ) => inlineSequence(nodeId, offset, accumulator);
 
-export function withSpan<const T extends object>(value: T, start: number, end: number): SpannedNode<T> {
-  const node = value as SpannedNode<T>;
-  node.position = { start, end };
-  return node;
-}
-
-export function extendSpan(value: object, end: number): void {
-  const node = value as SpannedValue;
-  node.position.end = Math.max(node.position.end, end);
-}
-
-export function blockEnd(nodeId: number, offset: number, context: BlockBuildContext): number {
-  let end = offset + context.view.arena.lenOf(nodeId);
-  if (end > offset && context.source[end - 1] === "\n") {
-    end--;
-  }
-  if (end > offset && context.source[end - 1] === "\r") {
-    end--;
-  }
-  return end;
-}
-
 function inlineTokenIndex(context: InlineBuildContext, index: number): number {
   const tokenIndex = index - context.tokenBase;
   if (tokenIndex < 0 || tokenIndex >= inlineTokenCount(context.tokens)) {
@@ -152,26 +87,6 @@ function lineEndingStart(source: string, offset: number): number {
   return source[start - 1] === "\n" && source[start - 2] === "\r" ? start - 2 : start - 1;
 }
 
-export function firstChildStart(value: { children: readonly object[] }): number {
-  const first = value.children[0];
-  if (!first) {
-    throw new Error("mdast container unexpectedly has no children");
-  }
-  return (first as SpannedValue).position.start;
-}
-
-export function lastChildEnd(value: { children: readonly object[] }, emptyEnd: number): number {
-  const last = value.children.at(-1);
-  return last ? (last as SpannedValue).position.end : emptyEnd;
-}
-
-export function firstNonspace(source: string, start: number, end: number): number {
-  while (start < end && (source[start] === " " || source[start] === "\t")) {
-    start++;
-  }
-  return start;
-}
-
 export function directLeaf(
   nodeId: number,
   tokenType: string,
@@ -195,72 +110,6 @@ export function leaf(nodeId: number, tokenType: string, context: InlineBuildCont
     throw new Error(`Expected inline syntax to contain ${tokenType}`);
   }
   return result;
-}
-
-export function directBlockToken(
-  nodeId: number,
-  tokenBase: number,
-  tokenType: string,
-  context: BlockBuildContext,
-): BlockToken | undefined {
-  const arena = context.view.arena;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const entry = arena.childAt(nodeId, index);
-    if (entry < 0) {
-      const token = context.view.tokenAt(arena.leafToken(entry, tokenBase));
-      if (token.type === tokenType) {
-        return token;
-      }
-    }
-  }
-}
-
-export function blockToken(
-  nodeId: number,
-  tokenBase: number,
-  tokenType: string,
-  context: BlockBuildContext,
-): BlockToken {
-  const token = directBlockToken(nodeId, tokenBase, tokenType, context);
-  if (!token) {
-    throw new Error(`Expected ${context.view.arena.ruleNameOf(nodeId)} syntax to contain ${tokenType}`);
-  }
-  return token;
-}
-
-export function payloadBounds(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockBuildContext,
-): SourceSpan {
-  const arena = context.view.arena;
-  const result = { start: offset + arena.lenOf(nodeId), end: offset };
-  const visit = (currentId: number, currentTokenBase: number): void => {
-    const childCount = arena.childCount(currentId);
-    for (let index = 0; index < childCount; index++) {
-      const child = arena.childAt(currentId, index);
-      if (child < 0) {
-        const token = context.view.tokenAt(arena.leafToken(child, currentTokenBase));
-        const start = tokenStart(token);
-        const end = tokenEnd(token);
-        if (end > start) {
-          result.start = Math.min(result.start, start);
-          result.end = Math.max(result.end, end);
-        }
-      }
-      else {
-        visit(child, currentTokenBase + arena.childTokRelAt(currentId, index));
-      }
-    }
-  };
-  visit(nodeId, tokenBase);
-  return result;
-}
-
-export function normalizeLines(value: string): string {
-  return value.replace(/\r\n|\r/g, "\n");
 }
 
 function appendText(target: PhrasingContent[], value: string, start: number, end: number): void {
@@ -469,116 +318,4 @@ export function inlineChildren(
     }
   }
   return result;
-}
-
-export function blockChildren(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockBuildContext,
-): (BlockContent | DefinitionContent)[] {
-  const arena = context.view.arena;
-  const children: (BlockContent | DefinitionContent)[] = [];
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const childId = arena.childAt(nodeId, index);
-    if (childId >= 0 && context.view.arena.isBlock(childId)) {
-      children.push(buildBlockNode(
-        childId,
-        offset + arena.childRelAt(nodeId, index),
-        tokenBase + arena.childTokRelAt(nodeId, index),
-        context,
-      ) as BlockContent | DefinitionContent);
-    }
-  }
-  return children;
-}
-
-export function buildBlockNode(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockBuildContext,
-): SpannedNode<TopLevelContent> {
-  const arena = context.view.arena;
-  const rule = arena.ruleOf(nodeId);
-  const build = rule.build;
-  if (!build) {
-    throw new Error(`Unexpected block syntax rule: ${rule.name}`);
-  }
-  return build(nodeId, offset, tokenBase, context);
-}
-
-function positionNode(value: SpannedValue, point: (offset: number) => SourceLocation): void {
-  const position = value.position;
-  const start = point(position.start);
-  for (const child of value.children ?? []) {
-    positionNode(child, point);
-  }
-  (value as unknown as Node).position = {
-    start,
-    end: point(position.end),
-  };
-}
-
-export function buildRoot(
-  nodes: SpannedNode<TopLevelContent>[],
-  sourceLength: number,
-  locate: (offset: number) => SourceLocation,
-): Root {
-  const start = locate(0);
-  for (let index = 0; index < nodes.length; index++) {
-    positionNode(nodes[index], locate);
-  }
-  return {
-    type: "root",
-    children: nodes,
-    position: { start, end: locate(sourceLength) },
-  };
-}
-
-function materializeNode(
-  value: SpannedValue,
-  shift: number,
-  point: (offset: number) => SourceLocation,
-): Node {
-  const result = {} as Node & Record<string, unknown>;
-  // Preserve start → children → end order for the tokenizer's forward source locator.
-  const start = point(shift + value.position.start);
-  for (const key in value) {
-    if (key !== "children" && key !== "position") {
-      result[key] = value[key];
-    }
-  }
-  const childrenTarget = value.children;
-  if (childrenTarget) {
-    const children = new Array<Node>(childrenTarget.length);
-    for (let i = 0; i < childrenTarget.length; i++) {
-      children[i] = materializeNode(childrenTarget[i], shift, point);
-    }
-    result.children = children;
-  }
-  result.position = {
-    start,
-    end: point(shift + value.position.end),
-  };
-  return result;
-}
-
-export function materialize(
-  fragments: readonly BlockFragment[],
-  sourceLength: number,
-  locate: (offset: number) => SourceLocation,
-): Root {
-  const start = locate(0);
-  const children = fragments.map((fragment) => materializeNode(
-    fragment.node,
-    fragment.offset - fragment.origin,
-    locate,
-  ) as TopLevelContent);
-  return {
-    type: "root",
-    children,
-    position: { start, end: locate(sourceLength) },
-  };
 }

@@ -1,4 +1,6 @@
 import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdast";
+import { lineEnd } from "../../../fragment/inline.ts";
+import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
 import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -12,7 +14,6 @@ import {
   type InlineTokenStream,
   setInlineTokenFlags,
 } from "../../../inline/tokens.ts";
-import { extendSpan, lineEnd, type SpannedNode } from "../../../mdast.ts";
 import {
   carryTerminalAttributes,
   hasTerminalAttributes,

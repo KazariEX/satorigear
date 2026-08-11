@@ -1,4 +1,4 @@
-import type { BlockNodeBuilder } from "../mdast.ts";
+import type { BlockNodeBuilder } from "../fragment/block.ts";
 // Block features compile into the immutable scanner, arena, and node builders shared by a parser.
 import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";

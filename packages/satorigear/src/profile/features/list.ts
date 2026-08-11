@@ -13,10 +13,9 @@ import {
   blockEnd,
   type BlockNodeBuilder,
   blockToken,
-  lastChildEnd,
   payloadBounds,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/block.ts";
+import { lastChildEnd, withSpan } from "../../fragment/node.ts";
 import { isThematicBreak } from "./break.ts";
 import type { SyntaxFeature } from "../types.ts";
 

@@ -1,7 +1,7 @@
 import { inlineKind } from "./kinds.ts";
 import { tokenizeInline } from "./lexer.ts";
 import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
-import type { InlineLeafBuilder, InlineNodeBuilder } from "../mdast.ts";
+import type { InlineLeafBuilder, InlineNodeBuilder } from "../fragment/inline.ts";
 // Inline features compile into one token pipeline and the arena/build tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
 

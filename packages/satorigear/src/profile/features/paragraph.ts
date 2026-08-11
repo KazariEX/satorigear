@@ -1,7 +1,9 @@
 import type { Paragraph } from "mdast";
 import { type BlockLine, indentOf, isBlank } from "../../block/lines.ts";
 import { type BlockToken, namedToken, structuralToken } from "../../block/tokens.ts";
-import { blockEnd, firstChildStart, inlineChildren, withSpan } from "../../mdast.ts";
+import { blockEnd } from "../../fragment/block.ts";
+import { inlineChildren } from "../../fragment/inline.ts";
+import { firstChildStart, withSpan } from "../../fragment/node.ts";
 import { setextMarkerAt } from "./heading.ts";
 import type { SyntaxFeature } from "../types.ts";
 

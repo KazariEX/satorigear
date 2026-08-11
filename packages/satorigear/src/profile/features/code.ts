@@ -9,18 +9,16 @@ import {
 } from "../../block/fence.ts";
 import { type BlockLine, indentOf, isBlank, removeIndent } from "../../block/lines.ts";
 import { logicalToken } from "../../block/tokens.ts";
-import { inlineTokenText } from "../../inline/tokens.ts";
 import {
-  appendInline,
   type BlockBuildContext,
   blockEnd,
   blockToken,
   firstNonspace,
-  type InlineAccumulator,
-  lineEnd,
   normalizeLines,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/block.ts";
+import { appendInline, type InlineAccumulator, lineEnd } from "../../fragment/inline.ts";
+import { withSpan } from "../../fragment/node.ts";
+import { inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
 import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";

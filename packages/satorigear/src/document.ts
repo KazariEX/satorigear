@@ -1,14 +1,10 @@
 import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
-import {
-  type BlockBuildContext,
-  type BlockFragment,
-  buildBlockNode,
-  buildRoot,
-  materialize,
-} from "./mdast.ts";
+import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
+import { materialize, snapshot } from "./fragment/output/materialize.ts";
 import { SyntaxState } from "./syntax-state.ts";
 import type { BlockArena, BlockHandle } from "./block/arena.ts";
+import type { BlockFragment } from "./fragment/node.ts";
 import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceSpan, TextEdit } from "./source-view.ts";
@@ -155,12 +151,16 @@ export class DocumentImpl implements Document {
     return nextFragments;
   }
 
-  build(): Root {
+  snapshot(): Root {
+    return snapshot(this.#buildBlockFragments(), this.source.length, this.#blockScanner.locator());
+  }
+
+  materialize(): Root {
     const blocks = this.#syntaxState.blocks();
     const context = this.#createBuildContext();
     this.#syntaxState.prepareInline(blocks);
 
-    return buildRoot(
+    return materialize(
       blocks.map((block) => buildBlockNode(
         block.handle.id,
         block.offset,
@@ -170,9 +170,5 @@ export class DocumentImpl implements Document {
       this.source.length,
       this.#blockScanner.locator(),
     );
-  }
-
-  snapshot(): Root {
-    return materialize(this.#buildBlockFragments(), this.source.length, this.#blockScanner.locator());
   }
 }

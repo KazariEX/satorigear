@@ -1,4 +1,14 @@
 import type { PhrasingContent } from "mdast";
+import {
+  appendInline,
+  contentBounds,
+  createInlineAccumulator,
+  directLeaf,
+  type InlineNodeBuilder,
+  inlineSequence,
+  lineEnd,
+} from "../../../fragment/inline.ts";
+import { withSpan } from "../../../fragment/node.ts";
 import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -11,21 +21,11 @@ import {
   type InlineTokenStream,
 } from "../../../inline/tokens.ts";
 import {
-  appendInline,
-  contentBounds,
-  createInlineAccumulator,
-  directLeaf,
-  inlineSequence,
-  lineEnd,
-  withSpan,
-} from "../../../mdast.ts";
-import {
   attributesEnd,
   componentNameEnd,
   normalizeComponentName,
 } from "../attributes/syntax.ts";
 import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
-import type { InlineNodeBuilder } from "../../../mdast.ts";
 import type { InlineComponent } from "./types.ts";
 
 interface Candidate {

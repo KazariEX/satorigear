@@ -4,9 +4,9 @@ import { type BlockToken, namedToken, structuralToken, tokenStart } from "../../
 import {
   type BlockBuildContext,
   blockToken,
-  inlineChildren,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/block.ts";
+import { inlineChildren } from "../../fragment/inline.ts";
+import { withSpan } from "../../fragment/node.ts";
 import { buildCodeSpan } from "./code.ts";
 import type { SyntaxFeature } from "../types.ts";
 

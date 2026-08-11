@@ -6,7 +6,7 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
-import type { InlineNodeBuilder } from "../mdast.ts";
+import type { InlineNodeBuilder } from "../fragment/inline.ts";
 import type { InlineSyntaxSchema } from "./profile.ts";
 
 function leaf(tokenIndex: number): number {

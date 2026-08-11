@@ -8,10 +8,9 @@ import {
   type BlockNodeBuilder,
   blockToken,
   directBlockToken,
-  inlineChildren,
-  type SpannedNode,
-  withSpan,
-} from "../../../mdast.ts";
+} from "../../../fragment/block.ts";
+import { inlineChildren } from "../../../fragment/inline.ts";
+import { type SpannedNode, withSpan } from "../../../fragment/node.ts";
 import {
   attributesEnd,
   closingBracket,

@@ -4,8 +4,8 @@ import {
   blockEnd,
   blockToken,
   normalizeLines,
-  withSpan,
-} from "../../mdast.ts";
+} from "../../fragment/block.ts";
+import { withSpan } from "../../fragment/node.ts";
 import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 

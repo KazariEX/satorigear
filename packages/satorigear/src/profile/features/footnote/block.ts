@@ -11,8 +11,8 @@ import {
   blockChildren,
   blockEnd,
   blockToken,
-  withSpan,
-} from "../../../mdast.ts";
+} from "../../../fragment/block.ts";
+import { withSpan } from "../../../fragment/node.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
 import type { BlockFeature } from "../../../block/profile.ts";

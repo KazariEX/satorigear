@@ -10,9 +10,9 @@ import {
   blockEnd,
   blockToken,
   firstNonspace,
-  lineEnd,
-  withSpan,
-} from "../../../mdast.ts";
+} from "../../../fragment/block.ts";
+import { lineEnd } from "../../../fragment/inline.ts";
+import { withSpan } from "../../../fragment/node.ts";
 import { semanticText } from "../text.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 import type { Math } from "./types.ts";
