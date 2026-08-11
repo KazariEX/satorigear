@@ -594,24 +594,17 @@ function materializeNode(
   return result;
 }
 
-function materializeBlock(
-  fragment: BlockFragment,
-  point: (offset: number) => SourceLocation,
-): TopLevelContent {
-  return materializeNode(
-    fragment.node,
-    fragment.offset - fragment.origin,
-    point,
-  ) as TopLevelContent;
-}
-
 export function materialize(
   fragments: readonly BlockFragment[],
   sourceLength: number,
   locate: (offset: number) => SourceLocation,
 ): Root {
   const start = locate(0);
-  const children = fragments.map((fragment) => materializeBlock(fragment, locate));
+  const children = fragments.map((fragment) => materializeNode(
+    fragment.node,
+    fragment.offset - fragment.origin,
+    locate,
+  ) as TopLevelContent);
   return {
     type: "root",
     children,
