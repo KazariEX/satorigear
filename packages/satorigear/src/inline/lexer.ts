@@ -214,8 +214,12 @@ function referenceTailEnd(source: string, start: number): number {
 }
 
 function isAsciiPunctuation(code: number): boolean {
-  return code >= 33 && code <= 47 || code >= 58 && code <= 64 ||
-    code >= 91 && code <= 96 || code >= 123 && code <= 126;
+  return (
+    code >= 33 && code <= 47 ||
+    code >= 58 && code <= 64 ||
+    code >= 91 && code <= 96 ||
+    code >= 123 && code <= 126
+  );
 }
 
 function textEnd(source: string, start: number): number {
@@ -300,6 +304,10 @@ export function tokenizeInline(source: string): readonly number[] {
         const next = source.charCodeAt(end);
         if (end - offset >= 2 && (next === 10 || next === 13)) {
           appendToken(tokens, hardBreakKind, offset, end);
+          offset = end;
+          continue;
+        }
+        if (end > offset + 1) {
           offset = end;
           continue;
         }
