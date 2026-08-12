@@ -2,16 +2,16 @@ import type { Node, Root, TopLevelContent } from "mdast";
 import type { SourceLocation } from "../../source-view.ts";
 import type { BlockFragment, SpannedNode, SpannedValue } from "../node.ts";
 
-function positionNode(value: SpannedValue, point: (offset: number) => SourceLocation): void {
+function materializeNode(value: SpannedValue, locate: (offset: number) => SourceLocation): void {
   const position = value.position;
-  const start = point(position.start);
+  const start = locate(position.start);
+  const end = position.end;
   for (const child of value.children ?? []) {
-    positionNode(child, point);
+    materializeNode(child, locate);
   }
-  (value as unknown as Node).position = {
-    start,
-    end: point(position.end),
-  };
+  const result = position as unknown as NonNullable<Node["position"]>;
+  result.start = start;
+  result.end = locate(end);
 }
 
 export function materialize(
@@ -21,7 +21,7 @@ export function materialize(
 ): Root {
   const start = locate(0);
   for (let index = 0; index < nodes.length; index++) {
-    positionNode(nodes[index], locate);
+    materializeNode(nodes[index], locate);
   }
   return {
     type: "root",
