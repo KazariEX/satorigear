@@ -168,17 +168,26 @@ function lineIndexAtOrAfter(lines: readonly BlockLine[], offset: number): number
 
 function linesOf(source: string, start = 0, limit = source.length): BlockLine[] {
   const lines: BlockLine[] = [];
+  let lineFeed = source.indexOf("\n", start);
+  let carriageReturn = source.indexOf("\r", start);
   while (start < limit) {
-    let end = start;
-    while (end < limit && source[end] !== "\n" && source[end] !== "\r") {
-      end++;
-    }
+    const nextEnding = lineFeed < 0
+      ? carriageReturn
+      : carriageReturn < 0 ? lineFeed : Math.min(lineFeed, carriageReturn);
+    const end = nextEnding < 0 || nextEnding >= limit ? limit : nextEnding;
     let next = end;
-    if (next < limit && source[next] === "\r") {
-      next += next + 1 < limit && source[next + 1] === "\n" ? 2 : 1;
-    }
-    else if (next < limit && source[next] === "\n") {
-      next++;
+    if (next < limit) {
+      if (next === carriageReturn) {
+        next += next + 1 < limit && source.charCodeAt(next + 1) === 10 ? 2 : 1;
+        carriageReturn = source.indexOf("\r", next);
+        if (lineFeed < next) {
+          lineFeed = source.indexOf("\n", next);
+        }
+      }
+      else {
+        next++;
+        lineFeed = source.indexOf("\n", next);
+      }
     }
     lines.push({ start, end, next });
     start = next;
