@@ -244,6 +244,7 @@ export class SyntaxState {
           ? candidate.update(binding, availableDefinitions)
           : new InlineRegion(this.#profile.inline, binding, availableDefinitions);
         regions[regionIndex] = region;
+        this.#regions.set(binding.id, region);
         regionsStable &&= candidate === previous?.regions[regionIndex] && revision === region.revision;
       }
 
@@ -254,12 +255,6 @@ export class SyntaxState {
       block.version = previous === void 0
         ? 0
         : fragmentStable ? previous.version : previous.version + 1;
-    }
-
-    for (let index = stableBlockCount; index < blocks.length; index++) {
-      for (const region of blocks[index].regions) {
-        this.#regions.set(region.id, region);
-      }
     }
 
     this.#view = view;
