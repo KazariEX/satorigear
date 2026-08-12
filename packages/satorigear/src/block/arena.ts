@@ -201,7 +201,12 @@ export class BlockArena {
       const current = stack.at(-1)!;
       const spec = this.#schema.frameByOpen[token.type];
       if (spec !== void 0) {
-        stack.push({ ...spec, children: [leaf(index)] });
+        stack.push({
+          block: spec.block,
+          close: spec.close,
+          children: [leaf(index)],
+          rule: spec.rule,
+        });
         continue;
       }
 
