@@ -1,14 +1,13 @@
 import type { PhrasingContent } from "mdast";
 import {
   appendInline,
+  appendInlineSequence,
   contentBounds,
   createInlineAccumulator,
   directLeaf,
   type InlineNodeBuilder,
-  inlineSequence,
   lineEnd,
 } from "../../../fragment/inline.ts";
-import { withSpan } from "../../../fragment/node.ts";
 import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -25,8 +24,8 @@ import {
   componentNameEnd,
   normalizeComponentName,
 } from "../attributes/syntax.ts";
+import type { SpannedNode } from "../../../fragment/node.ts";
 import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
-import type { InlineComponent } from "./types.ts";
 
 interface Candidate {
   children: Candidate[];
@@ -368,7 +367,7 @@ const buildInlineComponent: InlineNodeBuilder = (
   if (open === void 0) {
     throw new Error("InlineComponent does not contain an opener");
   }
-  const children: PhrasingContent[] = [];
+  const children: SpannedNode<PhrasingContent>[] = [];
   const labelOpen = directLeaf(nodeId, "InlineComponentLabelOpen", context);
   if (labelOpen !== void 0) {
     const [start, end] = contentBounds(
@@ -377,22 +376,19 @@ const buildInlineComponent: InlineNodeBuilder = (
       "InlineComponentLabelClose",
       context,
     );
-    inlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
+    appendInlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
   }
   const text = context.view.text.slice(
     inlineTokenStart(context.tokens, open) + 1,
     inlineTokenEnd(context.tokens, open),
   );
-  const value: InlineComponent = {
+  appendInline(accumulator, {
     type: "inlineComponent",
     name: normalizeComponentName(text),
     attributes: {},
     children,
-  };
-  appendInline(
-    accumulator,
-    withSpan(value, sourceSpan.start, sourceSpan.end),
-  );
+    position: sourceSpan,
+  });
   return true;
 };
 
@@ -410,18 +406,15 @@ const buildInlineSpan: InlineNodeBuilder = (
     "InlineSpanClose",
     context,
   );
-  const children: PhrasingContent[] = [];
-  inlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
-  const value: InlineComponent = {
+  const children: SpannedNode<PhrasingContent>[] = [];
+  appendInlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
+  appendInline(accumulator, {
     type: "inlineComponent",
     name: "span",
     attributes: {},
     children,
-  };
-  appendInline(
-    accumulator,
-    withSpan(value, sourceSpan.start, sourceSpan.end),
-  );
+    position: sourceSpan,
+  });
   return true;
 };
 

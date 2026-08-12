@@ -1,13 +1,13 @@
 import type { Delete, Emphasis, PhrasingContent, Strong } from "mdast";
 import {
   appendInline,
+  appendInlineSequence,
   contentBounds,
   createInlineAccumulator,
   type InlineNodeBuilder,
-  inlineSequence,
 } from "../../fragment/inline.ts";
-import { withSpan } from "../../fragment/node.ts";
 import { buildInlineText } from "./text.ts";
+import type { SpannedNode } from "../../fragment/node.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
 import type { InlineSyntaxDefinition } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -45,25 +45,22 @@ export interface StrikethroughOptions {
 
 type Formatting = Delete | Emphasis | Strong;
 
-function buildFormatting(type: Formatting["type"], boundary: "Emphasis" | "Strong"): InlineNodeBuilder {
+function createBuildFormatting(type: Formatting["type"], boundary: "Emphasis" | "Strong"): InlineNodeBuilder {
   const open = `${boundary}Open`;
   const close = `${boundary}Close`;
   return (nodeId, offset, endOffset, sourceSpan, accumulator) => {
     const context = accumulator.context;
     const [start, end] = contentBounds(nodeId, open, close, context);
-    const children: PhrasingContent[] = [];
-    inlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
-    appendInline(
-      accumulator,
-      withSpan<Formatting>({ type, children }, sourceSpan.start, sourceSpan.end),
-    );
+    const children: SpannedNode<PhrasingContent>[] = [];
+    appendInlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
+    appendInline(accumulator, { type, children, position: sourceSpan });
     return true;
   };
 }
 
-const buildInlineEmphasis = buildFormatting("emphasis", "Emphasis");
-const buildInlineStrong = buildFormatting("strong", "Strong");
-const buildInlineDelete = buildFormatting("delete", "Strong");
+const buildInlineEmphasis = createBuildFormatting("emphasis", "Emphasis");
+const buildInlineStrong = createBuildFormatting("strong", "Strong");
+const buildInlineDelete = createBuildFormatting("delete", "Strong");
 
 const buildInlineStrongOrDelete: InlineNodeBuilder = (
   nodeId,

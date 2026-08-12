@@ -1,11 +1,9 @@
-import type { Yaml } from "mdast";
 import { logicalToken, tokenStart } from "../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,
   normalizeLines,
 } from "../../fragment/block.ts";
-import { withSpan } from "../../fragment/node.ts";
 import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -70,11 +68,14 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
             if (value.endsWith("\n")) {
               value = value.slice(0, -1);
             }
-            return withSpan<Yaml>(
-              { type: "yaml", value },
-              tokenStart(token),
-              blockEnd(nodeId, offset, context),
-            );
+            return {
+              type: "yaml",
+              value,
+              position: {
+                start: tokenStart(token),
+                end: blockEnd(nodeId, offset, context),
+              },
+            };
           },
         },
       ],

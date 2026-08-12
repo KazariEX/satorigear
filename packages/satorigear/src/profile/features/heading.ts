@@ -6,8 +6,8 @@ import {
   blockToken,
   directBlockToken,
 } from "../../fragment/block.ts";
-import { inlineChildren } from "../../fragment/inline.ts";
-import { firstChildStart, withSpan } from "../../fragment/node.ts";
+import { buildInlineChildren } from "../../fragment/inline.ts";
+import { firstChildStart } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 function atxAt(source: string, line: BlockLine): {
@@ -78,11 +78,15 @@ export const feature: SyntaxFeature = {
         inlineContent: true,
         build(nodeId, offset, tokenBase, context) {
           const marker = blockToken(nodeId, tokenBase, "AtxHeadingOpen", context);
-          return withSpan<Heading>({
+          return {
             type: "heading",
             depth: tokenEnd(marker) - tokenStart(marker) as Heading["depth"],
-            children: inlineChildren(nodeId, context, true),
-          }, tokenStart(marker), blockEnd(nodeId, offset, context));
+            children: buildInlineChildren(nodeId, context, true),
+            position: {
+              start: tokenStart(marker),
+              end: blockEnd(nodeId, offset, context),
+            },
+          };
         },
       },
       {
@@ -101,16 +105,16 @@ export const feature: SyntaxFeature = {
           if (!levelOne) {
             blockToken(nodeId, tokenBase, "SetextHeading2Open", context);
           }
-          const result: Heading = {
+          const children = buildInlineChildren(nodeId, context);
+          return {
             type: "heading",
             depth: levelOne ? 1 : 2,
-            children: inlineChildren(nodeId, context),
+            children,
+            position: {
+              start: firstChildStart(children),
+              end: tokenStart(blockToken(nodeId, tokenBase, "HeadingClose", context)),
+            },
           };
-          return withSpan(
-            result,
-            firstChildStart(result),
-            tokenStart(blockToken(nodeId, tokenBase, "HeadingClose", context)),
-          );
         },
       },
     ],

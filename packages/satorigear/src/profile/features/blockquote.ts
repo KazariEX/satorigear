@@ -1,14 +1,12 @@
-import type { Blockquote } from "mdast";
 import { type BlockLine, isBlank, lineIndent, physicalColumnAt } from "../../block/lines.ts";
 import { structuralToken, tokenStart } from "../../block/tokens.ts";
 import {
-  blockChildren,
   blockEnd,
   blockToken,
+  buildBlockChildren,
   firstNonspace,
 } from "../../fragment/block.ts";
 import { lineEnd } from "../../fragment/inline.ts";
-import { withSpan } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface BlockQuoteMarker {
@@ -49,13 +47,15 @@ export const feature: SyntaxFeature = {
           close: "BlockQuoteClose",
         },
         build(nodeId, offset, tokenBase, context) {
-          const result: Blockquote = {
-            type: "blockquote",
-            children: blockChildren(nodeId, offset, tokenBase, context),
-          };
           const marker = blockToken(nodeId, tokenBase, "BlockQuoteOpen", context);
-          const start = firstNonspace(context.source, tokenStart(marker), lineEnd(context.source, offset));
-          return withSpan(result, start, blockEnd(nodeId, offset, context));
+          return {
+            type: "blockquote",
+            children: buildBlockChildren(nodeId, offset, tokenBase, context),
+            position: {
+              start: firstNonspace(context.source, tokenStart(marker), lineEnd(context.source, offset)),
+              end: blockEnd(nodeId, offset, context),
+            },
+          };
         },
       },
     ],

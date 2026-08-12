@@ -25,7 +25,7 @@ export function materialize(
   }
   return {
     type: "root",
-    children: nodes,
+    children: nodes as unknown as TopLevelContent[],
     position: { start, end: locate(sourceLength) },
   };
 }

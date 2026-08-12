@@ -9,7 +9,13 @@ export interface SpannedValue {
   position: SourceSpan;
 }
 
-export type SpannedNode<T extends object = Node> = T & SpannedValue;
+export type SpannedNode<T extends object = Node> = T extends unknown
+  ? Omit<T, "children" | "position"> & { position: SourceSpan } & (
+    T extends { children: readonly object[] }
+      ? { children: SpannedNode<T["children"][number]>[] }
+      : unknown
+  )
+  : never;
 
 export interface BlockFragment {
   node: SpannedNode<TopLevelContent>;
@@ -19,26 +25,20 @@ export interface BlockFragment {
   version: number;
 }
 
-export function withSpan<const T extends object>(value: T, start: number, end: number): SpannedNode<T> {
-  const node = value as SpannedNode<T>;
-  node.position = { start, end };
-  return node;
-}
-
 export function extendSpan(value: object, end: number): void {
   const node = value as SpannedValue;
   node.position.end = Math.max(node.position.end, end);
 }
 
-export function firstChildStart(value: { children: readonly object[] }): number {
-  const first = value.children[0];
+export function firstChildStart(children: readonly SpannedValue[]): number {
+  const first = children[0];
   if (!first) {
     throw new Error("mdast container unexpectedly has no children");
   }
-  return (first as SpannedValue).position.start;
+  return first.position.start;
 }
 
-export function lastChildEnd(value: { children: readonly object[] }, emptyEnd: number): number {
-  const last = value.children.at(-1);
-  return last ? (last as SpannedValue).position.end : emptyEnd;
+export function lastChildEnd(children: readonly SpannedValue[], emptyEnd: number): number {
+  const last = children.at(-1);
+  return last ? last.position.end : emptyEnd;
 }

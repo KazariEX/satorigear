@@ -1,4 +1,3 @@
-import type { FootnoteDefinition } from "mdast";
 import {
   type BlockLine,
   contentAfterColumns,
@@ -8,11 +7,10 @@ import {
 } from "../../../block/lines.ts";
 import { type BlockToken, structuralToken, tokenStart } from "../../../block/tokens.ts";
 import {
-  blockChildren,
   blockEnd,
   blockToken,
+  buildBlockChildren,
 } from "../../../fragment/block.ts";
-import { withSpan } from "../../../fragment/node.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
@@ -93,12 +91,16 @@ export const blockRules: BlockFeature["rules"] = [
     build(nodeId, offset, tokenBase, context) {
       const token = blockToken(nodeId, tokenBase, "FootnoteDefinitionOpen", context);
       const fields = definitionFields(token);
-      return withSpan<FootnoteDefinition>({
+      return {
         type: "footnoteDefinition",
         identifier: fields.normalizedLabel.toLowerCase(),
         label: semanticText(fields.label),
-        children: blockChildren(nodeId, offset, tokenBase, context),
-      }, tokenStart(token), blockEnd(nodeId, offset, context));
+        children: buildBlockChildren(nodeId, offset, tokenBase, context),
+        position: {
+          start: tokenStart(token),
+          end: blockEnd(nodeId, offset, context),
+        },
+      };
     },
     definitionKey(token) {
       return definitionFields(token).definitionKey;

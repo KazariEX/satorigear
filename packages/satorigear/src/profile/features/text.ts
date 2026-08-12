@@ -1,10 +1,8 @@
 import { decodeHTMLStrict } from "entities";
-import type { Text } from "mdast";
 import {
   appendInline,
   type InlineLeafBuilder,
 } from "../../fragment/inline.ts";
-import { withSpan } from "../../fragment/node.ts";
 import { InlineTokenFlag, inlineTokenFlags, inlineTokenText } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -22,12 +20,13 @@ export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, accum
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   appendInline(
     accumulator,
-    withSpan<Text>({
+    {
       type: "text",
       value: inlineTokenFlags(context.tokens, tokenIndex) & InlineTokenFlag.DecodeText
         ? semanticText(text)
         : text,
-    }, sourceSpan.start, sourceSpan.end),
+      position: sourceSpan,
+    },
   );
   return true;
 };

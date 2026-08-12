@@ -1,4 +1,4 @@
-import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdast";
+import type { Blockquote, Heading, List, Paragraph } from "mdast";
 import { lineEnd } from "../../../fragment/inline.ts";
 import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
 import { inlineKind } from "../../../inline/kinds.ts";
@@ -24,7 +24,6 @@ import {
 import { attributesEnd, parseAttributes } from "./syntax.ts";
 import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
 import type { SyntaxFeature } from "../../types.ts";
-import type { Attributes } from "./types.ts";
 
 interface AttributeRange {
   detached: boolean;
@@ -196,7 +195,7 @@ export const feature: SyntaxFeature = {
         kind: "leaf",
         token: "Attributes",
         build(tokenIndex, sourceSpan, accumulator) {
-          const previous = accumulator.target.at(-1) as (PhrasingContent & { attributes?: Attributes }) | undefined;
+          const previous = accumulator.target.at(-1);
           const parsed = parseAttributes(accumulator.context.view.text, inlineTokenStart(accumulator.context.tokens, tokenIndex));
           if (!previous || !parsed) {
             return false;

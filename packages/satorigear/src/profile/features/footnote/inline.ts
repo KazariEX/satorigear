@@ -1,6 +1,4 @@
-import type { FootnoteReference } from "mdast";
 import { appendInline } from "../../../fragment/inline.ts";
-import { withSpan } from "../../../fragment/node.ts";
 import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -148,11 +146,12 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
       const { context } = accumulator;
       const source = inlineTokenText(context.view.text, context.tokens, tokenIndex);
       const label = source.slice(2, -1);
-      appendInline(accumulator, withSpan<FootnoteReference>({
+      appendInline(accumulator, {
         type: "footnoteReference",
         identifier: normalizeAssociationLabel(label).toLowerCase(),
         label: semanticText(label),
-      }, sourceSpan.start, sourceSpan.end));
+        position: sourceSpan,
+      });
       return true;
     },
   },

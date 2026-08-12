@@ -1,4 +1,3 @@
-import type { Code, InlineCode } from "mdast";
 import {
   closesFence,
   type Fence,
@@ -16,11 +15,9 @@ import {
   firstNonspace,
   normalizeLines,
 } from "../../fragment/block.ts";
-import { appendInline, type InlineAccumulator, lineEnd } from "../../fragment/inline.ts";
-import { withSpan } from "../../fragment/node.ts";
+import { appendInline, type InlineLeafBuilder, lineEnd } from "../../fragment/inline.ts";
 import { inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
-import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const codeFenceRule: FenceRule = {
@@ -45,57 +42,22 @@ function codeSpanValue(value: string): string {
   return result;
 }
 
-export function buildCodeSpan(
-  tokenIndex: number,
-  sourceSpan: SourceSpan,
-  accumulator: InlineAccumulator,
-  decodeTablePipe = false,
-): boolean {
+export const buildInlineCode: InlineLeafBuilder = (tokenIndex, sourceSpan, accumulator) => {
   const { context } = accumulator;
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   const value = codeSpanValue(text);
   appendInline(
     accumulator,
-    withSpan<InlineCode>(
-      {
-        type: "inlineCode",
-        value: decodeTablePipe ? value.replace(/\\\|/g, "|") : value,
-      },
-      sourceSpan.start,
-      sourceSpan.end,
-    ),
+    {
+      type: "inlineCode",
+      value: context.blockRule === "TableCell"
+        ? value.replace(/\\\|/g, "|")
+        : value,
+      position: sourceSpan,
+    },
   );
   return true;
-}
-
-function fencedCode(value: string): { closed: boolean; node: Code } {
-  const source = normalizeLines(value);
-  const block = readFencedBlock(source, codeFenceRule);
-  const rawInfo = semanticText(block.info);
-  const langEnd = rawInfo.search(/[ \t]/);
-  const lang = rawInfo ? langEnd < 0 ? rawInfo : rawInfo.slice(0, langEnd) : null;
-  const metaStart = langEnd < 0 ? -1 : rawInfo.slice(langEnd).search(/[^ \t]/);
-  return {
-    closed: block.closed,
-    node: {
-      type: "code",
-      lang,
-      meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
-      value: fencedBlockContent(source, block),
-    },
-  };
-}
-
-function indentedCode(value: string): Code {
-  const lines = normalizeLines(value).split("\n").map((line) => removeIndent(line, 4));
-  while (lines.length) {
-    if (!/^[ \t]*$/.test(lines[lines.length - 1])) {
-      break;
-    }
-    lines.pop();
-  }
-  return { type: "code", lang: null, meta: null, value: lines.join("\n") };
-}
+};
 
 function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockBuildContext): number {
   const token = blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context);
@@ -137,13 +99,24 @@ export const feature: SyntaxFeature = {
         },
         build(nodeId, offset, tokenBase, context) {
           const end = offset + context.view.arena.lenOf(nodeId);
-          const fence = fencedCode(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
-          const codeEnd = fence.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end;
-          return withSpan(
-            fence.node,
-            firstNonspace(context.source, offset, lineEnd(context.source, offset)),
-            codeEnd,
-          );
+          const source = normalizeLines(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
+          const block = readFencedBlock(source, codeFenceRule);
+          const rawInfo = semanticText(block.info);
+          const langEnd = rawInfo.search(/[ \t]/);
+          const lang = rawInfo ? langEnd < 0 ? rawInfo : rawInfo.slice(0, langEnd) : null;
+          const metaStart = langEnd < 0 ? -1 : rawInfo.slice(langEnd).search(/[^ \t]/);
+          return {
+            type: "code",
+            lang,
+            meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
+            value: fencedBlockContent(source, block),
+            position: {
+              start: firstNonspace(context.source, offset, lineEnd(context.source, offset)),
+              end: block.closed || end < context.source.length
+                ? blockEnd(nodeId, offset, context)
+                : end,
+            },
+          };
         },
       },
       {
@@ -153,11 +126,18 @@ export const feature: SyntaxFeature = {
           token: "IndentedCodeBlockToken",
         },
         build(nodeId, offset, tokenBase, context) {
-          return withSpan(
-            indentedCode(blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context).text),
-            offset,
-            indentedCodeEnd(nodeId, tokenBase, context),
-          );
+          const token = blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context);
+          const lines = normalizeLines(token.text).split("\n").map((line) => removeIndent(line, 4));
+          while (lines.length && /^[ \t]*$/.test(lines[lines.length - 1])) {
+            lines.pop();
+          }
+          return {
+            type: "code",
+            lang: null,
+            meta: null,
+            value: lines.join("\n"),
+            position: { start: offset, end: indentedCodeEnd(nodeId, tokenBase, context) },
+          };
         },
       },
     ],
@@ -190,7 +170,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: "CodeSpan",
-        build: buildCodeSpan,
+        build: buildInlineCode,
       },
     ],
   },

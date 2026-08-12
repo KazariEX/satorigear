@@ -1,8 +1,6 @@
-import type { Definition } from "mdast";
 import { type BlockLine, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
 import { namedToken, structuralToken } from "../../block/tokens.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
-import { withSpan } from "../../fragment/node.ts";
 import { inlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -418,13 +416,17 @@ export const feature: SyntaxFeature = {
         build(nodeId, offset, tokenBase, context) {
           const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
           const fields = linkDefinitionFields(token);
-          return withSpan<Definition>({
+          return {
             type: "definition",
             identifier: fields.definitionKey.toLowerCase(),
             label: semanticText(fields.label),
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),
-          }, token.offset + fields.markerOffset, blockEnd(nodeId, offset, context));
+            position: {
+              start: token.offset + fields.markerOffset,
+              end: blockEnd(nodeId, offset, context),
+            },
+          };
         },
         definitionKey(token) {
           return linkDefinitionFields(token).definitionKey;

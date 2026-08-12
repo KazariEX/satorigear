@@ -1,9 +1,8 @@
-import type { Paragraph } from "mdast";
 import { type BlockLine, indentOf, isBlank } from "../../block/lines.ts";
 import { type BlockToken, namedToken, structuralToken } from "../../block/tokens.ts";
 import { blockEnd } from "../../fragment/block.ts";
-import { inlineChildren } from "../../fragment/inline.ts";
-import { firstChildStart, withSpan } from "../../fragment/node.ts";
+import { buildInlineChildren } from "../../fragment/inline.ts";
+import { firstChildStart } from "../../fragment/node.ts";
 import { setextMarkerAt } from "./heading.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -69,8 +68,15 @@ export const feature: SyntaxFeature = {
         },
         inlineContent: true,
         build(nodeId, offset, tokenBase, context) {
-          const result: Paragraph = { type: "paragraph", children: inlineChildren(nodeId, context) };
-          return withSpan(result, firstChildStart(result), blockEnd(nodeId, offset, context));
+          const children = buildInlineChildren(nodeId, context);
+          return {
+            type: "paragraph",
+            children,
+            position: {
+              start: firstChildStart(children),
+              end: blockEnd(nodeId, offset, context),
+            },
+          };
         },
       },
     ],

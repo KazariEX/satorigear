@@ -1,8 +1,6 @@
-import type { Break, Text, ThematicBreak } from "mdast";
 import { namedToken } from "../../block/tokens.ts";
 import { blockEnd, firstNonspace } from "../../fragment/block.ts";
 import { appendInline } from "../../fragment/inline.ts";
-import { withSpan } from "../../fragment/node.ts";
 import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -35,11 +33,13 @@ export const feature: SyntaxFeature = {
         },
         build(nodeId, offset, tokenBase, context) {
           const end = offset + context.view.arena.lenOf(nodeId);
-          return withSpan<ThematicBreak>(
-            { type: "thematicBreak" },
-            firstNonspace(context.source, offset, end),
-            blockEnd(nodeId, offset, context),
-          );
+          return {
+            type: "thematicBreak",
+            position: {
+              start: firstNonspace(context.source, offset, end),
+              end: blockEnd(nodeId, offset, context),
+            },
+          };
         },
       },
     ],
@@ -68,7 +68,7 @@ export const feature: SyntaxFeature = {
         build(tokenIndex, sourceSpan, accumulator) {
           appendInline(
             accumulator,
-            withSpan<Break>({ type: "break" }, sourceSpan.start, sourceSpan.end),
+            { type: "break", position: sourceSpan },
           );
           return true;
         },
@@ -79,7 +79,7 @@ export const feature: SyntaxFeature = {
         build(tokenIndex, sourceSpan, accumulator) {
           appendInline(
             accumulator,
-            withSpan<Text>({ type: "text", value: "\n" }, sourceSpan.start, sourceSpan.end),
+            { type: "text", value: "\n", position: sourceSpan },
           );
           return true;
         },

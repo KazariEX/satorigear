@@ -1,4 +1,4 @@
-import type { PhrasingContent, Text } from "mdast";
+import type { PhrasingContent } from "mdast";
 import {
   inlineTokenCount,
   inlineTokenEnd,
@@ -6,7 +6,7 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
 } from "../inline/tokens.ts";
-import { extendSpan, type SpannedNode, type SpannedValue, withSpan } from "./node.ts";
+import { extendSpan, type SpannedNode } from "./node.ts";
 import type { InlineArena } from "../inline/arena.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
@@ -25,7 +25,7 @@ export interface InlineAccumulator {
   context: InlineBuildContext;
   gapEnd: number;
   gapStart: number;
-  target: PhrasingContent[];
+  target: SpannedNode<PhrasingContent>[];
 }
 
 export type InlineLeafBuilder = (
@@ -41,14 +41,6 @@ export type InlineNodeBuilder = (
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
 ) => boolean;
-
-export const buildInlineChildren: InlineNodeBuilder = (
-  nodeId,
-  offset,
-  endOffset,
-  sourceSpan,
-  accumulator,
-) => inlineSequence(nodeId, offset, accumulator);
 
 function inlineTokenIndex(context: InlineBuildContext, tokenIndex: number): number {
   if (tokenIndex < 0 || tokenIndex >= inlineTokenCount(context.tokens)) {
@@ -110,7 +102,7 @@ export function leaf(nodeId: number, tokenType: string, context: InlineBuildCont
   return result;
 }
 
-function appendText(target: PhrasingContent[], value: string, start: number, end: number): void {
+function appendText(target: SpannedNode<PhrasingContent>[], value: string, start: number, end: number): void {
   if (!value) {
     return;
   }
@@ -120,14 +112,16 @@ function appendText(target: PhrasingContent[], value: string, start: number, end
     extendSpan(previous, end);
   }
   else {
-    target.push(withSpan<Text>({ type: "text", value }, start, end));
+    target.push({ type: "text", value, position: { start, end } });
   }
 }
 
-function appendPhrasing(target: PhrasingContent[], value: PhrasingContent): void {
+function appendPhrasing(
+  target: SpannedNode<PhrasingContent>[],
+  value: SpannedNode<PhrasingContent>,
+): void {
   if (value.type === "text") {
-    const node = value as PhrasingContent & SpannedValue;
-    appendText(target, value.value, node.position.start, node.position.end);
+    appendText(target, value.value, value.position.start, value.position.end);
   }
   else {
     target.push(value);
@@ -136,7 +130,7 @@ function appendPhrasing(target: PhrasingContent[], value: PhrasingContent): void
 
 export function createInlineAccumulator(
   context: InlineBuildContext,
-  target: PhrasingContent[],
+  target: SpannedNode<PhrasingContent>[],
 ): InlineAccumulator {
   return { context, gapEnd: -1, gapStart: -1, target };
 }
@@ -178,7 +172,7 @@ export function appendInline(
       extendSpan(previous, lineStart(context.source, nextLineOffset));
       return;
     }
-    (value as unknown as SpannedValue).position.start = lineEndingStart(context.source, nextLineOffset);
+    value.position.start = lineEndingStart(context.source, nextLineOffset);
     if (previous?.type === "text") {
       previous.value = previous.value.slice(0, trailingWhitespaceStart(previous.value));
     }
@@ -219,7 +213,15 @@ function trailingWhitespaceStart(value: string): number {
   return offset;
 }
 
-export function inlineSequence(
+export const appendInlineContents: InlineNodeBuilder = (
+  nodeId,
+  offset,
+  endOffset,
+  sourceSpan,
+  accumulator,
+) => appendInlineSequence(nodeId, offset, accumulator);
+
+export function appendInlineSequence(
   nodeId: number,
   offset: number,
   accumulator: InlineAccumulator,
@@ -276,11 +278,11 @@ function appendInlineNode(
   return build(nodeId, offset, endOffset, sourceSpan, accumulator);
 }
 
-export function inlineChildren(
+export function buildInlineChildren(
   nodeId: number,
   context: BlockBuildContext,
   allowEmpty = false,
-): PhrasingContent[] {
+): SpannedNode<PhrasingContent>[] {
   const region = context.inline.take(nodeId);
   if (!region) {
     const rule = context.view.arena.ruleNameOf(nodeId);
@@ -298,8 +300,8 @@ export function inlineChildren(
     tokens: region.tokens,
     view: region.view,
   };
-  const result: PhrasingContent[] = [];
-  inlineSequence(
+  const result: SpannedNode<PhrasingContent>[] = [];
+  appendInlineSequence(
     region.preparedRoot,
     inlineTokenCount(region.tokens) > 0
       ? inlineTokenStart(region.tokens, 0)
@@ -311,7 +313,7 @@ export function inlineChildren(
     const end = trailingWhitespaceStart(last.value);
     const removed = last.value.length - end;
     last.value = last.value.slice(0, end);
-    (last as unknown as SpannedValue).position.end -= removed;
+    last.position.end -= removed;
     if (!last.value) {
       result.pop();
     }

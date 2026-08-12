@@ -1,4 +1,3 @@
-import type { Html } from "mdast";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { type BlockToken, logicalToken } from "../../block/tokens.ts";
 import {
@@ -7,7 +6,6 @@ import {
   normalizeLines,
 } from "../../fragment/block.ts";
 import { appendInline, type InlineLeafBuilder } from "../../fragment/inline.ts";
-import { withSpan } from "../../fragment/node.ts";
 import { inlineTokenText } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -138,7 +136,7 @@ const buildInlineHtml: InlineLeafBuilder = (tokenIndex, sourceSpan, accumulator)
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   appendInline(
     accumulator,
-    withSpan<Html>({ type: "html", value: text }, sourceSpan.start, sourceSpan.end),
+    { type: "html", value: text, position: sourceSpan },
   );
   return true;
 };
@@ -159,11 +157,14 @@ export const feature: SyntaxFeature = {
           if (!token.unterminated && html.endsWith("\n")) {
             html = html.slice(0, -1);
           }
-          return withSpan<Html>(
-            { type: "html", value: html },
-            offset,
-            html.endsWith("\n") ? end : blockEnd(nodeId, offset, context),
-          );
+          return {
+            type: "html",
+            value: html,
+            position: {
+              start: offset,
+              end: html.endsWith("\n") ? end : blockEnd(nodeId, offset, context),
+            },
+          };
         },
       },
     ],

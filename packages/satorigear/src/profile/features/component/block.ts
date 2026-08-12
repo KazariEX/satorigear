@@ -4,13 +4,12 @@ import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
 import { logicalToken, namedToken, structuralToken, tokenEnd, tokenStart } from "../../../block/tokens.ts";
 import {
-  blockChildren,
   type BlockNodeBuilder,
   blockToken,
+  buildBlockChildren,
   directBlockToken,
 } from "../../../fragment/block.ts";
-import { inlineChildren } from "../../../fragment/inline.ts";
-import { type SpannedNode, withSpan } from "../../../fragment/node.ts";
+import { buildInlineChildren } from "../../../fragment/inline.ts";
 import {
   attributesEnd,
   closingBracket,
@@ -20,8 +19,8 @@ import {
 } from "../attributes/syntax.ts";
 import { codeFenceAt } from "../code.ts";
 import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
+import type { SpannedNode } from "../../../fragment/node.ts";
 import type { Attributes } from "../attributes/types.ts";
-import type { BlockComponent } from "./types.ts";
 
 interface BlockOpening {
   attributesEnd?: number;
@@ -386,34 +385,36 @@ function parseYamlAttributes(
 
 function directRule(
   nodeId: number,
+  offset: number,
   tokenBase: number,
   rule: string,
   context: Parameters<BlockNodeBuilder>[3],
-): { id: number; tokenBase: number } | undefined {
+): { id: number; offset: number; tokenBase: number } | undefined {
   const arena = context.view.arena;
   for (let index = 0; index < arena.childCount(nodeId); index++) {
     const child = arena.childAt(nodeId, index);
     if (child >= 0 && arena.ruleNameOf(child) === rule) {
       return {
         id: child,
+        offset: offset + arena.childRelAt(nodeId, index),
         tokenBase: tokenBase + arena.childTokRelAt(nodeId, index),
       };
     }
   }
 }
 
-function blockLabel(
-  nodeId: number,
-  tokenBase: number,
-  context: Parameters<BlockNodeBuilder>[3],
-): SpannedNode<Paragraph> {
+const buildBlockLabel: BlockNodeBuilder<Paragraph> = (nodeId, offset, tokenBase, context) => {
   const open = blockToken(nodeId, tokenBase, "BlockComponentLabelOpen", context);
   const close = blockToken(nodeId, tokenBase, "BlockComponentLabelClose", context);
-  return withSpan<Paragraph>({
+  return {
     type: "paragraph",
-    children: inlineChildren(nodeId, context, true),
-  }, tokenStart(open), tokenEnd(close));
-}
+    children: buildInlineChildren(nodeId, context, true),
+    position: {
+      start: tokenStart(open),
+      end: tokenEnd(close),
+    },
+  };
+};
 
 function createBlockStart(shorthand: boolean): BlockStart {
   return (source, lines, start, out, contentOffset, context) => {
@@ -458,9 +459,7 @@ export const blockRules: BlockFeature["rules"] = [
       close: "BlockComponentLabelClose",
     },
     inlineContent: true,
-    build(nodeId, offset, tokenBase, context) {
-      return blockLabel(nodeId, tokenBase, context);
-    },
+    build: buildBlockLabel,
   },
   {
     rule: "BlockComponent",
@@ -475,21 +474,24 @@ export const blockRules: BlockFeature["rules"] = [
       const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
       const parsed = attributesToken ? parseAttributes(context.source, tokenStart(attributesToken)) : void 0;
       const yamlToken = directBlockToken(nodeId, tokenBase, "BlockComponentYamlProps", context);
-      const label = directRule(nodeId, tokenBase, "BlockComponentLabel", context);
-      const children: RootContent[] = [];
+      const label = directRule(nodeId, offset, tokenBase, "BlockComponentLabel", context);
+      const children: SpannedNode<RootContent>[] = [];
       if (label) {
-        children.push(blockLabel(label.id, label.tokenBase, context));
+        children.push(buildBlockLabel(label.id, label.offset, label.tokenBase, context));
       }
-      children.push(...blockChildren(nodeId, offset, tokenBase, context));
-      const value: BlockComponent = {
+      children.push(...buildBlockChildren(nodeId, offset, tokenBase, context));
+      return {
         type: "blockComponent",
         name: normalizeComponentName(open.text.slice(open.text.lastIndexOf(":") + 1).trim()),
         attributes: yamlToken
           ? { ...parseYamlAttributes(yamlToken), ...parsed?.attributes }
           : (parsed?.attributes ?? {}),
+        position: {
+          start: tokenStart(open),
+          end: tokenEnd(close),
+        },
         children,
       };
-      return withSpan(value, tokenStart(open), tokenEnd(close));
     },
   },
   {
@@ -504,8 +506,8 @@ export const blockRules: BlockFeature["rules"] = [
       const close = blockToken(nodeId, tokenBase, "BlockComponentSlotClose", context);
       const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
       const parsed = attributesToken ? parseAttributes(context.source, tokenStart(attributesToken)) : void 0;
-      const children = blockChildren(nodeId, offset, tokenBase, context);
-      const value: BlockComponent = {
+      const children = buildBlockChildren(nodeId, offset, tokenBase, context);
+      return {
         type: "blockComponent",
         name: "template",
         attributes: {
@@ -513,8 +515,11 @@ export const blockRules: BlockFeature["rules"] = [
           name: normalizeComponentName(open.text.slice(1).trim()),
         },
         children,
+        position: {
+          start: tokenStart(open),
+          end: tokenEnd(close),
+        },
       };
-      return withSpan(value, tokenStart(open), tokenEnd(close));
     },
   },
 ];

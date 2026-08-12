@@ -1,18 +1,18 @@
-import type { Image, ImageReference, Link, LinkReference, PhrasingContent, Text } from "mdast";
+import type { PhrasingContent } from "mdast";
 import {
   appendInline,
-  buildInlineChildren,
+  appendInlineContents,
+  appendInlineSequence,
   contentBounds,
   createInlineAccumulator,
   type InlineAccumulator,
   type InlineNodeBuilder,
-  inlineSequence,
   leaf,
 } from "../../fragment/inline.ts";
-import { type SpannedNode, withSpan } from "../../fragment/node.ts";
 import { inlineTokenText } from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { buildInlineText, semanticText } from "./text.ts";
+import type { SpannedNode } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface Reference {
@@ -102,7 +102,7 @@ function reference(
   };
 }
 
-function phrasingText(children: readonly PhrasingContent[]): string {
+function phrasingText(children: readonly SpannedNode<PhrasingContent>[]): string {
   let result = "";
   for (const child of children) {
     if (child.type === "text" || child.type === "inlineCode" || child.type === "html") {
@@ -121,54 +121,49 @@ function phrasingText(children: readonly PhrasingContent[]): string {
   return result;
 }
 
-function linkOrImage(
-  nodeId: number,
-  offset: number,
-  endOffset: number,
-  sourceSpan: { end: number; start: number },
-  context: InlineAccumulator["context"],
-  media: "image" | "link",
-  resourceKind: "direct" | "reference",
-): SpannedNode<Image | ImageReference | Link | LinkReference> {
+function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineNodeBuilder {
   const image = media === "image";
   const referenceNode = resourceKind === "reference";
   const prefix = image ? "Image" : "";
   const resourcePrefix = referenceNode ? "Reference" : "Link";
-  const [start, end] = contentBounds(
-    nodeId,
-    `${prefix + resourcePrefix}Open`,
-    `${prefix + resourcePrefix}Close`,
-    context,
-  );
-  const children: PhrasingContent[] = [];
-  inlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
-  if (referenceNode) {
-    const association = reference(nodeId, offset, endOffset, context, image);
-    return image
-      ? withSpan<ImageReference>({ type: "imageReference", alt: phrasingText(children), ...association }, sourceSpan.start, sourceSpan.end)
-      : withSpan<LinkReference>({ type: "linkReference", children, ...association }, sourceSpan.start, sourceSpan.end);
-  }
-  const closeIndex = leaf(nodeId, `${prefix}LinkClose`, context);
-  const resource = destinationTitle(inlineTokenText(context.view.text, context.tokens, closeIndex).slice(2, -1));
-  return image
-    ? withSpan<Image>({ type: "image", alt: phrasingText(children), ...resource }, sourceSpan.start, sourceSpan.end)
-    : withSpan<Link>({ type: "link", children, ...resource }, sourceSpan.start, sourceSpan.end);
-}
 
-function buildMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineNodeBuilder {
   return (nodeId, offset, endOffset, sourceSpan, accumulator) => {
-    appendInline(
-      accumulator,
-      linkOrImage(nodeId, offset, endOffset, sourceSpan, accumulator.context, media, resourceKind),
+    const context = accumulator.context;
+    const [start, end] = contentBounds(
+      nodeId,
+      `${prefix + resourcePrefix}Open`,
+      `${prefix + resourcePrefix}Close`,
+      context,
     );
+    const children: SpannedNode<PhrasingContent>[] = [];
+    appendInlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
+    if (referenceNode) {
+      const association = reference(nodeId, offset, endOffset, context, image);
+      appendInline(
+        accumulator,
+        image
+          ? { type: "imageReference", alt: phrasingText(children), ...association, position: sourceSpan }
+          : { type: "linkReference", children, ...association, position: sourceSpan },
+      );
+    }
+    else {
+      const closeIndex = leaf(nodeId, `${prefix}LinkClose`, context);
+      const resource = destinationTitle(inlineTokenText(context.view.text, context.tokens, closeIndex).slice(2, -1));
+      appendInline(
+        accumulator,
+        image
+          ? { type: "image", alt: phrasingText(children), ...resource, position: sourceSpan }
+          : { type: "link", children, ...resource, position: sourceSpan },
+      );
+    }
     return true;
   };
 }
 
-const buildInlineImage = buildMedia("image", "direct");
-const buildInlineReferenceImage = buildMedia("image", "reference");
-const buildInlineLink = buildMedia("link", "direct");
-const buildInlineReferenceLink = buildMedia("link", "reference");
+const buildInlineImage = createBuildMedia("image", "direct");
+const buildInlineReferenceImage = createBuildMedia("image", "reference");
+const buildInlineLink = createBuildMedia("link", "direct");
+const buildInlineReferenceLink = createBuildMedia("link", "reference");
 
 export const feature: SyntaxFeature = {
   inline: {
@@ -199,7 +194,7 @@ export const feature: SyntaxFeature = {
       },
       {
         kind: "fallback",
-        build: buildInlineChildren,
+        build: appendInlineContents,
         tokens: [
           "ImageOpen",
           "BracketOpen",
@@ -224,14 +219,19 @@ export const feature: SyntaxFeature = {
           const { context } = accumulator;
           const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
           const label = text.slice(1, -1);
-          appendInline(accumulator, withSpan<Link>({
+          appendInline(accumulator, {
             type: "link",
             url: label.includes(":") ? label : `mailto:${label}`,
             title: null,
             children: [
-              withSpan<Text>({ type: "text", value: label }, sourceSpan.start + 1, sourceSpan.end - 1),
+              {
+                type: "text",
+                value: label,
+                position: { start: sourceSpan.start + 1, end: sourceSpan.end - 1 },
+              },
             ],
-          }, sourceSpan.start, sourceSpan.end));
+            position: sourceSpan,
+          });
           return true;
         },
       },

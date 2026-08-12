@@ -12,29 +12,14 @@ import {
   firstNonspace,
 } from "../../../fragment/block.ts";
 import { lineEnd } from "../../../fragment/inline.ts";
-import { withSpan } from "../../../fragment/node.ts";
 import { semanticText } from "../text.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
-import type { Math } from "./types.ts";
 
 const mathFenceRule: FenceRule = {
   forbiddenInfoMarkers: "$",
   markers: "$",
   minimumLength: 2,
 };
-
-function mathBlock(value: string): { closed: boolean; node: Math } {
-  const block = readFencedBlock(value, mathFenceRule);
-  const meta = semanticText(block.info);
-  return {
-    closed: block.closed,
-    node: {
-      type: "math",
-      meta: meta || null,
-      value: fencedBlockContent(value, block, "columns"),
-    },
-  };
-}
 
 export const blockRules: BlockFeature["rules"] = [
   {
@@ -45,12 +30,18 @@ export const blockRules: BlockFeature["rules"] = [
     },
     build(nodeId, offset, tokenBase, context) {
       const end = offset + context.view.arena.lenOf(nodeId);
-      const math = mathBlock(blockToken(nodeId, tokenBase, "MathBlockToken", context).text);
-      return withSpan(
-        math.node,
-        firstNonspace(context.source, offset, lineEnd(context.source, offset)),
-        math.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end,
-      );
+      const value = blockToken(nodeId, tokenBase, "MathBlockToken", context).text;
+      const block = readFencedBlock(value, mathFenceRule);
+      const meta = semanticText(block.info);
+      return {
+        type: "math",
+        meta: meta || null,
+        value: fencedBlockContent(value, block, "columns"),
+        position: {
+          start: firstNonspace(context.source, offset, lineEnd(context.source, offset)),
+          end: block.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end,
+        },
+      };
     },
   },
 ];

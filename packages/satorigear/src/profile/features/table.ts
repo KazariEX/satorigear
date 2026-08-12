@@ -1,13 +1,13 @@
-import type { AlignType, Table, TableCell, TableRow } from "mdast";
+import type { AlignType, TableCell, TableRow } from "mdast";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { type BlockToken, namedToken, structuralToken, tokenStart } from "../../block/tokens.ts";
 import {
   type BlockBuildContext,
+  type BlockNodeBuilder,
   blockToken,
 } from "../../fragment/block.ts";
-import { inlineChildren } from "../../fragment/inline.ts";
-import { withSpan } from "../../fragment/node.ts";
-import { buildCodeSpan } from "./code.ts";
+import { buildInlineChildren } from "../../fragment/inline.ts";
+import { buildInlineCode } from "./code.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface CellRange {
@@ -179,33 +179,24 @@ function childRules(
   return result;
 }
 
-function buildCell(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockBuildContext,
-): TableCell {
+const buildTableCell: BlockNodeBuilder<TableCell> = (nodeId, offset, tokenBase, context) => {
   const open = blockToken(nodeId, tokenBase, "TableCellOpen", context);
   const close = blockToken(nodeId, tokenBase, "TableCellClose", context);
-  return withSpan<TableCell>({
+  return {
     type: "tableCell",
-    children: inlineChildren(nodeId, context, true),
-  }, tokenStart(open), tokenStart(close));
-}
+    children: buildInlineChildren(nodeId, context, true),
+    position: { start: tokenStart(open), end: tokenStart(close) },
+  };
+};
 
-function buildRow(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockBuildContext,
-): TableRow {
+const buildTableRow: BlockNodeBuilder<TableRow> = (nodeId, offset, tokenBase, context) => {
   const open = blockToken(nodeId, tokenBase, "TableRowOpen", context);
   const close = blockToken(nodeId, tokenBase, "TableRowClose", context);
   const children = childRules(nodeId, offset, tokenBase, "TableCell", context).map((cell) => (
-    buildCell(cell.id, cell.offset, cell.tokenBase, context)
+    buildTableCell(cell.id, cell.offset, cell.tokenBase, context)
   ));
-  return withSpan<TableRow>({ type: "tableRow", children }, tokenStart(open), tokenStart(close));
-}
+  return { type: "tableRow", children, position: { start: tokenStart(open), end: tokenStart(close) } };
+};
 
 function tableAlignment(
   nodeId: number,
@@ -314,17 +305,18 @@ export const feature: SyntaxFeature = {
           const open = blockToken(nodeId, tokenBase, "TableOpen", context);
           const close = blockToken(nodeId, tokenBase, "TableClose", context);
           const rows = childRules(nodeId, offset, tokenBase, "TableRow", context).map((row) => (
-            buildRow(row.id, row.offset, row.tokenBase, context)
+            buildTableRow(row.id, row.offset, row.tokenBase, context)
           ));
           const delimiter = childRules(nodeId, offset, tokenBase, "TableDelimiter", context)[0];
           if (!delimiter) {
             throw new Error("Table syntax does not contain a delimiter");
           }
-          return withSpan<Table>({
+          return {
             type: "table",
             align: tableAlignment(delimiter.id, delimiter.tokenBase, context),
             children: rows,
-          }, tokenStart(open), tokenStart(close));
+            position: { start: tokenStart(open), end: tokenStart(close) },
+          };
         },
       },
     ],
@@ -334,15 +326,8 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: "CodeSpan",
-        build(tokenIndex, sourceSpan, accumulator) {
         // GFM removes a pipe escape inside table code spans, while CommonMark code spans preserve it.
-          return buildCodeSpan(
-            tokenIndex,
-            sourceSpan,
-            accumulator,
-            accumulator.context.blockRule === "TableCell",
-          );
-        },
+        build: buildInlineCode,
       },
     ],
   },

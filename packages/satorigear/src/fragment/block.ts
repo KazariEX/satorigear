@@ -1,4 +1,4 @@
-import type { BlockContent, DefinitionContent, TopLevelContent } from "mdast";
+import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
 import { type BlockToken, tokenEnd, tokenStart } from "../block/tokens.ts";
 import type { BlockSyntaxView } from "../block/arena.ts";
 import type { SyntaxProfile } from "../profile/types.ts";
@@ -14,12 +14,12 @@ export interface BlockBuildContext {
 }
 
 // Core owns fragment state and traversal; profiles supply every syntax-specific node builder.
-export type BlockNodeBuilder = (
+export type BlockNodeBuilder<T extends object = RootContent> = (
   nodeId: number,
   offset: number,
   tokenBase: number,
   context: BlockBuildContext,
-) => SpannedNode<TopLevelContent>;
+) => SpannedNode<T>;
 
 export function blockEnd(nodeId: number, offset: number, context: BlockBuildContext): number {
   let end = offset + context.view.arena.lenOf(nodeId);
@@ -105,40 +105,42 @@ export function normalizeLines(value: string): string {
   return value.replace(/\r\n|\r/g, "\n");
 }
 
-export function blockChildren(
+export const buildBlockNode = <T extends object = TopLevelContent>(
   nodeId: number,
   offset: number,
   tokenBase: number,
   context: BlockBuildContext,
-): (BlockContent | DefinitionContent)[] {
-  const arena = context.view.arena;
-  const children: (BlockContent | DefinitionContent)[] = [];
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const childId = arena.childAt(nodeId, index);
-    if (childId >= 0 && context.view.arena.isBlock(childId)) {
-      children.push(buildBlockNode(
-        childId,
-        offset + arena.childRelAt(nodeId, index),
-        tokenBase + arena.childTokRelAt(nodeId, index),
-        context,
-      ) as BlockContent | DefinitionContent);
-    }
-  }
-  return children;
-}
-
-export function buildBlockNode(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockBuildContext,
-): SpannedNode<TopLevelContent> {
+): SpannedNode<T> => {
   const arena = context.view.arena;
   const rule = arena.ruleOf(nodeId);
   const build = rule.build;
   if (!build) {
     throw new Error(`Unexpected block syntax rule: ${rule.name}`);
   }
-  return build(nodeId, offset, tokenBase, context);
-}
+  return build(nodeId, offset, tokenBase, context) as SpannedNode<T>;
+};
+
+export const buildBlockChildren: (
+  nodeId: number,
+  offset: number,
+  tokenBase: number,
+  context: BlockBuildContext,
+) => SpannedNode<BlockContent | DefinitionContent>[] = (nodeId, offset, tokenBase, context) => {
+  const arena = context.view.arena;
+  const children: SpannedNode<BlockContent | DefinitionContent>[] = [];
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const childId = arena.childAt(nodeId, index);
+    if (childId >= 0 && context.view.arena.isBlock(childId)) {
+      children.push(
+        buildBlockNode<typeof children[number]>(
+          childId,
+          offset + arena.childRelAt(nodeId, index),
+          tokenBase + arena.childTokRelAt(nodeId, index),
+          context,
+        ),
+      );
+    }
+  }
+  return children;
+};

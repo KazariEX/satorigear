@@ -9,13 +9,13 @@ import {
 import { structuralToken, tokenEnd, tokenStart } from "../../block/tokens.ts";
 import {
   type BlockBuildContext,
-  blockChildren,
   blockEnd,
   type BlockNodeBuilder,
   blockToken,
+  buildBlockChildren,
   payloadBounds,
 } from "../../fragment/block.ts";
-import { lastChildEnd, withSpan } from "../../fragment/node.ts";
+import { lastChildEnd, type SpannedNode } from "../../fragment/node.ts";
 import { isThematicBreak } from "./break.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -200,12 +200,7 @@ function childrenSpread(
   return false;
 }
 
-function listItem(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
-  context: BlockBuildContext,
-): ListItem {
+const buildListItem: BlockNodeBuilder<ListItem> = (nodeId, offset, tokenBase, context) => {
   const rule = context.view.arena.ruleNameOf(nodeId);
   if (rule !== "OrderedListItem" && rule !== "UnorderedListItem") {
     throw new Error(`Expected list item syntax, received ${rule}`);
@@ -216,26 +211,30 @@ function listItem(
     rule === "OrderedListItem" ? "OrderedItemOpen" : "UnorderedItemOpen",
     context,
   );
-  const result: ListItem = {
+  const children = buildBlockChildren(nodeId, offset, tokenBase, context);
+  return {
     type: "listItem",
     spread: childrenSpread(nodeId, offset, tokenBase, true, context),
     checked: null,
-    children: blockChildren(nodeId, offset, tokenBase, context),
+    children,
+    position: {
+      start: tokenStart(marker),
+      end: lastChildEnd(children, blockEnd(nodeId, offset, context)),
+    },
   };
-  return withSpan(result, tokenStart(marker), lastChildEnd(result, blockEnd(nodeId, offset, context)));
-}
+};
 
-function buildList(ordered: boolean): BlockNodeBuilder {
+function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (nodeId, offset, tokenBase, context) => {
     const arena = context.view.arena;
     const itemRule = ordered ? "OrderedListItem" : "UnorderedListItem";
     const listMarker = blockToken(nodeId, tokenBase, ordered ? "OrderedListOpen" : "UnorderedListOpen", context);
-    const items: ListItem[] = [];
+    const items: SpannedNode<ListItem>[] = [];
     const childCount = arena.childCount(nodeId);
     for (let index = 0; index < childCount; index++) {
       const childId = arena.childAt(nodeId, index);
       if (childId >= 0 && arena.ruleNameOf(childId) === itemRule) {
-        items.push(listItem(
+        items.push(buildListItem(
           childId,
           offset + arena.childRelAt(nodeId, index),
           tokenBase + arena.childTokRelAt(nodeId, index),
@@ -243,14 +242,17 @@ function buildList(ordered: boolean): BlockNodeBuilder {
         ));
       }
     }
-    const result: List = {
+    return {
       type: "list",
       ordered,
       start: ordered ? Number.parseInt(listMarker.text, 10) : null,
       spread: childrenSpread(nodeId, offset, tokenBase, false, context, itemRule),
       children: items,
+      position: {
+        start: tokenStart(listMarker),
+        end: lastChildEnd(items, tokenEnd(listMarker)),
+      },
     };
-    return withSpan(result, tokenStart(listMarker), lastChildEnd(result, tokenEnd(listMarker)));
   };
 }
 
@@ -280,7 +282,7 @@ export const feature: SyntaxFeature = {
           open: "UnorderedListOpen",
           close: "UnorderedListClose",
         },
-        build: buildList(false),
+        build: createBuildList(false),
       },
       {
         rule: "OrderedList",
@@ -289,7 +291,7 @@ export const feature: SyntaxFeature = {
           open: "OrderedListOpen",
           close: "OrderedListClose",
         },
-        build: buildList(true),
+        build: createBuildList(true),
       },
     ],
     starts: [

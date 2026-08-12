@@ -1,5 +1,4 @@
 import { appendInline } from "../../../fragment/inline.ts";
-import { withSpan } from "../../../fragment/node.ts";
 import { inlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -13,7 +12,6 @@ import {
   inlineTokenText,
 } from "../../../inline/tokens.ts";
 import type { InlineSyntaxDefinition, InlineTokenTransform } from "../../../inline/profile.ts";
-import type { InlineMath } from "./types.ts";
 
 interface MathRange {
   end: number;
@@ -175,14 +173,11 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
       const { context } = accumulator;
       appendInline(
         accumulator,
-        withSpan<InlineMath>(
-          {
-            type: "inlineMath",
-            value: mathTextValue(inlineTokenText(context.view.text, context.tokens, tokenIndex)),
-          },
-          sourceSpan.start,
-          sourceSpan.end,
-        ),
+        {
+          type: "inlineMath",
+          value: mathTextValue(inlineTokenText(context.view.text, context.tokens, tokenIndex)),
+          position: sourceSpan,
+        },
       );
       return true;
     },
