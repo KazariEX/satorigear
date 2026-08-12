@@ -1,7 +1,7 @@
 import { type BlockToken, tokenStart } from "./block/tokens.ts";
 import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
 import { inlineTokenCount, inlineTokenStart, type InlineTokenStream } from "./inline/tokens.ts";
-import { emptyArray, emptySet, isArrayEqual, isSetEqual } from "./primitives.ts";
+import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { createSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { BlockArenaChange, BlockHandle, BlockSyntaxView } from "./block/arena.ts";
 import type { InlineArena } from "./inline/arena.ts";
@@ -11,7 +11,6 @@ export interface SyntaxBlock {
   handle: BlockHandle;
   offset: number;
   regions: readonly InlineRegion[];
-  regionRevisions: readonly number[];
   tokenBase: number;
   version: number;
 }
@@ -168,7 +167,6 @@ export class SyntaxState {
         handle: syntaxBlock,
         offset,
         regions: emptyArray,
-        regionRevisions: emptyArray,
         tokenBase,
         version: 0,
       });
@@ -179,14 +177,13 @@ export class SyntaxState {
     if (definitionsChanged) {
       for (let index = 0; index < stableBlockCount; index++) {
         const block = blocks[index];
-        const revisions = new Array<number>(block.regions.length);
-        for (let regionIndex = 0; regionIndex < block.regions.length; regionIndex++) {
-          const region = block.regions[regionIndex];
+        let changed = false;
+        for (const region of block.regions) {
+          const revision = region.revision;
           region.updateDefinitions(availableDefinitions);
-          revisions[regionIndex] = region.revision;
+          changed ||= revision !== region.revision;
         }
-        if (!isArrayEqual(block.regionRevisions, revisions)) {
-          block.regionRevisions = revisions;
+        if (changed) {
           block.version++;
         }
       }
@@ -219,6 +216,7 @@ export class SyntaxState {
       const bindingStart = bindingStarts[blockIndex - stableBlockCount];
       const bindingEnd = bindingStarts[blockIndex - stableBlockCount + 1] ?? bindings.length;
       const regions = new Array<InlineRegion>(bindingEnd - bindingStart);
+      let regionsStable = previous !== void 0 && previous.regions.length === regions.length;
       for (let bindingIndex = bindingStart; bindingIndex < bindingEnd; bindingIndex++) {
         const binding = bindings[bindingIndex];
         const regionIndex = bindingIndex - bindingStart;
@@ -241,21 +239,18 @@ export class SyntaxState {
           }
           candidate = nearest < 0 ? void 0 : displacedRegions.splice(nearest, 1)[0];
         }
-        regions[regionIndex] = candidate
+        const revision = candidate?.revision;
+        const region = candidate
           ? candidate.update(binding, availableDefinitions)
           : new InlineRegion(this.#profile.inline, binding, availableDefinitions);
+        regions[regionIndex] = region;
+        regionsStable &&= candidate === previous?.regions[regionIndex] && revision === region.revision;
       }
 
-      const regionRevisions = regions.map((region) => region.revision);
       // Arena prefix handles may survive token-equivalent edits with different source geometry.
       // Only the converged suffix can reuse fragments without comparing duplicate block text.
-      const fragmentStable = (
-        blockIndex >= newEnd &&
-        previous !== void 0 &&
-        isArrayEqual(previous.regionRevisions, regionRevisions)
-      );
+      const fragmentStable = blockIndex >= newEnd && regionsStable;
       block.regions = regions;
-      block.regionRevisions = regionRevisions;
       block.version = previous === void 0
         ? 0
         : fragmentStable ? previous.version : previous.version + 1;
