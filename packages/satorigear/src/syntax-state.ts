@@ -279,19 +279,12 @@ export class SyntaxState {
 
   prepareInline(blocks: readonly SyntaxBlock[]): void {
     const regions: InlineRegion[] = [];
-    const segments: InlineTokenStream[] = [];
     for (const block of blocks) {
       for (const region of block.regions) {
         regions.push(region);
-        segments.push(region.tokens);
       }
     }
-
-    const roots: number[] = [];
-    this.#inlineArena.build(segments, roots);
-    for (let index = 0; index < regions.length; index++) {
-      regions[index].preparedRoot = roots[index];
-    }
+    this.#inlineArena.build(regions);
   }
 
   inlineForBlock(nodeId: number): MarkdownInlineSyntax | undefined {

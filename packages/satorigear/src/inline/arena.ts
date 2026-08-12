@@ -9,6 +9,11 @@ import {
 import type { InlineNodeBuilder } from "../fragment/inline.ts";
 import type { InlineSyntaxSchema } from "./profile.ts";
 
+export interface PreparedInlineRegion {
+  preparedRoot: number;
+  tokens: InlineTokenStream;
+}
+
 function leaf(tokenIndex: number): number {
   return ~tokenIndex;
 }
@@ -31,13 +36,15 @@ export class InlineArena {
     this.#schema = schema;
   }
 
-  build(segments: readonly InlineTokenStream[], roots: number[]): void {
+  build(regions: readonly PreparedInlineRegion[]): void {
     this.#kidCount = 0;
     this.#nodeCount = 0;
 
-    for (let index = 0; index < segments.length; index++) {
-      const tokens = segments[index];
-      roots[index] = buildRoot(
+    for (let index = 0; index < regions.length; index++) {
+      const region = regions[index];
+      const tokens = region.tokens;
+      // The root is valid only for this shared arena build; the region retains token ownership.
+      region.preparedRoot = buildRoot(
         this,
         this.#schema,
         tokens,
