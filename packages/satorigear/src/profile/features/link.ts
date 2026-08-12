@@ -1,7 +1,6 @@
 import type { PhrasingContent } from "mdast";
 import {
   appendInline,
-  appendInlineContents,
   appendInlineSequence,
   contentBounds,
   createInlineAccumulator,
@@ -191,26 +190,6 @@ export const feature: SyntaxFeature = {
         open: "ImageReferenceOpen",
         close: "ImageReferenceClose",
         build: buildInlineReferenceImage,
-      },
-      {
-        kind: "fallback",
-        build: appendInlineContents,
-        tokens: [
-          "ImageOpen",
-          "BracketOpen",
-          "LinkTail",
-          "ReferenceTail",
-          "ShortcutReferenceTail",
-          "ReferenceSeparatorClose",
-          "LinkOpen",
-          "LinkClose",
-          "ImageLinkOpen",
-          "ImageLinkClose",
-          "ReferenceOpen",
-          "ReferenceClose",
-          "ImageReferenceOpen",
-          "ImageReferenceClose",
-        ],
       },
       {
         kind: "leaf",

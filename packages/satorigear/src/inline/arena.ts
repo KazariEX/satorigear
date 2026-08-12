@@ -73,22 +73,6 @@ export class InlineArena {
     return id;
   }
 
-  singleNode(
-    build: InlineNodeBuilder,
-    start: number,
-    end: number,
-    child: number,
-  ): number {
-    const id = this.#nodeCount++;
-    this.#builders[id] = build;
-    this.#starts[id] = start;
-    this.#ends[id] = end;
-    this.#childStarts[id] = this.#kidCount;
-    this.#childCounts[id] = 1;
-    this.#children[this.#kidCount++] = child;
-    return id;
-  }
-
   scratch(depth: number): number[] {
     // Nodes copy children into the arena before this depth-indexed list is reused.
     return (this.#scratch[depth] ??= []);
@@ -250,15 +234,7 @@ function parseItems(
       index = semantic.next;
     }
     else {
-      const fallbackBuilder = schema.fallbackBuilderByKind[kind];
-      item = fallbackBuilder === void 0
-        ? leaf(index)
-        : arena.singleNode(
-          fallbackBuilder,
-          inlineTokenStart(tokens, index),
-          inlineTokenEnd(tokens, index),
-          leaf(index),
-        );
+      item = leaf(index);
       index++;
     }
     children[childCount++] = item;

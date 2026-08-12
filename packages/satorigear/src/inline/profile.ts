@@ -32,11 +32,6 @@ export type InlineSyntaxDefinition =
     build: InlineNodeBuilder;
   }
   | {
-    kind: "fallback";
-    tokens: readonly string[];
-    build: InlineNodeBuilder;
-  }
-  | {
     kind: "pair";
     close: string;
     open: string;
@@ -56,7 +51,6 @@ interface InlineContainer {
 
 export interface InlineSyntaxSchema {
   containerByKind: readonly (InlineContainer | undefined)[];
-  fallbackBuilderByKind: readonly (InlineNodeBuilder | undefined)[];
   pairByOpenKind: readonly (InlinePair | undefined)[];
 }
 
@@ -92,7 +86,6 @@ function compileInlineSyntax(
 ): InlineSyntaxCompilation {
   const tokenBuilders: (InlineLeafBuilder | undefined)[] = [];
   const containerByKind: (InlineContainer | undefined)[] = [];
-  const fallbackBuilderByKind: (InlineNodeBuilder | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
   const registerToken = (token: string, build: InlineLeafBuilder): number => {
     const kind = inlineKind(token);
@@ -103,13 +96,6 @@ function compileInlineSyntax(
   for (const definition of definitions) {
     if (definition.kind === "leaf") {
       registerToken(definition.token, definition.build);
-      continue;
-    }
-
-    if (definition.kind === "fallback") {
-      for (const token of definition.tokens) {
-        fallbackBuilderByKind[inlineKind(token)] = definition.build;
-      }
       continue;
     }
 
@@ -133,7 +119,6 @@ function compileInlineSyntax(
   return {
     schema: {
       containerByKind,
-      fallbackBuilderByKind,
       pairByOpenKind,
     },
     tokenBuilders,

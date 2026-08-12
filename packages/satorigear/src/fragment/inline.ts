@@ -213,14 +213,6 @@ function trailingWhitespaceStart(value: string): number {
   return offset;
 }
 
-export const appendInlineContents: InlineNodeBuilder = (
-  nodeId,
-  offset,
-  endOffset,
-  sourceSpan,
-  accumulator,
-) => appendInlineSequence(nodeId, offset, accumulator);
-
 export function appendInlineSequence(
   nodeId: number,
   offset: number,
