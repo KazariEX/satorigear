@@ -1,6 +1,6 @@
 import { type BlockLine, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
-import { inlineKind } from "../../inline/kinds.ts";
+import { InlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -27,10 +27,10 @@ interface LinkDefinitionFields {
   title: string | undefined;
 }
 
-const referenceTailKind = inlineKind("ReferenceTail");
-const bracketOpenKind = inlineKind("BracketOpen");
-const shortcutTailKind = inlineKind("ShortcutReferenceTail");
-const imageOpenKind = inlineKind("ImageOpen");
+const referenceTailKind = InlineKind.ReferenceTail;
+const bracketOpenKind = InlineKind.BracketOpen;
+const shortcutTailKind = InlineKind.ShortcutReferenceTail;
+const imageOpenKind = InlineKind.ImageOpen;
 
 interface LinkDefinitionOpenToken extends BlockToken {
   linkDefinition: LinkDefinitionFields;
@@ -310,63 +310,63 @@ const activateReference: NonNullable<PairedTokenConfig["activate"]> = ({
 
 const markdownBracketPairs: readonly PairedTokenConfig[] = [
   {
-    opener: "BracketOpen",
-    closer: "LinkTail",
-    open: "LinkOpen",
-    close: "LinkClose",
-    deactivateEarlier: ["BracketOpen"],
+    opener: InlineKind.BracketOpen,
+    closer: InlineKind.LinkTail,
+    open: InlineKind.LinkOpen,
+    close: InlineKind.LinkClose,
+    deactivateEarlier: [InlineKind.BracketOpen],
     isolateDelimiters: true,
   },
   {
-    opener: "ImageOpen",
-    closer: "LinkTail",
-    open: "ImageLinkOpen",
-    close: "ImageLinkClose",
+    opener: InlineKind.ImageOpen,
+    closer: InlineKind.LinkTail,
+    open: InlineKind.ImageLinkOpen,
+    close: InlineKind.ImageLinkClose,
   },
   {
-    opener: "BracketOpen",
-    closer: "ReferenceTail",
-    open: "ReferenceOpen",
-    close: "ReferenceClose",
-    deactivateEarlier: ["BracketOpen"],
+    opener: InlineKind.BracketOpen,
+    closer: InlineKind.ReferenceTail,
+    open: InlineKind.ReferenceOpen,
+    close: InlineKind.ReferenceClose,
+    deactivateEarlier: [InlineKind.BracketOpen],
     isolateDelimiters: true,
     activate: activateReference,
     splitUnmatchedCloser: splitReferenceTail,
   },
   {
-    opener: "BracketOpen",
-    closer: "ShortcutReferenceTail",
-    open: "ReferenceOpen",
-    close: "ReferenceClose",
-    deactivateEarlier: ["BracketOpen"],
+    opener: InlineKind.BracketOpen,
+    closer: InlineKind.ShortcutReferenceTail,
+    open: InlineKind.ReferenceOpen,
+    close: InlineKind.ReferenceClose,
+    deactivateEarlier: [InlineKind.BracketOpen],
     isolateDelimiters: true,
     activate: activateReference,
     content: {
       requireNonWhitespace: true,
       maxCharacters: 999,
-      forbidTokens: ["BracketOpen", "ImageOpen"],
+      forbidTokens: [InlineKind.BracketOpen, InlineKind.ImageOpen],
     },
   },
   {
-    opener: "ImageOpen",
-    closer: "ReferenceTail",
-    open: "ImageReferenceOpen",
-    close: "ImageReferenceClose",
+    opener: InlineKind.ImageOpen,
+    closer: InlineKind.ReferenceTail,
+    open: InlineKind.ImageReferenceOpen,
+    close: InlineKind.ImageReferenceClose,
     isolateDelimiters: true,
     activate: activateReference,
     splitUnmatchedCloser: splitReferenceTail,
   },
   {
-    opener: "ImageOpen",
-    closer: "ShortcutReferenceTail",
-    open: "ImageReferenceOpen",
-    close: "ImageReferenceClose",
+    opener: InlineKind.ImageOpen,
+    closer: InlineKind.ShortcutReferenceTail,
+    open: InlineKind.ImageReferenceOpen,
+    close: InlineKind.ImageReferenceClose,
     isolateDelimiters: true,
     activate: activateReference,
     content: {
       requireNonWhitespace: true,
       maxCharacters: 999,
-      forbidTokens: ["BracketOpen", "ImageOpen"],
+      forbidTokens: [InlineKind.BracketOpen, InlineKind.ImageOpen],
     },
   },
 ];

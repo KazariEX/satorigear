@@ -16,6 +16,7 @@ import {
   normalizeLines,
 } from "../../fragment/block.ts";
 import { appendInline, type InlineLeafBuilder, lineEnd } from "../../fragment/inline.ts";
+import { InlineKind } from "../../inline/kinds.ts";
 import { inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -169,7 +170,7 @@ export const feature: SyntaxFeature = {
     syntax: [
       {
         kind: "leaf",
-        token: "CodeSpan",
+        token: InlineKind.CodeSpan,
         build: buildInlineCode,
       },
     ],

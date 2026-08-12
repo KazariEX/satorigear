@@ -6,6 +6,7 @@ import {
   normalizeLines,
 } from "../../fragment/block.ts";
 import { appendInline, type InlineLeafBuilder } from "../../fragment/inline.ts";
+import { InlineKind } from "../../inline/kinds.ts";
 import { inlineTokenText } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -211,8 +212,8 @@ export const feature: SyntaxFeature = {
   },
   inline: {
     syntax: [
-      { kind: "leaf", token: "InlineHtml", build: buildInlineHtml },
-      { kind: "leaf", token: "HtmlComment", build: buildInlineHtml },
+      { kind: "leaf", token: InlineKind.InlineHtml, build: buildInlineHtml },
+      { kind: "leaf", token: InlineKind.HtmlComment, build: buildInlineHtml },
     ],
   },
 };

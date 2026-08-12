@@ -1,3 +1,4 @@
+import { InlineKind } from "../../../inline/kinds.ts";
 import { blockRules, blockStarts } from "./block.ts";
 import { inlineSyntax, transformComponentTokens } from "./inline.ts";
 import type { SyntaxFeature } from "../../types.ts";
@@ -14,13 +15,13 @@ export const feature: SyntaxFeature = {
       // Component contents form their own Markdown subtree, so delimiters cannot pair across its boundary.
       pairs: [
         {
-          opener: "InlineComponentLabelOpen",
-          closer: "InlineComponentLabelClose",
+          opener: InlineKind.InlineComponentLabelOpen,
+          closer: InlineKind.InlineComponentLabelClose,
           isolateDelimiters: true,
         },
         {
-          opener: "InlineSpanOpen",
-          closer: "InlineSpanClose",
+          opener: InlineKind.InlineSpanOpen,
+          closer: InlineKind.InlineSpanClose,
           isolateDelimiters: true,
         },
       ],

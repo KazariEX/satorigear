@@ -1,7 +1,7 @@
-import { inlineKind } from "./kinds.ts";
 import { tokenizeInline } from "./lexer.ts";
 import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
 import type { InlineLeafBuilder, InlineNodeBuilder } from "../fragment/inline.ts";
+import type { InlineKind } from "./kinds.ts";
 // Inline features compile into one token pipeline and the projection tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
 
@@ -21,20 +21,20 @@ export type InlineTokenTransform = (
 export type InlineSyntaxDefinition =
   | {
     kind: "leaf";
-    token: string;
+    token: InlineKind;
     build: InlineLeafBuilder;
   }
   | {
     kind: "container";
-    close: string;
-    contentOpen: string;
-    token: string;
+    close: InlineKind;
+    contentOpen: InlineKind;
+    token: InlineKind;
     build: InlineNodeBuilder;
   }
   | {
     kind: "pair";
-    close: string;
-    open: string;
+    close: InlineKind;
+    open: InlineKind;
     build: InlineNodeBuilder;
   };
 
@@ -87,8 +87,7 @@ function compileInlineSyntax(
   const tokenBuilders: (InlineLeafBuilder | undefined)[] = [];
   const containerByKind: (InlineContainer | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
-  const registerToken = (token: string, build: InlineLeafBuilder): number => {
-    const kind = inlineKind(token);
+  const registerToken = (kind: InlineKind, build: InlineLeafBuilder): InlineKind => {
     tokenBuilders[kind] = build;
     return kind;
   };

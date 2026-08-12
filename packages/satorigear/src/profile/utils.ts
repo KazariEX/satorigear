@@ -1,4 +1,4 @@
-import { inlineKind } from "../inline/kinds.ts";
+import { InlineKind } from "../inline/kinds.ts";
 import {
   appendInlineToken,
   inlineTokenEnd,
@@ -8,10 +8,10 @@ import {
   type InlineTokenStream,
 } from "../inline/tokens.ts";
 
-const referenceSeparatorCloseKind = inlineKind("ReferenceSeparatorClose");
-const bracketOpenKind = inlineKind("BracketOpen");
-const textKind = inlineKind("Text");
-const shortcutReferenceTailKind = inlineKind("ShortcutReferenceTail");
+const referenceSeparatorCloseKind = InlineKind.ReferenceSeparatorClose;
+const bracketOpenKind = InlineKind.BracketOpen;
+const textKind = InlineKind.Text;
+const shortcutReferenceTailKind = InlineKind.ShortcutReferenceTail;
 
 export function normalizeAssociationLabel(label: string): string {
   return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();

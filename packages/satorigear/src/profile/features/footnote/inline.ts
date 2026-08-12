@@ -1,5 +1,5 @@
 import { appendInline } from "../../../fragment/inline.ts";
-import { inlineKind } from "../../../inline/kinds.ts";
+import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -16,13 +16,13 @@ import { semanticText } from "../text.ts";
 import { footnoteLabelAt } from "./shared.ts";
 import type { InlineSyntaxDefinition, InlineTokenTransform } from "../../../inline/profile.ts";
 
-const bracketOpenKind = inlineKind("BracketOpen");
-const footnoteReferenceKind = inlineKind("FootnoteReference");
-const imageOpenKind = inlineKind("ImageOpen");
-const referenceSeparatorCloseKind = inlineKind("ReferenceSeparatorClose");
-const referenceTailKind = inlineKind("ReferenceTail");
-const shortcutReferenceTailKind = inlineKind("ShortcutReferenceTail");
-const textKind = inlineKind("Text");
+const bracketOpenKind = InlineKind.BracketOpen;
+const footnoteReferenceKind = InlineKind.FootnoteReference;
+const imageOpenKind = InlineKind.ImageOpen;
+const referenceSeparatorCloseKind = InlineKind.ReferenceSeparatorClose;
+const referenceTailKind = InlineKind.ReferenceTail;
+const shortcutReferenceTailKind = InlineKind.ShortcutReferenceTail;
+const textKind = InlineKind.Text;
 
 function closerIndex(tokens: InlineTokenStream, start: number, end: number): number {
   for (let index = start + 1; index < inlineTokenCount(tokens); index++) {
@@ -141,7 +141,7 @@ export const transformFootnoteTokens: InlineTokenTransform = (source, tokens, co
 export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "leaf",
-    token: "FootnoteReference",
+    token: InlineKind.FootnoteReference,
     build(tokenIndex, sourceSpan, accumulator) {
       const { context } = accumulator;
       const source = inlineTokenText(context.view.text, context.tokens, tokenIndex);

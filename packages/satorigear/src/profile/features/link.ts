@@ -4,6 +4,7 @@ import {
   type InlineAccumulator,
   type InlineNodeBuilder,
 } from "../../fragment/inline.ts";
+import { InlineKind } from "../../inline/kinds.ts";
 import { inlineTokenEnd, inlineTokenStart, inlineTokenText } from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { buildInlineText, semanticText } from "./text.ts";
@@ -160,31 +161,31 @@ export const feature: SyntaxFeature = {
     syntax: [
       {
         kind: "pair",
-        open: "LinkOpen",
-        close: "LinkClose",
+        open: InlineKind.LinkOpen,
+        close: InlineKind.LinkClose,
         build: buildInlineLink,
       },
       {
         kind: "pair",
-        open: "ImageLinkOpen",
-        close: "ImageLinkClose",
+        open: InlineKind.ImageLinkOpen,
+        close: InlineKind.ImageLinkClose,
         build: buildInlineImage,
       },
       {
         kind: "pair",
-        open: "ReferenceOpen",
-        close: "ReferenceClose",
+        open: InlineKind.ReferenceOpen,
+        close: InlineKind.ReferenceClose,
         build: buildInlineReferenceLink,
       },
       {
         kind: "pair",
-        open: "ImageReferenceOpen",
-        close: "ImageReferenceClose",
+        open: InlineKind.ImageReferenceOpen,
+        close: InlineKind.ImageReferenceClose,
         build: buildInlineReferenceImage,
       },
       {
         kind: "leaf",
-        token: "Autolink",
+        token: InlineKind.Autolink,
         build(tokenIndex, sourceSpan, accumulator) {
           const { context } = accumulator;
           const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
@@ -205,12 +206,12 @@ export const feature: SyntaxFeature = {
           return true;
         },
       },
-      { kind: "leaf", token: "BracketOpen", build: buildInlineText },
-      { kind: "leaf", token: "ImageOpen", build: buildInlineText },
-      { kind: "leaf", token: "LinkTail", build: buildInlineText },
-      { kind: "leaf", token: "ReferenceTail", build: buildInlineText },
-      { kind: "leaf", token: "ShortcutReferenceTail", build: buildInlineText },
-      { kind: "leaf", token: "ReferenceSeparatorClose", build: buildInlineText },
+      { kind: "leaf", token: InlineKind.BracketOpen, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.ImageOpen, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.LinkTail, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.ReferenceTail, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.ShortcutReferenceTail, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.ReferenceSeparatorClose, build: buildInlineText },
     ],
   },
 };

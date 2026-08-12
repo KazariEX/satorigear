@@ -3,6 +3,7 @@ import {
   appendInline,
   type InlineLeafBuilder,
 } from "../../fragment/inline.ts";
+import { InlineKind } from "../../inline/kinds.ts";
 import { InlineTokenFlag, inlineTokenFlags, inlineTokenText } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -34,9 +35,9 @@ export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, accum
 export const feature: SyntaxFeature = {
   inline: {
     syntax: [
-      { kind: "leaf", token: "Text", build: buildInlineText },
-      { kind: "leaf", token: "Escape", build: buildInlineText },
-      { kind: "leaf", token: "Entity", build: buildInlineText },
+      { kind: "leaf", token: InlineKind.Text, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.Escape, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.Entity, build: buildInlineText },
     ],
   },
 };

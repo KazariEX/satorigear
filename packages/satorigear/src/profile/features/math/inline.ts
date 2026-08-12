@@ -1,5 +1,5 @@
 import { appendInline } from "../../../fragment/inline.ts";
-import { inlineKind } from "../../../inline/kinds.ts";
+import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   firstInlineTokenEndingAfter,
@@ -19,8 +19,8 @@ interface MathRange {
   start: number;
 }
 
-const mathTextKind = inlineKind("MathText");
-const textKind = inlineKind("Text");
+const mathTextKind = InlineKind.MathText;
+const textKind = InlineKind.Text;
 
 function textTokenAt(tokens: InlineTokenStream, offset: number): number | undefined {
   const index = firstInlineTokenEndingAfter(tokens, offset);
@@ -168,7 +168,7 @@ function mathTextValue(value: string): string {
 export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "leaf",
-    token: "MathText",
+    token: InlineKind.MathText,
     build(tokenIndex, sourceSpan, accumulator) {
       const { context } = accumulator;
       appendInline(

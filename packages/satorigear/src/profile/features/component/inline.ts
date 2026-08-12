@@ -3,7 +3,7 @@ import {
   type InlineNodeBuilder,
   lineEnd,
 } from "../../../fragment/inline.ts";
-import { inlineKind } from "../../../inline/kinds.ts";
+import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   firstInlineTokenEndingAfter,
@@ -46,18 +46,18 @@ interface CandidateSet {
   roots: Candidate[];
 }
 
-const bracketOpenKind = inlineKind("BracketOpen");
-const imageOpenKind = inlineKind("ImageOpen");
-const linkTailKind = inlineKind("LinkTail");
-const referenceTailKind = inlineKind("ReferenceTail");
-const shortcutTailKind = inlineKind("ShortcutReferenceTail");
-const textKind = inlineKind("Text");
-const componentOpenKind = inlineKind("InlineComponentOpen");
-const componentLabelOpenKind = inlineKind("InlineComponentLabelOpen");
-const componentLabelCloseKind = inlineKind("InlineComponentLabelClose");
-const spanOpenKind = inlineKind("InlineSpanOpen");
-const spanCloseKind = inlineKind("InlineSpanClose");
-const inlineBoundaryKind = inlineKind("InlineBoundary");
+const bracketOpenKind = InlineKind.BracketOpen;
+const imageOpenKind = InlineKind.ImageOpen;
+const linkTailKind = InlineKind.LinkTail;
+const referenceTailKind = InlineKind.ReferenceTail;
+const shortcutTailKind = InlineKind.ShortcutReferenceTail;
+const textKind = InlineKind.Text;
+const componentOpenKind = InlineKind.InlineComponentOpen;
+const componentLabelOpenKind = InlineKind.InlineComponentLabelOpen;
+const componentLabelCloseKind = InlineKind.InlineComponentLabelClose;
+const spanOpenKind = InlineKind.InlineSpanOpen;
+const spanCloseKind = InlineKind.InlineSpanClose;
+const inlineBoundaryKind = InlineKind.InlineBoundary;
 
 function bracketIndex(tokens: InlineTokenStream): BracketIndex {
   const stack: Array<{ image: boolean; start: number }> = [];
@@ -389,15 +389,15 @@ const buildInlineSpan: InlineNodeBuilder = (
 export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "container",
-    token: "InlineComponentOpen",
-    contentOpen: "InlineComponentLabelOpen",
-    close: "InlineComponentLabelClose",
+    token: InlineKind.InlineComponentOpen,
+    contentOpen: InlineKind.InlineComponentLabelOpen,
+    close: InlineKind.InlineComponentLabelClose,
     build: buildInlineComponent,
   },
   {
     kind: "pair",
-    open: "InlineSpanOpen",
-    close: "InlineSpanClose",
+    open: InlineKind.InlineSpanOpen,
+    close: InlineKind.InlineSpanClose,
     build: buildInlineSpan,
   },
 ];

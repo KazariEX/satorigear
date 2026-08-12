@@ -3,35 +3,36 @@ import {
   appendInline,
   type InlineNodeBuilder,
 } from "../../fragment/inline.ts";
+import { InlineKind } from "../../inline/kinds.ts";
 import { buildInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
 import type { InlineSyntaxDefinition } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {
-  token: "AsteriskRun",
+  token: InlineKind.AsteriskRun,
   marker: "*",
-  fallbackToken: "Delimiter",
-  single: { open: "EmphasisOpen", close: "EmphasisClose" },
-  double: { open: "StrongOpen", close: "StrongClose" },
+  fallbackToken: InlineKind.Delimiter,
+  single: { open: InlineKind.EmphasisOpen, close: InlineKind.EmphasisClose },
+  double: { open: InlineKind.StrongOpen, close: InlineKind.StrongClose },
   pairing: { kind: "partial", ruleOfThree: true },
 };
 
 const underscoreDelimiter: DelimiterConfig = {
-  token: "UnderscoreRun",
+  token: InlineKind.UnderscoreRun,
   marker: "_",
-  fallbackToken: "Delimiter",
-  single: { open: "EmphasisOpen", close: "EmphasisClose" },
-  double: { open: "StrongOpen", close: "StrongClose" },
+  fallbackToken: InlineKind.Delimiter,
+  single: { open: InlineKind.EmphasisOpen, close: InlineKind.EmphasisClose },
+  double: { open: InlineKind.StrongOpen, close: InlineKind.StrongClose },
   pairing: { kind: "partial", ruleOfThree: true },
   allowIntraword: false,
 };
 
 const strikethroughDelimiter: DelimiterConfig = {
-  token: "TildeRun",
+  token: InlineKind.TildeRun,
   marker: "~",
-  fallbackToken: "Delimiter",
-  double: { open: "StrongOpen", close: "StrongClose" },
+  fallbackToken: InlineKind.Delimiter,
+  double: { open: InlineKind.StrongOpen, close: InlineKind.StrongClose },
   pairing: { kind: "whole" },
 };
 
@@ -65,8 +66,8 @@ const buildInlineStrongOrDelete: InlineNodeBuilder = (
 };
 
 const inlineSyntax: readonly InlineSyntaxDefinition[] = [
-  { kind: "leaf", token: "Delimiter", build: buildInlineText },
-  { kind: "leaf", token: "TildeRun", build: buildInlineText },
+  { kind: "leaf", token: InlineKind.Delimiter, build: buildInlineText },
+  { kind: "leaf", token: InlineKind.TildeRun, build: buildInlineText },
 ];
 
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {
@@ -89,14 +90,14 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
         ...inlineSyntax,
         {
           kind: "pair",
-          open: "EmphasisOpen",
-          close: "EmphasisClose",
+          open: InlineKind.EmphasisOpen,
+          close: InlineKind.EmphasisClose,
           build: buildInlineEmphasis,
         },
         {
           kind: "pair",
-          open: "StrongOpen",
-          close: "StrongClose",
+          open: InlineKind.StrongOpen,
+          close: InlineKind.StrongClose,
           build: buildStrong,
         },
       ],

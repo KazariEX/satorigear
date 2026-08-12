@@ -1,7 +1,7 @@
 import type { Blockquote, Heading, List, Paragraph } from "mdast";
 import { lineEnd } from "../../../fragment/inline.ts";
 import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
-import { inlineKind } from "../../../inline/kinds.ts";
+import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -31,9 +31,9 @@ interface AttributeRange {
   start: number;
 }
 
-const attributesKind = inlineKind("Attributes");
-const boundaryKind = inlineKind("InlineBoundary");
-const textKind = inlineKind("Text");
+const attributesKind = InlineKind.AttributesToken;
+const boundaryKind = InlineKind.InlineBoundary;
+const textKind = InlineKind.Text;
 
 const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
   const result = build(nodeId, offset, tokenBase, context) as SpannedNode<Paragraph | Heading>;
@@ -193,7 +193,7 @@ export const feature: SyntaxFeature = {
     syntax: [
       {
         kind: "leaf",
-        token: "Attributes",
+        token: InlineKind.AttributesToken,
         build(tokenIndex, sourceSpan, accumulator) {
           const previous = accumulator.target.at(-1);
           const parsed = parseAttributes(accumulator.context.view.text, inlineTokenStart(accumulator.context.tokens, tokenIndex));

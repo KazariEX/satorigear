@@ -1,5 +1,4 @@
 import { emptyArray } from "../primitives.ts";
-import { inlineKind } from "./kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -11,14 +10,15 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
+import type { InlineKind } from "./kinds.ts";
 import type { InlineResolutionContext, InlineTokenTransform } from "./profile.ts";
 
 export interface DelimiterConfig {
-  token: string;
+  token: InlineKind;
   marker: string;
-  fallbackToken: string;
-  single?: { open: string; close: string };
-  double?: { open: string; close: string };
+  fallbackToken: InlineKind;
+  single?: { open: InlineKind; close: InlineKind };
+  double?: { open: InlineKind; close: InlineKind };
   pairing:
     | { kind: "partial"; ruleOfThree?: boolean }
     | { kind: "whole" };
@@ -26,16 +26,16 @@ export interface DelimiterConfig {
 }
 
 export interface PairedTokenConfig {
-  opener: string;
-  closer: string;
-  open?: string;
-  close?: string;
-  deactivateEarlier?: readonly string[];
+  opener: InlineKind;
+  closer: InlineKind;
+  open?: InlineKind;
+  close?: InlineKind;
+  deactivateEarlier?: readonly InlineKind[];
   isolateDelimiters?: boolean;
   content?: {
     requireNonWhitespace?: boolean;
     maxCharacters?: number;
-    forbidTokens?: readonly string[];
+    forbidTokens?: readonly InlineKind[];
   };
   activate?: (context: PairedTokenActivationContext) => boolean;
   splitUnmatchedCloser?: (tokens: InlineTokenStream, tokenIndex: number) => InlineTokenStream;
@@ -209,18 +209,18 @@ function indexPairs(configs: readonly PairedTokenConfig[]): PairIndex {
   const openerKinds: boolean[] = [];
   const splitByCloser: PairedTokenConfig["splitUnmatchedCloser"][] = [];
   for (const config of configs) {
-    const openerKind = inlineKind(config.opener);
-    const closerKind = inlineKind(config.closer);
+    const openerKind = config.opener;
+    const closerKind = config.closer;
     openerKinds[openerKind] = true;
     const pairs = byCloser[closerKind] ?? [];
     pairs.push({
       activate: config.activate,
-      closeKind: config.close === void 0 ? closerKind : inlineKind(config.close),
+      closeKind: config.close ?? closerKind,
       content: config.content,
-      deactivatedKinds: config.deactivateEarlier?.map(inlineKind) ?? [],
-      forbiddenKinds: config.content?.forbidTokens?.map(inlineKind) ?? [],
+      deactivatedKinds: config.deactivateEarlier ?? [],
+      forbiddenKinds: config.content?.forbidTokens ?? [],
       isolateDelimiters: config.isolateDelimiters,
-      openKind: config.open === void 0 ? openerKind : inlineKind(config.open),
+      openKind: config.open ?? openerKind,
       openerKind,
     });
     byCloser[closerKind] = pairs;
@@ -553,14 +553,14 @@ export function createPairingResolver(
 ): InlineTokenTransform {
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
-    delimiterByKind[inlineKind(config.token)] = {
+    delimiterByKind[config.token] = {
       marker: config.marker,
-      fallbackKind: inlineKind(config.fallbackToken),
+      fallbackKind: config.fallbackToken,
       single: config.single
-        ? { open: inlineKind(config.single.open), close: inlineKind(config.single.close) }
+        ? { open: config.single.open, close: config.single.close }
         : void 0,
       double: config.double
-        ? { open: inlineKind(config.double.open), close: inlineKind(config.double.close) }
+        ? { open: config.double.open, close: config.double.close }
         : void 0,
       allowIntraword: config.allowIntraword,
       matchWholeRun: config.pairing.kind === "whole" ? true : void 0,
@@ -571,12 +571,12 @@ export function createPairingResolver(
   const pairIndex = indexPairs(pairConfigs);
   const phasesByKind: number[] = [];
   for (const config of delimiterConfigs) {
-    const kind = inlineKind(config.token);
+    const kind = config.token;
     phasesByKind[kind] |= Phase.Delimiter;
   }
   for (const config of pairConfigs) {
-    const openerKind = inlineKind(config.opener);
-    const closerKind = inlineKind(config.closer);
+    const openerKind = config.opener;
+    const closerKind = config.closer;
     phasesByKind[openerKind] |= Phase.Pair;
     phasesByKind[closerKind] |= Phase.Pair;
   }

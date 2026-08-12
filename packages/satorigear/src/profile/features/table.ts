@@ -7,6 +7,7 @@ import {
   blockToken,
 } from "../../fragment/block.ts";
 import { buildInlineChildren } from "../../fragment/inline.ts";
+import { InlineKind } from "../../inline/kinds.ts";
 import { buildInlineCode } from "./code.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -357,7 +358,7 @@ export const feature: SyntaxFeature = {
     syntax: [
       {
         kind: "leaf",
-        token: "CodeSpan",
+        token: InlineKind.CodeSpan,
         // GFM removes a pipe escape inside table code spans, while CommonMark code spans preserve it.
         build: buildInlineCode,
       },

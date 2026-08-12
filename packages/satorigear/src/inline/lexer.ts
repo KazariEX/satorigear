@@ -1,29 +1,10 @@
-import { inlineKind } from "./kinds.ts";
+import { InlineKind } from "./kinds.ts";
 import { InlineTokenFlag } from "./tokens.ts";
 
 const htmlComment = /<!-->|<!--->|<!--[\s\S]*?(?:-->|$)/y;
 const autolink = /<(?:[A-Z][A-Z0-9+.\-]{1,31}:[^ \t\n\r<>]+|[\w!#$%&'*+\-/=?^`{|}~.]+@[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*(?:\.[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*)+)>/iy;
 const inlineHtml = /<[A-Za-z][A-Za-z0-9-]*(?:[ \t\n\r]+[A-Za-z_:][\w.:-]*(?:[ \t\n\r]*=[ \t\n\r]*(?:[^ \t\n\r"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t\n\r]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t\n\r]*>|<\?[\s\S]*?\?>|<![A-Z][\s\S]*?>|<!\[CDATA\[[\s\S]*?\]\]>/y;
 const entity = /&(?:#x[0-9A-F]{1,6}|#\d{1,7}|[A-Z][A-Z0-9]{0,30});/iy;
-
-const htmlCommentKind = inlineKind("HtmlComment");
-const codeSpanKind = inlineKind("CodeSpan");
-const autolinkKind = inlineKind("Autolink");
-const inlineHtmlKind = inlineKind("InlineHtml");
-const entityKind = inlineKind("Entity");
-const hardBreakKind = inlineKind("HardBreak");
-const escapeKind = inlineKind("Escape");
-const textKind = inlineKind("Text");
-const asteriskRunKind = inlineKind("AsteriskRun");
-const underscoreRunKind = inlineKind("UnderscoreRun");
-const tildeRunKind = inlineKind("TildeRun");
-const imageOpenKind = inlineKind("ImageOpen");
-const bracketOpenKind = inlineKind("BracketOpen");
-const linkTailKind = inlineKind("LinkTail");
-const referenceTailKind = inlineKind("ReferenceTail");
-const shortcutReferenceTailKind = inlineKind("ShortcutReferenceTail");
-const delimiterKind = inlineKind("Delimiter");
-const newlineKind = inlineKind("Newline");
 
 function appendToken(tokens: number[], kind: number, start: number, end: number, flags = 0): void {
   tokens.push(kind, start, end, flags);
@@ -285,7 +266,7 @@ export function tokenizeInline(source: string): readonly number[] {
       }
       offset = content;
       if (tokens.length > 0) {
-        appendToken(tokens, newlineKind, offset, offset);
+        appendToken(tokens, InlineKind.Newline, offset, offset);
       }
       lineStart = false;
       continue;
@@ -297,7 +278,7 @@ export function tokenizeInline(source: string): readonly number[] {
         const end = runEnd(source, offset, 32);
         const next = source.charCodeAt(end);
         if (end - offset >= 2 && (next === 10 || next === 13)) {
-          appendToken(tokens, hardBreakKind, offset, end);
+          appendToken(tokens, InlineKind.HardBreak, offset, end);
           offset = end;
           continue;
         }
@@ -319,77 +300,77 @@ export function tokenizeInline(source: string): readonly number[] {
     }
 
     let end = -1;
-    let kind = delimiterKind;
+    let kind = InlineKind.Delimiter;
     if (code === 60) {
       end = matchEnd(htmlComment, source, offset);
-      kind = htmlCommentKind;
+      kind = InlineKind.HtmlComment;
       if (end < 0) {
         end = matchEnd(autolink, source, offset);
-        kind = autolinkKind;
+        kind = InlineKind.Autolink;
       }
       if (end < 0) {
         end = matchEnd(inlineHtml, source, offset);
-        kind = inlineHtmlKind;
+        kind = InlineKind.InlineHtml;
       }
     }
     else if (code === 38) {
       end = matchEnd(entity, source, offset);
-      kind = entityKind;
+      kind = InlineKind.Entity;
     }
     else if (code === 92) {
       const next = source.charCodeAt(offset + 1);
       if (next === 10 || next === 13) {
         end = offset + 1;
-        kind = hardBreakKind;
+        kind = InlineKind.HardBreak;
       }
       else if (isAsciiPunctuation(next)) {
         end = offset + 2;
-        kind = escapeKind;
+        kind = InlineKind.Escape;
       }
       else if (next === 32 || next === 9) {
         end = textEnd(source, offset, textBoundary);
-        kind = textKind;
+        kind = InlineKind.Text;
       }
     }
     else if (code === 96) {
       end = codeSpanEnd(source, offset);
-      kind = codeSpanKind;
+      kind = InlineKind.CodeSpan;
     }
     else if (code === 42 || code === 95 || code === 126) {
       end = runEnd(source, offset, code);
-      kind = code === 42 ? asteriskRunKind : code === 95 ? underscoreRunKind : tildeRunKind;
+      kind = code === 42 ? InlineKind.AsteriskRun : code === 95 ? InlineKind.UnderscoreRun : InlineKind.TildeRun;
     }
     else if (code === 33 && source.charCodeAt(offset + 1) === 91) {
       end = offset + 2;
-      kind = imageOpenKind;
+      kind = InlineKind.ImageOpen;
     }
     else if (code === 91) {
       end = offset + 1;
-      kind = bracketOpenKind;
+      kind = InlineKind.BracketOpen;
     }
     else if (code === 93) {
       end = linkTailEnd(source, offset);
-      kind = linkTailKind;
+      kind = InlineKind.LinkTail;
       if (end < 0) {
         end = referenceTailEnd(source, offset);
-        kind = referenceTailKind;
+        kind = InlineKind.ReferenceTail;
       }
       if (end < 0) {
         end = offset + 1;
-        kind = shortcutReferenceTailKind;
+        kind = InlineKind.ShortcutReferenceTail;
       }
     }
     else {
       end = textEnd(source, offset, textBoundary);
-      kind = textKind;
+      kind = InlineKind.Text;
     }
 
     if (end <= offset) {
       end = offset + 1;
-      kind = delimiterKind;
+      kind = InlineKind.Delimiter;
     }
-    const decode = kind === escapeKind || kind === entityKind || (
-      (kind === linkTailKind || kind === referenceTailKind) && needsTextDecode(source, offset, end)
+    const decode = kind === InlineKind.Escape || kind === InlineKind.Entity || (
+      (kind === InlineKind.LinkTail || kind === InlineKind.ReferenceTail) && needsTextDecode(source, offset, end)
     );
     appendToken(tokens, kind, offset, end, decode ? InlineTokenFlag.DecodeText : 0);
     offset = end;
