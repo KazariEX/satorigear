@@ -2,5 +2,7 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   exports: true,
-  hash: false,
+  dts: {
+    build: true,
+  },
 });

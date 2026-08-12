@@ -1,0 +1,11 @@
+{
+  "extends": "@zinkawaii/tsconfig",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "packages/**/*.ts"
+  ]
+}

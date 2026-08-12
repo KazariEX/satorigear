@@ -1,0 +1,15 @@
+{
+  "extends": "@zinkawaii/tsconfig",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "./scripts/**/*.ts",
+    "./test/**/*.ts"
+  ]
+}
