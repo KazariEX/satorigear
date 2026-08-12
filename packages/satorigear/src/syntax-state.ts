@@ -1,7 +1,12 @@
-import { type BlockToken, tokenStart } from "./block/tokens.ts";
+import { tokenStart } from "./block/tokens.ts";
 import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
-import { createSourceView, type SourceSpan } from "./source-view.ts";
+import {
+  ContiguousSourceView,
+  SegmentedSourceView,
+  type SourceSpan,
+  type SourceView,
+} from "./source-view.ts";
 import type { BlockArenaChange, BlockHandle, BlockSyntaxView } from "./block/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 
@@ -37,35 +42,40 @@ interface BlockDefinition {
   key: string;
 }
 
-function appendTokenSpans(spans: SourceSpan[], token: BlockToken): void {
-  if (token.ranges?.length) {
-    for (const range of token.ranges) {
-      spans.push({ start: range.offset, end: range.end });
-    }
-  }
-  else {
-    spans.push({ start: token.offset, end: token.offset + token.text.length });
-  }
-}
-
-function inlineSpansOf(
+function inlineViewOf(
+  source: string,
   view: BlockSyntaxView,
   arena: BlockSyntaxView["arena"],
   nodeId: number,
   tokenBase: number,
-): SourceSpan[] {
-  const spans: SourceSpan[] = [];
+): SourceView | undefined {
+  let firstStart = -1;
+  let firstEnd = -1;
+  let spans: SourceSpan[] | undefined;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0) {
       const token = view.tokenAt(arena.leafToken(entry, tokenBase));
       if (token.type === "InlineChunk") {
-        appendTokenSpans(spans, token);
+        const end = token.offset + token.text.length;
+        if (firstStart < 0) {
+          firstStart = token.offset;
+          firstEnd = end;
+        }
+        else {
+          spans ??= [{ start: firstStart, end: firstEnd }];
+          spans.push({ start: token.offset, end });
+        }
       }
     }
   }
-  return spans;
+  if (spans) {
+    return new SegmentedSourceView(source, spans);
+  }
+  if (firstStart >= 0) {
+    return new ContiguousSourceView(source, firstStart, firstEnd);
+  }
 }
 
 export class SyntaxState {
@@ -132,13 +142,13 @@ export class SyntaxState {
         availableDefinitions.add(key);
       }
       if (rule.inlineContent) {
-        const spans = inlineSpansOf(view, arena, nodeId, tokenBase);
-        if (spans.length > 0) {
+        const inlineView = inlineViewOf(source, view, arena, nodeId, tokenBase);
+        if (inlineView) {
           bindings.push({
             id: nodeId,
             rule: rule.name,
             span: { start: offset, end: offset + arena.lenOf(nodeId) },
-            view: createSourceView(source, spans),
+            view: inlineView,
           });
         }
         return;
