@@ -24,7 +24,6 @@ export interface SourceView {
   readonly segments: readonly SourceViewSegment[];
   mapPoint: (offset: number) => number;
   mapSpan: (start: number, end: number) => SourceSpan;
-  mapSpans: (start: number, end: number) => SourceSpan[];
 }
 
 function containingSegment(view: SourceView, offset: number): number {
@@ -90,35 +89,6 @@ function mapSpan(this: SourceView, start: number, end: number): SourceSpan {
   };
 }
 
-function mapSpans(this: SourceView, start: number, end: number): SourceSpan[] {
-  validateSpan(this, start, end);
-  if (start === end) {
-    return [];
-  }
-
-  const mapped: SourceSpan[] = [];
-  for (let index = containingSegment(this, start); index < this.segments.length; index++) {
-    const segment = this.segments[index];
-    if (segment.viewStart >= end) {
-      break;
-    }
-    const viewStart = Math.max(start, segment.viewStart);
-    const viewEnd = Math.min(end, segment.viewEnd);
-    const next = {
-      start: segment.start + viewStart - segment.viewStart,
-      end: segment.start + viewEnd - segment.viewStart,
-    };
-    const previous = mapped[mapped.length - 1];
-    if (previous?.end === next.start) {
-      previous.end = next.end;
-    }
-    else {
-      mapped.push(next);
-    }
-  }
-  return mapped;
-}
-
 // Build logical text from physical source spans while preserving original coordinates.
 export function createSourceView(source: string, spans: readonly SourceSpan[]): SourceView {
   if (spans.length === 1) {
@@ -126,7 +96,7 @@ export function createSourceView(source: string, spans: readonly SourceSpan[]): 
     const span = spans[0];
     validateSourceSpan(span, source.length);
     if (span.start === span.end) {
-      return { text: "", segments: [], mapPoint, mapSpan, mapSpans };
+      return { text: "", segments: [], mapPoint, mapSpan };
     }
     const length = span.end - span.start;
     return {
@@ -134,7 +104,6 @@ export function createSourceView(source: string, spans: readonly SourceSpan[]): 
       segments: [{ start: span.start, end: span.end, viewStart: 0, viewEnd: length }],
       mapPoint,
       mapSpan,
-      mapSpans,
     };
   }
 
@@ -159,5 +128,5 @@ export function createSourceView(source: string, spans: readonly SourceSpan[]): 
     previousEnd = span.end;
   }
 
-  return { text: parts.join(""), segments, mapPoint, mapSpan, mapSpans };
+  return { text: parts.join(""), segments, mapPoint, mapSpan };
 }
