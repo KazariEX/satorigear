@@ -8,6 +8,7 @@ import {
   firstInlineTokenEndingAfter,
   inlineTokenCount,
   inlineTokenEnd,
+  InlineTokenFlag,
   inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
@@ -34,8 +35,6 @@ interface AttributeRange {
 const attributesKind = inlineKind("Attributes");
 const boundaryKind = inlineKind("InlineBoundary");
 const textKind = inlineKind("Text");
-const detachedFlag = 4;
-const terminalFlag = 8;
 
 const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
   const result = build(nodeId, offset, tokenBase, context) as SpannedNode<Paragraph | Heading>;
@@ -203,8 +202,8 @@ export const feature: SyntaxFeature = {
             return false;
           }
           const flags = inlineTokenFlags(accumulator.context.tokens, tokenIndex);
-          const terminal = Boolean(flags & terminalFlag);
-          const detached = Boolean(flags & detachedFlag);
+          const terminal = Boolean(flags & InlineTokenFlag.AttributeTerminal);
+          const detached = Boolean(flags & InlineTokenFlag.AttributeDetached);
           if (
             terminal && (
               detached ||
@@ -238,7 +237,13 @@ function transformAttributeTokens(source: string, tokens: InlineTokenStream): In
   let cursor = 0;
   for (const range of ranges) {
     copyRange(result, tokens, cursor, range.start);
-    appendInlineToken(result, attributesKind, range.start, range.end, range.detached ? detachedFlag : 0);
+    appendInlineToken(
+      result,
+      attributesKind,
+      range.start,
+      range.end,
+      range.detached ? InlineTokenFlag.AttributeDetached : 0,
+    );
     cursor = range.end;
   }
   copyRange(result, tokens, cursor, source.length);
@@ -250,7 +255,11 @@ function transformAttributeTokens(source: string, tokens: InlineTokenStream): In
     }
     else if (kind === attributesKind) {
       if (terminal) {
-        setInlineTokenFlags(result, index, inlineTokenFlags(result, index) | terminalFlag);
+        setInlineTokenFlags(
+          result,
+          index,
+          inlineTokenFlags(result, index) | InlineTokenFlag.AttributeTerminal,
+        );
       }
     }
     else if (

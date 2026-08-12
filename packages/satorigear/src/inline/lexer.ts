@@ -1,4 +1,5 @@
 import { inlineKind } from "./kinds.ts";
+import { InlineTokenFlag } from "./tokens.ts";
 
 const htmlComment = /<!-->|<!--->|<!--[\s\S]*?(?:-->|$)/y;
 const autolink = /<(?:[A-Z][A-Z0-9+.\-]{1,31}:[^ \t\n\r<>]+|[\w!#$%&'*+\-/=?^`{|}~.]+@[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*(?:\.[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*)+)>/iy;
@@ -24,14 +25,24 @@ const shortcutReferenceTailKind = inlineKind("ShortcutReferenceTail");
 const delimiterKind = inlineKind("Delimiter");
 const newlineKind = inlineKind("Newline");
 
-function appendToken(tokens: number[], kind: number, start: number, end: number): void {
-  tokens.push(kind, start, end, 0);
+function appendToken(tokens: number[], kind: number, start: number, end: number, flags = 0): void {
+  tokens.push(kind, start, end, flags);
 }
 
 function matchEnd(pattern: RegExp, source: string, start: number): number {
   pattern.lastIndex = start;
   const match = pattern.exec(source);
   return match === null ? -1 : start + match[0].length;
+}
+
+function needsTextDecode(source: string, start: number, end: number): boolean {
+  for (let index = start; index < end; index++) {
+    const code = source.charCodeAt(index);
+    if (code === 38 || code === 92) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function runEnd(source: string, start: number, marker: number): number {
@@ -377,7 +388,10 @@ export function tokenizeInline(source: string): readonly number[] {
       end = offset + 1;
       kind = delimiterKind;
     }
-    appendToken(tokens, kind, offset, end);
+    const decode = kind === escapeKind || kind === entityKind || (
+      (kind === linkTailKind || kind === referenceTailKind) && needsTextDecode(source, offset, end)
+    );
+    appendToken(tokens, kind, offset, end, decode ? InlineTokenFlag.DecodeText : 0);
     offset = end;
   }
   return tokens;

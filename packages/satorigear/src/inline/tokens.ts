@@ -4,6 +4,15 @@ export type InlineTokenStream = readonly number[];
 // region-local record layout. Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = 4;
 
+// Token flags survive lexer and feature rewrites, so their bits are allocated here
+// even when a particular feature owns their interpretation.
+// eslint-disable-next-line no-restricted-syntax
+export const enum InlineTokenFlag {
+  AttributeDetached = 4,
+  AttributeTerminal = 8,
+  DecodeText = 16,
+}
+
 export function inlineTokenCount(tokens: InlineTokenStream): number {
   return tokens.length / inlineTokenStride;
 }
@@ -18,21 +27,6 @@ export function inlineTokenStart(tokens: InlineTokenStream, index: number): numb
 
 export function inlineTokenEnd(tokens: InlineTokenStream, index: number): number {
   return tokens[index * inlineTokenStride + 2];
-}
-
-export function firstInlineTokenEndingAfter(tokens: InlineTokenStream, offset: number): number {
-  let low = 0;
-  let high = inlineTokenCount(tokens);
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (inlineTokenEnd(tokens, middle) <= offset) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-  return low;
 }
 
 export function inlineTokenFlags(tokens: InlineTokenStream, index: number): number {
@@ -65,4 +59,19 @@ export function copyInlineToken(target: number[], tokens: InlineTokenStream, ind
   for (let field = 0; field < inlineTokenStride; field++) {
     target.push(tokens[offset + field]);
   }
+}
+
+export function firstInlineTokenEndingAfter(tokens: InlineTokenStream, offset: number): number {
+  let low = 0;
+  let high = inlineTokenCount(tokens);
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (inlineTokenEnd(tokens, middle) <= offset) {
+      low = middle + 1;
+    }
+    else {
+      high = middle;
+    }
+  }
+  return low;
 }

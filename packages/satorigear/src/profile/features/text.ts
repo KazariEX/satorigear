@@ -5,7 +5,7 @@ import {
   type InlineLeafBuilder,
 } from "../../fragment/inline.ts";
 import { withSpan } from "../../fragment/node.ts";
-import { inlineTokenText } from "../../inline/tokens.ts";
+import { InlineTokenFlag, inlineTokenFlags, inlineTokenText } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
@@ -22,7 +22,12 @@ export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, accum
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   appendInline(
     accumulator,
-    withSpan<Text>({ type: "text", value: semanticText(text) }, sourceSpan.start, sourceSpan.end),
+    withSpan<Text>({
+      type: "text",
+      value: inlineTokenFlags(context.tokens, tokenIndex) & InlineTokenFlag.DecodeText
+        ? semanticText(text)
+        : text,
+    }, sourceSpan.start, sourceSpan.end),
   );
   return true;
 };
