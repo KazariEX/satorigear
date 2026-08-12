@@ -20,11 +20,17 @@ function atxAt(source: string, line: BlockLine): {
   if (!indent || source[indent.offset] !== "#") {
     return;
   }
-  const match = /^(#{1,6})(?:[ \t]+|$)/.exec(source.slice(indent.offset, line.end));
-  if (!match) {
+  let markerEnd = indent.offset + 1;
+  while (markerEnd < line.end && markerEnd - indent.offset < 6 && source[markerEnd] === "#") {
+    markerEnd++;
+  }
+  if (markerEnd < line.end && source[markerEnd] !== " " && source[markerEnd] !== "\t") {
     return;
   }
-  const contentOffset = indent.offset + match[0].length;
+  let contentOffset = markerEnd;
+  while (contentOffset < line.end && (source[contentOffset] === " " || source[contentOffset] === "\t")) {
+    contentOffset++;
+  }
   let contentEnd = line.end;
   while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
     contentEnd--;
@@ -39,7 +45,12 @@ function atxAt(source: string, line: BlockLine): {
       contentEnd--;
     }
   }
-  return { markerOffset: indent.offset, marker: match[1], contentOffset, contentEnd };
+  return {
+    markerOffset: indent.offset,
+    marker: source.slice(indent.offset, markerEnd),
+    contentOffset,
+    contentEnd,
+  };
 }
 
 export function setextMarkerAt(source: string, line: BlockLine): "=" | "-" | undefined {
