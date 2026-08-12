@@ -20,9 +20,7 @@ import { semanticText } from "./text.ts";
 import type { BlockToken } from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/pairing.ts";
 import type { InlineTokenTransform } from "../../inline/profile.ts";
-import type {
-  SyntaxFeature,
-} from "../types.ts";
+import type { SyntaxFeature } from "../types.ts";
 
 interface LinkDefinitionFields {
   definitionKey: string;
@@ -101,7 +99,7 @@ function linkDefinitionAt(
     if (source[offset] === "]" && source[offset + 1] === ":") {
       break;
     }
-    if (!/[ \t]/.test(source[offset])) {
+    if (source[offset] !== " " && source[offset] !== "\t") {
       labelHasContent = true;
     }
     if (++labelLength > 999) {
