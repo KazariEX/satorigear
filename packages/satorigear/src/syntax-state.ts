@@ -66,7 +66,6 @@ export class SyntaxState {
   #definitionEntries?: BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
   #inlineArena: InlineArena;
-  #inlineRoots = new Map<number, number>();
   #profile: SyntaxProfile;
   // Blocks own region lifetimes; this index only resolves current arena node IDs while building fragments.
   #regions = new Map<number, InlineRegion>();
@@ -304,9 +303,8 @@ export class SyntaxState {
 
     const roots: number[] = [];
     this.#inlineArena.build(segments, roots);
-    this.#inlineRoots.clear();
     for (let index = 0; index < regions.length; index++) {
-      this.#inlineRoots.set(regions[index].id, roots[index]);
+      regions[index].preparedRoot = roots[index];
     }
   }
 
@@ -315,14 +313,13 @@ export class SyntaxState {
     if (!region) {
       return;
     }
-    const root = this.#inlineRoots.get(nodeId);
-    if (root === void 0) {
+    if (region.preparedRoot < 0) {
       throw new Error(`Inline region ${nodeId} was built outside its prepared block batch`);
     }
     return {
       arena: this.#inlineArena,
       blockRule: region.rule,
-      rootId: root,
+      rootId: region.preparedRoot,
       rootOffset: inlineTokenCount(region.tokens) > 0 ? inlineTokenStart(region.tokens, 0) : 0,
       tokens: region.tokens,
       view: region.view,

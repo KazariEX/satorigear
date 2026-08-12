@@ -30,6 +30,7 @@ export class InlineRegion {
   #tokenSource?: string;
   #tokens?: InlineTokenStream;
   id: number;
+  preparedRoot = -1;
   revision = 0;
   rule: string;
   span: SourceSpan;
@@ -88,6 +89,7 @@ export class InlineRegion {
     this.rule = binding.rule;
     this.span = binding.span;
     this.view = binding.view;
+    this.preparedRoot = -1;
   }
 
   #updateTokens(
