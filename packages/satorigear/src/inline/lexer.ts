@@ -222,40 +222,23 @@ function isAsciiPunctuation(code: number): boolean {
   );
 }
 
-function textEnd(source: string, start: number): number {
-  let end = start;
-  while (end < source.length) {
-    const code = source.charCodeAt(end);
-    if (code === 92 && (source.charCodeAt(end + 1) === 32 || source.charCodeAt(end + 1) === 9)) {
-      end += 2;
-      continue;
-    }
-    if (code === 32) {
-      let spaces = end + 1;
-      while (source.charCodeAt(spaces) === 32) {
-        spaces++;
-      }
-      const next = source.charCodeAt(spaces);
-      if (spaces > end + 1 && (spaces === source.length || next === 10 || next === 13)) {
-        break;
-      }
-      end++;
-      continue;
-    }
-    if (
-      code === 10 || code === 13 || code === 92 || code === 96 || code === 42 ||
-      code === 95 || code === 91 || code === 93 || code === 60 || code === 33 ||
-      code === 38 || code === 126
-    ) {
+function textEnd(source: string, start: number, boundary: RegExp): number {
+  boundary.lastIndex = start;
+  let match = boundary.exec(source);
+  while (match !== null && source.charCodeAt(match.index) === 92) {
+    const next = source.charCodeAt(match.index + 1);
+    if (next !== 32 && next !== 9) {
       break;
     }
-    end++;
+    boundary.lastIndex = match.index + 2;
+    match = boundary.exec(source);
   }
-  return end;
+  return match?.index ?? source.length;
 }
 
 export function tokenizeInline(source: string): readonly number[] {
   const tokens: number[] = [];
+  const textBoundary = / {2,}(?=[\n\r]|$)|[\n\r\\`*_[\]<!&~]/g;
   let offset = 0;
   let lineStart = true;
   while (offset < source.length) {
@@ -353,7 +336,7 @@ export function tokenizeInline(source: string): readonly number[] {
         kind = escapeKind;
       }
       else if (next === 32 || next === 9) {
-        end = textEnd(source, offset);
+        end = textEnd(source, offset, textBoundary);
         kind = textKind;
       }
     }
@@ -386,7 +369,7 @@ export function tokenizeInline(source: string): readonly number[] {
       }
     }
     else {
-      end = textEnd(source, offset);
+      end = textEnd(source, offset, textBoundary);
       kind = textKind;
     }
 
