@@ -1,6 +1,6 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
-import { type BlockToken, tokenEnd, tokenStart } from "../block/tokens.ts";
 import type { BlockSyntaxView } from "../block/arena.ts";
+import type { BlockKind } from "../block/kinds.ts";
 import type { SyntaxProfile } from "../profile/types.ts";
 import type { SourceSpan } from "../source-view.ts";
 import type { InlineRegionBatch } from "../syntax-state.ts";
@@ -42,16 +42,16 @@ export function firstNonspace(source: string, start: number, end: number): numbe
 export function directBlockToken(
   nodeId: number,
   tokenBase: number,
-  tokenType: string,
+  kind: BlockKind,
   context: BlockBuildContext,
-): BlockToken | undefined {
+): number | undefined {
   const arena = context.view.arena;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0) {
-      const token = context.view.tokenAt(arena.leafToken(entry, tokenBase));
-      if (token.type === tokenType) {
+      const token = arena.leafToken(entry, tokenBase);
+      if (context.view.tokens.kind(token) === kind) {
         return token;
       }
     }
@@ -61,12 +61,12 @@ export function directBlockToken(
 export function blockToken(
   nodeId: number,
   tokenBase: number,
-  tokenType: string,
+  kind: BlockKind,
   context: BlockBuildContext,
-): BlockToken {
-  const token = directBlockToken(nodeId, tokenBase, tokenType, context);
-  if (!token) {
-    throw new Error(`Expected ${context.view.arena.ruleNameOf(nodeId)} syntax to contain ${tokenType}`);
+): number {
+  const token = directBlockToken(nodeId, tokenBase, kind, context);
+  if (token === void 0) {
+    throw new Error(`Expected ${context.view.arena.ruleNameOf(nodeId)} syntax to contain block token ${kind}`);
   }
   return token;
 }
@@ -84,9 +84,9 @@ export function payloadBounds(
     for (let index = 0; index < childCount; index++) {
       const child = arena.childAt(currentId, index);
       if (child < 0) {
-        const token = context.view.tokenAt(arena.leafToken(child, currentTokenBase));
-        const start = tokenStart(token);
-        const end = tokenEnd(token);
+        const token = arena.leafToken(child, currentTokenBase);
+        const start = context.view.tokens.start(token);
+        const end = context.view.tokens.end(token);
         if (end > start) {
           result.start = Math.min(result.start, start);
           result.end = Math.max(result.end, end);

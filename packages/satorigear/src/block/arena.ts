@@ -1,10 +1,11 @@
-import { type BlockToken, type BlockTokenChange, tokenEnd, tokenStart } from "./tokens.ts";
+import { BlockKind } from "./kinds.ts";
+import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
 
 export interface BlockSyntaxView {
   readonly arena: BlockArena;
   readonly blocks: readonly TopLevelBlock[];
-  tokenAt: (index: number) => BlockToken;
+  readonly tokens: BlockTokenStream;
 }
 
 // Object identity remains stable for unchanged top-level blocks while released numeric IDs may be reused.
@@ -25,7 +26,7 @@ export interface BlockArenaChange {
 }
 
 interface Frame {
-  close: string;
+  close: BlockKind;
   children: number[];
   rule?: CompiledBlockRule;
 }
@@ -57,13 +58,15 @@ export class BlockArena {
   #releaseStack: number[] = [];
   #rules: CompiledBlockRule[];
   #schema: BlockSyntaxSchema;
-  #tokens: readonly BlockToken[] = [];
+  #tokens: BlockTokenStream;
+
   constructor(schema: BlockSyntaxSchema) {
     this.#rules = [];
     this.#schema = schema;
+    this.#tokens = new BlockTokenStream();
   }
 
-  build(tokens: readonly BlockToken[]): void {
+  build(tokens: BlockTokenStream): void {
     // One-shot parses reuse array capacity, but no node identity survives across documents.
     this.#edgeLength = 0;
     this.#freeEdges.length = 0;
@@ -77,17 +80,11 @@ export class BlockArena {
     return {
       arena: this,
       blocks: this.#blocks,
-      tokenAt: (index) => {
-        const token = this.#tokens[index];
-        if (!token) {
-          throw new Error("block arena returned a leaf outside its token stream");
-        }
-        return token;
-      },
+      tokens: this.#tokens,
     };
   }
 
-  update(tokens: readonly BlockToken[], change: BlockTokenChange): BlockArenaChange {
+  update(tokens: BlockTokenStream, change: BlockTokenChange): BlockArenaChange {
     const previous = this.#blocks;
     // Token damage can begin inside a block, so widen it to complete top-level records.
     let prefixEnd = 0;
@@ -99,7 +96,7 @@ export class BlockArena {
       suffixStart++;
     }
 
-    const tokenDelta = change.tokens.length - (change.oldEnd - change.oldStart);
+    const tokenDelta = change.newEnd - change.oldStart - (change.oldEnd - change.oldStart);
     const buildStart = previous[prefixEnd - 1]?.tokenEnd ?? 0;
     const oldSuffixTokenStart = previous[suffixStart]?.tokenStart;
     const buildEnd = oldSuffixTokenStart === void 0 ? tokens.length : oldSuffixTokenStart + tokenDelta;
@@ -185,15 +182,15 @@ export class BlockArena {
 
   #buildRange(start: number, end: number): TopLevelBlock[] {
     const document: Frame = {
-      close: "",
+      close: BlockKind.None,
       children: [],
     };
     const stack = [document];
 
     for (let index = start; index < end; index++) {
-      const token = this.#tokens[index];
+      const kind = this.#tokens.kind(index);
       const current = stack.at(-1)!;
-      const spec = this.#schema.frameByOpen[token.type];
+      const spec = this.#schema.frameByOpen[kind];
       if (spec !== void 0) {
         stack.push({
           close: spec.close,
@@ -203,21 +200,21 @@ export class BlockArena {
         continue;
       }
 
-      const groupedRule = this.#schema.groupedRuleByToken[token.type];
+      const groupedRule = this.#schema.groupedRuleByToken[kind];
       if (groupedRule !== void 0) {
         const children: number[] = [];
         do {
           children.push(leaf(index++));
         } while (
           index < end &&
-          this.#schema.groupedRuleByToken[this.#tokens[index].type] === groupedRule
+          this.#schema.groupedRuleByToken[this.#tokens.kind(index)] === groupedRule
         );
         index--;
         current.children.push(this.#allocate(groupedRule, children));
         continue;
       }
 
-      if (current.close === token.type) {
+      if (current.close === kind) {
         current.children.push(leaf(index));
         stack.pop();
         const id = this.#allocate(current.rule!, current.children);
@@ -225,7 +222,7 @@ export class BlockArena {
         continue;
       }
 
-      const leafRule = this.#schema.ruleByLeaf[token.type];
+      const leafRule = this.#schema.ruleByLeaf[kind];
       if (leafRule !== void 0) {
         current.children.push(this.#allocate(leafRule, [leaf(index)]));
         continue;
@@ -245,11 +242,11 @@ export class BlockArena {
   }
 
   #entryEnd(entry: number): number {
-    return entry < 0 ? tokenEnd(this.#tokens[~entry]) : this.#buildStarts[entry] + this.#lengths[entry];
+    return entry < 0 ? this.#tokens.end(~entry) : this.#buildStarts[entry] + this.#lengths[entry];
   }
 
   #entryStart(entry: number): number {
-    return entry < 0 ? tokenStart(this.#tokens[~entry]) : this.#buildStarts[entry];
+    return entry < 0 ? this.#tokens.start(~entry) : this.#buildStarts[entry];
   }
 
   #entryTokenEnd(entry: number): number {
@@ -327,8 +324,8 @@ export class BlockArena {
     return tokenBase + ~entry;
   }
 
-  leafTokenType(entry: number, tokenBase: number): string {
-    return this.#tokens[this.leafToken(entry, tokenBase)].type;
+  leafTokenKind(entry: number, tokenBase: number): BlockKind {
+    return this.#tokens.kind(this.leafToken(entry, tokenBase));
   }
 
   lenOf(id: number): number {

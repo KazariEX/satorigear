@@ -1,4 +1,4 @@
-import { tokenStart } from "./block/tokens.ts";
+import { BlockKind } from "./block/kinds.ts";
 import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import {
@@ -56,16 +56,17 @@ function inlineViewOf(
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0) {
-      const token = view.tokenAt(arena.leafToken(entry, tokenBase));
-      if (token.type === "InlineChunk") {
-        const end = token.offset + token.text.length;
+      const token = arena.leafToken(entry, tokenBase);
+      if (view.tokens.kind(token) === BlockKind.InlineChunk) {
+        const start = view.tokens.start(token);
+        const end = view.tokens.end(token);
         if (firstStart < 0) {
-          firstStart = token.offset;
+          firstStart = start;
           firstEnd = end;
         }
         else {
           spans ??= [{ start: firstStart, end: firstEnd }];
-          spans.push({ start: token.offset, end });
+          spans.push({ start, end });
         }
       }
     }
@@ -137,7 +138,7 @@ export class SyntaxState {
       const rule = arena.ruleOf(nodeId);
       const definitionKey = rule.definitionKey;
       if (definitionKey) {
-        const key = definitionKey(view.tokenAt(tokenBase));
+        const key = definitionKey(view.tokens, tokenBase);
         (tailDefinitionEntries ??= []).push({ blockIndex, key });
         availableDefinitions.add(key);
       }
@@ -173,7 +174,7 @@ export class SyntaxState {
       const syntaxBlock = view.blocks[index];
       const childId = syntaxBlock.id;
       const tokenBase = syntaxBlock.tokenStart;
-      const offset = tokenStart(view.tokenAt(tokenBase));
+      const offset = view.tokens.start(tokenBase);
       bindingStarts.push(bindings.length);
       collect(childId, offset, tokenBase, blocks.length);
       blocks.push({

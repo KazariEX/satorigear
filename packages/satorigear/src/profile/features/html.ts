@@ -1,6 +1,8 @@
+import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
-import { type BlockToken, logicalToken } from "../../block/tokens.ts";
+import { appendLogicalToken } from "../../block/tokens.ts";
 import {
+  type BlockBuildContext,
   blockEnd,
   blockToken,
   normalizeLines,
@@ -13,11 +15,6 @@ import type { SyntaxFeature } from "../types.ts";
 interface HtmlStart {
   interruptParagraph: boolean;
   terminator?: string;
-}
-
-// Scanning owns block classification; node building only preserves an unfinished terminator block.
-interface HtmlBlockToken extends BlockToken {
-  unterminated: boolean;
 }
 
 const htmlBlockTags = new Set([
@@ -124,12 +121,12 @@ function htmlStartAt(source: string, line: BlockLine): HtmlStart | undefined {
   }
 }
 
-function htmlBlockToken(token: BlockToken): HtmlBlockToken {
-  const result = token as Partial<HtmlBlockToken>;
-  if (token.type !== "HtmlBlockToken" || typeof result.unterminated !== "boolean") {
+function htmlBlockUnterminated(token: number, context: BlockBuildContext): boolean {
+  const result = context.view.tokens.value<boolean>(token);
+  if (context.view.tokens.kind(token) !== BlockKind.HtmlBlockToken || result === void 0) {
     throw new Error("Expected HtmlBlockToken to contain its termination state");
   }
-  return result as HtmlBlockToken;
+  return result;
 }
 
 const buildInlineHtml: InlineLeafBuilder = (tokenIndex, sourceSpan, accumulator) => {
@@ -149,13 +146,14 @@ export const feature: SyntaxFeature = {
         rule: "HtmlBlock",
         syntax: {
           kind: "leaf",
-          token: "HtmlBlockToken",
+          token: BlockKind.HtmlBlockToken,
         },
         build(nodeId, offset, tokenBase, context) {
           const end = offset + context.view.arena.lenOf(nodeId);
-          const token = htmlBlockToken(blockToken(nodeId, tokenBase, "HtmlBlockToken", context));
-          let html = normalizeLines(token.text);
-          if (!token.unterminated && html.endsWith("\n")) {
+          const token = blockToken(nodeId, tokenBase, BlockKind.HtmlBlockToken, context);
+          const unterminated = htmlBlockUnterminated(token, context);
+          let html = normalizeLines(context.view.tokens.text(context.source, token));
+          if (!unterminated && html.endsWith("\n")) {
             html = html.slice(0, -1);
           }
           return {
@@ -202,9 +200,7 @@ export const feature: SyntaxFeature = {
               end++;
             }
           }
-          const token = logicalToken("HtmlBlockToken", source, lines, start, end) as HtmlBlockToken;
-          token.unterminated = unterminated;
-          out.push(token);
+          appendLogicalToken(out, BlockKind.HtmlBlockToken, source, lines, start, end, unterminated);
           return end;
         },
       },

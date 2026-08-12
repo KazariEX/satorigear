@@ -1,18 +1,12 @@
 import { type BlockLine, indentOf, isBlank, lineIndent } from "./lines.ts";
-import {
-  type BlockToken,
-  type BlockTokenChange,
-  createShiftedToken,
-  createTokenChange,
-  tokenEqualsAfterShift,
-} from "./tokens.ts";
+import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocation, SourceSpan } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanContext {
   endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
   startsInterruptingBlock: (source: string, line: BlockLine) => boolean;
-  resolveLines: (source: string, lines: readonly BlockLine[], tokens: BlockToken[]) => void;
+  resolveLines: (source: string, lines: readonly BlockLine[], tokens: BlockTokenStream) => void;
 }
 
 export interface BlockScanChange {
@@ -26,7 +20,7 @@ function profileStarts(
   source: string,
   lines: readonly BlockLine[],
   start: number,
-  out: BlockToken[],
+  out: BlockTokenStream,
 ): number | undefined {
   const indent = lineIndent(source, lines[start]);
   if (!indent) {
@@ -98,7 +92,7 @@ function resolveBlock(
   source: string,
   lines: readonly BlockLine[],
   start: number,
-  out: BlockToken[],
+  out: BlockTokenStream,
 ): number {
   const matchedEnd = profileStarts(profile, context, source, lines, start, out);
   if (matchedEnd !== void 0) {
@@ -125,7 +119,7 @@ function resolveLines(
   context: BlockScanContext,
   source: string,
   lines: readonly BlockLine[],
-  out: BlockToken[],
+  out: BlockTokenStream,
   visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => boolean,
 ): void {
   for (let index = 0; index < lines.length;) {
@@ -220,9 +214,11 @@ function updatePhysicalLines(
 }
 
 function sameShiftedBlock(
-  previous: readonly BlockToken[],
+  previous: BlockTokenStream,
+  previousSource: string,
   checkpoint: BlockCheckpoint,
-  next: readonly BlockToken[],
+  next: BlockTokenStream,
+  nextSource: string,
   tokenStart: number,
   tokenEnd: number,
   delta: number,
@@ -232,7 +228,14 @@ function sameShiftedBlock(
     return false;
   }
   for (let index = 0; index < length; index++) {
-    if (!tokenEqualsAfterShift(previous[checkpoint.tokenStart + index], next[tokenStart + index], delta)) {
+    if (!previous.equalsAfterShift(
+      checkpoint.tokenStart + index,
+      previousSource,
+      next,
+      tokenStart + index,
+      nextSource,
+      delta,
+    )) {
       return false;
     }
   }
@@ -279,12 +282,12 @@ export class BlockScanner {
   #lines: BlockLine[];
   #profile: BlockProfile;
   #source: string;
-  #tokens: BlockToken[];
+  #tokens: BlockTokenStream;
 
   constructor(source: string, profile: BlockProfile) {
     const context = createBlockScanContext(profile);
     const lines = linesOf(source);
-    const tokens: BlockToken[] = [];
+    const tokens = new BlockTokenStream(source.length);
     const checkpoints: BlockCheckpoint[] = [];
     resolveLines(profile, context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
       checkpoints.push({
@@ -308,7 +311,7 @@ export class BlockScanner {
     return this.#source;
   }
 
-  get tokens(): readonly BlockToken[] {
+  get tokens(): BlockTokenStream {
     return this.#tokens;
   }
 
@@ -345,7 +348,7 @@ export class BlockScanner {
     const oldTokenStart = checkpoint?.tokenStart ?? 0;
     const restartLine = nextLines.findIndex((line) => line.start >= restartOffset);
     const scanLines = restartLine < 0 ? [] : nextLines.slice(restartLine);
-    const replacement: BlockToken[] = [];
+    const replacement = new BlockTokenStream(nextSource.length);
     const scanned: BlockCheckpoint[] = [];
     let converged = -1;
     // Old checkpoints and rescanned blocks share source order, so candidates only move forward.
@@ -365,9 +368,18 @@ export class BlockScanner {
         if (
           candidate?.lineStart + delta === blockStart &&
           candidate.lineEnd + delta === blockEnd &&
-          sameShiftedBlock(this.#tokens, candidate, replacement, tokenStart, tokenEnd, delta)
+          sameShiftedBlock(
+            this.#tokens,
+            previousSource,
+            candidate,
+            replacement,
+            nextSource,
+            tokenStart,
+            tokenEnd,
+            delta,
+          )
         ) {
-          replacement.length = tokenStart;
+          replacement.truncate(tokenStart);
           converged = convergenceCandidate;
           return true;
         }
@@ -379,17 +391,13 @@ export class BlockScanner {
     const oldTokenEnd = converged < 0 ? this.#tokens.length : this.#checkpoints[converged].tokenStart;
     const tokenDelta = replacement.length - (oldTokenEnd - oldTokenStart);
     const previousTokens = this.#tokens;
-    const tokenChange = createTokenChange(
-      previousTokens,
+    const tokenChange = previousTokens.replace(
+      previousSource,
+      nextSource,
       oldTokenStart,
       oldTokenEnd,
       replacement,
-      delta,
     );
-    const suffix = delta === 0
-      ? previousTokens.slice(oldTokenEnd)
-      : previousTokens.slice(oldTokenEnd).map((token) => createShiftedToken(token, delta));
-    this.#tokens = [...previousTokens.slice(0, oldTokenStart), ...replacement, ...suffix];
     const prefixCheckpoints = this.#checkpoints.slice(0, Math.max(0, restart));
     const scannedCheckpoints = scanned.map((value) => ({
       ...value,

@@ -1,4 +1,5 @@
 import type { List, ListItem } from "mdast";
+import { BlockKind } from "../../block/kinds.ts";
 import {
   type BlockLine,
   contentAfterColumns,
@@ -6,7 +7,6 @@ import {
   isBlank,
   lineIndent,
 } from "../../block/lines.ts";
-import { tokenEnd, tokenStart } from "../../block/tokens.ts";
 import {
   type BlockBuildContext,
   blockEnd,
@@ -208,7 +208,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (nodeId, offset, tokenBase, co
   const marker = blockToken(
     nodeId,
     tokenBase,
-    rule === "OrderedListItem" ? "OrderedItemOpen" : "UnorderedItemOpen",
+    rule === "OrderedListItem" ? BlockKind.OrderedItemOpen : BlockKind.UnorderedItemOpen,
     context,
   );
   const children = buildBlockChildren(nodeId, offset, tokenBase, context);
@@ -218,7 +218,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (nodeId, offset, tokenBase, co
     checked: null,
     children,
     position: {
-      start: tokenStart(marker),
+      start: context.view.tokens.start(marker),
       end: lastChildEnd(children, blockEnd(nodeId, offset, context)),
     },
   };
@@ -228,7 +228,12 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (nodeId, offset, tokenBase, context) => {
     const arena = context.view.arena;
     const itemRule = ordered ? "OrderedListItem" : "UnorderedListItem";
-    const listMarker = blockToken(nodeId, tokenBase, ordered ? "OrderedListOpen" : "UnorderedListOpen", context);
+    const listMarker = blockToken(
+      nodeId,
+      tokenBase,
+      ordered ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen,
+      context,
+    );
     const items: SpannedNode<ListItem>[] = [];
     const childCount = arena.childCount(nodeId);
     for (let index = 0; index < childCount; index++) {
@@ -245,12 +250,12 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     return {
       type: "list",
       ordered,
-      start: ordered ? Number.parseInt(listMarker.text, 10) : null,
+      start: ordered ? Number.parseInt(context.view.tokens.text(context.source, listMarker), 10) : null,
       spread: childrenSpread(nodeId, offset, tokenBase, false, context, itemRule),
       children: items,
       position: {
-        start: tokenStart(listMarker),
-        end: lastChildEnd(items, tokenEnd(listMarker)),
+        start: context.view.tokens.start(listMarker),
+        end: lastChildEnd(items, context.view.tokens.end(listMarker)),
       },
     };
   };
@@ -263,24 +268,24 @@ export const feature: SyntaxFeature = {
         rule: "UnorderedListItem",
         syntax: {
           kind: "frame",
-          open: "UnorderedItemOpen",
-          close: "UnorderedItemClose",
+          open: BlockKind.UnorderedItemOpen,
+          close: BlockKind.UnorderedItemClose,
         },
       },
       {
         rule: "OrderedListItem",
         syntax: {
           kind: "frame",
-          open: "OrderedItemOpen",
-          close: "OrderedItemClose",
+          open: BlockKind.OrderedItemOpen,
+          close: BlockKind.OrderedItemClose,
         },
       },
       {
         rule: "UnorderedList",
         syntax: {
           kind: "block",
-          open: "UnorderedListOpen",
-          close: "UnorderedListClose",
+          open: BlockKind.UnorderedListOpen,
+          close: BlockKind.UnorderedListClose,
         },
         build: createBuildList(false),
       },
@@ -288,8 +293,8 @@ export const feature: SyntaxFeature = {
         rule: "OrderedList",
         syntax: {
           kind: "block",
-          open: "OrderedListOpen",
-          close: "OrderedListClose",
+          open: BlockKind.OrderedListOpen,
+          close: BlockKind.OrderedListClose,
         },
         build: createBuildList(true),
       },
@@ -316,15 +321,11 @@ export const feature: SyntaxFeature = {
             return;
           }
           const kind = listMarker.kind;
-          const listOpen = kind === "ordered" ? "OrderedListOpen" : "UnorderedListOpen";
-          const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
-          const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
-          const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
-          out.push({
-            type: listOpen,
-            text: listMarker.text,
-            offset: listMarker.offset,
-          });
+          const listOpen = kind === "ordered" ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
+          const listClose = kind === "ordered" ? BlockKind.OrderedListClose : BlockKind.UnorderedListClose;
+          const itemOpen = kind === "ordered" ? BlockKind.OrderedItemOpen : BlockKind.UnorderedItemOpen;
+          const itemClose = kind === "ordered" ? BlockKind.OrderedItemClose : BlockKind.UnorderedItemClose;
+          out.push(listOpen, listMarker.offset, listMarker.offset + listMarker.text.length);
           let index = start;
           let listEnd = listMarker.offset + listMarker.text.length;
           while (index < lines.length) {
@@ -332,11 +333,7 @@ export const feature: SyntaxFeature = {
             if (!marker || !sameList(marker, listMarker)) {
               break;
             }
-            out.push({
-              type: itemOpen,
-              text: marker.text,
-              offset: marker.offset,
-            });
+            out.push(itemOpen, marker.offset, marker.offset + marker.text.length);
             const itemLines: BlockLine[] = [{
               ...lines[index],
               start: marker.contentOffset,
@@ -378,17 +375,9 @@ export const feature: SyntaxFeature = {
             }
             context.resolveLines(source, itemLines, out);
             listEnd = itemLines.at(-1)?.next ?? marker.offset;
-            out.push({
-              type: itemClose,
-              text: "",
-              offset: listEnd,
-            });
+            out.push(itemClose, listEnd, listEnd);
           }
-          out.push({
-            type: listClose,
-            text: "",
-            offset: listEnd,
-          });
+          out.push(listClose, listEnd, listEnd);
           return index;
         },
       },

@@ -1,14 +1,11 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
+import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
-import { type BlockToken, tokenStart } from "../../block/tokens.ts";
-import {
-  type BlockBuildContext,
-  type BlockNodeBuilder,
-  blockToken,
-} from "../../fragment/block.ts";
+import { type BlockBuildContext, type BlockNodeBuilder, blockToken } from "../../fragment/block.ts";
 import { buildInlineChildren } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { buildInlineCode } from "./code.ts";
+import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface CellRange {
@@ -23,12 +20,6 @@ interface RuleLocation {
   offset: number;
   tokenBase: number;
 }
-
-type AlignmentToken =
-  | "TableAlignNone"
-  | "TableAlignLeft"
-  | "TableAlignRight"
-  | "TableAlignCenter";
 
 function trimCell(source: string, start: number, end: number): { end: number; start: number } {
   while (start < end && (source[start] === " " || source[start] === "\t")) {
@@ -102,7 +93,7 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): Ce
   return cells.length > 0 ? cells : void 0;
 }
 
-function alignmentAt(source: string, cell: CellRange): AlignmentToken | undefined {
+function alignmentAt(source: string, cell: CellRange): BlockKind | undefined {
   let start = cell.contentStart;
   let end = cell.contentEnd;
   const left = source[start] === ":";
@@ -122,11 +113,11 @@ function alignmentAt(source: string, cell: CellRange): AlignmentToken | undefine
     }
   }
   return left
-    ? right ? "TableAlignCenter" : "TableAlignLeft"
-    : right ? "TableAlignRight" : "TableAlignNone";
+    ? right ? BlockKind.TableAlignCenter : BlockKind.TableAlignLeft
+    : right ? BlockKind.TableAlignRight : BlockKind.TableAlignNone;
 }
 
-function delimiterAt(source: string, line: BlockLine): { cells: CellRange[]; tokens: AlignmentToken[] } | undefined {
+function delimiterAt(source: string, line: BlockLine): { cells: CellRange[]; tokens: BlockKind[] } | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
     return;
@@ -139,7 +130,7 @@ function delimiterAt(source: string, line: BlockLine): { cells: CellRange[]; tok
   if (!cells) {
     return;
   }
-  const tokens: AlignmentToken[] = [];
+  const tokens: BlockKind[] = [];
   for (const cell of cells) {
     const alignment = alignmentAt(source, cell);
     if (!alignment) {
@@ -150,36 +141,16 @@ function delimiterAt(source: string, line: BlockLine): { cells: CellRange[]; tok
   return { cells, tokens };
 }
 
-function emitTableRow(source: string, line: BlockLine, cells: readonly CellRange[], out: BlockToken[]): void {
-  out.push({
-    type: "TableRowOpen",
-    text: "",
-    offset: cells[0].start,
-  });
+function emitTableRow(line: BlockLine, cells: readonly CellRange[], out: BlockTokenStream): void {
+  out.push(BlockKind.TableRowOpen, cells[0].start, cells[0].start);
   for (const cell of cells) {
-    out.push({
-      type: "TableCellOpen",
-      text: "",
-      offset: cell.start,
-    });
+    out.push(BlockKind.TableCellOpen, cell.start, cell.start);
     if (cell.contentEnd > cell.contentStart) {
-      out.push({
-        type: "InlineChunk",
-        text: source.slice(cell.contentStart, cell.contentEnd),
-        offset: cell.contentStart,
-      });
+      out.push(BlockKind.InlineChunk, cell.contentStart, cell.contentEnd);
     }
-    out.push({
-      type: "TableCellClose",
-      text: "",
-      offset: cell.end,
-    });
+    out.push(BlockKind.TableCellClose, cell.end, cell.end);
   }
-  out.push({
-    type: "TableRowClose",
-    text: "",
-    offset: line.end,
-  });
+  out.push(BlockKind.TableRowClose, line.end, line.end);
 }
 
 function childRules(
@@ -205,22 +176,32 @@ function childRules(
 }
 
 const buildTableCell: BlockNodeBuilder<TableCell> = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, "TableCellOpen", context);
-  const close = blockToken(nodeId, tokenBase, "TableCellClose", context);
+  const open = blockToken(nodeId, tokenBase, BlockKind.TableCellOpen, context);
+  const close = blockToken(nodeId, tokenBase, BlockKind.TableCellClose, context);
   return {
     type: "tableCell",
     children: buildInlineChildren(nodeId, context, true),
-    position: { start: tokenStart(open), end: tokenStart(close) },
+    position: {
+      start: context.view.tokens.start(open),
+      end: context.view.tokens.start(close),
+    },
   };
 };
 
 const buildTableRow: BlockNodeBuilder<TableRow> = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, "TableRowOpen", context);
-  const close = blockToken(nodeId, tokenBase, "TableRowClose", context);
+  const open = blockToken(nodeId, tokenBase, BlockKind.TableRowOpen, context);
+  const close = blockToken(nodeId, tokenBase, BlockKind.TableRowClose, context);
   const children = childRules(nodeId, offset, tokenBase, "TableCell", context).map((cell) => (
     buildTableCell(cell.id, cell.offset, cell.tokenBase, context)
   ));
-  return { type: "tableRow", children, position: { start: tokenStart(open), end: tokenStart(close) } };
+  return {
+    type: "tableRow",
+    children,
+    position: {
+      start: context.view.tokens.start(open),
+      end: context.view.tokens.start(close),
+    },
+  };
 };
 
 function tableAlignment(
@@ -235,13 +216,13 @@ function tableAlignment(
     if (child >= 0) {
       continue;
     }
-    const type = arena.leafTokenType(child, tokenBase);
+    const kind = arena.leafTokenKind(child, tokenBase);
     result.push(
-      type === "TableAlignLeft"
+      kind === BlockKind.TableAlignLeft
         ? "left"
-        : type === "TableAlignRight"
+        : kind === BlockKind.TableAlignRight
           ? "right"
-          : type === "TableAlignCenter" ? "center" : null,
+          : kind === BlockKind.TableAlignCenter ? "center" : null,
     );
   }
   return result;
@@ -261,19 +242,11 @@ export const feature: SyntaxFeature = {
           return;
         }
 
-        out.push({
-          type: "TableOpen",
-          text: "",
-          offset: header[0].start,
-        });
-        emitTableRow(source, lines[start], header, out);
+        out.push(BlockKind.TableOpen, header[0].start, header[0].start);
+        emitTableRow(lines[start], header, out);
         for (let index = 0; index < delimiter.cells.length; index++) {
           const cell = delimiter.cells[index];
-          out.push({
-            type: delimiter.tokens[index],
-            text: source.slice(cell.start, cell.end),
-            offset: cell.start,
-          });
+          out.push(delimiter.tokens[index], cell.start, cell.end);
         }
 
         let end = start + 2;
@@ -286,14 +259,10 @@ export const feature: SyntaxFeature = {
           if (!cells) {
             break;
           }
-          emitTableRow(source, line, cells, out);
+          emitTableRow(line, cells, out);
           end++;
         }
-        out.push({
-          type: "TableClose",
-          text: "",
-          offset: lines[end - 1].end,
-        });
+        out.push(BlockKind.TableClose, lines[end - 1].end, lines[end - 1].end);
         return end;
       },
     ],
@@ -302,8 +271,8 @@ export const feature: SyntaxFeature = {
         rule: "TableCell",
         syntax: {
           kind: "frame",
-          open: "TableCellOpen",
-          close: "TableCellClose",
+          open: BlockKind.TableCellOpen,
+          close: BlockKind.TableCellClose,
         },
         inlineContent: true,
       },
@@ -311,8 +280,8 @@ export const feature: SyntaxFeature = {
         rule: "TableRow",
         syntax: {
           kind: "frame",
-          open: "TableRowOpen",
-          close: "TableRowClose",
+          open: BlockKind.TableRowOpen,
+          close: BlockKind.TableRowClose,
         },
       },
       {
@@ -320,10 +289,10 @@ export const feature: SyntaxFeature = {
         syntax: {
           kind: "group",
           tokens: [
-            "TableAlignNone",
-            "TableAlignLeft",
-            "TableAlignRight",
-            "TableAlignCenter",
+            BlockKind.TableAlignNone,
+            BlockKind.TableAlignLeft,
+            BlockKind.TableAlignRight,
+            BlockKind.TableAlignCenter,
           ],
         },
       },
@@ -331,12 +300,12 @@ export const feature: SyntaxFeature = {
         rule: "Table",
         syntax: {
           kind: "block",
-          open: "TableOpen",
-          close: "TableClose",
+          open: BlockKind.TableOpen,
+          close: BlockKind.TableClose,
         },
         build(nodeId, offset, tokenBase, context) {
-          const open = blockToken(nodeId, tokenBase, "TableOpen", context);
-          const close = blockToken(nodeId, tokenBase, "TableClose", context);
+          const open = blockToken(nodeId, tokenBase, BlockKind.TableOpen, context);
+          const close = blockToken(nodeId, tokenBase, BlockKind.TableClose, context);
           const rows = childRules(nodeId, offset, tokenBase, "TableRow", context).map((row) => (
             buildTableRow(row.id, row.offset, row.tokenBase, context)
           ));
@@ -348,7 +317,10 @@ export const feature: SyntaxFeature = {
             type: "table",
             align: tableAlignment(delimiter.id, delimiter.tokenBase, context),
             children: rows,
-            position: { start: tokenStart(open), end: tokenStart(close) },
+            position: {
+              start: context.view.tokens.start(open),
+              end: context.view.tokens.start(close),
+            },
           };
         },
       },

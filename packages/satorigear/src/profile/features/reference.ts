@@ -1,3 +1,4 @@
+import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
 import { InlineKind } from "../../inline/kinds.ts";
@@ -14,7 +15,7 @@ import {
 } from "../../inline/tokens.ts";
 import { normalizeAssociationLabel, splitReferenceTail } from "../utils.ts";
 import { semanticText } from "./text.ts";
-import type { BlockToken } from "../../block/tokens.ts";
+import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/pairing.ts";
 import type { InlineTokenTransform } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -32,18 +33,14 @@ const bracketOpenKind = InlineKind.BracketOpen;
 const shortcutTailKind = InlineKind.ShortcutReferenceTail;
 const imageOpenKind = InlineKind.ImageOpen;
 
-interface LinkDefinitionOpenToken extends BlockToken {
-  linkDefinition: LinkDefinitionFields;
-}
-
 interface LinkDefinitionMatch {
   end: number;
   fields: LinkDefinitionFields;
 }
 
-function linkDefinitionFields(token: BlockToken): LinkDefinitionFields {
-  const fields = (token as Partial<LinkDefinitionOpenToken>).linkDefinition;
-  if (token.type !== "LinkDefinitionOpen" || !fields) {
+function linkDefinitionFields(tokens: BlockTokenStream, token: number): LinkDefinitionFields {
+  const fields = tokens.value<LinkDefinitionFields>(token);
+  if (tokens.kind(token) !== BlockKind.LinkDefinitionOpen || !fields) {
     throw new Error("Expected LinkDefinitionOpen token to contain parsed fields");
   }
   return fields;
@@ -405,12 +402,12 @@ export const feature: SyntaxFeature = {
         rule: "LinkDefinition",
         syntax: {
           kind: "block",
-          open: "LinkDefinitionOpen",
-          close: "LinkDefinitionClose",
+          open: BlockKind.LinkDefinitionOpen,
+          close: BlockKind.LinkDefinitionClose,
         },
         build(nodeId, offset, tokenBase, context) {
-          const token = blockToken(nodeId, tokenBase, "LinkDefinitionOpen", context);
-          const fields = linkDefinitionFields(token);
+          const token = blockToken(nodeId, tokenBase, BlockKind.LinkDefinitionOpen, context);
+          const fields = linkDefinitionFields(context.view.tokens, token);
           return {
             type: "definition",
             identifier: fields.definitionKey.toLowerCase(),
@@ -418,13 +415,13 @@ export const feature: SyntaxFeature = {
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),
             position: {
-              start: token.offset + fields.markerOffset,
+              start: context.view.tokens.start(token) + fields.markerOffset,
               end: blockEnd(nodeId, offset, context),
             },
           };
         },
-        definitionKey(token) {
-          return linkDefinitionFields(token).definitionKey;
+        definitionKey(tokens, token) {
+          return linkDefinitionFields(tokens, token).definitionKey;
         },
       },
     ],
@@ -437,27 +434,14 @@ export const feature: SyntaxFeature = {
             return;
           }
           const line = lines[start];
-          const open: LinkDefinitionOpenToken = {
-            type: "LinkDefinitionOpen",
-            text: "",
-            offset: line.start,
-            linkDefinition: definition.fields,
-          };
-          out.push(open);
+          out.push(BlockKind.LinkDefinitionOpen, line.start, line.start, { value: definition.fields });
           for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
             const current = lines[definitionLine];
             const end = definitionLine + 1 < definition.end ? current.next : current.end;
-            out.push({
-              type: "LinkDefinitionChunk",
-              text: source.slice(current.start, end),
-              offset: current.start,
-            });
+            out.push(BlockKind.LinkDefinitionChunk, current.start, end);
           }
-          out.push({
-            type: "LinkDefinitionClose",
-            text: "",
-            offset: lines[definition.end - 1].end,
-          });
+          const end = lines[definition.end - 1].end;
+          out.push(BlockKind.LinkDefinitionClose, end, end);
           return definition.end;
         },
       },

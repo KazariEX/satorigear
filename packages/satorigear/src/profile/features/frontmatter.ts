@@ -1,4 +1,7 @@
-import { logicalToken, tokenStart } from "../../block/tokens.ts";
+import { BlockKind } from "../../block/kinds.ts";
+import {
+  appendLogicalToken,
+} from "../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,
@@ -56,15 +59,18 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
           rule: "Frontmatter",
           syntax: {
             kind: "leaf",
-            token: "FrontmatterToken",
+            token: BlockKind.FrontmatterToken,
           },
           build(nodeId, offset, tokenBase, context) {
-            const token = blockToken(nodeId, tokenBase, "FrontmatterToken", context);
-            const ranges = token.ranges;
-            if (!ranges || ranges.length < 2) {
+            const token = blockToken(nodeId, tokenBase, BlockKind.FrontmatterToken, context);
+            const rangeCount = context.view.tokens.rangeCount(token);
+            if (rangeCount < 2) {
               throw new Error("FrontmatterToken does not contain two fences");
             }
-            let value = normalizeLines(context.source.slice(ranges[0].end, ranges.at(-1)!.offset));
+            let value = normalizeLines(context.source.slice(
+              context.view.tokens.rangeEnd(token, 0),
+              context.view.tokens.rangeStart(token, rangeCount - 1),
+            ));
             if (value.endsWith("\n")) {
               value = value.slice(0, -1);
             }
@@ -72,7 +78,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
               type: "yaml",
               value,
               position: {
-                start: tokenStart(token),
+                start: context.view.tokens.start(token),
                 end: blockEnd(nodeId, offset, context),
               },
             };
@@ -88,7 +94,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
             }
             for (let end = start + 1; end < lines.length; end++) {
               if (frontmatterFenceAt(source, lines[end], marker)) {
-                out.push(logicalToken("FrontmatterToken", source, lines, start, end + 1));
+                appendLogicalToken(out, BlockKind.FrontmatterToken, source, lines, start, end + 1);
                 return end + 1;
               }
             }

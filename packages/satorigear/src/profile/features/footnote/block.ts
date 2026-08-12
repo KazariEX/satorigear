@@ -1,3 +1,4 @@
+import { BlockKind } from "../../../block/kinds.ts";
 import {
   type BlockLine,
   contentAfterColumns,
@@ -5,15 +6,11 @@ import {
   isBlank,
   lineIndent,
 } from "../../../block/lines.ts";
-import { type BlockToken, tokenStart } from "../../../block/tokens.ts";
-import {
-  blockEnd,
-  blockToken,
-  buildBlockChildren,
-} from "../../../fragment/block.ts";
+import { blockEnd, blockToken, buildBlockChildren } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
+import type { BlockTokenStream } from "../../../block/tokens.ts";
 
 interface FootnoteDefinitionFields {
   definitionKey: string;
@@ -25,10 +22,6 @@ interface FootnoteDefinitionMatch extends FootnoteLabel {
   contentOffset: number;
   markerEnd: number;
   markerStart: number;
-}
-
-interface FootnoteDefinitionOpenToken extends BlockToken {
-  footnoteDefinition: FootnoteDefinitionFields;
 }
 
 function definitionAt(source: string, line: BlockLine): FootnoteDefinitionMatch | undefined {
@@ -53,9 +46,9 @@ function definitionAt(source: string, line: BlockLine): FootnoteDefinitionMatch 
   };
 }
 
-function definitionFields(token: BlockToken): FootnoteDefinitionFields {
-  const fields = (token as Partial<FootnoteDefinitionOpenToken>).footnoteDefinition;
-  if (token.type !== "FootnoteDefinitionOpen" || !fields) {
+function definitionFields(tokens: BlockTokenStream, token: number): FootnoteDefinitionFields {
+  const fields = tokens.value<FootnoteDefinitionFields>(token);
+  if (tokens.kind(token) !== BlockKind.FootnoteDefinitionOpen || !fields) {
     throw new Error("Expected FootnoteDefinitionOpen token to contain parsed fields");
   }
   return fields;
@@ -70,25 +63,25 @@ export const blockRules: BlockFeature["rules"] = [
     rule: "FootnoteDefinition",
     syntax: {
       kind: "block",
-      open: "FootnoteDefinitionOpen",
-      close: "FootnoteDefinitionClose",
+      open: BlockKind.FootnoteDefinitionOpen,
+      close: BlockKind.FootnoteDefinitionClose,
     },
     build(nodeId, offset, tokenBase, context) {
-      const token = blockToken(nodeId, tokenBase, "FootnoteDefinitionOpen", context);
-      const fields = definitionFields(token);
+      const token = blockToken(nodeId, tokenBase, BlockKind.FootnoteDefinitionOpen, context);
+      const fields = definitionFields(context.view.tokens, token);
       return {
         type: "footnoteDefinition",
         identifier: fields.normalizedLabel.toLowerCase(),
         label: semanticText(fields.label),
         children: buildBlockChildren(nodeId, offset, tokenBase, context),
         position: {
-          start: tokenStart(token),
+          start: context.view.tokens.start(token),
           end: blockEnd(nodeId, offset, context),
         },
       };
     },
-    definitionKey(token) {
-      return definitionFields(token).definitionKey;
+    definitionKey(tokens, token) {
+      return definitionFields(tokens, token).definitionKey;
     },
   },
 ];
@@ -137,24 +130,19 @@ export const blockStarts: BlockFeature["starts"] = [
       while (definitionLines.length > 0 && isBlank(source, definitionLines[definitionLines.length - 1])) {
         definitionLines.pop();
       }
-      const open: FootnoteDefinitionOpenToken = {
-        type: "FootnoteDefinitionOpen",
-        text: source.slice(match.markerStart, match.markerEnd),
-        offset: match.markerStart,
-        footnoteDefinition: {
+      out.push(
+        BlockKind.FootnoteDefinitionOpen,
+        match.markerStart,
+        match.markerEnd,
+        { value: {
           definitionKey: match.definitionKey,
           label: match.label,
           normalizedLabel: match.normalizedLabel,
-        },
-      };
-      out.push(open);
+        } },
+      );
       context.resolveLines(source, definitionLines, out);
       const end = definitionLines.at(-1)?.next ?? match.markerEnd;
-      out.push({
-        type: "FootnoteDefinitionClose",
-        text: "",
-        offset: end,
-      });
+      out.push(BlockKind.FootnoteDefinitionClose, end, end);
       return index;
     },
   },

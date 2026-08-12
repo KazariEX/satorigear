@@ -1,5 +1,5 @@
+import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent, physicalColumnAt } from "../../block/lines.ts";
-import { tokenStart } from "../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,
@@ -43,16 +43,20 @@ export const feature: SyntaxFeature = {
         rule: "BlockQuote",
         syntax: {
           kind: "block",
-          open: "BlockQuoteOpen",
-          close: "BlockQuoteClose",
+          open: BlockKind.BlockQuoteOpen,
+          close: BlockKind.BlockQuoteClose,
         },
         build(nodeId, offset, tokenBase, context) {
-          const marker = blockToken(nodeId, tokenBase, "BlockQuoteOpen", context);
+          const marker = blockToken(nodeId, tokenBase, BlockKind.BlockQuoteOpen, context);
           return {
             type: "blockquote",
             children: buildBlockChildren(nodeId, offset, tokenBase, context),
             position: {
-              start: firstNonspace(context.source, tokenStart(marker), lineEnd(context.source, offset)),
+              start: firstNonspace(
+                context.source,
+                context.view.tokens.start(marker),
+                lineEnd(context.source, offset),
+              ),
               end: blockEnd(nodeId, offset, context),
             },
           };
@@ -92,17 +96,10 @@ export const feature: SyntaxFeature = {
             quoteLines.push({ ...lines[index], lazy: true });
             index++;
           }
-          out.push({
-            type: "BlockQuoteOpen",
-            text: ">",
-            offset: line.start,
-          });
+          out.push(BlockKind.BlockQuoteOpen, line.start, line.start + 1);
           context.resolveLines(source, quoteLines, out);
-          out.push({
-            type: "BlockQuoteClose",
-            text: "",
-            offset: quoteLines.at(-1)?.next ?? line.start,
-          });
+          const end = quoteLines.at(-1)?.next ?? line.start;
+          out.push(BlockKind.BlockQuoteClose, end, end);
           return index;
         },
       },

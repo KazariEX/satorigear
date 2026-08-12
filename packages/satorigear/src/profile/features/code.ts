@@ -6,8 +6,9 @@ import {
   type FenceRule,
   readFencedBlock,
 } from "../../block/fence.ts";
+import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, indentOf, isBlank, removeIndent } from "../../block/lines.ts";
-import { logicalToken } from "../../block/tokens.ts";
+import { appendLogicalToken } from "../../block/tokens.ts";
 import {
   type BlockBuildContext,
   blockEnd,
@@ -61,13 +62,14 @@ export const buildInlineCode: InlineLeafBuilder = (tokenIndex, sourceSpan, accum
 };
 
 function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockBuildContext): number {
-  const token = blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context);
-  const spans = token.ranges ?? [{ offset: token.offset, end: token.offset + token.text.length }];
-  for (let index = spans.length - 1; index >= 0; index--) {
-    const span = spans[index];
-    if (/[^\r\n]/.test(context.source.slice(span.offset, span.end))) {
-      let end = span.end;
-      while (end > span.offset && /[\r\n]/.test(context.source[end - 1])) {
+  const token = blockToken(nodeId, tokenBase, BlockKind.IndentedCodeBlockToken, context);
+  const count = context.view.tokens.rangeCount(token);
+  for (let index = count - 1; index >= 0; index--) {
+    const start = context.view.tokens.rangeStart(token, index);
+    const rangeEnd = context.view.tokens.rangeEnd(token, index);
+    if (/[^\r\n]/.test(context.source.slice(start, rangeEnd))) {
+      let end = rangeEnd;
+      while (end > start && /[\r\n]/.test(context.source[end - 1])) {
         end--;
       }
       return end;
@@ -87,7 +89,7 @@ export const feature: SyntaxFeature = {
         while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
           end++;
         }
-        out.push(logicalToken("IndentedCodeBlockToken", source, lines, start, end));
+        appendLogicalToken(out, BlockKind.IndentedCodeBlockToken, source, lines, start, end);
         return end;
       },
     ],
@@ -96,11 +98,16 @@ export const feature: SyntaxFeature = {
         rule: "FencedCode",
         syntax: {
           kind: "leaf",
-          token: "FencedCodeBlock",
+          token: BlockKind.FencedCodeBlock,
         },
         build(nodeId, offset, tokenBase, context) {
           const end = offset + context.view.arena.lenOf(nodeId);
-          const source = normalizeLines(blockToken(nodeId, tokenBase, "FencedCodeBlock", context).text);
+          const source = normalizeLines(
+            context.view.tokens.text(
+              context.source,
+              blockToken(nodeId, tokenBase, BlockKind.FencedCodeBlock, context),
+            ),
+          );
           const block = readFencedBlock(source, codeFenceRule);
           const rawInfo = semanticText(block.info);
           const langEnd = rawInfo.search(/[ \t]/);
@@ -124,11 +131,13 @@ export const feature: SyntaxFeature = {
         rule: "IndentedCodeBlock",
         syntax: {
           kind: "leaf",
-          token: "IndentedCodeBlockToken",
+          token: BlockKind.IndentedCodeBlockToken,
         },
         build(nodeId, offset, tokenBase, context) {
-          const token = blockToken(nodeId, tokenBase, "IndentedCodeBlockToken", context);
-          const lines = normalizeLines(token.text).split("\n").map((line) => removeIndent(line, 4));
+          const token = blockToken(nodeId, tokenBase, BlockKind.IndentedCodeBlockToken, context);
+          const lines = normalizeLines(context.view.tokens.text(context.source, token))
+            .split("\n")
+            .map((line) => removeIndent(line, 4));
           while (lines.length && /^[ \t]*$/.test(lines[lines.length - 1])) {
             lines.pop();
           }
@@ -160,7 +169,7 @@ export const feature: SyntaxFeature = {
           if (end < lines.length) {
             end++;
           }
-          out.push(logicalToken("FencedCodeBlock", source, lines, start, end));
+          appendLogicalToken(out, BlockKind.FencedCodeBlock, source, lines, start, end);
           return end;
         },
       },

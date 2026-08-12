@@ -1,8 +1,11 @@
 import { parse as parseYaml } from "yaml";
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
+import { BlockKind } from "../../../block/kinds.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
-import { logicalToken, tokenEnd, tokenStart } from "../../../block/tokens.ts";
+import {
+  appendLogicalToken,
+} from "../../../block/tokens.ts";
 import {
   type BlockNodeBuilder,
   blockToken,
@@ -287,17 +290,9 @@ function emitSlotOpening(
   opening: SlotOpening,
   out: Parameters<BlockStart>[3],
 ): void {
-  out.push({
-    type: "BlockComponentSlotOpen",
-    text: source.slice(opening.offset, opening.nameEnd),
-    offset: opening.offset,
-  });
+  out.push(BlockKind.BlockComponentSlotOpen, opening.offset, opening.nameEnd);
   if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
-    out.push({
-      type: "BlockComponentAttributes",
-      text: source.slice(opening.attributesStart, opening.attributesEnd),
-      offset: opening.attributesStart,
-    });
+    out.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
   }
 }
 
@@ -313,15 +308,12 @@ function emitComponentBody(
   let cursor = start;
   const yaml = cursor < end ? yamlPropsAt(source, lines, cursor, end) : void 0;
   if (yaml) {
-    out.push(
-      yaml.close > yaml.open + 1
-        ? logicalToken("BlockComponentYamlProps", source, lines, yaml.open + 1, yaml.close)
-        : {
-          type: "BlockComponentYamlProps",
-          text: "",
-          offset: lines[yaml.open].end,
-        },
-    );
+    if (yaml.close > yaml.open + 1) {
+      appendLogicalToken(out, BlockKind.BlockComponentYamlProps, source, lines, yaml.open + 1, yaml.close);
+    }
+    else {
+      out.push(BlockKind.BlockComponentYamlProps, lines[yaml.open].end, lines[yaml.open].end);
+    }
     cursor = yaml.close + 1;
   }
   let slot = nextSlot(source, lines, cursor, end);
@@ -337,11 +329,8 @@ function emitComponentBody(
     const next = following?.index ?? end;
     emitSlotOpening(source, slot.opening, out);
     context.resolveLines(source, lines.slice(slot.index + 1, next), out);
-    out.push({
-      type: "BlockComponentSlotClose",
-      text: "",
-      offset: following ? following.opening.offset : closingOffset,
-    });
+    const slotEnd = following ? following.opening.offset : closingOffset;
+    out.push(BlockKind.BlockComponentSlotClose, slotEnd, slotEnd);
     slot = following;
   }
 }
@@ -352,43 +341,24 @@ function emitOpening(
   opening: BlockOpening,
   out: Parameters<BlockStart>[3],
 ): void {
-  out.push({
-    type: "BlockComponentOpen",
-    text: source.slice(contentOffset, opening.nameEnd),
-    offset: contentOffset,
-  });
+  out.push(BlockKind.BlockComponentOpen, contentOffset, opening.nameEnd);
   if (opening.labelStart !== void 0 && opening.labelEnd !== void 0) {
-    out.push({
-      type: "BlockComponentLabelOpen",
-      text: "[",
-      offset: opening.labelStart,
-    });
+    out.push(BlockKind.BlockComponentLabelOpen, opening.labelStart, opening.labelStart + 1);
     if (opening.labelEnd > opening.labelStart + 2) {
-      out.push({
-        type: "InlineChunk",
-        text: source.slice(opening.labelStart + 1, opening.labelEnd - 1),
-        offset: opening.labelStart + 1,
-      });
+      out.push(BlockKind.InlineChunk, opening.labelStart + 1, opening.labelEnd - 1);
     }
-    out.push({
-      type: "BlockComponentLabelClose",
-      text: "]",
-      offset: opening.labelEnd - 1,
-    });
+    out.push(BlockKind.BlockComponentLabelClose, opening.labelEnd - 1, opening.labelEnd);
   }
   if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
-    out.push({
-      type: "BlockComponentAttributes",
-      text: source.slice(opening.attributesStart, opening.attributesEnd),
-      offset: opening.attributesStart,
-    });
+    out.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
   }
 }
 
 function parseYamlAttributes(
   token: NonNullable<ReturnType<typeof directBlockToken>>,
+  context: Parameters<BlockNodeBuilder>[3],
 ): Attributes {
-  const value: unknown = parseYaml(token.text, { schema: "core" });
+  const value: unknown = parseYaml(context.view.tokens.text(context.source, token), { schema: "core" });
   if (value === null || value === void 0) {
     return {};
   }
@@ -419,14 +389,14 @@ function directRule(
 }
 
 const buildBlockLabel: BlockNodeBuilder<Paragraph> = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, "BlockComponentLabelOpen", context);
-  const close = blockToken(nodeId, tokenBase, "BlockComponentLabelClose", context);
+  const open = blockToken(nodeId, tokenBase, BlockKind.BlockComponentLabelOpen, context);
+  const close = blockToken(nodeId, tokenBase, BlockKind.BlockComponentLabelClose, context);
   return {
     type: "paragraph",
     children: buildInlineChildren(nodeId, context, true),
     position: {
-      start: tokenStart(open),
-      end: tokenEnd(close),
+      start: context.view.tokens.start(open),
+      end: context.view.tokens.end(close),
     },
   };
 };
@@ -439,11 +409,7 @@ function createBlockStart(shorthand: boolean): BlockStart {
     }
     if (shorthand) {
       emitOpening(source, contentOffset, opening, out);
-      out.push({
-        type: "BlockComponentClose",
-        text: "",
-        offset: lines[start].end,
-      });
+      out.push(BlockKind.BlockComponentClose, lines[start].end, lines[start].end);
       return start + 1;
     }
     const closing = blockClose(source, lines, start, opening);
@@ -460,11 +426,7 @@ function createBlockStart(shorthand: boolean): BlockStart {
       out,
       context,
     );
-    out.push({
-      type: "BlockComponentClose",
-      text: source.slice(closing.offset, lines[closing.index].end),
-      offset: closing.offset,
-    });
+    out.push(BlockKind.BlockComponentClose, closing.offset, lines[closing.index].end);
     return closing.index + 1;
   };
 }
@@ -474,8 +436,8 @@ export const blockRules: BlockFeature["rules"] = [
     rule: "BlockComponentLabel",
     syntax: {
       kind: "frame",
-      open: "BlockComponentLabelOpen",
-      close: "BlockComponentLabelClose",
+      open: BlockKind.BlockComponentLabelOpen,
+      close: BlockKind.BlockComponentLabelClose,
     },
     inlineContent: true,
     build: buildBlockLabel,
@@ -484,30 +446,33 @@ export const blockRules: BlockFeature["rules"] = [
     rule: "BlockComponent",
     syntax: {
       kind: "block",
-      open: "BlockComponentOpen",
-      close: "BlockComponentClose",
+      open: BlockKind.BlockComponentOpen,
+      close: BlockKind.BlockComponentClose,
     },
     build(nodeId, offset, tokenBase, context) {
-      const open = blockToken(nodeId, tokenBase, "BlockComponentOpen", context);
-      const close = blockToken(nodeId, tokenBase, "BlockComponentClose", context);
-      const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
-      const parsed = attributesToken ? parseAttributes(context.source, tokenStart(attributesToken)) : void 0;
-      const yamlToken = directBlockToken(nodeId, tokenBase, "BlockComponentYamlProps", context);
+      const open = blockToken(nodeId, tokenBase, BlockKind.BlockComponentOpen, context);
+      const close = blockToken(nodeId, tokenBase, BlockKind.BlockComponentClose, context);
+      const attributesToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentAttributes, context);
+      const parsed = attributesToken !== void 0
+        ? parseAttributes(context.source, context.view.tokens.start(attributesToken))
+        : void 0;
+      const yamlToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentYamlProps, context);
       const label = directRule(nodeId, offset, tokenBase, "BlockComponentLabel", context);
       const children: SpannedNode<RootContent>[] = [];
       if (label) {
         children.push(buildBlockLabel(label.id, label.offset, label.tokenBase, context));
       }
       children.push(...buildBlockChildren(nodeId, offset, tokenBase, context));
+      const opening = context.view.tokens.text(context.source, open);
       return {
         type: "blockComponent",
-        name: normalizeComponentName(open.text.slice(open.text.lastIndexOf(":") + 1).trim()),
-        attributes: yamlToken
-          ? { ...parseYamlAttributes(yamlToken), ...parsed?.attributes }
+        name: normalizeComponentName(opening.slice(opening.lastIndexOf(":") + 1).trim()),
+        attributes: yamlToken !== void 0
+          ? { ...parseYamlAttributes(yamlToken, context), ...parsed?.attributes }
           : (parsed?.attributes ?? {}),
         position: {
-          start: tokenStart(open),
-          end: tokenEnd(close),
+          start: context.view.tokens.start(open),
+          end: context.view.tokens.end(close),
         },
         children,
       };
@@ -517,26 +482,28 @@ export const blockRules: BlockFeature["rules"] = [
     rule: "BlockComponentSlot",
     syntax: {
       kind: "block",
-      open: "BlockComponentSlotOpen",
-      close: "BlockComponentSlotClose",
+      open: BlockKind.BlockComponentSlotOpen,
+      close: BlockKind.BlockComponentSlotClose,
     },
     build(nodeId, offset, tokenBase, context) {
-      const open = blockToken(nodeId, tokenBase, "BlockComponentSlotOpen", context);
-      const close = blockToken(nodeId, tokenBase, "BlockComponentSlotClose", context);
-      const attributesToken = directBlockToken(nodeId, tokenBase, "BlockComponentAttributes", context);
-      const parsed = attributesToken ? parseAttributes(context.source, tokenStart(attributesToken)) : void 0;
+      const open = blockToken(nodeId, tokenBase, BlockKind.BlockComponentSlotOpen, context);
+      const close = blockToken(nodeId, tokenBase, BlockKind.BlockComponentSlotClose, context);
+      const attributesToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentAttributes, context);
+      const parsed = attributesToken !== void 0
+        ? parseAttributes(context.source, context.view.tokens.start(attributesToken))
+        : void 0;
       const children = buildBlockChildren(nodeId, offset, tokenBase, context);
       return {
         type: "blockComponent",
         name: "template",
         attributes: {
           ...parsed?.attributes,
-          name: normalizeComponentName(open.text.slice(1).trim()),
+          name: normalizeComponentName(context.view.tokens.text(context.source, open).slice(1).trim()),
         },
         children,
         position: {
-          start: tokenStart(open),
-          end: tokenEnd(close),
+          start: context.view.tokens.start(open),
+          end: context.view.tokens.end(close),
         },
       };
     },

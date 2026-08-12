@@ -1,33 +1,34 @@
 import type { BlockNodeBuilder } from "../fragment/block.ts";
 // Block features compile into the immutable scanner, arena, and node builders shared by a parser.
+import type { BlockKind } from "./kinds.ts";
 import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
-import type { BlockToken } from "./tokens.ts";
+import type { BlockTokenStream } from "./tokens.ts";
 
 export interface CompiledBlockRule {
   block: boolean;
-  definitionKey?: (token: BlockToken) => string;
+  definitionKey?: (tokens: BlockTokenStream, index: number) => string;
   inlineContent: boolean;
   name: string;
   build?: BlockNodeBuilder;
 }
 
 export interface BlockSyntaxFrame {
-  close: string;
+  close: BlockKind;
   rule: CompiledBlockRule;
 }
 
 export interface BlockSyntaxSchema {
-  frameByOpen: Readonly<Record<string, BlockSyntaxFrame | undefined>>;
-  groupedRuleByToken: Readonly<Record<string, CompiledBlockRule | undefined>>;
-  ruleByLeaf: Readonly<Record<string, CompiledBlockRule | undefined>>;
+  frameByOpen: readonly (BlockSyntaxFrame | undefined)[];
+  groupedRuleByToken: readonly (CompiledBlockRule | undefined)[];
+  ruleByLeaf: readonly (CompiledBlockRule | undefined)[];
 }
 
 export type BlockStart = (
   source: string,
   lines: readonly BlockLine[],
   start: number,
-  tokens: BlockToken[],
+  tokens: BlockTokenStream,
   contentOffset: number,
   context: BlockScanContext,
 ) => number | undefined;
@@ -36,7 +37,7 @@ export type BlockFallback = (
   source: string,
   lines: readonly BlockLine[],
   start: number,
-  tokens: BlockToken[],
+  tokens: BlockTokenStream,
   context: BlockScanContext,
 ) => number | undefined;
 
@@ -59,16 +60,16 @@ export interface BlockStartRegistration {
 export type BlockSyntaxRegistration =
   | {
     kind: "block" | "frame";
-    close: string;
-    open: string | readonly string[];
+    close: BlockKind;
+    open: BlockKind | readonly BlockKind[];
   }
   | {
     kind: "group";
-    tokens: readonly string[];
+    tokens: readonly BlockKind[];
   }
   | {
     kind: "leaf";
-    token: string;
+    token: BlockKind;
   };
 
 export interface BlockRuleRegistration {
@@ -76,7 +77,7 @@ export interface BlockRuleRegistration {
   syntax: BlockSyntaxRegistration;
   build?: BlockNodeBuilder;
   inlineContent?: true;
-  definitionKey?: (token: BlockToken) => string;
+  definitionKey?: (tokens: BlockTokenStream, index: number) => string;
 }
 
 export type BlockNodeBuilderDecorator = (build: BlockNodeBuilder) => BlockNodeBuilder;
@@ -113,10 +114,10 @@ export interface BlockProfile {
 export function compileBlockProfile(features: readonly BlockFeature[]): BlockProfile {
   const decorators: BlockDecoratorRegistration[] = [];
   const fallbacks: BlockFallback[] = [];
-  const frameByOpen: Record<string, BlockSyntaxFrame> = Object.create(null);
-  const groupedRuleByToken: Record<string, CompiledBlockRule> = Object.create(null);
+  const frameByOpen: (BlockSyntaxFrame | undefined)[] = [];
+  const groupedRuleByToken: (CompiledBlockRule | undefined)[] = [];
   const interrupts: BlockInterrupt[][] = [];
-  const ruleByLeaf: Record<string, CompiledBlockRule> = Object.create(null);
+  const ruleByLeaf: (CompiledBlockRule | undefined)[] = [];
   const rules: Record<string, CompiledBlockRule> = Object.create(null);
   const restarts: BlockRestart[] = [];
   const starts: BlockStart[][] = [];
@@ -157,7 +158,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
         };
         rules[registration.rule] = rule;
         if (syntax.kind === "block" || syntax.kind === "frame") {
-          const opens = typeof syntax.open === "string" ? [syntax.open] : syntax.open;
+          const opens = typeof syntax.open === "number" ? [syntax.open] : syntax.open;
           for (const open of opens) {
             frameByOpen[open] = {
               close: syntax.close,

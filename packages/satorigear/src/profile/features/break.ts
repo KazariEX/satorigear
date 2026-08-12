@@ -1,3 +1,4 @@
+import { BlockKind } from "../../block/kinds.ts";
 import { blockEnd, firstNonspace } from "../../fragment/block.ts";
 import { appendInline } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
@@ -29,7 +30,7 @@ export const feature: SyntaxFeature = {
         rule: "ThematicBreak",
         syntax: {
           kind: "leaf",
-          token: "ThematicBreakToken",
+          token: BlockKind.ThematicBreakToken,
         },
         build(nodeId, offset, tokenBase, context) {
           const end = offset + context.view.arena.lenOf(nodeId);
@@ -54,11 +55,7 @@ export const feature: SyntaxFeature = {
           if (!isThematicBreak(source, line, contentOffset)) {
             return;
           }
-          out.push({
-            type: "ThematicBreakToken",
-            text: source.slice(line.start, line.end),
-            offset: line.start,
-          });
+          out.push(BlockKind.ThematicBreakToken, line.start, line.end);
           return start + 1;
         },
       },

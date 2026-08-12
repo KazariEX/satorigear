@@ -1,40 +1,30 @@
+import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, indentOf, isBlank } from "../../block/lines.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineChildren } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import { setextMarkerAt } from "./heading.ts";
-import type { BlockToken } from "../../block/tokens.ts";
+import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-function emitInlineChunks(source: string, lines: readonly BlockLine[], out: BlockToken[]): void {
+function emitInlineChunks(source: string, lines: readonly BlockLine[], out: BlockTokenStream): void {
   lines.forEach((line, index) => {
     const offset = indentOf(source, line, 3).offset;
     const end = index < lines.length - 1 ? line.next : line.end;
     if (end > offset) {
-      out.push({
-        type: "InlineChunk",
-        text: source.slice(offset, end),
-        offset,
-      });
+      out.push(BlockKind.InlineChunk, offset, end);
     }
   });
 }
 
-function emitParagraph(source: string, lines: readonly BlockLine[], out: BlockToken[]): void {
+function emitParagraph(source: string, lines: readonly BlockLine[], out: BlockTokenStream): void {
   if (lines.length === 0) {
     return;
   }
-  out.push({
-    type: "ParagraphOpen",
-    text: "",
-    offset: lines[0].start,
-  });
+  out.push(BlockKind.ParagraphOpen, lines[0].start, lines[0].start);
   emitInlineChunks(source, lines, out);
-  out.push({
-    type: "ParagraphClose",
-    text: "",
-    offset: lines[lines.length - 1].end,
-  });
+  const end = lines[lines.length - 1].end;
+  out.push(BlockKind.ParagraphClose, end, end);
 }
 
 export const feature: SyntaxFeature = {
@@ -55,17 +45,13 @@ export const feature: SyntaxFeature = {
           }
           const setext = setextMarkerAt(source, line);
           if (paragraph.length > 0 && setext) {
-            out.push({
-              type: setext === "=" ? "SetextHeading1Open" : "SetextHeading2Open",
-              text: "",
-              offset: paragraph[0].start,
-            });
+            out.push(
+              setext === "=" ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
+              paragraph[0].start,
+              paragraph[0].start,
+            );
             emitInlineChunks(source, paragraph, out);
-            out.push({
-              type: "HeadingClose",
-              text: "",
-              offset: line.end,
-            });
+            out.push(BlockKind.HeadingClose, line.end, line.end);
             return index + 1;
           }
           if (paragraph.length > 0 && context.startsInterruptingBlock(source, line)) {
@@ -83,8 +69,8 @@ export const feature: SyntaxFeature = {
         rule: "Paragraph",
         syntax: {
           kind: "block",
-          open: "ParagraphOpen",
-          close: "ParagraphClose",
+          open: BlockKind.ParagraphOpen,
+          close: BlockKind.ParagraphClose,
         },
         inlineContent: true,
         build(nodeId, offset, tokenBase, context) {
