@@ -1,6 +1,6 @@
 import type { Heading } from "mdast";
 import { type BlockLine, lineIndent } from "../../block/lines.ts";
-import { namedToken, structuralToken, tokenEnd, tokenStart } from "../../block/tokens.ts";
+import { tokenEnd, tokenStart } from "../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,
@@ -130,11 +130,23 @@ export const feature: SyntaxFeature = {
           if (!atx) {
             return;
           }
-          out.push(structuralToken("AtxHeadingOpen", atx.markerOffset, atx.marker));
+          out.push({
+            type: "AtxHeadingOpen",
+            text: atx.marker,
+            offset: atx.markerOffset,
+          });
           if (atx.contentEnd > atx.contentOffset) {
-            out.push(namedToken("InlineChunk", source.slice(atx.contentOffset, atx.contentEnd), atx.contentOffset));
+            out.push({
+              type: "InlineChunk",
+              text: source.slice(atx.contentOffset, atx.contentEnd),
+              offset: atx.contentOffset,
+            });
           }
-          out.push(structuralToken("HeadingClose", line.end));
+          out.push({
+            type: "HeadingClose",
+            text: "",
+            offset: line.end,
+          });
           return start + 1;
         },
       },

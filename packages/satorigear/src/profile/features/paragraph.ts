@@ -1,9 +1,9 @@
 import { type BlockLine, indentOf, isBlank } from "../../block/lines.ts";
-import { type BlockToken, namedToken, structuralToken } from "../../block/tokens.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineChildren } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import { setextMarkerAt } from "./heading.ts";
+import type { BlockToken } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 function emitInlineChunks(source: string, lines: readonly BlockLine[], out: BlockToken[]): void {
@@ -11,7 +11,11 @@ function emitInlineChunks(source: string, lines: readonly BlockLine[], out: Bloc
     const offset = indentOf(source, line, 3).offset;
     const end = index < lines.length - 1 ? line.next : line.end;
     if (end > offset) {
-      out.push(namedToken("InlineChunk", source.slice(offset, end), offset));
+      out.push({
+        type: "InlineChunk",
+        text: source.slice(offset, end),
+        offset,
+      });
     }
   });
 }
@@ -20,9 +24,17 @@ function emitParagraph(source: string, lines: readonly BlockLine[], out: BlockTo
   if (lines.length === 0) {
     return;
   }
-  out.push(structuralToken("ParagraphOpen", lines[0].start));
+  out.push({
+    type: "ParagraphOpen",
+    text: "",
+    offset: lines[0].start,
+  });
   emitInlineChunks(source, lines, out);
-  out.push(structuralToken("ParagraphClose", lines[lines.length - 1].end));
+  out.push({
+    type: "ParagraphClose",
+    text: "",
+    offset: lines[lines.length - 1].end,
+  });
 }
 
 export const feature: SyntaxFeature = {
@@ -43,9 +55,17 @@ export const feature: SyntaxFeature = {
           }
           const setext = setextMarkerAt(source, line);
           if (paragraph.length > 0 && setext) {
-            out.push(structuralToken(setext === "=" ? "SetextHeading1Open" : "SetextHeading2Open", paragraph[0].start));
+            out.push({
+              type: setext === "=" ? "SetextHeading1Open" : "SetextHeading2Open",
+              text: "",
+              offset: paragraph[0].start,
+            });
             emitInlineChunks(source, paragraph, out);
-            out.push(structuralToken("HeadingClose", line.end));
+            out.push({
+              type: "HeadingClose",
+              text: "",
+              offset: line.end,
+            });
             return index + 1;
           }
           if (paragraph.length > 0 && context.startsInterruptingBlock(source, line)) {

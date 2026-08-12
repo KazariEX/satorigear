@@ -1,5 +1,5 @@
 import { type BlockLine, isBlank, lineIndent, physicalColumnAt } from "../../block/lines.ts";
-import { structuralToken, tokenStart } from "../../block/tokens.ts";
+import { tokenStart } from "../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,
@@ -92,9 +92,17 @@ export const feature: SyntaxFeature = {
             quoteLines.push({ ...lines[index], lazy: true });
             index++;
           }
-          out.push(structuralToken("BlockQuoteOpen", line.start, ">"));
+          out.push({
+            type: "BlockQuoteOpen",
+            text: ">",
+            offset: line.start,
+          });
           context.resolveLines(source, quoteLines, out);
-          out.push(structuralToken("BlockQuoteClose", quoteLines.at(-1)?.next ?? line.start));
+          out.push({
+            type: "BlockQuoteClose",
+            text: "",
+            offset: quoteLines.at(-1)?.next ?? line.start,
+          });
           return index;
         },
       },

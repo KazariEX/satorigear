@@ -1,5 +1,4 @@
 import { type BlockLine, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
-import { namedToken, structuralToken } from "../../block/tokens.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
 import { inlineKind } from "../../inline/kinds.ts";
 import {
@@ -40,10 +39,6 @@ interface LinkDefinitionOpenToken extends BlockToken {
 interface LinkDefinitionMatch {
   end: number;
   fields: LinkDefinitionFields;
-}
-
-function linkDefinitionOpen(offset: number, fields: LinkDefinitionFields): LinkDefinitionOpenToken {
-  return { ...structuralToken("LinkDefinitionOpen", offset), linkDefinition: fields };
 }
 
 function linkDefinitionFields(token: BlockToken): LinkDefinitionFields {
@@ -442,13 +437,27 @@ export const feature: SyntaxFeature = {
             return;
           }
           const line = lines[start];
-          out.push(linkDefinitionOpen(line.start, definition.fields));
+          const open: LinkDefinitionOpenToken = {
+            type: "LinkDefinitionOpen",
+            text: "",
+            offset: line.start,
+            linkDefinition: definition.fields,
+          };
+          out.push(open);
           for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
             const current = lines[definitionLine];
             const end = definitionLine + 1 < definition.end ? current.next : current.end;
-            out.push(namedToken("LinkDefinitionChunk", source.slice(current.start, end), current.start));
+            out.push({
+              type: "LinkDefinitionChunk",
+              text: source.slice(current.start, end),
+              offset: current.start,
+            });
           }
-          out.push(structuralToken("LinkDefinitionClose", lines[definition.end - 1].end));
+          out.push({
+            type: "LinkDefinitionClose",
+            text: "",
+            offset: lines[definition.end - 1].end,
+          });
           return definition.end;
         },
       },

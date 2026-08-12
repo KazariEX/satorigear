@@ -6,7 +6,7 @@ import {
   isBlank,
   lineIndent,
 } from "../../block/lines.ts";
-import { structuralToken, tokenEnd, tokenStart } from "../../block/tokens.ts";
+import { tokenEnd, tokenStart } from "../../block/tokens.ts";
 import {
   type BlockBuildContext,
   blockEnd,
@@ -320,7 +320,11 @@ export const feature: SyntaxFeature = {
           const listClose = kind === "ordered" ? "OrderedListClose" : "UnorderedListClose";
           const itemOpen = kind === "ordered" ? "OrderedItemOpen" : "UnorderedItemOpen";
           const itemClose = kind === "ordered" ? "OrderedItemClose" : "UnorderedItemClose";
-          out.push(structuralToken(listOpen, listMarker.offset, listMarker.text));
+          out.push({
+            type: listOpen,
+            text: listMarker.text,
+            offset: listMarker.offset,
+          });
           let index = start;
           let listEnd = listMarker.offset + listMarker.text.length;
           while (index < lines.length) {
@@ -328,7 +332,11 @@ export const feature: SyntaxFeature = {
             if (!marker || !sameList(marker, listMarker)) {
               break;
             }
-            out.push(structuralToken(itemOpen, marker.offset, marker.text));
+            out.push({
+              type: itemOpen,
+              text: marker.text,
+              offset: marker.offset,
+            });
             const itemLines: BlockLine[] = [{
               ...lines[index],
               start: marker.contentOffset,
@@ -370,9 +378,17 @@ export const feature: SyntaxFeature = {
             }
             context.resolveLines(source, itemLines, out);
             listEnd = itemLines.at(-1)?.next ?? marker.offset;
-            out.push(structuralToken(itemClose, listEnd));
+            out.push({
+              type: itemClose,
+              text: "",
+              offset: listEnd,
+            });
           }
-          out.push(structuralToken(listClose, listEnd));
+          out.push({
+            type: listClose,
+            text: "",
+            offset: listEnd,
+          });
           return index;
         },
       },

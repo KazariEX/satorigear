@@ -26,19 +26,6 @@ export function tokenEnd(token: BlockToken): number {
   return token.ranges?.at(-1)?.end ?? token.offset + token.text.length;
 }
 
-export function namedToken(type: string, text: string, offset: number, ranges?: BlockTokenRange[]): BlockToken {
-  return {
-    type,
-    text,
-    offset,
-    ...(ranges?.length ? { ranges } : {}),
-  };
-}
-
-export function structuralToken(type: string, offset: number, text = ""): BlockToken {
-  return namedToken(type, text, offset);
-}
-
 export function logicalToken(
   type: string,
   source: string,
@@ -78,12 +65,12 @@ export function logicalToken(
     }
     text = logicalLines.join("");
   }
-  return namedToken(
+  return {
     type,
     text,
-    lines[start].start,
+    offset: lines[start].start,
     ranges,
-  );
+  };
 }
 
 export function createShiftedToken(token: BlockToken, delta: number): BlockToken {

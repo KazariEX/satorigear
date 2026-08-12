@@ -5,7 +5,7 @@ import {
   isBlank,
   lineIndent,
 } from "../../../block/lines.ts";
-import { type BlockToken, structuralToken, tokenStart } from "../../../block/tokens.ts";
+import { type BlockToken, tokenStart } from "../../../block/tokens.ts";
 import {
   blockEnd,
   blockToken,
@@ -50,21 +50,6 @@ function definitionAt(source: string, line: BlockLine): FootnoteDefinitionMatch 
     contentOffset,
     markerEnd,
     markerStart: indent.offset,
-  };
-}
-
-function definitionOpen(source: string, match: FootnoteDefinitionMatch): FootnoteDefinitionOpenToken {
-  return {
-    ...structuralToken(
-      "FootnoteDefinitionOpen",
-      match.markerStart,
-      source.slice(match.markerStart, match.markerEnd),
-    ),
-    footnoteDefinition: {
-      definitionKey: match.definitionKey,
-      label: match.label,
-      normalizedLabel: match.normalizedLabel,
-    },
   };
 }
 
@@ -152,10 +137,24 @@ export const blockStarts: BlockFeature["starts"] = [
       while (definitionLines.length > 0 && isBlank(source, definitionLines[definitionLines.length - 1])) {
         definitionLines.pop();
       }
-      out.push(definitionOpen(source, match));
+      const open: FootnoteDefinitionOpenToken = {
+        type: "FootnoteDefinitionOpen",
+        text: source.slice(match.markerStart, match.markerEnd),
+        offset: match.markerStart,
+        footnoteDefinition: {
+          definitionKey: match.definitionKey,
+          label: match.label,
+          normalizedLabel: match.normalizedLabel,
+        },
+      };
+      out.push(open);
       context.resolveLines(source, definitionLines, out);
       const end = definitionLines.at(-1)?.next ?? match.markerEnd;
-      out.push(structuralToken("FootnoteDefinitionClose", end));
+      out.push({
+        type: "FootnoteDefinitionClose",
+        text: "",
+        offset: end,
+      });
       return index;
     },
   },

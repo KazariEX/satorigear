@@ -1,4 +1,3 @@
-import { namedToken } from "../../block/tokens.ts";
 import { blockEnd, firstNonspace } from "../../fragment/block.ts";
 import { appendInline } from "../../fragment/inline.ts";
 import type { BlockLine } from "../../block/lines.ts";
@@ -54,7 +53,11 @@ export const feature: SyntaxFeature = {
           if (!isThematicBreak(source, line, contentOffset)) {
             return;
           }
-          out.push(namedToken("ThematicBreakToken", source.slice(line.start, line.end), line.start));
+          out.push({
+            type: "ThematicBreakToken",
+            text: source.slice(line.start, line.end),
+            offset: line.start,
+          });
           return start + 1;
         },
       },

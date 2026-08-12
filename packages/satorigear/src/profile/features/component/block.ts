@@ -2,7 +2,7 @@ import { parse as parseYaml } from "yaml";
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
-import { logicalToken, namedToken, structuralToken, tokenEnd, tokenStart } from "../../../block/tokens.ts";
+import { logicalToken, tokenEnd, tokenStart } from "../../../block/tokens.ts";
 import {
   type BlockNodeBuilder,
   blockToken,
@@ -287,17 +287,17 @@ function emitSlotOpening(
   opening: SlotOpening,
   out: Parameters<BlockStart>[3],
 ): void {
-  out.push(namedToken(
-    "BlockComponentSlotOpen",
-    source.slice(opening.offset, opening.nameEnd),
-    opening.offset,
-  ));
+  out.push({
+    type: "BlockComponentSlotOpen",
+    text: source.slice(opening.offset, opening.nameEnd),
+    offset: opening.offset,
+  });
   if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
-    out.push(namedToken(
-      "BlockComponentAttributes",
-      source.slice(opening.attributesStart, opening.attributesEnd),
-      opening.attributesStart,
-    ));
+    out.push({
+      type: "BlockComponentAttributes",
+      text: source.slice(opening.attributesStart, opening.attributesEnd),
+      offset: opening.attributesStart,
+    });
   }
 }
 
@@ -313,9 +313,15 @@ function emitComponentBody(
   let cursor = start;
   const yaml = cursor < end ? yamlPropsAt(source, lines, cursor, end) : void 0;
   if (yaml) {
-    out.push(yaml.close > yaml.open + 1
-      ? logicalToken("BlockComponentYamlProps", source, lines, yaml.open + 1, yaml.close)
-      : structuralToken("BlockComponentYamlProps", lines[yaml.open].end));
+    out.push(
+      yaml.close > yaml.open + 1
+        ? logicalToken("BlockComponentYamlProps", source, lines, yaml.open + 1, yaml.close)
+        : {
+          type: "BlockComponentYamlProps",
+          text: "",
+          offset: lines[yaml.open].end,
+        },
+    );
     cursor = yaml.close + 1;
   }
   let slot = nextSlot(source, lines, cursor, end);
@@ -331,10 +337,11 @@ function emitComponentBody(
     const next = following?.index ?? end;
     emitSlotOpening(source, slot.opening, out);
     context.resolveLines(source, lines.slice(slot.index + 1, next), out);
-    out.push(structuralToken(
-      "BlockComponentSlotClose",
-      following ? following.opening.offset : closingOffset,
-    ));
+    out.push({
+      type: "BlockComponentSlotClose",
+      text: "",
+      offset: following ? following.opening.offset : closingOffset,
+    });
     slot = following;
   }
 }
@@ -345,28 +352,36 @@ function emitOpening(
   opening: BlockOpening,
   out: Parameters<BlockStart>[3],
 ): void {
-  out.push(namedToken(
-    "BlockComponentOpen",
-    source.slice(contentOffset, opening.nameEnd),
-    contentOffset,
-  ));
+  out.push({
+    type: "BlockComponentOpen",
+    text: source.slice(contentOffset, opening.nameEnd),
+    offset: contentOffset,
+  });
   if (opening.labelStart !== void 0 && opening.labelEnd !== void 0) {
-    out.push(namedToken("BlockComponentLabelOpen", "[", opening.labelStart));
+    out.push({
+      type: "BlockComponentLabelOpen",
+      text: "[",
+      offset: opening.labelStart,
+    });
     if (opening.labelEnd > opening.labelStart + 2) {
-      out.push(namedToken(
-        "InlineChunk",
-        source.slice(opening.labelStart + 1, opening.labelEnd - 1),
-        opening.labelStart + 1,
-      ));
+      out.push({
+        type: "InlineChunk",
+        text: source.slice(opening.labelStart + 1, opening.labelEnd - 1),
+        offset: opening.labelStart + 1,
+      });
     }
-    out.push(namedToken("BlockComponentLabelClose", "]", opening.labelEnd - 1));
+    out.push({
+      type: "BlockComponentLabelClose",
+      text: "]",
+      offset: opening.labelEnd - 1,
+    });
   }
   if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
-    out.push(namedToken(
-      "BlockComponentAttributes",
-      source.slice(opening.attributesStart, opening.attributesEnd),
-      opening.attributesStart,
-    ));
+    out.push({
+      type: "BlockComponentAttributes",
+      text: source.slice(opening.attributesStart, opening.attributesEnd),
+      offset: opening.attributesStart,
+    });
   }
 }
 
@@ -424,7 +439,11 @@ function createBlockStart(shorthand: boolean): BlockStart {
     }
     if (shorthand) {
       emitOpening(source, contentOffset, opening, out);
-      out.push(structuralToken("BlockComponentClose", lines[start].end));
+      out.push({
+        type: "BlockComponentClose",
+        text: "",
+        offset: lines[start].end,
+      });
       return start + 1;
     }
     const closing = blockClose(source, lines, start, opening);
@@ -441,11 +460,11 @@ function createBlockStart(shorthand: boolean): BlockStart {
       out,
       context,
     );
-    out.push(namedToken(
-      "BlockComponentClose",
-      source.slice(closing.offset, lines[closing.index].end),
-      closing.offset,
-    ));
+    out.push({
+      type: "BlockComponentClose",
+      text: source.slice(closing.offset, lines[closing.index].end),
+      offset: closing.offset,
+    });
     return closing.index + 1;
   };
 }
