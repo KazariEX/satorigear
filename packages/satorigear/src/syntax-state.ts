@@ -1,8 +1,7 @@
 import { type BlockToken, tokenStart } from "./block/tokens.ts";
 import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
-import { inlineTokenCount, inlineTokenStart, type InlineTokenStream } from "./inline/tokens.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
-import { createSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
+import { createSourceView, type SourceSpan } from "./source-view.ts";
 import type { BlockArenaChange, BlockHandle, BlockSyntaxView } from "./block/arena.ts";
 import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
@@ -15,13 +14,28 @@ export interface SyntaxBlock {
   version: number;
 }
 
-export interface MarkdownInlineSyntax {
-  arena: InlineArena;
-  blockRule: string;
-  rootId: number;
-  rootOffset: number;
-  tokens: InlineTokenStream;
-  view: SourceView;
+// Block building follows source order, so the prepared regions need only one forward cursor.
+export class PreparedInlineBatch {
+  readonly arena: InlineArena;
+  #index = 0;
+  #regions: readonly InlineRegion[];
+
+  constructor(arena: InlineArena, regions: readonly InlineRegion[]) {
+    this.arena = arena;
+    this.#regions = regions;
+  }
+
+  take(nodeId: number): InlineRegion | undefined {
+    const region = this.#regions[this.#index];
+    if (region?.id !== nodeId) {
+      return;
+    }
+    this.#index++;
+    if (region.preparedRoot < 0) {
+      throw new Error(`Inline region ${nodeId} was built outside its prepared block batch`);
+    }
+    return region;
+  }
 }
 
 interface BlockDefinition {
@@ -66,8 +80,6 @@ export class SyntaxState {
   #definitions: ReadonlySet<string> = emptySet;
   #inlineArena: InlineArena;
   #profile: SyntaxProfile;
-  // Blocks own region lifetimes; this index only resolves current arena node IDs while building fragments.
-  #regions = new Map<number, InlineRegion>();
   #view: BlockSyntaxView;
 
   constructor(
@@ -189,14 +201,6 @@ export class SyntaxState {
       }
     }
 
-    // Reused regions may acquire new arena IDs, so remove the old tail index before rebinding.
-    for (let index = stableBlockCount; index < previousBlocks.length; index++) {
-      for (const region of previousBlocks[index].regions) {
-        if (this.#regions.get(region.id) === region) {
-          this.#regions.delete(region.id);
-        }
-      }
-    }
     const displacedRegions: InlineRegion[] = [];
     for (let index = oldStart; index < oldEnd; index++) {
       for (const region of previousBlocks[index].regions) {
@@ -244,7 +248,6 @@ export class SyntaxState {
           ? candidate.update(binding, availableDefinitions)
           : new InlineRegion(this.#profile.inline, binding, availableDefinitions);
         regions[regionIndex] = region;
-        this.#regions.set(binding.id, region);
         regionsStable &&= candidate === previous?.regions[regionIndex] && revision === region.revision;
       }
 
@@ -277,7 +280,7 @@ export class SyntaxState {
     return this.#view;
   }
 
-  prepareInline(blocks: readonly SyntaxBlock[]): void {
+  prepareInline(blocks: readonly SyntaxBlock[]): PreparedInlineBatch {
     const regions: InlineRegion[] = [];
     for (const block of blocks) {
       for (const region of block.regions) {
@@ -285,23 +288,7 @@ export class SyntaxState {
       }
     }
     this.#inlineArena.build(regions);
-  }
 
-  inlineForBlock(nodeId: number): MarkdownInlineSyntax | undefined {
-    const region = this.#regions.get(nodeId);
-    if (!region) {
-      return;
-    }
-    if (region.preparedRoot < 0) {
-      throw new Error(`Inline region ${nodeId} was built outside its prepared block batch`);
-    }
-    return {
-      arena: this.#inlineArena,
-      blockRule: region.rule,
-      rootId: region.preparedRoot,
-      rootOffset: inlineTokenCount(region.tokens) > 0 ? inlineTokenStart(region.tokens, 0) : 0,
-      tokens: region.tokens,
-      view: region.view,
-    };
+    return new PreparedInlineBatch(this.#inlineArena, regions);
   }
 }

@@ -281,8 +281,8 @@ export function inlineChildren(
   context: BlockBuildContext,
   allowEmpty = false,
 ): PhrasingContent[] {
-  const inline = context.syntaxState.inlineForBlock(nodeId);
-  if (!inline) {
+  const region = context.inline.take(nodeId);
+  if (!region) {
     const rule = context.view.arena.ruleNameOf(nodeId);
     if (allowEmpty) {
       return [];
@@ -290,18 +290,20 @@ export function inlineChildren(
     throw new Error(`Expected ${rule} syntax to contain InlineLines`);
   }
   const inlineContext: InlineBuildContext = {
-    arena: inline.arena,
-    blockRule: inline.blockRule,
+    arena: context.inline.arena,
+    blockRule: region.rule,
     decodeText: context.profile.inline.decodeText,
     source: context.source,
     tokenBuilders: context.profile.inline.tokenBuilders,
-    tokens: inline.tokens,
-    view: inline.view,
+    tokens: region.tokens,
+    view: region.view,
   };
   const result: PhrasingContent[] = [];
   inlineSequence(
-    inline.rootId,
-    inline.rootOffset,
+    region.preparedRoot,
+    inlineTokenCount(region.tokens) > 0
+      ? inlineTokenStart(region.tokens, 0)
+      : 0,
     createInlineAccumulator(inlineContext, result),
   );
   const last = result.at(-1);

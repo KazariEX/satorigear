@@ -2,7 +2,7 @@ import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, snapshot } from "./fragment/output/materialize.ts";
-import { SyntaxState } from "./syntax-state.ts";
+import { type SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 import type { BlockArena, BlockHandle } from "./block/arena.ts";
 import type { BlockFragment } from "./fragment/node.ts";
 import type { InlineArena } from "./inline/arena.ts";
@@ -109,11 +109,11 @@ export class DocumentImpl implements Document {
     return { changedSpan: applied.changedSpan };
   }
 
-  #createBuildContext(): BlockBuildContext {
+  #createBuildContext(blocks: readonly SyntaxBlock[]): BlockBuildContext {
     return {
+      inline: this.#syntaxState.prepareInline(blocks),
       profile: this.#profile,
       source: this.source,
-      syntaxState: this.#syntaxState,
       view: this.#syntaxState.blockView(),
     };
   }
@@ -128,9 +128,8 @@ export class DocumentImpl implements Document {
     const changedBlocks = previousFragments === void 0
       ? blocks
       : blocks.filter((block) => previousFragments.get(block.handle)?.version !== block.version);
-    const context = this.#createBuildContext();
     // Changed regions share one build workspace; no arena reference escapes the resulting fragments.
-    this.#syntaxState.prepareInline(changedBlocks);
+    const context = this.#createBuildContext(changedBlocks);
 
     const nextFragments = blocks.map((block) => {
       const previous = previousFragments?.get(block.handle);
@@ -157,8 +156,7 @@ export class DocumentImpl implements Document {
 
   materialize(): Root {
     const blocks = this.#syntaxState.blocks();
-    const context = this.#createBuildContext();
-    this.#syntaxState.prepareInline(blocks);
+    const context = this.#createBuildContext(blocks);
 
     return materialize(
       blocks.map((block) => buildBlockNode(
