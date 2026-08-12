@@ -126,6 +126,14 @@ function alignmentAt(source: string, cell: CellRange): AlignmentToken | undefine
 }
 
 function delimiterAt(source: string, line: BlockLine): { cells: CellRange[]; tokens: AlignmentToken[] } | undefined {
+  const indent = lineIndent(source, line);
+  if (!indent) {
+    return;
+  }
+  const first = source[indent.offset];
+  if (first !== "-" && first !== ":" && first !== "|") {
+    return;
+  }
   const cells = tableCellsAt(source, line, false);
   if (!cells) {
     return;
