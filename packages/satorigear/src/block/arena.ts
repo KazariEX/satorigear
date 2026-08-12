@@ -43,7 +43,6 @@ function leaf(tokenIndex: number): number {
 // The workspace reclaims ranges across edits and retains array capacity across one-shot documents.
 export class BlockArena {
   #blocks: TopLevelBlock[] = [];
-  #buildEnds: number[] = [];
   #buildStarts: number[] = [];
   #buildTokenEnds: number[] = [];
   #buildTokenStarts: number[] = [];
@@ -151,7 +150,6 @@ export class BlockArena {
     this.#lengths[id] = end - start;
     this.#rules[id] = rule;
     this.#buildStarts[id] = start;
-    this.#buildEnds[id] = end;
     this.#buildTokenStarts[id] = tokenBase;
     this.#buildTokenEnds[id] = tokenLimit;
     return id;
@@ -247,7 +245,7 @@ export class BlockArena {
   }
 
   #entryEnd(entry: number): number {
-    return entry < 0 ? tokenEnd(this.#tokens[~entry]) : this.#buildEnds[entry];
+    return entry < 0 ? tokenEnd(this.#tokens[~entry]) : this.#buildStarts[entry] + this.#lengths[entry];
   }
 
   #entryStart(entry: number): number {
