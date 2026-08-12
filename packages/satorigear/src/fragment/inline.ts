@@ -7,14 +7,14 @@ import {
   type InlineTokenStream,
 } from "../inline/tokens.ts";
 import { extendSpan, type SpannedNode } from "./node.ts";
-import type { InlineArena } from "../inline/arena.ts";
+import type { InlineSyntaxSchema } from "../inline/profile.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
 
 export interface InlineBuildContext {
-  arena: InlineArena;
   blockRule: string;
   decodeText: (value: string) => string;
+  schema: InlineSyntaxSchema;
   source: string;
   tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
   tokens: InlineTokenStream;
@@ -35,12 +35,12 @@ export type InlineLeafBuilder = (
 ) => boolean;
 
 export type InlineNodeBuilder = (
-  nodeId: number,
-  offset: number,
-  endOffset: number,
+  openToken: number,
+  closeToken: number,
+  children: SpannedNode<PhrasingContent>[],
   sourceSpan: SourceSpan,
   accumulator: InlineAccumulator,
-) => boolean;
+) => void;
 
 function inlineTokenIndex(context: InlineBuildContext, tokenIndex: number): number {
   if (tokenIndex < 0 || tokenIndex >= inlineTokenCount(context.tokens)) {
@@ -75,31 +75,6 @@ function lineEndingStart(source: string, offset: number): number {
     return offset;
   }
   return source[start - 1] === "\n" && source[start - 2] === "\r" ? start - 2 : start - 1;
-}
-
-export function directLeaf(
-  nodeId: number,
-  tokenType: string,
-  context: InlineBuildContext,
-): number | undefined {
-  const { arena } = context;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const entry = arena.childAt(nodeId, index);
-    if (
-      entry < 0 && arena.leafTokenType(entry, context.tokens) === tokenType
-    ) {
-      return inlineTokenIndex(context, arena.leafToken(entry));
-    }
-  }
-}
-
-export function leaf(nodeId: number, tokenType: string, context: InlineBuildContext): number {
-  const result = directLeaf(nodeId, tokenType, context);
-  if (result === void 0) {
-    throw new Error(`Expected inline syntax to contain ${tokenType}`);
-  }
-  return result;
 }
 
 function appendText(target: SpannedNode<PhrasingContent>[], value: string, start: number, end: number): void {
@@ -193,18 +168,6 @@ function appendInlineLeaf(
   return build(tokenIndex, sourceSpan, accumulator);
 }
 
-export function contentBounds(
-  nodeId: number,
-  openType: string,
-  closeType: string,
-  context: InlineBuildContext,
-): [number, number] {
-  return [
-    inlineTokenEnd(context.tokens, leaf(nodeId, openType, context)),
-    inlineTokenStart(context.tokens, leaf(nodeId, closeType, context)),
-  ];
-}
-
 function trailingWhitespaceStart(value: string): number {
   let offset = value.length;
   while (offset > 0 && (value[offset - 1] === " " || value[offset - 1] === "\t")) {
@@ -213,61 +176,139 @@ function trailingWhitespaceStart(value: string): number {
   return offset;
 }
 
-export function appendInlineSequence(
-  nodeId: number,
-  offset: number,
+// Resolution has already made semantic pairs unambiguous, so projection can consume that stream
+// directly instead of copying it into a second syntax arena.
+function appendInlineRange(
+  startToken: number,
+  endToken: number,
   accumulator: InlineAccumulator,
   start?: number,
   end?: number,
-): boolean {
+  closeKind?: number,
+): { cursor: number | undefined; next: number } {
   const { context } = accumulator;
   let cursor = start;
-  let emitted = false;
-  const { arena } = context;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const entry = arena.childAt(nodeId, index);
-    const tokenIndex = entry < 0 ? inlineTokenIndex(context, arena.leafToken(entry)) : void 0;
-    const childOffset = tokenIndex !== void 0
-      ? inlineTokenStart(context.tokens, tokenIndex)
-      : offset + arena.childRelAt(nodeId, index, context.tokens);
-    const childEnd = tokenIndex !== void 0
-      ? inlineTokenEnd(context.tokens, tokenIndex)
-      : childOffset + arena.lenOf(entry);
-    const sourceSpan = context.view.mapSpan(childOffset, childEnd);
+  let index = startToken;
+  while (index < endToken) {
+    const kind = inlineTokenKind(context.tokens, index);
+    if (kind === closeKind) {
+      break;
+    }
+    const childOffset = inlineTokenStart(context.tokens, index);
     if (cursor !== void 0 && childOffset > cursor) {
       accumulator.gapStart = cursor;
       accumulator.gapEnd = childOffset;
     }
-    const childEmitted = tokenIndex !== void 0
-      ? appendInlineLeaf(tokenIndex, sourceSpan, accumulator)
-      : appendInlineNode(entry, childOffset, childEnd, sourceSpan, accumulator);
+    const next = buildInlineSemantic(index, endToken, accumulator);
+    const childEnd = inlineTokenEnd(context.tokens, next === void 0 ? index : next - 1);
+    const childEmitted = next === void 0
+      ? appendInlineLeaf(
+        inlineTokenIndex(context, index),
+        context.view.mapSpan(childOffset, childEnd),
+        accumulator,
+      )
+      : true;
+    index = next ?? index + 1;
     if (!childEmitted) {
       continue;
     }
-    emitted = true;
     cursor = childEnd;
   }
   if (cursor !== void 0 && end !== void 0 && end > cursor) {
     appendInlineGap(accumulator, cursor, end);
-    emitted = true;
   }
-  return emitted;
+  return { cursor, next: index };
 }
 
-function appendInlineNode(
-  nodeId: number,
-  offset: number,
-  endOffset: number,
-  sourceSpan: SourceSpan,
+function buildInlineSemantic(
+  openToken: number,
+  endToken: number,
   accumulator: InlineAccumulator,
-): boolean {
+): number | undefined {
   const { context } = accumulator;
-  const build = context.arena.builderOf(nodeId);
-  if (!build) {
-    throw new Error("Unexpected inline syntax rule");
+  const kind = inlineTokenKind(context.tokens, openToken);
+  const container = context.schema.containerByKind[kind];
+  if (container) {
+    let closeToken = openToken;
+    let next = openToken + 1;
+    const children: SpannedNode<PhrasingContent>[] = [];
+    if (
+      next < endToken &&
+      inlineTokenKind(context.tokens, next) === container.contentOpenKind
+    ) {
+      const contentStart = inlineTokenEnd(context.tokens, next++);
+      const childAccumulator = createInlineAccumulator(context, children);
+      const result = appendInlineRange(
+        next,
+        endToken,
+        childAccumulator,
+        contentStart,
+        void 0,
+        container.closeKind,
+      );
+      closeToken = result.next;
+      if (
+        closeToken >= endToken ||
+        inlineTokenKind(context.tokens, closeToken) !== container.closeKind
+      ) {
+        throw new Error(`Resolved inline stream did not close token kind ${kind}`);
+      }
+      const contentEnd = inlineTokenStart(context.tokens, closeToken);
+      if (result.cursor !== void 0 && contentEnd > result.cursor) {
+        appendInlineGap(childAccumulator, result.cursor, contentEnd);
+      }
+      next = closeToken + 1;
+    }
+    container.build(
+      openToken,
+      closeToken,
+      children,
+      context.view.mapSpan(
+        inlineTokenStart(context.tokens, openToken),
+        inlineTokenEnd(context.tokens, closeToken),
+      ),
+      accumulator,
+    );
+    return next;
   }
-  return build(nodeId, offset, endOffset, sourceSpan, accumulator);
+
+  const pair = context.schema.pairByOpenKind[kind];
+  if (!pair) {
+    return;
+  }
+  const contentStart = inlineTokenEnd(context.tokens, openToken);
+  const children: SpannedNode<PhrasingContent>[] = [];
+  const childAccumulator = createInlineAccumulator(context, children);
+  const result = appendInlineRange(
+    openToken + 1,
+    endToken,
+    childAccumulator,
+    contentStart,
+    void 0,
+    pair.closeKind,
+  );
+  const closeToken = result.next;
+  if (
+    closeToken >= endToken ||
+    inlineTokenKind(context.tokens, closeToken) !== pair.closeKind
+  ) {
+    throw new Error(`Resolved inline stream did not close token kind ${kind}`);
+  }
+  const contentEnd = inlineTokenStart(context.tokens, closeToken);
+  if (result.cursor !== void 0 && contentEnd > result.cursor) {
+    appendInlineGap(childAccumulator, result.cursor, contentEnd);
+  }
+  pair.build(
+    openToken,
+    closeToken,
+    children,
+    context.view.mapSpan(
+      inlineTokenStart(context.tokens, openToken),
+      inlineTokenEnd(context.tokens, closeToken),
+    ),
+    accumulator,
+  );
+  return closeToken + 1;
 }
 
 export function buildInlineChildren(
@@ -284,20 +325,18 @@ export function buildInlineChildren(
     throw new Error(`Expected ${rule} syntax to contain InlineLines`);
   }
   const inlineContext: InlineBuildContext = {
-    arena: context.inline.arena,
     blockRule: region.rule,
     decodeText: context.profile.inline.decodeText,
+    schema: context.profile.inline.schema,
     source: context.source,
     tokenBuilders: context.profile.inline.tokenBuilders,
     tokens: region.tokens,
     view: region.view,
   };
   const result: SpannedNode<PhrasingContent>[] = [];
-  appendInlineSequence(
-    region.preparedRoot,
-    inlineTokenCount(region.tokens) > 0
-      ? inlineTokenStart(region.tokens, 0)
-      : 0,
+  appendInlineRange(
+    0,
+    inlineTokenCount(region.tokens),
     createInlineAccumulator(inlineContext, result),
   );
   const last = result.at(-1);

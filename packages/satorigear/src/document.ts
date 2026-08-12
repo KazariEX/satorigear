@@ -5,7 +5,6 @@ import { materialize, snapshot } from "./fragment/output/materialize.ts";
 import { type SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 import type { BlockArena, BlockHandle } from "./block/arena.ts";
 import type { BlockFragment } from "./fragment/node.ts";
-import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceSpan, TextEdit } from "./source-view.ts";
 
@@ -64,7 +63,6 @@ export class DocumentImpl implements Document {
     source: string,
     profile: SyntaxProfile,
     blockArena: BlockArena,
-    inlineArena: InlineArena,
   ) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(source, profile.block);
@@ -74,7 +72,6 @@ export class DocumentImpl implements Document {
       source,
       this.#blockArena.view(),
       profile,
-      inlineArena,
     );
   }
 
@@ -111,7 +108,7 @@ export class DocumentImpl implements Document {
 
   #createBuildContext(blocks: readonly SyntaxBlock[]): BlockBuildContext {
     return {
-      inline: this.#syntaxState.prepareInline(blocks),
+      inline: this.#syntaxState.inlineBatch(blocks),
       profile: this.#profile,
       source: this.source,
       view: this.#syntaxState.blockView(),

@@ -1,14 +1,10 @@
 import type { PhrasingContent } from "mdast";
 import {
   appendInline,
-  appendInlineSequence,
-  contentBounds,
-  createInlineAccumulator,
   type InlineAccumulator,
   type InlineNodeBuilder,
-  leaf,
 } from "../../fragment/inline.ts";
-import { inlineTokenText } from "../../inline/tokens.ts";
+import { inlineTokenEnd, inlineTokenStart, inlineTokenText } from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { buildInlineText, semanticText } from "./text.ts";
 import type { SpannedNode } from "../../fragment/node.ts";
@@ -82,13 +78,12 @@ function destinationTitle(bodySource: string): Resource {
 }
 
 function reference(
-  nodeId: number,
+  close: number,
   syntaxStart: number,
   syntaxEnd: number,
   context: InlineAccumulator["context"],
   image: boolean,
 ): Reference {
-  const close = leaf(nodeId, image ? "ImageReferenceClose" : "ReferenceClose", context);
   const closeText = inlineTokenText(context.view.text, context.tokens, close);
   const text = context.view.text.slice(syntaxStart, syntaxEnd);
   const content = text.slice(image ? 2 : 1, text.length - closeText.length);
@@ -123,21 +118,17 @@ function phrasingText(children: readonly SpannedNode<PhrasingContent>[]): string
 function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineNodeBuilder {
   const image = media === "image";
   const referenceNode = resourceKind === "reference";
-  const prefix = image ? "Image" : "";
-  const resourcePrefix = referenceNode ? "Reference" : "Link";
 
-  return (nodeId, offset, endOffset, sourceSpan, accumulator) => {
+  return (openToken, closeToken, children, sourceSpan, accumulator) => {
     const context = accumulator.context;
-    const [start, end] = contentBounds(
-      nodeId,
-      `${prefix + resourcePrefix}Open`,
-      `${prefix + resourcePrefix}Close`,
-      context,
-    );
-    const children: SpannedNode<PhrasingContent>[] = [];
-    appendInlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
     if (referenceNode) {
-      const association = reference(nodeId, offset, endOffset, context, image);
+      const association = reference(
+        closeToken,
+        inlineTokenStart(context.tokens, openToken),
+        inlineTokenEnd(context.tokens, closeToken),
+        context,
+        image,
+      );
       appendInline(
         accumulator,
         image
@@ -146,8 +137,9 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
       );
     }
     else {
-      const closeIndex = leaf(nodeId, `${prefix}LinkClose`, context);
-      const resource = destinationTitle(inlineTokenText(context.view.text, context.tokens, closeIndex).slice(2, -1));
+      const resource = destinationTitle(
+        inlineTokenText(context.view.text, context.tokens, closeToken).slice(2, -1),
+      );
       appendInline(
         accumulator,
         image
@@ -155,7 +147,6 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
           : { type: "link", children, ...resource, position: sourceSpan },
       );
     }
-    return true;
   };
 }
 

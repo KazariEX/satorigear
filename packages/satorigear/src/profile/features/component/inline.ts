@@ -1,10 +1,5 @@
-import type { PhrasingContent } from "mdast";
 import {
   appendInline,
-  appendInlineSequence,
-  contentBounds,
-  createInlineAccumulator,
-  directLeaf,
   type InlineNodeBuilder,
   lineEnd,
 } from "../../../fragment/inline.ts";
@@ -24,7 +19,6 @@ import {
   componentNameEnd,
   normalizeComponentName,
 } from "../attributes/syntax.ts";
-import type { SpannedNode } from "../../../fragment/node.ts";
 import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
 
 interface Candidate {
@@ -356,28 +350,13 @@ export function transformComponentTokens(
 }
 
 const buildInlineComponent: InlineNodeBuilder = (
-  nodeId,
-  offset,
-  endOffset,
+  open,
+  close,
+  children,
   sourceSpan,
   accumulator,
 ) => {
   const { context } = accumulator;
-  const open = directLeaf(nodeId, "InlineComponentOpen", context);
-  if (open === void 0) {
-    throw new Error("InlineComponent does not contain an opener");
-  }
-  const children: SpannedNode<PhrasingContent>[] = [];
-  const labelOpen = directLeaf(nodeId, "InlineComponentLabelOpen", context);
-  if (labelOpen !== void 0) {
-    const [start, end] = contentBounds(
-      nodeId,
-      "InlineComponentLabelOpen",
-      "InlineComponentLabelClose",
-      context,
-    );
-    appendInlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
-  }
   const text = context.view.text.slice(
     inlineTokenStart(context.tokens, open) + 1,
     inlineTokenEnd(context.tokens, open),
@@ -389,25 +368,15 @@ const buildInlineComponent: InlineNodeBuilder = (
     children,
     position: sourceSpan,
   });
-  return true;
 };
 
 const buildInlineSpan: InlineNodeBuilder = (
-  nodeId,
-  offset,
-  endOffset,
+  open,
+  close,
+  children,
   sourceSpan,
   accumulator,
 ) => {
-  const { context } = accumulator;
-  const [start, end] = contentBounds(
-    nodeId,
-    "InlineSpanOpen",
-    "InlineSpanClose",
-    context,
-  );
-  const children: SpannedNode<PhrasingContent>[] = [];
-  appendInlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
   appendInline(accumulator, {
     type: "inlineComponent",
     name: "span",
@@ -415,7 +384,6 @@ const buildInlineSpan: InlineNodeBuilder = (
     children,
     position: sourceSpan,
   });
-  return true;
 };
 
 export const inlineSyntax: readonly InlineSyntaxDefinition[] = [

@@ -3,7 +3,6 @@ import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { createSourceView, type SourceSpan } from "./source-view.ts";
 import type { BlockArenaChange, BlockHandle, BlockSyntaxView } from "./block/arena.ts";
-import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 
 export interface SyntaxBlock {
@@ -14,14 +13,12 @@ export interface SyntaxBlock {
   version: number;
 }
 
-// Block building follows source order, so the prepared regions need only one forward cursor.
-export class PreparedInlineBatch {
-  readonly arena: InlineArena;
+// Block building follows source order, so inline regions need only one forward cursor.
+export class InlineRegionBatch {
   #index = 0;
   #regions: readonly InlineRegion[];
 
-  constructor(arena: InlineArena, regions: readonly InlineRegion[]) {
-    this.arena = arena;
+  constructor(regions: readonly InlineRegion[]) {
     this.#regions = regions;
   }
 
@@ -31,9 +28,6 @@ export class PreparedInlineBatch {
       return;
     }
     this.#index++;
-    if (region.preparedRoot < 0) {
-      throw new Error(`Inline region ${nodeId} was built outside its prepared block batch`);
-    }
     return region;
   }
 }
@@ -78,7 +72,6 @@ export class SyntaxState {
   #blocks: SyntaxBlock[] = [];
   #definitionEntries?: BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
-  #inlineArena: InlineArena;
   #profile: SyntaxProfile;
   #view: BlockSyntaxView;
 
@@ -86,9 +79,7 @@ export class SyntaxState {
     source: string,
     view: BlockSyntaxView,
     profile: SyntaxProfile,
-    inlineArena: InlineArena,
   ) {
-    this.#inlineArena = inlineArena;
     this.#profile = profile;
     this.#view = view;
     this.update(source, view);
@@ -280,15 +271,13 @@ export class SyntaxState {
     return this.#view;
   }
 
-  prepareInline(blocks: readonly SyntaxBlock[]): PreparedInlineBatch {
+  inlineBatch(blocks: readonly SyntaxBlock[]): InlineRegionBatch {
     const regions: InlineRegion[] = [];
     for (const block of blocks) {
       for (const region of block.regions) {
         regions.push(region);
       }
     }
-    this.#inlineArena.build(regions);
-
-    return new PreparedInlineBatch(this.#inlineArena, regions);
+    return new InlineRegionBatch(regions);
   }
 }

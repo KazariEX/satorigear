@@ -1,13 +1,9 @@
-import type { Delete, Emphasis, PhrasingContent, Strong } from "mdast";
+import type { Delete, Emphasis, Strong } from "mdast";
 import {
   appendInline,
-  appendInlineSequence,
-  contentBounds,
-  createInlineAccumulator,
   type InlineNodeBuilder,
 } from "../../fragment/inline.ts";
 import { buildInlineText } from "./text.ts";
-import type { SpannedNode } from "../../fragment/node.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
 import type { InlineSyntaxDefinition } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -45,34 +41,27 @@ export interface StrikethroughOptions {
 
 type Formatting = Delete | Emphasis | Strong;
 
-function createBuildFormatting(type: Formatting["type"], boundary: "Emphasis" | "Strong"): InlineNodeBuilder {
-  const open = `${boundary}Open`;
-  const close = `${boundary}Close`;
-  return (nodeId, offset, endOffset, sourceSpan, accumulator) => {
-    const context = accumulator.context;
-    const [start, end] = contentBounds(nodeId, open, close, context);
-    const children: SpannedNode<PhrasingContent>[] = [];
-    appendInlineSequence(nodeId, offset, createInlineAccumulator(context, children), start, end);
+function createBuildFormatting(type: Formatting["type"]): InlineNodeBuilder {
+  return (openToken, closeToken, children, sourceSpan, accumulator) => {
     appendInline(accumulator, { type, children, position: sourceSpan });
-    return true;
   };
 }
 
-const buildInlineEmphasis = createBuildFormatting("emphasis", "Emphasis");
-const buildInlineStrong = createBuildFormatting("strong", "Strong");
-const buildInlineDelete = createBuildFormatting("delete", "Strong");
+const buildInlineEmphasis = createBuildFormatting("emphasis");
+const buildInlineStrong = createBuildFormatting("strong");
+const buildInlineDelete = createBuildFormatting("delete");
 
 const buildInlineStrongOrDelete: InlineNodeBuilder = (
-  nodeId,
-  offset,
-  endOffset,
+  openToken,
+  closeToken,
+  children,
   sourceSpan,
   accumulator,
 ) => {
   const build = accumulator.context.source[sourceSpan.start] === "~"
     ? buildInlineDelete
     : buildInlineStrong;
-  return build(nodeId, offset, endOffset, sourceSpan, accumulator);
+  build(openToken, closeToken, children, sourceSpan, accumulator);
 };
 
 const inlineSyntax: readonly InlineSyntaxDefinition[] = [

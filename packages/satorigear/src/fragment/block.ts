@@ -3,13 +3,13 @@ import { type BlockToken, tokenEnd, tokenStart } from "../block/tokens.ts";
 import type { BlockSyntaxView } from "../block/arena.ts";
 import type { SyntaxProfile } from "../profile/types.ts";
 import type { SourceSpan } from "../source-view.ts";
-import type { PreparedInlineBatch } from "../syntax-state.ts";
+import type { InlineRegionBatch } from "../syntax-state.ts";
 import type { SpannedNode } from "./node.ts";
 
 export interface BlockBuildContext {
   profile: SyntaxProfile;
   source: string;
-  inline: PreparedInlineBatch;
+  inline: InlineRegionBatch;
   view: BlockSyntaxView;
 }
 
