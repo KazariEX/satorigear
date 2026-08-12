@@ -221,7 +221,7 @@ export class SyntaxState {
         const binding = bindings[bindingIndex];
         const regionIndex = bindingIndex - bindingStart;
         let candidate = previous?.regions[regionIndex];
-        if (!candidate) {
+        if (!candidate && displacedRegions.length > 0) {
           let nearest = displacedRegions.findIndex((value) => value.id === binding.id);
           // Changed blocks retain lexer state by matching their displaced inline regions in source order.
           if (nearest < 0) {
