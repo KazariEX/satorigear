@@ -3,12 +3,7 @@ import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
 
 export interface BlockSyntaxView {
   readonly arena: BlockArena;
-  readonly blockHandles: readonly BlockHandle[];
-  readonly root: {
-    id: number;
-    offset: number;
-    tokenBase: number;
-  };
+  readonly blocks: readonly TopLevelBlock[];
   tokenAt: (index: number) => BlockToken;
 }
 
@@ -17,16 +12,16 @@ export interface BlockHandle {
   readonly id: number;
 }
 
+interface TopLevelBlock extends BlockHandle {
+  tokenEnd: number;
+  tokenStart: number;
+}
+
 export interface BlockArenaChange {
   // Arena surgery replaces old [oldStart, oldEnd) with new [oldStart, newEnd).
   readonly newEnd: number;
   readonly oldEnd: number;
   readonly oldStart: number;
-}
-
-interface BlockRecord extends BlockHandle {
-  tokenEnd: number;
-  tokenStart: number;
 }
 
 interface Frame {
@@ -48,7 +43,7 @@ function leaf(tokenIndex: number): number {
 // Relative edges make unchanged top-level trees independent of later source and token shifts.
 // The workspace reclaims ranges across edits and retains array capacity across one-shot documents.
 export class BlockArena {
-  #blockRecords: BlockRecord[] = [];
+  #blocks: TopLevelBlock[] = [];
   #buildEnds: number[] = [];
   #buildStarts: number[] = [];
   #buildTokenEnds: number[] = [];
@@ -61,13 +56,11 @@ export class BlockArena {
   #freeIds: number[] = [];
   #blockNodes: boolean[] = [false];
   #lengths: number[] = [0];
-  #nodeCount = 1;
+  #nodeCount = 0;
   #releaseStack: number[] = [];
   #rules: CompiledBlockRule[];
   #schema: BlockSyntaxSchema;
   #tokens: readonly BlockToken[] = [];
-  root = 0;
-
   constructor(schema: BlockSyntaxSchema) {
     this.#rules = [];
     this.#schema = schema;
@@ -78,21 +71,15 @@ export class BlockArena {
     this.#edgeLength = 0;
     this.#freeEdges.length = 0;
     this.#freeIds.length = 0;
-    this.#nodeCount = 1;
+    this.#nodeCount = 0;
     this.#tokens = tokens;
-    this.#blockRecords = this.#buildRange(0, tokens.length);
-    this.#rebuildRoot();
+    this.#blocks = this.#buildRange(0, tokens.length);
   }
 
   view(): BlockSyntaxView {
     return {
       arena: this,
-      blockHandles: this.#blockRecords,
-      root: {
-        id: this.root,
-        offset: this.#tokens[0] ? tokenStart(this.#tokens[0]) : 0,
-        tokenBase: 0,
-      },
+      blocks: this.#blocks,
       tokenAt: (index) => {
         const token = this.#tokens[index];
         if (!token) {
@@ -104,7 +91,7 @@ export class BlockArena {
   }
 
   update(tokens: readonly BlockToken[], change: BlockTokenChange): BlockArenaChange {
-    const previous = this.#blockRecords;
+    const previous = this.#blocks;
     // Token damage can begin inside a block, so widen it to complete top-level records.
     let prefixEnd = 0;
     while (prefixEnd < previous.length && previous[prefixEnd].tokenEnd <= change.oldStart) {
@@ -119,7 +106,6 @@ export class BlockArena {
     const buildStart = previous[prefixEnd - 1]?.tokenEnd ?? 0;
     const oldSuffixTokenStart = previous[suffixStart]?.tokenStart;
     const buildEnd = oldSuffixTokenStart === void 0 ? tokens.length : oldSuffixTokenStart + tokenDelta;
-    this.#releaseEdges(this.root);
     for (let index = prefixEnd; index < suffixStart; index++) {
       this.#release(previous[index].id);
     }
@@ -134,12 +120,11 @@ export class BlockArena {
         block.tokenEnd += tokenDelta;
       }
     }
-    this.#blockRecords = [
+    this.#blocks = [
       ...previous.slice(0, prefixEnd),
       ...changed,
       ...suffix,
     ];
-    this.#rebuildRoot();
     return {
       newEnd: prefixEnd + changed.length,
       oldEnd: suffixStart,
@@ -203,7 +188,7 @@ export class BlockArena {
     return start;
   }
 
-  #buildRange(start: number, end: number): BlockRecord[] {
+  #buildRange(start: number, end: number): TopLevelBlock[] {
     const document: Frame = {
       block: false,
       close: "",
@@ -275,24 +260,6 @@ export class BlockArena {
 
   #entryTokenStart(entry: number): number {
     return entry < 0 ? ~entry : this.#buildTokenStarts[entry];
-  }
-
-  #rebuildRoot(): void {
-    const blocks = this.#blockRecords;
-    const rootOffset = blocks.length === 0 ? 0 : tokenStart(this.#tokens[blocks[0].tokenStart]);
-    const edgeStart = this.#allocateEdges(blocks.length);
-    this.#edgeStarts[this.root] = edgeStart;
-    this.#edgeCounts[this.root] = blocks.length;
-    for (let index = 0; index < blocks.length; index++) {
-      const block = blocks[index];
-      const edge = (edgeStart + index) * 3;
-      this.#edges[edge] = block.id;
-      this.#edges[edge + 1] = tokenStart(this.#tokens[block.tokenStart]) - rootOffset;
-      this.#edges[edge + 2] = block.tokenStart;
-    }
-    this.#lengths[this.root] = blocks.length === 0
-      ? 0
-      : tokenEnd(this.#tokens[blocks.at(-1)!.tokenEnd - 1]) - rootOffset;
   }
 
   #release(id: number): void {

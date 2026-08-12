@@ -1,9 +1,9 @@
+import { type BlockToken, tokenStart } from "./block/tokens.ts";
 import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
 import { inlineTokenCount, inlineTokenStart, type InlineTokenStream } from "./inline/tokens.ts";
 import { emptyArray, emptySet, isArrayEqual, isSetEqual } from "./primitives.ts";
 import { createSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { BlockArenaChange, BlockHandle, BlockSyntaxView } from "./block/arena.ts";
-import type { BlockToken } from "./block/tokens.ts";
 import type { InlineArena } from "./inline/arena.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 
@@ -97,7 +97,7 @@ export class SyntaxState {
     const previousBlocks = this.#blocks;
     const oldStart = change?.oldStart ?? 0;
     const oldEnd = change?.oldEnd ?? 0;
-    const newEnd = change?.newEnd ?? view.blockHandles.length;
+    const newEnd = change?.newEnd ?? view.blocks.length;
     const blocks: SyntaxBlock[] = stableBlockCount === 0 ? [] : previousBlocks.slice(0, stableBlockCount);
     const previousDefinitionEntries = this.#definitionEntries;
     let stableDefinitionCount = 0;
@@ -157,19 +157,15 @@ export class SyntaxState {
     // Inline resolution needs the complete definition set, so one flat list records block boundaries
     // without allocating temporary binding arrays for every block.
     const bindingStarts: number[] = [];
-    const root = view.root;
-    const rootChildCount = arena.childCount(root.id);
-    for (let index = stableBlockCount; index < rootChildCount; index++) {
-      const childId = arena.childAt(root.id, index);
-      if (childId < 0 || !view.arena.isBlock(childId)) {
-        continue;
-      }
-      const offset = root.offset + arena.childRelAt(root.id, index);
-      const tokenBase = root.tokenBase + arena.childTokRelAt(root.id, index);
+    for (let index = stableBlockCount; index < view.blocks.length; index++) {
+      const syntaxBlock = view.blocks[index];
+      const childId = syntaxBlock.id;
+      const tokenBase = syntaxBlock.tokenStart;
+      const offset = tokenStart(view.tokenAt(tokenBase));
       bindingStarts.push(bindings.length);
       collect(childId, offset, tokenBase, blocks.length);
       blocks.push({
-        handle: view.blockHandles[index],
+        handle: syntaxBlock,
         offset,
         regions: emptyArray,
         regionRevisions: emptyArray,
