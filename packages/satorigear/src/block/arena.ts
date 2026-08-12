@@ -25,7 +25,6 @@ export interface BlockArenaChange {
 }
 
 interface Frame {
-  block: boolean;
   close: string;
   children: number[];
   rule?: CompiledBlockRule;
@@ -54,7 +53,6 @@ export class BlockArena {
   #edgeStarts: number[] = [0];
   #freeEdges: FreeEdgeRange[] = [];
   #freeIds: number[] = [];
-  #blockNodes: boolean[] = [false];
   #lengths: number[] = [0];
   #nodeCount = 0;
   #releaseStack: number[] = [];
@@ -132,7 +130,7 @@ export class BlockArena {
     };
   }
 
-  #allocate(rule: CompiledBlockRule, children: readonly number[], block = false): number {
+  #allocate(rule: CompiledBlockRule, children: readonly number[]): number {
     const id = this.#freeIds.pop() ?? this.#nodeCount++;
     const first = children[0];
     const last = children.at(-1);
@@ -151,7 +149,6 @@ export class BlockArena {
       this.#edges[edge + 2] = this.#entryTokenStart(entry) - tokenBase;
     }
     this.#lengths[id] = end - start;
-    this.#blockNodes[id] = block;
     this.#rules[id] = rule;
     this.#buildStarts[id] = start;
     this.#buildEnds[id] = end;
@@ -190,7 +187,6 @@ export class BlockArena {
 
   #buildRange(start: number, end: number): TopLevelBlock[] {
     const document: Frame = {
-      block: false,
       close: "",
       children: [],
     };
@@ -202,7 +198,6 @@ export class BlockArena {
       const spec = this.#schema.frameByOpen[token.type];
       if (spec !== void 0) {
         stack.push({
-          block: spec.block,
           close: spec.close,
           children: [leaf(index)],
           rule: spec.rule,
@@ -227,14 +222,14 @@ export class BlockArena {
       if (current.close === token.type) {
         current.children.push(leaf(index));
         stack.pop();
-        const id = this.#allocate(current.rule!, current.children, current.block);
+        const id = this.#allocate(current.rule!, current.children);
         stack.at(-1)!.children.push(id);
         continue;
       }
 
       const leafRule = this.#schema.ruleByLeaf[token.type];
       if (leafRule !== void 0) {
-        current.children.push(this.#allocate(leafRule, [leaf(index)], true));
+        current.children.push(this.#allocate(leafRule, [leaf(index)]));
         continue;
       }
 
@@ -343,7 +338,7 @@ export class BlockArena {
   }
 
   isBlock(id: number): boolean {
-    return this.#blockNodes[id];
+    return this.#rules[id].block;
   }
 
   ruleNameOf(id: number): string {

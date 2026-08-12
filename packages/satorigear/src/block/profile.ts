@@ -5,6 +5,7 @@ import type { BlockScanContext } from "./scanner.ts";
 import type { BlockToken } from "./tokens.ts";
 
 export interface CompiledBlockRule {
+  block: boolean;
   definitionKey?: (token: BlockToken) => string;
   inlineContent: boolean;
   name: string;
@@ -12,7 +13,6 @@ export interface CompiledBlockRule {
 }
 
 export interface BlockSyntaxFrame {
-  block: boolean;
   close: string;
   rule: CompiledBlockRule;
 }
@@ -147,19 +147,19 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     }
     if (feature.rules) {
       for (const registration of feature.rules) {
+        const syntax = registration.syntax;
         const rule: CompiledBlockRule = {
+          block: syntax.kind === "block" || syntax.kind === "leaf",
           definitionKey: registration.definitionKey,
           inlineContent: registration.inlineContent === true,
           name: registration.rule,
           build: registration.build,
         };
         rules[registration.rule] = rule;
-        const syntax = registration.syntax;
         if (syntax.kind === "block" || syntax.kind === "frame") {
           const opens = typeof syntax.open === "string" ? [syntax.open] : syntax.open;
           for (const open of opens) {
             frameByOpen[open] = {
-              block: syntax.kind === "block",
               close: syntax.close,
               rule,
             };
