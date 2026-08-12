@@ -21,14 +21,8 @@ export interface MarkdownInlineSyntax {
   blockRule: string;
   rootId: number;
   rootOffset: number;
-  rootTokenBase: number;
   tokens: InlineTokenStream;
   view: SourceView;
-}
-
-interface InlineRoot {
-  id: number;
-  tokenBase: number;
 }
 
 interface BlockDefinition {
@@ -72,7 +66,7 @@ export class SyntaxState {
   #definitionEntries?: BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
   #inlineArena: InlineArena;
-  #inlineRoots = new Map<number, InlineRoot>();
+  #inlineRoots = new Map<number, number>();
   #profile: SyntaxProfile;
   // Blocks own region lifetimes; this index only resolves current arena node IDs while building fragments.
   #regions = new Map<number, InlineRegion>();
@@ -311,10 +305,8 @@ export class SyntaxState {
     const roots: number[] = [];
     this.#inlineArena.build(segments, roots);
     this.#inlineRoots.clear();
-    let tokenBase = 0;
     for (let index = 0; index < regions.length; index++) {
-      this.#inlineRoots.set(regions[index].id, { id: roots[index], tokenBase });
-      tokenBase += inlineTokenCount(segments[index]);
+      this.#inlineRoots.set(regions[index].id, roots[index]);
     }
   }
 
@@ -324,15 +316,14 @@ export class SyntaxState {
       return;
     }
     const root = this.#inlineRoots.get(nodeId);
-    if (!root) {
+    if (root === void 0) {
       throw new Error(`Inline region ${nodeId} was built outside its prepared block batch`);
     }
     return {
       arena: this.#inlineArena,
       blockRule: region.rule,
-      rootId: root.id,
+      rootId: root,
       rootOffset: inlineTokenCount(region.tokens) > 0 ? inlineTokenStart(region.tokens, 0) : 0,
-      rootTokenBase: root.tokenBase,
       tokens: region.tokens,
       view: region.view,
     };

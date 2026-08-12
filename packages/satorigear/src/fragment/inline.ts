@@ -16,7 +16,6 @@ export interface InlineBuildContext {
   blockRule: string;
   decodeText: (value: string) => string;
   source: string;
-  tokenBase: number;
   tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
   tokens: InlineTokenStream;
   view: SourceView;
@@ -51,8 +50,7 @@ export const buildInlineChildren: InlineNodeBuilder = (
   accumulator,
 ) => inlineSequence(nodeId, offset, accumulator);
 
-function inlineTokenIndex(context: InlineBuildContext, index: number): number {
-  const tokenIndex = index - context.tokenBase;
+function inlineTokenIndex(context: InlineBuildContext, tokenIndex: number): number {
   if (tokenIndex < 0 || tokenIndex >= inlineTokenCount(context.tokens)) {
     throw new Error("inline arena returned a leaf outside its token stream");
   }
@@ -97,7 +95,7 @@ export function directLeaf(
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (
-      entry < 0 && arena.leafTokenType(entry) === tokenType
+      entry < 0 && arena.leafTokenType(entry, context.tokens) === tokenType
     ) {
       return inlineTokenIndex(context, arena.leafToken(entry));
     }
@@ -238,7 +236,7 @@ export function inlineSequence(
     const tokenIndex = entry < 0 ? inlineTokenIndex(context, arena.leafToken(entry)) : void 0;
     const childOffset = tokenIndex !== void 0
       ? inlineTokenStart(context.tokens, tokenIndex)
-      : offset + arena.childRelAt(nodeId, index);
+      : offset + arena.childRelAt(nodeId, index, context.tokens);
     const childEnd = tokenIndex !== void 0
       ? inlineTokenEnd(context.tokens, tokenIndex)
       : childOffset + arena.lenOf(entry);
@@ -296,7 +294,6 @@ export function inlineChildren(
     blockRule: inline.blockRule,
     decodeText: context.profile.inline.decodeText,
     source: context.source,
-    tokenBase: inline.rootTokenBase,
     tokenBuilders: context.profile.inline.tokenBuilders,
     tokens: inline.tokens,
     view: inline.view,

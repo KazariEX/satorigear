@@ -22,34 +22,28 @@ export class InlineArena {
   #ends: number[] = [];
   #kidCount = 0;
   #nodeCount = 0;
-  #packedTokens: number[] = [];
   #builders: (InlineNodeBuilder | undefined)[] = [];
   #schema: InlineSyntaxSchema;
   #scratch: number[][] = [];
   #starts: number[] = [];
-  #tokens: InlineTokenStream = [];
 
   constructor(schema: InlineSyntaxSchema) {
     this.#schema = schema;
   }
 
   build(segments: readonly InlineTokenStream[], roots: number[]): void {
-    // Batching removes per-region parser startup; token bases retain each region's local coordinates.
-    let fieldCount = 0;
-    for (const segment of segments) {
-      for (let field = 0; field < segment.length; field++) {
-        this.#packedTokens[fieldCount++] = segment[field];
-      }
-    }
-    this.#tokens = this.#packedTokens;
     this.#kidCount = 0;
     this.#nodeCount = 0;
 
-    let tokenStart = 0;
     for (let index = 0; index < segments.length; index++) {
-      const tokenEnd = tokenStart + segments[index].length / inlineTokenStride;
-      roots[index] = buildRoot(this, this.#schema, this.#tokens, tokenStart, tokenEnd);
-      tokenStart = tokenEnd;
+      const tokens = segments[index];
+      roots[index] = buildRoot(
+        this,
+        this.#schema,
+        tokens,
+        0,
+        tokens.length / inlineTokenStride,
+      );
     }
   }
 
@@ -93,12 +87,12 @@ export class InlineArena {
     return (this.#scratch[depth] ??= []);
   }
 
-  entryEnd(entry: number): number {
-    return entry < 0 ? inlineTokenEnd(this.#tokens, ~entry) : this.#ends[entry];
+  entryEnd(entry: number, tokens: InlineTokenStream): number {
+    return entry < 0 ? inlineTokenEnd(tokens, ~entry) : this.#ends[entry];
   }
 
-  entryStart(entry: number): number {
-    return entry < 0 ? inlineTokenStart(this.#tokens, ~entry) : this.#starts[entry];
+  entryStart(entry: number, tokens: InlineTokenStream): number {
+    return entry < 0 ? inlineTokenStart(tokens, ~entry) : this.#starts[entry];
   }
 
   childAt(id: number, index: number): number {
@@ -109,17 +103,17 @@ export class InlineArena {
     return this.#childCounts[id];
   }
 
-  childRelAt(id: number, index: number): number {
+  childRelAt(id: number, index: number, tokens: InlineTokenStream): number {
     const child = this.childAt(id, index);
-    return this.entryStart(child) - this.#starts[id];
+    return this.entryStart(child, tokens) - this.#starts[id];
   }
 
   leafToken(entry: number): number {
     return ~entry;
   }
 
-  leafTokenType(entry: number): string {
-    return inlineKindName(inlineTokenKind(this.#tokens, ~entry));
+  leafTokenType(entry: number, tokens: InlineTokenStream): string {
+    return inlineKindName(inlineTokenKind(tokens, ~entry));
   }
 
   lenOf(id: number): number {
@@ -280,8 +274,8 @@ function buildRoot(
   const last = content.children[content.childCount - 1];
   return arena.node(
     void 0,
-    arena.entryStart(first),
-    arena.entryEnd(last),
+    arena.entryStart(first, tokens),
+    arena.entryEnd(last, tokens),
     content.children,
     content.childCount,
   );
