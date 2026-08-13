@@ -1,4 +1,4 @@
-import { type BlockLine, indentOf, isBlank, lineIndent } from "./lines.ts";
+import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocation, SourceSpan } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
@@ -145,21 +145,6 @@ function createBlockScanContext(profile: BlockProfile): BlockScanContext {
   return context;
 }
 
-function lineIndexAtOrAfter(lines: readonly BlockLine[], offset: number): number {
-  let low = 0;
-  let high = lines.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (lines[middle].start < offset) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
 function linesOf(source: string, start = 0, limit = source.length): BlockLine[] {
   const lines: BlockLine[] = [];
   let lineFeed = source.indexOf("\n", start);
@@ -197,10 +182,10 @@ function updatePhysicalLines(
   delta: number,
 ): BlockLine[] {
   // Rebuild one following line so edits at line-ending boundaries cannot retain stale geometry.
-  const suffix = Math.min(previous.length, lineIndexAtOrAfter(previous, oldDamageEnd + 1) + 1);
+  const suffix = Math.min(previous.length, firstLineIndexAtOrAfter(previous, oldDamageEnd + 1) + 1);
   const oldSuffixOffset = previous[suffix]?.start ?? nextSource.length - delta;
   const newSuffixOffset = oldSuffixOffset + delta;
-  const prefix = previous.slice(0, lineIndexAtOrAfter(previous, restartOffset));
+  const prefix = previous.slice(0, firstLineIndexAtOrAfter(previous, restartOffset));
   const changed = linesOf(nextSource, restartOffset, newSuffixOffset);
   const suffixLines = previous.slice(suffix);
   const unchanged = delta === 0

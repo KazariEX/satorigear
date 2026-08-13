@@ -11,6 +11,21 @@ export interface Indent {
   offset: number;
 }
 
+export function firstLineIndexAtOrAfter(lines: readonly BlockLine[], offset: number): number {
+  let low = 0;
+  let high = lines.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (lines[middle].start < offset) {
+      low = middle + 1;
+    }
+    else {
+      high = middle;
+    }
+  }
+  return low;
+}
+
 export function indentOf(source: string, line: BlockLine, limit = Number.POSITIVE_INFINITY): Indent {
   let offset = line.start;
   let columns = line.prefixColumns ?? 0;

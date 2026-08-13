@@ -1,5 +1,5 @@
 import { BlockKind } from "../../block/kinds.ts";
-import { type BlockLine, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
+import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import {
@@ -366,21 +366,9 @@ const markdownBracketPairs: readonly PairedTokenConfig[] = [
 export const feature: SyntaxFeature = {
   block: {
     restart(source, lines, changedStart, changedEnd) {
-      let low = 0;
-      let high = lines.length;
-      const offset = Math.max(0, changedEnd - 1);
-      while (low < high) {
-        const middle = (low + high) >>> 1;
-        if (lines[middle].start <= offset) {
-          low = middle + 1;
-        }
-        else {
-          high = middle;
-        }
-      }
-
+      const end = firstLineIndexAtOrAfter(lines, Math.max(1, changedEnd));
       let candidate: number | undefined;
-      for (let index = Math.min(low, lines.length) - 1; index >= 0; index--) {
+      for (let index = end - 1; index >= 0; index--) {
         const line = lines[index];
         if (isBlank(source, line)) {
           break;
