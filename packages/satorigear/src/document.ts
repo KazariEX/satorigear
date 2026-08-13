@@ -63,9 +63,9 @@ export class DocumentImpl implements Document {
   constructor(source: string, profile: SyntaxProfile) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(profile.block);
-    this.#blockArena = new BlockArena(profile.block.schema);
+    this.#blockArena = new BlockArena(profile.block.schema, this.#blockScanner.tokens);
     this.#blockScanner.scan(source);
-    this.#blockArena.build(this.#blockScanner.tokens);
+    this.#blockArena.build();
     this.#syntaxState = new SyntaxState(source, profile.inline, this.#blockArena);
   }
 
@@ -94,7 +94,7 @@ export class DocumentImpl implements Document {
       applied.changedSpan,
       applied.oldChangedEnd,
     );
-    const arenaChange = this.#blockArena.update(this.#blockScanner.tokens, tokenChange);
+    const arenaChange = this.#blockArena.update(tokenChange);
     this.#syntaxState.update(this.source, arenaChange, stableBlockCount);
 
     return { changedSpan: applied.changedSpan };
@@ -155,7 +155,7 @@ export class DocumentImpl implements Document {
     blockArena: BlockArena,
   ): Root {
     blockScanner.scan(source);
-    blockArena.build(blockScanner.tokens);
+    blockArena.build();
 
     const regions = createInlineRegions(source, profile.inline, blockArena);
     const context: BlockBuildContext = {

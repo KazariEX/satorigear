@@ -1,6 +1,6 @@
 import { BlockKind } from "./kinds.ts";
-import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
+import type { BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 
 // Object identity remains stable for unchanged top-level blocks while released numeric IDs may be reused.
 export interface BlockRecord {
@@ -49,22 +49,21 @@ export class BlockArena {
   #releaseStack: number[] = [];
   #rules: CompiledBlockRule[];
   #schema: BlockSyntaxSchema;
-  #tokens: BlockTokenStream;
+  // The scanner owns and mutates this stream; the arena retains the same view for its lifetime.
+  readonly #tokens: BlockTokenStream;
 
-  constructor(schema: BlockSyntaxSchema) {
+  constructor(schema: BlockSyntaxSchema, tokens: BlockTokenStream) {
     this.#rules = [];
     this.#schema = schema;
-    this.#tokens = new BlockTokenStream();
+    this.#tokens = tokens;
   }
 
-  // One-shot parses reuse array capacity, but no node identity survives across documents.
-  build(tokens: BlockTokenStream): void {
+  build(): void {
     this.#edgeLength = 0;
     this.#freeEdges.length = 0;
     this.#freeIds.length = 0;
     this.#nodeCount = 0;
-    this.#tokens = tokens;
-    this.#records = this.#buildRange(0, tokens.length);
+    this.#records = this.#buildRange(0, this.#tokens.length);
   }
 
   get records(): readonly BlockRecord[] {
@@ -75,7 +74,7 @@ export class BlockArena {
     return this.#tokens;
   }
 
-  update(tokens: BlockTokenStream, change: BlockTokenChange): BlockArenaChange {
+  update(change: BlockTokenChange): BlockArenaChange {
     const previous = this.#records;
     // Token damage can begin inside a block, so widen it to complete top-level records.
     let prefixEnd = 0;
@@ -90,13 +89,12 @@ export class BlockArena {
     const tokenDelta = change.newEnd - change.oldStart - (change.oldEnd - change.oldStart);
     const buildStart = previous[prefixEnd - 1]?.tokenEnd ?? 0;
     const oldSuffixTokenStart = previous[suffixStart]?.tokenStart;
-    const buildEnd = oldSuffixTokenStart === void 0 ? tokens.length : oldSuffixTokenStart + tokenDelta;
+    const buildEnd = oldSuffixTokenStart === void 0 ? this.#tokens.length : oldSuffixTokenStart + tokenDelta;
     for (let index = prefixEnd; index < suffixStart; index++) {
       this.#release(previous[index].id);
     }
     this.#coalesceFreeEdges();
 
-    this.#tokens = tokens;
     const changed = this.#buildRange(buildStart, buildEnd);
     const suffix = previous.slice(suffixStart);
     if (tokenDelta !== 0) {

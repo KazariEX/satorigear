@@ -20,7 +20,7 @@ export function createParser(options?: SyntaxOptions): Parser {
     createDocument: (source) => new DocumentImpl(source, profile),
     parse: (source) => {
       blockScanner ??= new BlockScanner(profile.block);
-      blockArena ??= new BlockArena(profile.block.schema);
+      blockArena ??= new BlockArena(profile.block.schema, blockScanner.tokens);
       return DocumentImpl.parse(
         source,
         profile,
