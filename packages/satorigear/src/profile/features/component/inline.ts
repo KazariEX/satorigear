@@ -20,22 +20,21 @@ import {
   normalizeComponentName,
 } from "../attributes/syntax.ts";
 import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
+import type { SourceSpan } from "../../../source-view.ts";
 
-interface Candidate {
+interface Candidate extends SourceSpan {
   children: Candidate[];
   close: number;
   contentEnd: number;
   contentStart: number;
-  end: number;
   flags: number;
   inLinkLabel: boolean;
   kind: "component" | "span";
   nameEnd: number;
-  start: number;
 }
 
 interface BracketIndex {
-  linkLabels: Array<{ end: number; start: number }>;
+  linkLabels: SourceSpan[];
   normalClosers: Set<number>;
   pairs: Map<number, number>;
   referenceSuffixes: Map<number, number>;
@@ -49,7 +48,7 @@ interface CandidateSet {
 function bracketIndex(tokens: InlineTokenStream): BracketIndex {
   const stack: Array<{ image: boolean; start: number }> = [];
   const pairs = new Map<number, number>();
-  const linkLabels: Array<{ end: number; start: number }> = [];
+  const linkLabels: SourceSpan[] = [];
   const normalClosers = new Set<number>();
   const referenceSuffixes = new Map<number, number>();
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
@@ -140,7 +139,7 @@ function componentCandidate(
 
 function insideLinkLabel(
   offset: number,
-  labels: readonly { end: number; start: number }[],
+  labels: readonly SourceSpan[],
 ): boolean {
   let start = 0;
   let end = labels.length;

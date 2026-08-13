@@ -17,6 +17,7 @@ import {
 } from "../../fragment/block.ts";
 import { lastChildEnd, type SpannedNode } from "../../fragment/node.ts";
 import { isThematicBreak } from "./break.ts";
+import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface ListMarker {
@@ -177,7 +178,7 @@ function childrenSpread(
   nestedRule?: string,
 ): boolean {
   const arena = context.arena;
-  let previous: { end: number; start: number } | undefined;
+  let previous: SourceSpan | undefined;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const childId = arena.childAt(nodeId, index);

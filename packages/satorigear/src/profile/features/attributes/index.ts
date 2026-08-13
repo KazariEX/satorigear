@@ -23,12 +23,11 @@ import {
 } from "./carrier.ts";
 import { attributesEnd, parseAttributes } from "./syntax.ts";
 import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
+import type { SourceSpan } from "../../../source-view.ts";
 import type { SyntaxFeature } from "../../types.ts";
 
-interface AttributeRange {
+interface AttributeSpan extends SourceSpan {
   detached: boolean;
-  end: number;
-  start: number;
 }
 
 const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
@@ -81,8 +80,8 @@ function hasVisibleText(source: string, start: number, end: number): boolean {
   return false;
 }
 
-function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
-  const ranges: AttributeRange[] = [];
+function attributeSpansOf(source: string, tokens: InlineTokenStream): AttributeSpan[] {
+  const spans: AttributeSpan[] = [];
   let consumedEnd = 0;
   let hasContent = false;
   let regionEnd = source.length;
@@ -133,7 +132,7 @@ function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
         offset = source.indexOf("{", cursor);
         continue;
       }
-      ranges.push({
+      spans.push({
         detached: offset > 0 && isMarkdownWhitespace(source.charCodeAt(offset - 1)),
         start: offset,
         end: parsedEnd,
@@ -146,7 +145,7 @@ function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
       hasContent = true;
     }
   }
-  return ranges;
+  return spans;
 }
 
 function copyRange(target: number[], tokens: InlineTokenStream, start: number, end: number): void {
@@ -228,22 +227,22 @@ function transformAttributeTokens(source: string, tokens: InlineTokenStream): In
   if (!source.includes("{")) {
     return tokens;
   }
-  const ranges = rangesOf(source, tokens);
-  if (ranges.length === 0) {
+  const spans = attributeSpansOf(source, tokens);
+  if (spans.length === 0) {
     return tokens;
   }
   const result: number[] = [];
   let cursor = 0;
-  for (const range of ranges) {
-    copyRange(result, tokens, cursor, range.start);
+  for (const span of spans) {
+    copyRange(result, tokens, cursor, span.start);
     appendInlineToken(
       result,
       InlineKind.AttributesToken,
-      range.start,
-      range.end,
-      range.detached ? InlineTokenFlag.AttributeDetached : 0,
+      span.start,
+      span.end,
+      span.detached ? InlineTokenFlag.AttributeDetached : 0,
     );
-    cursor = range.end;
+    cursor = span.end;
   }
   copyRange(result, tokens, cursor, source.length);
   let terminal = true;

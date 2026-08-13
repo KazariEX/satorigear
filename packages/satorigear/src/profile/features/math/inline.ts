@@ -12,11 +12,10 @@ import {
   inlineTokenText,
 } from "../../../inline/tokens.ts";
 import type { InlineSyntaxDefinition, InlineTokenTransform } from "../../../inline/profile.ts";
+import type { SourceSpan } from "../../../source-view.ts";
 
-interface MathRange {
-  end: number;
+interface MathSpan extends SourceSpan {
   flags: number;
-  start: number;
 }
 
 function textTokenAt(tokens: InlineTokenStream, offset: number): number | undefined {
@@ -38,11 +37,11 @@ function markerRunEnd(source: string, start: number): number {
   return end;
 }
 
-function firstMathRange(
+function firstMathSpan(
   source: string,
   tokens: InlineTokenStream,
   minimum: number,
-): MathRange | undefined {
+): MathSpan | undefined {
   let search = 0;
   while (search < source.length) {
     const start = source.indexOf("$", search);
@@ -116,8 +115,8 @@ export function createMathTokensTransform(singleDollarTextMath: boolean): Inline
     let segmentTokens = tokens;
     let result: number[] | undefined;
     while (true) {
-      const range = firstMathRange(segmentSource, segmentTokens, minimum);
-      if (!range) {
+      const span = firstMathSpan(segmentSource, segmentTokens, minimum);
+      if (!span) {
         if (!result) {
           return tokens;
         }
@@ -126,15 +125,15 @@ export function createMathTokensTransform(singleDollarTextMath: boolean): Inline
       }
 
       result ??= [];
-      copyRange(result, segmentTokens, 0, range.start, segmentStart);
+      copyRange(result, segmentTokens, 0, span.start, segmentStart);
       appendInlineToken(
         result,
         InlineKind.MathText,
-        segmentStart + range.start,
-        segmentStart + range.end,
-        range.flags,
+        segmentStart + span.start,
+        segmentStart + span.end,
+        span.flags,
       );
-      segmentStart += range.end;
+      segmentStart += span.end;
       if (segmentStart === source.length) {
         return result;
       }

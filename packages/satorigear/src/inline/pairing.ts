@@ -10,6 +10,7 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
+import type { SourceSpan } from "../source-view.ts";
 import type { InlineKind } from "./kinds.ts";
 import type { InlineResolutionContext, InlineTokenTransform } from "./profile.ts";
 
@@ -50,9 +51,7 @@ interface PairedTokenActivationContext {
   state: InlineResolutionContext;
 }
 
-interface TokenIsolationRange {
-  start: number;
-  end: number;
+interface TokenIsolationSpan extends SourceSpan {
   id: number;
 }
 
@@ -107,7 +106,7 @@ interface PairIndex {
 interface PairResolution {
   replacements: readonly number[];
   matchedClosers: readonly boolean[];
-  delimiterIsolations: TokenIsolationRange[];
+  delimiterIsolations: TokenIsolationSpan[];
 }
 
 // eslint-disable-next-line no-restricted-syntax
@@ -242,7 +241,7 @@ function resolvePairedTokens(
   const lastSeen: number[] = [];
   const replacements: number[] = [];
   const matchedClosers: boolean[] = [];
-  const delimiterIsolations: TokenIsolationRange[] = [];
+  const delimiterIsolations: TokenIsolationSpan[] = [];
 
   function resolveCloser(tokenIndex: number, tokenKind: number): void {
     const pairs = index.byCloser[tokenKind];
@@ -349,12 +348,12 @@ function appendFragment(
   appendInlineToken(result, kind, start, end, flags);
 }
 
-function assignDelimiterScopes(runs: DelimiterRun[], isolations: readonly TokenIsolationRange[]): void {
+function assignDelimiterScopes(runs: DelimiterRun[], isolations: readonly TokenIsolationSpan[]): void {
   if (isolations.length === 0) {
     return;
   }
   const ordered = [...isolations].sort((left, right) => left.start - right.start || right.end - left.end);
-  const active: TokenIsolationRange[] = [];
+  const active: TokenIsolationSpan[] = [];
   let isolationIndex = 0;
   for (const run of runs) {
     while (isolationIndex < ordered.length && ordered[isolationIndex].start <= run.offset) {
@@ -457,7 +456,7 @@ function resolveDelimiterRuns(
   source: string,
   tokens: InlineTokenStream,
   configByKind: readonly (CompiledDelimiterConfig | undefined)[],
-  isolations: readonly TokenIsolationRange[],
+  isolations: readonly TokenIsolationSpan[],
 ): InlineTokenStream {
   const runs: DelimiterRun[] = [];
   const count = inlineTokenCount(tokens);

@@ -1,9 +1,9 @@
-export interface BlockLine {
-  end: number;
+import type { SourceSpan } from "../source-view.ts";
+
+export interface BlockLine extends SourceSpan {
   lazy?: boolean;
   next: number;
   prefixColumns?: number;
-  start: number;
 }
 
 export interface Indent {

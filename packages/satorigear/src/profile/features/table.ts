@@ -6,13 +6,12 @@ import { buildInlineChildren } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { buildInlineCode } from "./code.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
+import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-interface CellRange {
+interface CellSpan extends SourceSpan {
   contentEnd: number;
   contentStart: number;
-  end: number;
-  start: number;
 }
 
 interface RuleLocation {
@@ -27,7 +26,7 @@ function tableCell(
   end: number,
   contentStart: number,
   contentEnd: number,
-): CellRange {
+): CellSpan {
   while (contentStart < contentEnd && (source[contentStart] === " " || source[contentStart] === "\t")) {
     contentStart++;
   }
@@ -37,7 +36,7 @@ function tableCell(
   return { start, end, contentStart, contentEnd };
 }
 
-function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): CellRange[] | undefined {
+function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): CellSpan[] | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
     return;
@@ -66,7 +65,7 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): Ce
   }
   const trailingPipe = pipes.at(-1) === visibleEnd - 1;
   const leadingPipe = pipes[0] === indent.offset;
-  const cells: CellRange[] = [];
+  const cells: CellSpan[] = [];
   let contentStart = indent.offset;
   let spanStart = indent.offset;
   let pipeIndex = 0;
@@ -87,7 +86,7 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): Ce
   return cells.length > 0 ? cells : void 0;
 }
 
-function alignmentAt(source: string, cell: CellRange): BlockKind | undefined {
+function alignmentAt(source: string, cell: CellSpan): BlockKind | undefined {
   let start = cell.contentStart;
   let end = cell.contentEnd;
   const left = source[start] === ":";
@@ -111,7 +110,7 @@ function alignmentAt(source: string, cell: CellRange): BlockKind | undefined {
     : right ? BlockKind.TableAlignRight : BlockKind.TableAlignNone;
 }
 
-function delimiterAt(source: string, line: BlockLine): { cells: CellRange[]; tokens: BlockKind[] } | undefined {
+function delimiterAt(source: string, line: BlockLine): { cells: CellSpan[]; tokens: BlockKind[] } | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
     return;
@@ -135,7 +134,7 @@ function delimiterAt(source: string, line: BlockLine): { cells: CellRange[]; tok
   return { cells, tokens };
 }
 
-function emitTableRow(line: BlockLine, cells: readonly CellRange[], out: BlockTokenStream): void {
+function emitTableRow(line: BlockLine, cells: readonly CellSpan[], out: BlockTokenStream): void {
   out.push(BlockKind.TableRowOpen, cells[0].start, cells[0].start);
   for (const cell of cells) {
     out.push(BlockKind.TableCellOpen, cell.start, cell.start);
