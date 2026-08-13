@@ -21,14 +21,20 @@ interface RuleLocation {
   tokenBase: number;
 }
 
-function trimCell(source: string, start: number, end: number): { end: number; start: number } {
-  while (start < end && (source[start] === " " || source[start] === "\t")) {
-    start++;
+function tableCell(
+  source: string,
+  start: number,
+  end: number,
+  contentStart: number,
+  contentEnd: number,
+): CellRange {
+  while (contentStart < contentEnd && (source[contentStart] === " " || source[contentStart] === "\t")) {
+    contentStart++;
   }
-  while (end > start && (source[end - 1] === " " || source[end - 1] === "\t")) {
-    end--;
+  while (contentEnd > contentStart && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
+    contentEnd--;
   }
-  return { start, end };
+  return { start, end, contentStart, contentEnd };
 }
 
 function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): CellRange[] | undefined {
@@ -70,25 +76,13 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): Ce
   }
   for (; pipeIndex < pipes.length; pipeIndex++) {
     const pipe = pipes[pipeIndex];
-    const content = trimCell(source, contentStart, pipe);
     const trailing = trailingPipe && pipeIndex === pipes.length - 1;
-    cells.push({
-      contentStart: content.start,
-      contentEnd: content.end,
-      start: spanStart,
-      end: trailing ? line.end : pipe,
-    });
+    cells.push(tableCell(source, spanStart, trailing ? line.end : pipe, contentStart, pipe));
     spanStart = pipe;
     contentStart = pipe + 1;
   }
   if (!trailingPipe) {
-    const content = trimCell(source, contentStart, line.end);
-    cells.push({
-      contentStart: content.start,
-      contentEnd: content.end,
-      start: spanStart,
-      end: line.end,
-    });
+    cells.push(tableCell(source, spanStart, line.end, contentStart, line.end));
   }
   return cells.length > 0 ? cells : void 0;
 }
