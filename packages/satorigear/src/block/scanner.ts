@@ -148,6 +148,7 @@ function createBlockScanContext(profile: BlockProfile): BlockScanContext {
 function linesOf(source: string, start = 0, limit = source.length): BlockLine[] {
   const lines: BlockLine[] = [];
   const sourceOffset = start;
+  // Bound the search window explicitly because String#indexOf has no end limit.
   if (start > 0 || limit < source.length) {
     source = source.slice(start, limit);
     start = 0;
@@ -348,11 +349,14 @@ export class BlockScanner {
     const previousSource = this.#source;
     const delta = nextSource.length - previousSource.length;
 
+    // 1. Find the earliest affected checkpoint and rebuild its physical line window.
     let affected = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineEnd >= changedSpan.start);
     if (affected < 0) {
       affected = Math.max(0, this.#checkpoints.length - 1);
     }
-    let restart = this.#checkpoints[affected]?.lineStart > changedSpan.start ? -1 : Math.max(0, affected - 1);
+    let restart = this.#checkpoints[affected]?.lineStart > changedSpan.start
+      ? -1
+      : Math.max(0, affected - 1);
     const initialRestartOffset = this.#checkpoints[restart]?.lineStart ?? 0;
     const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, oldChangedEnd, delta);
     const profileRestart = this.#profile.restart(nextSource, nextLines, changedSpan.start, changedSpan.end);
@@ -361,19 +365,21 @@ export class BlockScanner {
         checkpoint.lineStart <= profileRestart &&
         checkpoint.lineEnd > profileRestart
       ));
-      if (candidate >= 0) {
-        restart = restart < 0 ? restart : Math.min(restart, candidate);
+      if (candidate >= 0 && restart >= 0) {
+        restart = Math.min(restart, candidate);
       }
     }
+    const stableBlockCount = Math.max(0, restart);
     const checkpoint = this.#checkpoints[restart];
     const restartOffset = checkpoint?.lineStart ?? 0;
     const oldTokenStart = checkpoint?.tokenStart ?? 0;
     const restartLine = nextLines.findIndex((line) => line.start >= restartOffset);
     const scanLines = restartLine < 0 ? [] : nextLines.slice(restartLine);
+
+    // 2. Rescan from the restart checkpoint until a shifted old checkpoint matches.
     const replacement = new BlockTokenStream(nextSource.length);
     const scanned: BlockCheckpoint[] = [];
     let converged = -1;
-    // Old checkpoints and rescanned blocks share source order, so candidates only move forward.
     let convergenceCandidate = affected;
     scanBlockLines(this.#profile, this.#context, nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
       const blockStart = scanLines[lineStart].start;
@@ -386,14 +392,14 @@ export class BlockScanner {
         ) {
           convergenceCandidate++;
         }
-        const candidate = this.#checkpoints[convergenceCandidate];
+        const candidateCheckpoint = this.#checkpoints[convergenceCandidate];
         if (
-          candidate?.lineStart + delta === blockStart &&
-          candidate.lineEnd + delta === blockEnd &&
+          candidateCheckpoint?.lineStart + delta === blockStart &&
+          candidateCheckpoint.lineEnd + delta === blockEnd &&
           sameShiftedBlock(
             this.#tokens,
             previousSource,
-            candidate,
+            candidateCheckpoint,
             replacement,
             nextSource,
             tokenStart,
@@ -415,17 +421,19 @@ export class BlockScanner {
       return false;
     });
 
-    const oldTokenEnd = converged < 0 ? this.#tokens.length : this.#checkpoints[converged].tokenStart;
+    // 3. Replace the damaged token range and rebase the converged checkpoint suffix.
+    const oldTokenEnd = converged < 0
+      ? this.#tokens.length
+      : this.#checkpoints[converged].tokenStart;
     const tokenDelta = replacement.length - (oldTokenEnd - oldTokenStart);
-    const previousTokens = this.#tokens;
-    const tokenChange = previousTokens.replace(
+    const tokenChange = this.#tokens.replace(
       previousSource,
       nextSource,
       oldTokenStart,
       oldTokenEnd,
       replacement,
     );
-    const prefixCheckpoints = this.#checkpoints.slice(0, Math.max(0, restart));
+    const prefixCheckpoints = this.#checkpoints.slice(0, stableBlockCount);
     const suffixCheckpoints = converged < 0 ? [] : this.#checkpoints.slice(converged);
     if (delta !== 0 || tokenDelta !== 0) {
       for (const checkpoint of suffixCheckpoints) {
@@ -435,12 +443,14 @@ export class BlockScanner {
         checkpoint.tokenEnd += tokenDelta;
       }
     }
+
+    // 4. Publish the scanner state after all derived structures are ready.
     this.#source = nextSource;
     this.#lines = nextLines;
     this.#checkpoints = [...prefixCheckpoints, ...scanned, ...suffixCheckpoints];
 
     return {
-      stableBlockCount: Math.max(0, restart),
+      stableBlockCount,
       tokenChange,
     };
   }
