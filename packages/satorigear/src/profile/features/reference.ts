@@ -28,11 +28,6 @@ interface LinkDefinitionFields {
   title: string | undefined;
 }
 
-const referenceTailKind = InlineKind.ReferenceTail;
-const bracketOpenKind = InlineKind.BracketOpen;
-const shortcutTailKind = InlineKind.ShortcutReferenceTail;
-const imageOpenKind = InlineKind.ImageOpen;
-
 interface LinkDefinitionMatch {
   end: number;
   fields: LinkDefinitionFields;
@@ -234,8 +229,8 @@ const reassociateReferenceTails: InlineTokenTransform = (source, tokens, context
   let result: number[] | undefined;
   for (let index = 0; index < count; index++) {
     const kind = inlineTokenKind(tokens, index);
-    const label = kind === referenceTailKind ? inlineTokenText(source, tokens, index).slice(2, -1) : "";
-    if (kind !== referenceTailKind || context.hasDefinition(normalizeAssociationLabel(label))) {
+    const label = kind === InlineKind.ReferenceTail ? inlineTokenText(source, tokens, index).slice(2, -1) : "";
+    if (kind !== InlineKind.ReferenceTail || context.hasDefinition(normalizeAssociationLabel(label))) {
       if (result) {
         copyInlineToken(result, tokens, index);
       }
@@ -244,7 +239,7 @@ const reassociateReferenceTails: InlineTokenTransform = (source, tokens, context
     const openerIndex = index + 1;
     if (
       openerIndex >= count ||
-      inlineTokenKind(tokens, openerIndex) !== bracketOpenKind ||
+      inlineTokenKind(tokens, openerIndex) !== InlineKind.BracketOpen ||
       inlineTokenStart(tokens, openerIndex) !== inlineTokenEnd(tokens, index)
     ) {
       if (result) {
@@ -254,9 +249,9 @@ const reassociateReferenceTails: InlineTokenTransform = (source, tokens, context
     }
     let closerIndex = index + 2;
     let nested = false;
-    while (closerIndex < count && inlineTokenKind(tokens, closerIndex) !== shortcutTailKind) {
+    while (closerIndex < count && inlineTokenKind(tokens, closerIndex) !== InlineKind.ShortcutReferenceTail) {
       const closerKind = inlineTokenKind(tokens, closerIndex);
-      nested ||= closerKind === bracketOpenKind || closerKind === imageOpenKind;
+      nested ||= closerKind === InlineKind.BracketOpen || closerKind === InlineKind.ImageOpen;
       closerIndex++;
     }
     if (closerIndex === count || nested) {
@@ -283,7 +278,7 @@ const reassociateReferenceTails: InlineTokenTransform = (source, tokens, context
     const offset = inlineTokenEnd(tokens, index) - 1;
     appendInlineToken(
       result,
-      referenceTailKind,
+      InlineKind.ReferenceTail,
       offset,
       inlineTokenEnd(tokens, closerIndex),
       inlineTokenFlags(tokens, index),
@@ -407,7 +402,7 @@ export const feature: SyntaxFeature = {
         },
         build(nodeId, offset, tokenBase, context) {
           const token = blockToken(nodeId, tokenBase, BlockKind.LinkDefinitionOpen, context);
-          const fields = linkDefinitionFields(context.view.tokens, token);
+          const fields = linkDefinitionFields(context.arena.tokens, token);
           return {
             type: "definition",
             identifier: fields.definitionKey.toLowerCase(),
@@ -415,7 +410,7 @@ export const feature: SyntaxFeature = {
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),
             position: {
-              start: context.view.tokens.start(token) + fields.markerOffset,
+              start: context.arena.tokens.start(token) + fields.markerOffset,
               end: blockEnd(nodeId, offset, context),
             },
           };

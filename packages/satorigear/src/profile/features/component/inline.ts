@@ -46,19 +46,6 @@ interface CandidateSet {
   roots: Candidate[];
 }
 
-const bracketOpenKind = InlineKind.BracketOpen;
-const imageOpenKind = InlineKind.ImageOpen;
-const linkTailKind = InlineKind.LinkTail;
-const referenceTailKind = InlineKind.ReferenceTail;
-const shortcutTailKind = InlineKind.ShortcutReferenceTail;
-const textKind = InlineKind.Text;
-const componentOpenKind = InlineKind.InlineComponentOpen;
-const componentLabelOpenKind = InlineKind.InlineComponentLabelOpen;
-const componentLabelCloseKind = InlineKind.InlineComponentLabelClose;
-const spanOpenKind = InlineKind.InlineSpanOpen;
-const spanCloseKind = InlineKind.InlineSpanClose;
-const inlineBoundaryKind = InlineKind.InlineBoundary;
-
 function bracketIndex(tokens: InlineTokenStream): BracketIndex {
   const stack: Array<{ image: boolean; start: number }> = [];
   const pairs = new Map<number, number>();
@@ -67,23 +54,27 @@ function bracketIndex(tokens: InlineTokenStream): BracketIndex {
   const referenceSuffixes = new Map<number, number>();
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const kind = inlineTokenKind(tokens, index);
-    if (kind === inlineBoundaryKind) {
+    if (kind === InlineKind.InlineBoundary) {
       stack.length = 0;
     }
-    else if (kind === bracketOpenKind) {
+    else if (kind === InlineKind.BracketOpen) {
       stack.push({ image: false, start: inlineTokenStart(tokens, index) });
     }
-    else if (kind === imageOpenKind) {
+    else if (kind === InlineKind.ImageOpen) {
       stack.push({ image: true, start: inlineTokenEnd(tokens, index) - 1 });
     }
-    else if (kind === shortcutTailKind || kind === linkTailKind || kind === referenceTailKind) {
+    else if (
+      kind === InlineKind.ShortcutReferenceTail ||
+      kind === InlineKind.LinkTail ||
+      kind === InlineKind.ReferenceTail
+    ) {
       const open = stack.pop();
       if (open !== void 0) {
         const close = inlineTokenStart(tokens, index);
         if (!open.image) {
           pairs.set(open.start, close);
           normalClosers.add(close);
-          if (kind === linkTailKind || kind === referenceTailKind) {
+          if (kind === InlineKind.LinkTail || kind === InlineKind.ReferenceTail) {
             let nested = linkLabels.at(-1);
             while (nested && nested.start > open.start) {
               linkLabels.pop();
@@ -91,7 +82,7 @@ function bracketIndex(tokens: InlineTokenStream): BracketIndex {
             }
             linkLabels.push({ start: open.start, end: close });
           }
-          if (kind === referenceTailKind) {
+          if (kind === InlineKind.ReferenceTail) {
             referenceSuffixes.set(close, inlineTokenEnd(tokens, index));
           }
         }
@@ -175,7 +166,7 @@ function candidates(
   const componentLabels = new Set<number>();
   let attributeLineEnd = 0;
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    if (inlineTokenKind(tokens, index) !== textKind) {
+    if (inlineTokenKind(tokens, index) !== InlineKind.Text) {
       continue;
     }
     const start = inlineTokenStart(tokens, index);
@@ -215,7 +206,7 @@ function candidates(
     }
   }
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    if (inlineTokenKind(tokens, index) !== bracketOpenKind) {
+    if (inlineTokenKind(tokens, index) !== InlineKind.BracketOpen) {
       continue;
     }
     const start = inlineTokenStart(tokens, index);
@@ -295,14 +286,16 @@ function copyRange(
     // A component inside a link may contain bracket text, but activating that text as a
     // nested link would deactivate the outer CommonMark link.
     const literalLink = inLinkLabel && (
-      kind === bracketOpenKind ||
+      kind === InlineKind.BracketOpen ||
       normalClosers.has(tokenStart) && (
-        kind === linkTailKind || kind === referenceTailKind || kind === shortcutTailKind
+        kind === InlineKind.LinkTail ||
+        kind === InlineKind.ReferenceTail ||
+        kind === InlineKind.ShortcutReferenceTail
       )
     );
     appendInlineToken(
       target,
-      literalLink || fragmentStart !== tokenStart || fragmentEnd !== tokenEnd ? textKind : kind,
+      literalLink || fragmentStart !== tokenStart || fragmentEnd !== tokenEnd ? InlineKind.Text : kind,
       fragmentStart,
       fragmentEnd,
       fragmentStart === tokenStart ? inlineTokenFlags(tokens, index) : 0,
@@ -323,9 +316,9 @@ function emitRange(
   for (const candidate of nested) {
     copyRange(target, tokens, cursor, candidate.start, inLinkLabel, normalClosers);
     if (candidate.kind === "component") {
-      appendInlineToken(target, componentOpenKind, candidate.start, candidate.nameEnd, candidate.flags);
+      appendInlineToken(target, InlineKind.InlineComponentOpen, candidate.start, candidate.nameEnd, candidate.flags);
       if (candidate.contentStart < candidate.contentEnd) {
-        appendInlineToken(target, componentLabelOpenKind, candidate.nameEnd, candidate.contentStart);
+        appendInlineToken(target, InlineKind.InlineComponentLabelOpen, candidate.nameEnd, candidate.contentStart);
         emitRange(
           target,
           tokens,
@@ -335,11 +328,11 @@ function emitRange(
           candidate.inLinkLabel,
           normalClosers,
         );
-        appendInlineToken(target, componentLabelCloseKind, candidate.close, candidate.close + 1);
+        appendInlineToken(target, InlineKind.InlineComponentLabelClose, candidate.close, candidate.close + 1);
       }
     }
     else {
-      appendInlineToken(target, spanOpenKind, candidate.start, candidate.contentStart, candidate.flags);
+      appendInlineToken(target, InlineKind.InlineSpanOpen, candidate.start, candidate.contentStart, candidate.flags);
       emitRange(
         target,
         tokens,
@@ -349,7 +342,7 @@ function emitRange(
         candidate.inLinkLabel,
         normalClosers,
       );
-      appendInlineToken(target, spanCloseKind, candidate.close, candidate.close + 1);
+      appendInlineToken(target, InlineKind.InlineSpanClose, candidate.close, candidate.close + 1);
     }
     cursor = candidate.end;
   }

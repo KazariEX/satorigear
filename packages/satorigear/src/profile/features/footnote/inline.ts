@@ -16,14 +16,6 @@ import { semanticText } from "../text.ts";
 import { footnoteLabelAt } from "./shared.ts";
 import type { InlineSyntaxDefinition, InlineTokenTransform } from "../../../inline/profile.ts";
 
-const bracketOpenKind = InlineKind.BracketOpen;
-const footnoteReferenceKind = InlineKind.FootnoteReference;
-const imageOpenKind = InlineKind.ImageOpen;
-const referenceSeparatorCloseKind = InlineKind.ReferenceSeparatorClose;
-const referenceTailKind = InlineKind.ReferenceTail;
-const shortcutReferenceTailKind = InlineKind.ShortcutReferenceTail;
-const textKind = InlineKind.Text;
-
 function closerIndex(tokens: InlineTokenStream, start: number, end: number): number {
   for (let index = start + 1; index < inlineTokenCount(tokens); index++) {
     if (inlineTokenStart(tokens, index) >= end) {
@@ -31,8 +23,8 @@ function closerIndex(tokens: InlineTokenStream, start: number, end: number): num
     }
     if (
       inlineTokenEnd(tokens, index) === end && (
-        inlineTokenKind(tokens, index) === shortcutReferenceTailKind ||
-        inlineTokenKind(tokens, index) === referenceSeparatorCloseKind
+        inlineTokenKind(tokens, index) === InlineKind.ShortcutReferenceTail ||
+        inlineTokenKind(tokens, index) === InlineKind.ReferenceSeparatorClose
       )
     ) {
       return index;
@@ -51,17 +43,17 @@ const splitFootnoteTails: InlineTokenTransform = (source, tokens, context) => {
     if (start >= activeFootnoteEnd) {
       activeFootnoteEnd = -1;
     }
-    if (kind === bracketOpenKind || kind === imageOpenKind) {
+    if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
       const label = footnoteLabelAt(
         source,
-        kind === imageOpenKind ? start + 1 : start,
+        kind === InlineKind.ImageOpen ? start + 1 : start,
         source.length,
       );
       activeFootnoteEnd = label && context.hasDefinition(label.definitionKey)
         ? label.end
         : -1;
     }
-    if (kind !== referenceTailKind) {
+    if (kind !== InlineKind.ReferenceTail) {
       if (result) {
         copyInlineToken(result, tokens, index);
       }
@@ -96,8 +88,8 @@ const activateFootnoteReferences: InlineTokenTransform = (source, tokens, contex
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const start = inlineTokenStart(tokens, index);
     const kind = inlineTokenKind(tokens, index);
-    const labelStart = kind === imageOpenKind ? start + 1 : start;
-    const label = kind === bracketOpenKind || kind === imageOpenKind
+    const labelStart = kind === InlineKind.ImageOpen ? start + 1 : start;
+    const label = kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen
       ? footnoteLabelAt(source, labelStart, source.length)
       : void 0;
     const close = label ? closerIndex(tokens, index, label.end) : -1;
@@ -117,12 +109,12 @@ const activateFootnoteReferences: InlineTokenTransform = (source, tokens, contex
         copyInlineToken(result, tokens, prefix);
       }
     }
-    if (kind === imageOpenKind) {
-      appendInlineToken(result, textKind, start, labelStart, inlineTokenFlags(tokens, index));
+    if (kind === InlineKind.ImageOpen) {
+      appendInlineToken(result, InlineKind.Text, start, labelStart, inlineTokenFlags(tokens, index));
     }
     appendInlineToken(
       result,
-      footnoteReferenceKind,
+      InlineKind.FootnoteReference,
       labelStart,
       label.end,
       inlineTokenFlags(tokens, index),

@@ -8,11 +8,6 @@ import {
   type InlineTokenStream,
 } from "../inline/tokens.ts";
 
-const referenceSeparatorCloseKind = InlineKind.ReferenceSeparatorClose;
-const bracketOpenKind = InlineKind.BracketOpen;
-const textKind = InlineKind.Text;
-const shortcutReferenceTailKind = InlineKind.ShortcutReferenceTail;
-
 export function normalizeAssociationLabel(label: string): string {
   return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();
 }
@@ -23,11 +18,11 @@ export function splitReferenceTail(tokens: InlineTokenStream, index: number): In
   const flags = inlineTokenFlags(tokens, index);
   const decodeFlags = flags & InlineTokenFlag.DecodeText;
   const result: number[] = [];
-  appendInlineToken(result, referenceSeparatorCloseKind, start, start + 1, flags & ~InlineTokenFlag.DecodeText);
-  appendInlineToken(result, bracketOpenKind, start + 1, start + 2);
+  appendInlineToken(result, InlineKind.ReferenceSeparatorClose, start, start + 1, flags & ~InlineTokenFlag.DecodeText);
+  appendInlineToken(result, InlineKind.BracketOpen, start + 1, start + 2);
   if (end > start + 3) {
-    appendInlineToken(result, textKind, start + 2, end - 1, decodeFlags);
+    appendInlineToken(result, InlineKind.Text, start + 2, end - 1, decodeFlags);
   }
-  appendInlineToken(result, shortcutReferenceTailKind, end - 1, end);
+  appendInlineToken(result, InlineKind.ShortcutReferenceTail, end - 1, end);
   return result;
 }

@@ -19,15 +19,12 @@ interface MathRange {
   start: number;
 }
 
-const mathTextKind = InlineKind.MathText;
-const textKind = InlineKind.Text;
-
 function textTokenAt(tokens: InlineTokenStream, offset: number): number | undefined {
   const index = firstInlineTokenEndingAfter(tokens, offset);
   if (
     index < inlineTokenCount(tokens) &&
     inlineTokenStart(tokens, index) <= offset &&
-    inlineTokenKind(tokens, index) === textKind
+    inlineTokenKind(tokens, index) === InlineKind.Text
   ) {
     return index;
   }
@@ -132,7 +129,7 @@ export function createMathTokensTransform(singleDollarTextMath: boolean): Inline
       copyRange(result, segmentTokens, 0, range.start, segmentStart);
       appendInlineToken(
         result,
-        mathTextKind,
+        InlineKind.MathText,
         segmentStart + range.start,
         segmentStart + range.end,
         range.flags,

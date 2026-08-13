@@ -31,10 +31,6 @@ interface AttributeRange {
   start: number;
 }
 
-const attributesKind = InlineKind.AttributesToken;
-const boundaryKind = InlineKind.InlineBoundary;
-const textKind = InlineKind.Text;
-
 const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
   const result = build(nodeId, offset, tokenBase, context) as SpannedNode<Paragraph | Heading>;
   const attributes = takeTerminalAttributes(result.children);
@@ -92,7 +88,7 @@ function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
   let regionEnd = source.length;
   const boundaries: number[] = [];
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    if (inlineTokenKind(tokens, index) === boundaryKind) {
+    if (inlineTokenKind(tokens, index) === InlineKind.InlineBoundary) {
       boundaries.push(inlineTokenStart(tokens, index));
     }
   }
@@ -109,10 +105,10 @@ function rangesOf(source: string, tokens: InlineTokenStream): AttributeRange[] {
       hasContent = false;
       attributeLineEnd = 0;
     }
-    if (kind === boundaryKind || end <= consumedEnd) {
+    if (kind === InlineKind.InlineBoundary || end <= consumedEnd) {
       continue;
     }
-    if (kind !== textKind) {
+    if (kind !== InlineKind.Text) {
       hasContent = true;
       continue;
     }
@@ -168,7 +164,7 @@ function copyRange(target: number[], tokens: InlineTokenStream, start: number, e
     else {
       appendInlineToken(
         target,
-        textKind,
+        InlineKind.Text,
         fragmentStart,
         fragmentEnd,
         fragmentStart === tokenStart ? inlineTokenFlags(tokens, index) : 0,
@@ -242,7 +238,7 @@ function transformAttributeTokens(source: string, tokens: InlineTokenStream): In
     copyRange(result, tokens, cursor, range.start);
     appendInlineToken(
       result,
-      attributesKind,
+      InlineKind.AttributesToken,
       range.start,
       range.end,
       range.detached ? InlineTokenFlag.AttributeDetached : 0,
@@ -253,10 +249,10 @@ function transformAttributeTokens(source: string, tokens: InlineTokenStream): In
   let terminal = true;
   for (let index = inlineTokenCount(result) - 1; index >= 0; index--) {
     const kind = inlineTokenKind(result, index);
-    if (kind === boundaryKind) {
+    if (kind === InlineKind.InlineBoundary) {
       terminal = true;
     }
-    else if (kind === attributesKind) {
+    else if (kind === InlineKind.AttributesToken) {
       if (terminal) {
         setInlineTokenFlags(
           result,
@@ -266,7 +262,7 @@ function transformAttributeTokens(source: string, tokens: InlineTokenStream): In
       }
     }
     else if (
-      kind !== textKind || hasVisibleText(
+      kind !== InlineKind.Text || hasVisibleText(
         source,
         inlineTokenStart(result, index),
         inlineTokenEnd(result, index),
