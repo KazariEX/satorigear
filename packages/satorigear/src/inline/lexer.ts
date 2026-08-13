@@ -6,10 +6,6 @@ const autolink = /<(?:[A-Z][A-Z0-9+.\-]{1,31}:[^ \t\n\r<>]+|[\w!#$%&'*+\-/=?^`{|
 const inlineHtml = /<[A-Za-z][A-Za-z0-9-]*(?:[ \t\n\r]+[A-Za-z_:][\w.:-]*(?:[ \t\n\r]*=[ \t\n\r]*(?:[^ \t\n\r"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t\n\r]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t\n\r]*>|<\?[\s\S]*?\?>|<![A-Z][\s\S]*?>|<!\[CDATA\[[\s\S]*?\]\]>/y;
 const entity = /&(?:#x[0-9A-F]{1,6}|#\d{1,7}|[A-Z][A-Z0-9]{0,30});/iy;
 
-function appendToken(tokens: number[], kind: number, start: number, end: number, flags = 0): void {
-  tokens.push(kind, start, end, flags);
-}
-
 function matchEnd(pattern: RegExp, source: string, start: number): number {
   pattern.lastIndex = start;
   const match = pattern.exec(source);
@@ -266,7 +262,7 @@ export function tokenizeInline(source: string): readonly number[] {
       }
       offset = content;
       if (tokens.length > 0) {
-        appendToken(tokens, InlineKind.Newline, offset, offset);
+        tokens.push(InlineKind.Newline, offset, offset, 0);
       }
       lineStart = false;
       continue;
@@ -278,7 +274,7 @@ export function tokenizeInline(source: string): readonly number[] {
         const end = runEnd(source, offset, 32);
         const next = source.charCodeAt(end);
         if (end - offset >= 2 && (next === 10 || next === 13)) {
-          appendToken(tokens, InlineKind.HardBreak, offset, end);
+          tokens.push(InlineKind.HardBreak, offset, end, 0);
           offset = end;
           continue;
         }
@@ -372,7 +368,7 @@ export function tokenizeInline(source: string): readonly number[] {
     const decode = kind === InlineKind.Escape || kind === InlineKind.Entity || (
       (kind === InlineKind.LinkTail || kind === InlineKind.ReferenceTail) && needsTextDecode(source, offset, end)
     );
-    appendToken(tokens, kind, offset, end, decode ? InlineTokenFlag.DecodeText : 0);
+    tokens.push(kind, offset, end, decode ? InlineTokenFlag.DecodeText : 0);
     offset = end;
   }
   return tokens;
