@@ -6,7 +6,8 @@ export interface RawBenchmarkCorpus {
   id: string;
   name: string;
   file: string;
-  format: "markdown" | "commonmark";
+  format: "markdown" | "json";
+  profile: "commonmark" | "features";
   download: string;
 }
 
@@ -21,24 +22,35 @@ interface CommonMarkExample {
 
 export const rawCorpora: readonly RawBenchmarkCorpus[] = [
   {
-    id: "markdown-exit-readme",
-    name: "markdown-exit README",
-    file: "markdown-exit.md",
+    id: "commonmark-spec-0.31.2",
+    name: "CommonMark 0.31.2 specification",
+    file: "commonmark-spec.md",
     format: "markdown",
-    download: "https://raw.githubusercontent.com/serkodev/markdown-exit/1c1c7cb/README.md",
+    profile: "commonmark",
+    download: "https://raw.githubusercontent.com/commonmark/commonmark/0.31.2/spec.txt",
   },
   {
-    id: "ox-content-readme",
-    name: "Ox Content README",
-    file: "ox-content.md",
+    id: "rust-releases",
+    name: "Rust release history",
+    file: "rust-releases.md",
     format: "markdown",
-    download: "https://raw.githubusercontent.com/ubugeeei-prod/ox-content/bf62928/README.md",
+    profile: "features",
+    download: "https://raw.githubusercontent.com/rust-lang/rust/ba28ff76f353a722f31c4f3dd2ac4e437d36411b/RELEASES.md",
+  },
+  {
+    id: "public-apis-readme",
+    name: "Public APIs README",
+    file: "public-apis.md",
+    format: "markdown",
+    profile: "features",
+    download: "https://raw.githubusercontent.com/public-apis/public-apis/6472943bb66b35b96eecd6820f639656f3304499/README.md",
   },
   {
     id: "commonmark-0.31.2",
     name: "CommonMark 0.31.2 examples",
     file: "commonmark.json",
-    format: "commonmark",
+    format: "json",
+    profile: "commonmark",
     download: "https://spec.commonmark.org/0.31.2/spec.json",
   },
 ];
@@ -47,7 +59,7 @@ export function load(): readonly BenchmarkCorpus[] {
   return rawCorpora.map((corpus) => {
     const path = join(import.meta.dirname, `../../corpus/${corpus.file}`);
     const source = readFileSync(path, "utf8");
-    const documents = corpus.format === "commonmark"
+    const documents = corpus.format === "json"
       ? (JSON.parse(source) as CommonMarkExample[]).map((example) => example.markdown)
       : [source];
     return {

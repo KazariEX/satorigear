@@ -5,7 +5,7 @@ import { createCommonmarkEngines } from "./helpers/engines.ts";
 import { corpusLabel, parseCorpus } from "./helpers/utils.ts";
 
 const engines = createCommonmarkEngines();
-const corpora = load();
+const corpora = load().filter((corpus) => corpus.profile === "commonmark");
 
 // Parser (profile) construction is intentionally separate from steady-state document parsing.
 summary(() => {

@@ -10,10 +10,10 @@ interface EditScenario {
 }
 
 const parser = createParser();
-const oxContent = load().find((corpus) => corpus.id === "ox-content-readme");
-const base = oxContent?.documents[0];
+const rustReleases = load().find((corpus) => corpus.id === "rust-releases");
+const base = rustReleases?.documents[0];
 if (base === void 0) {
-  throw new Error("Ox Content benchmark corpus is unavailable");
+  throw new Error("Rust release history benchmark corpus is unavailable");
 }
 
 function replaceOnce(source: string, search: string, replacement: string): string {
@@ -51,7 +51,7 @@ const scenarios: readonly EditScenario[] = [
   {
     name: "single title character",
     first: base,
-    second: replaceOnce(base, "High-performance", "high-performance"),
+    second: replaceOnce(base, "Version 1.97.1", "version 1.97.1"),
   },
   {
     name: "document-start newline",
@@ -66,7 +66,7 @@ const scenarios: readonly EditScenario[] = [
   {
     name: "list indentation",
     first: base,
-    second: replaceOnce(base, "\n- **Blazing Fast**", "\n    - **Blazing Fast**"),
+    second: replaceOnce(base, "\n- [rustc:", "\n    - [rustc:"),
   },
   {
     name: "definition availability",

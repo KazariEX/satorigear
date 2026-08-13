@@ -4,7 +4,7 @@ import { createFeatureEngines } from "./helpers/engines.ts";
 import { corpusLabel, parseCorpus } from "./helpers/utils.ts";
 
 const engines = createFeatureEngines();
-const corpora = load();
+const corpora = load().filter((corpus) => corpus.profile === "features");
 
 for (const corpus of corpora) {
   summary(() => {
