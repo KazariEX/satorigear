@@ -5,7 +5,7 @@ import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type Source
 import type { BlockArena, BlockArenaChange, BlockRecord } from "./block/arena.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
 
-export interface SyntaxBlock {
+interface SyntaxBlock {
   offset: number;
   record: BlockRecord;
   regions: readonly InlineRegion[];
@@ -212,7 +212,7 @@ export class SyntaxState {
         regionsUnchanged &&= candidate === previousBlock?.regions[regionIndex] && revision === region.revision;
       }
 
-      // Arena prefix handles may survive token-equivalent edits with different source geometry.
+      // Arena prefix records may survive token-equivalent edits with different source geometry.
       // Only the converged suffix can reuse fragments without comparing duplicate block text.
       block.regions = regions;
       if (previousBlock) {
