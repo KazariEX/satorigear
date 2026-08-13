@@ -185,8 +185,16 @@ function updatePhysicalLines(
   const suffix = Math.min(previous.length, firstLineIndexAtOrAfter(previous, oldDamageEnd + 1) + 1);
   const oldSuffixOffset = previous[suffix]?.start ?? nextSource.length - delta;
   const newSuffixOffset = oldSuffixOffset + delta;
-  const prefix = previous.slice(0, firstLineIndexAtOrAfter(previous, restartOffset));
+  const prefixEnd = firstLineIndexAtOrAfter(previous, restartOffset);
   const changed = linesOf(nextSource, restartOffset, newSuffixOffset);
+  if (delta === 0 && changed.length === suffix - prefixEnd) {
+    const next = previous.slice();
+    for (let index = 0; index < changed.length; index++) {
+      next[prefixEnd + index] = changed[index];
+    }
+    return next;
+  }
+  const prefix = previous.slice(0, prefixEnd);
   const suffixLines = previous.slice(suffix);
   const unchanged = delta === 0
     ? suffixLines
