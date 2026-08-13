@@ -147,6 +147,12 @@ function createBlockScanContext(profile: BlockProfile): BlockScanContext {
 
 function linesOf(source: string, start = 0, limit = source.length): BlockLine[] {
   const lines: BlockLine[] = [];
+  const sourceOffset = start;
+  if (start > 0 || limit < source.length) {
+    source = source.slice(start, limit);
+    start = 0;
+    limit = source.length;
+  }
   let lineFeed = source.indexOf("\n", start);
   let carriageReturn = source.indexOf("\r", start);
   while (start < limit) {
@@ -168,7 +174,11 @@ function linesOf(source: string, start = 0, limit = source.length): BlockLine[] 
         lineFeed = source.indexOf("\n", next);
       }
     }
-    lines.push({ start, end, next });
+    lines.push({
+      start: sourceOffset + start,
+      end: sourceOffset + end,
+      next: sourceOffset + next,
+    });
     start = next;
   }
   return lines;
