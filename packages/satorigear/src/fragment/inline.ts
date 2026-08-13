@@ -23,6 +23,7 @@ export interface InlineBuildContext {
 
 export interface InlineAccumulator {
   context: InlineBuildContext;
+  cursor: number | undefined;
   gapEnd: number;
   gapStart: number;
   target: SpannedNode<PhrasingContent>[];
@@ -106,8 +107,9 @@ function appendPhrasing(
 export function createInlineAccumulator(
   context: InlineBuildContext,
   target: SpannedNode<PhrasingContent>[],
+  cursor?: number,
 ): InlineAccumulator {
-  return { context, gapEnd: -1, gapStart: -1, target };
+  return { context, cursor, gapEnd: -1, gapStart: -1, target };
 }
 
 function appendInlineGap(accumulator: InlineAccumulator, start: number, end: number): void {
@@ -182,12 +184,9 @@ function appendInlineRange(
   startToken: number,
   endToken: number,
   accumulator: InlineAccumulator,
-  start?: number,
-  end?: number,
   closeKind?: number,
-): { cursor: number | undefined; next: number } {
+): number {
   const { context } = accumulator;
-  let cursor = start;
   let index = startToken;
   while (index < endToken) {
     const kind = inlineTokenKind(context.tokens, index);
@@ -195,8 +194,8 @@ function appendInlineRange(
       break;
     }
     const childOffset = inlineTokenStart(context.tokens, index);
-    if (cursor !== void 0 && childOffset > cursor) {
-      accumulator.gapStart = cursor;
+    if (accumulator.cursor !== void 0 && childOffset > accumulator.cursor) {
+      accumulator.gapStart = accumulator.cursor;
       accumulator.gapEnd = childOffset;
     }
     const next = buildInlineSemantic(index, endToken, accumulator);
@@ -212,12 +211,9 @@ function appendInlineRange(
     if (!childEmitted) {
       continue;
     }
-    cursor = childEnd;
+    accumulator.cursor = childEnd;
   }
-  if (cursor !== void 0 && end !== void 0 && end > cursor) {
-    appendInlineGap(accumulator, cursor, end);
-  }
-  return { cursor, next: index };
+  return index;
 }
 
 function buildInlineSemantic(
@@ -237,16 +233,13 @@ function buildInlineSemantic(
       inlineTokenKind(context.tokens, next) === container.contentOpenKind
     ) {
       const contentStart = inlineTokenEnd(context.tokens, next++);
-      const childAccumulator = createInlineAccumulator(context, children);
-      const result = appendInlineRange(
+      const childAccumulator = createInlineAccumulator(context, children, contentStart);
+      closeToken = appendInlineRange(
         next,
         endToken,
         childAccumulator,
-        contentStart,
-        void 0,
         container.closeKind,
       );
-      closeToken = result.next;
       if (
         closeToken >= endToken ||
         inlineTokenKind(context.tokens, closeToken) !== container.closeKind
@@ -254,8 +247,8 @@ function buildInlineSemantic(
         throw new Error(`Resolved inline stream did not close token kind ${kind}`);
       }
       const contentEnd = inlineTokenStart(context.tokens, closeToken);
-      if (result.cursor !== void 0 && contentEnd > result.cursor) {
-        appendInlineGap(childAccumulator, result.cursor, contentEnd);
+      if (childAccumulator.cursor !== void 0 && contentEnd > childAccumulator.cursor) {
+        appendInlineGap(childAccumulator, childAccumulator.cursor, contentEnd);
       }
       next = closeToken + 1;
     }
@@ -278,16 +271,13 @@ function buildInlineSemantic(
   }
   const contentStart = inlineTokenEnd(context.tokens, openToken);
   const children: SpannedNode<PhrasingContent>[] = [];
-  const childAccumulator = createInlineAccumulator(context, children);
-  const result = appendInlineRange(
+  const childAccumulator = createInlineAccumulator(context, children, contentStart);
+  const closeToken = appendInlineRange(
     openToken + 1,
     endToken,
     childAccumulator,
-    contentStart,
-    void 0,
     pair.closeKind,
   );
-  const closeToken = result.next;
   if (
     closeToken >= endToken ||
     inlineTokenKind(context.tokens, closeToken) !== pair.closeKind
@@ -295,8 +285,8 @@ function buildInlineSemantic(
     throw new Error(`Resolved inline stream did not close token kind ${kind}`);
   }
   const contentEnd = inlineTokenStart(context.tokens, closeToken);
-  if (result.cursor !== void 0 && contentEnd > result.cursor) {
-    appendInlineGap(childAccumulator, result.cursor, contentEnd);
+  if (childAccumulator.cursor !== void 0 && contentEnd > childAccumulator.cursor) {
+    appendInlineGap(childAccumulator, childAccumulator.cursor, contentEnd);
   }
   pair.build(
     openToken,
