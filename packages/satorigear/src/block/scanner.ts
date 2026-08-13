@@ -249,18 +249,10 @@ function createForwardLocator(
   endsInLineEnding: boolean,
 ): (offset: number) => SourceLocation {
   if (lines.length === 0) {
-    return (offset) => {
-      if (offset < 0 || offset > sourceLength) {
-        throw new RangeError(`Source offset ${offset} is outside the document`);
-      }
-      return { line: 1, column: 1, offset };
-    };
+    return (offset) => ({ line: 1, column: 1, offset });
   }
   let line = 0;
   return (offset) => {
-    if (offset < 0 || offset > sourceLength) {
-      throw new RangeError(`Source offset ${offset} is outside the document`);
-    }
     if (offset === sourceLength && endsInLineEnding) {
       return { line: lines.length + 1, column: 1, offset };
     }

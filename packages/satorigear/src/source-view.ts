@@ -35,14 +35,10 @@ export class ContiguousSourceView implements SourceView {
   }
 
   mapPoint(offset: number): number {
-    if (offset < 0 || offset > this.text.length) {
-      throw new RangeError(`Invalid source-view offset ${offset} for length ${this.text.length}`);
-    }
     return this.#offset + offset;
   }
 
   mapSpan(start: number, end: number): SourceSpan {
-    validateSpan(this.text.length, start, end);
     return { start: this.#offset + start, end: this.#offset + end };
   }
 }
@@ -75,9 +71,6 @@ export class SegmentedSourceView implements SourceView {
   }
 
   mapPoint(offset: number): number {
-    if (offset < 0 || offset > this.text.length) {
-      throw new RangeError(`Invalid source-view offset ${offset} for length ${this.text.length}`);
-    }
     if (this.#segments.length === 0) {
       return 0;
     }
@@ -89,7 +82,6 @@ export class SegmentedSourceView implements SourceView {
   }
 
   mapSpan(start: number, end: number): SourceSpan {
-    validateSpan(this.text.length, start, end);
     if (this.#segments.length === 0) {
       return { start: 0, end: 0 };
     }
@@ -118,12 +110,6 @@ export class SegmentedSourceView implements SourceView {
       }
     }
     return this.#segments[low];
-  }
-}
-
-function validateSpan(length: number, start: number, end: number): void {
-  if (start < 0 || end < start || end > length) {
-    throw new RangeError(`Invalid source-view span [${start}, ${end}) for length ${length}`);
   }
 }
 
