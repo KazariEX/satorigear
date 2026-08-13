@@ -2,7 +2,6 @@ import { Buffer } from "node:buffer";
 import { bench, do_not_optimize, run, summary } from "mitata";
 import { createParser, type TextEdit } from "satorigear";
 import { load } from "./helpers/corpus.ts";
-import { fullyRead } from "./helpers/utils.ts";
 
 interface EditScenario {
   name: string;
@@ -83,61 +82,36 @@ summary(() => {
   bench(`cached snapshot (${Buffer.byteLength(base)} bytes)`, () => {
     do_not_optimize(document.snapshot());
   });
-  bench(`cached snapshot fully read (${Buffer.byteLength(base)} bytes)`, () => {
-    const tree = document.snapshot();
-    do_not_optimize(fullyRead(tree));
-    do_not_optimize(tree);
-  });
-  bench(`fresh parse return (${Buffer.byteLength(base)} bytes)`, () => {
-    do_not_optimize(parser.parse(base));
-  });
-  bench(`fresh fully read (${Buffer.byteLength(base)} bytes)`, () => {
-    const tree = parser.parse(base);
-    do_not_optimize(fullyRead(tree));
-    do_not_optimize(tree);
+  bench(`fresh snapshot (${Buffer.byteLength(base)} bytes)`, () => {
+    do_not_optimize(parser.createDocument(base).snapshot());
   });
 });
 
 for (const scenario of scenarios) {
   summary(() => {
     const bytes = Math.max(Buffer.byteLength(scenario.first), Buffer.byteLength(scenario.second));
-    let editSource = scenario.first;
-    const editDocument = parser.createDocument(editSource);
-    let snapshotSource = scenario.first;
-    const snapshotDocument = parser.createDocument(snapshotSource);
-    let fullyReadSource = scenario.first;
-    const fullyReadDocument = parser.createDocument(fullyReadSource);
+    const edits = [
+      editBetween(scenario.first, scenario.second),
+      editBetween(scenario.second, scenario.first),
+    ] as const;
+    let editIndex = 0;
+    const editDocument = parser.createDocument(scenario.first);
+    let snapshotEditIndex = 0;
+    const snapshotDocument = parser.createDocument(scenario.first);
     let freshSource = scenario.first;
-    let freshFullyReadSource = scenario.first;
 
     bench(`edit only (${scenario.name}, ${bytes} bytes)`, () => {
-      const next = editSource === scenario.first ? scenario.second : scenario.first;
-      do_not_optimize(editDocument.edit([editBetween(editSource, next)]));
-      editSource = next;
+      do_not_optimize(editDocument.edit([edits[editIndex]]));
+      editIndex ^= 1;
     });
     bench(`edit and snapshot (${scenario.name}, ${bytes} bytes)`, () => {
-      const next = snapshotSource === scenario.first ? scenario.second : scenario.first;
-      snapshotDocument.edit([editBetween(snapshotSource, next)]);
-      snapshotSource = next;
+      snapshotDocument.edit([edits[snapshotEditIndex]]);
+      snapshotEditIndex ^= 1;
       do_not_optimize(snapshotDocument.snapshot());
     });
-    bench(`edit and fully read (${scenario.name}, ${bytes} bytes)`, () => {
-      const next = fullyReadSource === scenario.first ? scenario.second : scenario.first;
-      fullyReadDocument.edit([editBetween(fullyReadSource, next)]);
-      fullyReadSource = next;
-      const tree = fullyReadDocument.snapshot();
-      do_not_optimize(fullyRead(tree));
-      do_not_optimize(tree);
-    });
-    bench(`fresh parse return (${scenario.name}, ${bytes} bytes)`, () => {
+    bench(`fresh snapshot (${scenario.name}, ${bytes} bytes)`, () => {
       freshSource = freshSource === scenario.first ? scenario.second : scenario.first;
-      do_not_optimize(parser.parse(freshSource));
-    });
-    bench(`fresh fully read (${scenario.name}, ${bytes} bytes)`, () => {
-      freshFullyReadSource = freshFullyReadSource === scenario.first ? scenario.second : scenario.first;
-      const tree = parser.parse(freshFullyReadSource);
-      do_not_optimize(fullyRead(tree));
-      do_not_optimize(tree);
+      do_not_optimize(parser.createDocument(freshSource).snapshot());
     });
   });
 }
