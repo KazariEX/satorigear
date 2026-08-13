@@ -378,7 +378,12 @@ export class BlockScanner {
           return true;
         }
       }
-      scanned.push({ lineStart: blockStart, lineEnd: blockEnd, tokenStart, tokenEnd });
+      scanned.push({
+        lineStart: blockStart,
+        lineEnd: blockEnd,
+        tokenStart: oldTokenStart + tokenStart,
+        tokenEnd: oldTokenStart + tokenEnd,
+      });
       return false;
     });
 
@@ -393,21 +398,18 @@ export class BlockScanner {
       replacement,
     );
     const prefixCheckpoints = this.#checkpoints.slice(0, Math.max(0, restart));
-    const scannedCheckpoints = scanned.map((value) => ({
-      lineStart: value.lineStart,
-      lineEnd: value.lineEnd,
-      tokenStart: oldTokenStart + value.tokenStart,
-      tokenEnd: oldTokenStart + value.tokenEnd,
-    }));
-    const suffixCheckpoints = converged < 0 ? [] : this.#checkpoints.slice(converged).map((value) => ({
-      lineStart: value.lineStart + delta,
-      lineEnd: value.lineEnd + delta,
-      tokenStart: value.tokenStart + tokenDelta,
-      tokenEnd: value.tokenEnd + tokenDelta,
-    }));
+    const suffixCheckpoints = converged < 0 ? [] : this.#checkpoints.slice(converged);
+    if (delta !== 0 || tokenDelta !== 0) {
+      for (const checkpoint of suffixCheckpoints) {
+        checkpoint.lineStart += delta;
+        checkpoint.lineEnd += delta;
+        checkpoint.tokenStart += tokenDelta;
+        checkpoint.tokenEnd += tokenDelta;
+      }
+    }
     this.#source = nextSource;
     this.#lines = nextLines;
-    this.#checkpoints = [...prefixCheckpoints, ...scannedCheckpoints, ...suffixCheckpoints];
+    this.#checkpoints = [...prefixCheckpoints, ...scanned, ...suffixCheckpoints];
 
     return {
       stableBlockCount: Math.max(0, restart),
