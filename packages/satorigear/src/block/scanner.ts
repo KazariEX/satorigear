@@ -373,8 +373,8 @@ export class BlockScanner {
     const checkpoint = this.#checkpoints[restart];
     const restartOffset = checkpoint?.lineStart ?? 0;
     const oldTokenStart = checkpoint?.tokenStart ?? 0;
-    const restartLine = nextLines.findIndex((line) => line.start >= restartOffset);
-    const scanLines = restartLine < 0 ? [] : nextLines.slice(restartLine);
+    const restartLine = firstLineIndexAtOrAfter(nextLines, restartOffset);
+    const scanLines = nextLines.slice(restartLine);
 
     // 2. Rescan from the restart checkpoint until a shifted old checkpoint matches.
     const replacement = new BlockTokenStream(nextSource.length);
