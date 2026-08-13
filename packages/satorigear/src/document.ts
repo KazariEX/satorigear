@@ -125,7 +125,7 @@ export class DocumentImpl implements Document {
     const context: BlockBuildContext = {
       arena: this.#blockArena,
       inline: new InlineRegionCursor(regions),
-      profile: this.#profile,
+      profile: this.#profile.inline,
       source: this.source,
     };
 
@@ -161,7 +161,7 @@ export class DocumentImpl implements Document {
     const context: BlockBuildContext = {
       arena: blockArena,
       inline: new InlineRegionCursor(regions),
-      profile,
+      profile: profile.inline,
       source,
     };
 

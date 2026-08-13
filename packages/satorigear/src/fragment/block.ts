@@ -1,16 +1,16 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
 import type { BlockArena } from "../block/arena.ts";
 import type { BlockKind } from "../block/kinds.ts";
+import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
-import type { SyntaxProfile } from "../profile/types.ts";
 import type { SourceSpan } from "../source-view.ts";
 import type { SpannedNode } from "./node.ts";
 
 export interface BlockBuildContext {
   arena: BlockArena;
-  profile: SyntaxProfile;
-  source: string;
   inline: InlineRegionCursor;
+  profile: InlineProfile;
+  source: string;
 }
 
 // Core owns fragment state and traversal; profiles supply every syntax-specific node builder.

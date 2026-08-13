@@ -309,10 +309,10 @@ export function buildInlineChildren(
   }
   const inlineContext: InlineBuildContext = {
     blockRule: region.rule,
-    decodeText: context.profile.inline.decodeText,
-    schema: context.profile.inline.schema,
+    decodeText: context.profile.decodeText,
+    schema: context.profile.schema,
     source: context.source,
-    tokenBuilders: context.profile.inline.tokenBuilders,
+    tokenBuilders: context.profile.tokenBuilders,
     tokens: region.tokens,
     view: region.view,
   };
