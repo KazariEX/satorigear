@@ -3,8 +3,7 @@ import { InlineRegion, type InlineRegionBinding, type InlineRegionSyntax } from 
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { BlockArena, BlockArenaChange, BlockRecord } from "./block/arena.ts";
-import type { InlineResolutionContext } from "./inline/profile.ts";
-import type { SyntaxProfile } from "./profile/types.ts";
+import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
 
 export interface SyntaxBlock {
   offset: number;
@@ -23,12 +22,12 @@ export class SyntaxState {
   #blocks: SyntaxBlock[] = [];
   #definitionEntries?: BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
-  #profile: SyntaxProfile;
+  #profile: InlineProfile;
   #arena: BlockArena;
 
   constructor(
     source: string,
-    profile: SyntaxProfile,
+    profile: InlineProfile,
     arena: BlockArena,
   ) {
     this.#profile = profile;
@@ -127,7 +126,7 @@ export class SyntaxState {
         const regions = new Array<InlineRegion>(bindingEnd - bindingStart);
         for (let bindingIndex = bindingStart; bindingIndex < bindingEnd; bindingIndex++) {
           regions[bindingIndex - bindingStart] = new InlineRegion(
-            this.#profile.inline,
+            this.#profile,
             bindings[bindingIndex],
             definitions,
           );
@@ -208,7 +207,7 @@ export class SyntaxState {
         const revision = candidate?.revision;
         const region = candidate
           ? candidate.update(binding, definitions)
-          : new InlineRegion(this.#profile.inline, binding, definitions);
+          : new InlineRegion(this.#profile, binding, definitions);
         regions[regionIndex] = region;
         regionsUnchanged &&= candidate === previousBlock?.regions[regionIndex] && revision === region.revision;
       }
@@ -242,7 +241,7 @@ export class SyntaxState {
 
 export function createInlineRegions(
   source: string,
-  profile: SyntaxProfile,
+  profile: InlineProfile,
   arena: BlockArena,
 ): readonly InlineRegionSyntax[] {
   const definitions = new Set<string>();
@@ -280,14 +279,14 @@ export function createInlineRegions(
   // One-shot parsing needs definition visibility, but has no future edit to track dependencies for.
   const context: InlineResolutionContext = {
     hasDefinition: (key) => definitions.has(key),
-    tokenize: profile.inline.tokenize,
+    tokenize: profile.tokenize,
   };
   for (const region of regions) {
     const text = region.view.text;
     // @ts-expect-error override readonly tokens
-    region.tokens = profile.inline.resolve(
+    region.tokens = profile.resolve(
       text,
-      profile.inline.tokenize(text),
+      profile.tokenize(text),
       context,
     );
   }

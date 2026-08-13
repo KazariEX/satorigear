@@ -66,7 +66,7 @@ export class DocumentImpl implements Document {
     this.#blockArena = new BlockArena(profile.block.schema);
     this.#blockScanner.scan(source);
     this.#blockArena.build(this.#blockScanner.tokens);
-    this.#syntaxState = new SyntaxState(source, profile, this.#blockArena);
+    this.#syntaxState = new SyntaxState(source, profile.inline, this.#blockArena);
   }
 
   get source(): string {
@@ -157,7 +157,7 @@ export class DocumentImpl implements Document {
     blockScanner.scan(source);
     blockArena.build(blockScanner.tokens);
 
-    const regions = createInlineRegions(source, profile, blockArena);
+    const regions = createInlineRegions(source, profile.inline, blockArena);
     const context: BlockBuildContext = {
       arena: blockArena,
       inline: new InlineRegionCursor(regions),
