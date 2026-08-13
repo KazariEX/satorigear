@@ -204,16 +204,26 @@ function updatePhysicalLines(
     }
     return next;
   }
-  const prefix = previous.slice(0, prefixEnd);
-  const suffixLines = previous.slice(suffix);
-  const unchanged = delta === 0
-    ? suffixLines
-    : suffixLines.map((line) => ({
-      start: line.start + delta,
-      end: line.end + delta,
-      next: line.next + delta,
-    }));
-  return [...prefix, ...changed, ...unchanged];
+  // Assemble a new owner once; mutating previous suffix lines before scanning would break edit atomicity.
+  const next = new Array<BlockLine>(prefixEnd + changed.length + previous.length - suffix);
+  let write = 0;
+  for (let index = 0; index < prefixEnd; index++) {
+    next[write++] = previous[index];
+  }
+  for (const line of changed) {
+    next[write++] = line;
+  }
+  for (let index = suffix; index < previous.length; index++) {
+    const line = previous[index];
+    next[write++] = delta === 0
+      ? line
+      : {
+        start: line.start + delta,
+        end: line.end + delta,
+        next: line.next + delta,
+      };
+  }
+  return next;
 }
 
 function sameShiftedBlock(
