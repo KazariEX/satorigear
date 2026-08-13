@@ -20,7 +20,7 @@ import { feature as featureText, semanticText } from "./features/text.ts";
 import type { MathOptions } from "./features/math/types.ts";
 import type { SyntaxProfile } from "./types.ts";
 
-export interface SyntaxOptions {
+export interface FeatureOptions {
   attributes?: boolean;
   component?: boolean;
   footnote?: boolean;
@@ -31,7 +31,7 @@ export interface SyntaxOptions {
 }
 
 // Compilation builds the hot dispatch tables once; documents only retain the immutable result.
-export function compileProfile(options: SyntaxOptions = {}): SyntaxProfile {
+export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
   const features = [
     featureHeading,
     featureBreak,

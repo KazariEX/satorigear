@@ -8,9 +8,8 @@ import {
   type TextEdit,
 } from "../../packages/satorigear/src/index.ts";
 
-const options = { attributes: true, component: true } as const;
-const parser = createParser(options);
-const componentParser = createParser({ component: true });
+const parser = createParser({ features: { attributes: true, component: true } });
+const componentParser = createParser({ features: { component: true } });
 const defaultParser = createParser();
 
 function component(source: string): BlockComponent | InlineComponent {

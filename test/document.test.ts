@@ -5,7 +5,7 @@ const parser = createParser();
 
 describe("markdown document", () => {
   it("keeps a parser profile fixed across documents", () => {
-    const tableParser = createParser({ table: true });
+    const tableParser = createParser({ features: { table: true } });
     const source = "a | b\n--- | ---\nc | d\n";
 
     expect(tableParser.parse(source).children[0]).toMatchObject({ type: "table" });
@@ -66,7 +66,13 @@ describe("markdown document", () => {
   });
 
   it("matches complete parses while appending streamed chunks", () => {
-    const streamParser = createParser({ footnote: true, frontmatter: true, math: true });
+    const streamParser = createParser({
+      features: {
+        footnote: true,
+        frontmatter: true,
+        math: true,
+      },
+    });
     const document = streamParser.createDocument("");
     const chunks = [
       "---\n",

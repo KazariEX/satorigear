@@ -25,11 +25,13 @@ export function createCommonmarkEngines(): readonly Engine[] {
 
 export function createFeatureEngines(): readonly Engine[] {
   const satorigear = createParser({
-    footnote: true,
-    frontmatter: true,
-    math: true,
-    strikethrough: true,
-    table: true,
+    features: {
+      footnote: true,
+      frontmatter: true,
+      math: true,
+      strikethrough: true,
+      table: true,
+    },
   });
   const satteriOptions = {
     features: {

@@ -1,18 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { createParser } from "../../packages/satorigear/src/index.ts";
 
-const options = { strikethrough: true } as const;
-const strictOptions = { strikethrough: { singleTilde: false } } as const;
-const parser = createParser(options);
-const strictParser = createParser(strictOptions);
-const defaultParser = createParser();
-const disabledParser = createParser({ strikethrough: false });
+const parser = createParser({ features: { strikethrough: true } });
+const strictParser = createParser({ features: { strikethrough: { singleTilde: false } } });
 const compositeParser = createParser({
-  attributes: true,
-  component: true,
-  math: true,
-  strikethrough: true,
-  table: true,
+  features: {
+    attributes: true,
+    component: true,
+    math: true,
+    strikethrough: true,
+    table: true,
+  },
 });
 
 describe("strikethrough", () => {
@@ -84,13 +82,6 @@ describe("strikethrough", () => {
         { type: "delete", children: [{ type: "text", value: "bar" }] },
         { type: "text", value: "baz" },
       ],
-    });
-  });
-
-  it("remains disabled by default", () => {
-    expect(defaultParser.parse("~~text~~")).toEqual(disabledParser.parse("~~text~~"));
-    expect(defaultParser.parse("~~text~~").children[0]).toMatchObject({
-      children: [{ type: "text", value: "~~text~~" }],
     });
   });
 

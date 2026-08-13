@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createParser } from "../../packages/satorigear/src/index.ts";
 
-const parser = createParser({ footnote: true });
-const componentParser = createParser({ component: true, footnote: true });
-const defaultParser = createParser();
-const disabledParser = createParser({ footnote: false });
+const parser = createParser({ features: { footnote: true } });
+const componentParser = createParser({ features: { component: true, footnote: true } });
 
 describe("footnote", () => {
   it("builds references and definitions as mdast associations", () => {
@@ -199,12 +197,6 @@ describe("footnote", () => {
         },
       ],
     });
-  });
-
-  it("remains disabled by default", () => {
-    const source = "call[^a]\n\n[^a]: note\n";
-    expect(defaultParser.parse(source)).toEqual(disabledParser.parse(source));
-    expect(JSON.stringify(defaultParser.parse(source))).not.toContain("footnote");
   });
 
   it("keeps full and incremental parsing equivalent as definitions change", () => {

@@ -5,11 +5,10 @@ import {
   type Document,
 } from "../../packages/satorigear/src/index.ts";
 
-const options = { attributes: true } as const;
-const parser = createParser(options);
-const componentParser = createParser({ attributes: true, component: true });
-const componentOnlyParser = createParser({ component: true });
-const disabledParser = createParser({ attributes: false });
+const parser = createParser({ features: { attributes: true } });
+const componentParser = createParser({ features: { attributes: true, component: true } });
+const componentOnlyParser = createParser({ features: { component: true } });
+const disabledParser = createParser({ features: { attributes: false } });
 const defaultParser = createParser();
 
 describe("attributes", () => {

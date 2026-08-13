@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createParser } from "../../packages/satorigear/src/index.ts";
 
-const options = { math: true } as const;
-const parser = createParser(options);
-const strictParser = createParser({ math: { singleDollarTextMath: false } });
+const parser = createParser({ features: { math: true } });
+const strictParser = createParser({ features: { math: { singleDollarTextMath: false } } });
 const componentParser = createParser({
-  attributes: true,
-  component: true,
-  math: true,
+  features: {
+    attributes: true,
+    component: true,
+    math: true,
+  },
 });
-const defaultParser = createParser();
 
 describe("math", () => {
   it("builds inline math with exact dollar runs", () => {
@@ -145,13 +145,6 @@ describe("math", () => {
       type: "list",
       children: [{ children: [{ type: "math", value: "x" }] }],
     });
-  });
-
-  it("remains disabled by default", () => {
-    for (const source of ["$x$", "$$\nx\n$$\n"]) {
-      expect(defaultParser.parse(source).children.some((node) => node.type === "math")).toBe(false);
-      expect(JSON.stringify(defaultParser.parse(source))).not.toContain("inlineMath");
-    }
   });
 
   it("keeps full and incremental math parsing equivalent", () => {

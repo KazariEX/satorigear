@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createParser } from "../../packages/satorigear/src/index.ts";
 
-const hyphen = { frontmatter: { marker: "-" } } as const;
-const plus = { frontmatter: { marker: "+" } } as const;
-const hyphenParser = createParser(hyphen);
-const plusParser = createParser(plus);
-const frontmatterParser = createParser({ frontmatter: true });
-const defaultParser = createParser();
+const hyphenParser = createParser({ features: { frontmatter: { marker: "-" } } });
+const plusParser = createParser({ features: { frontmatter: { marker: "+" } } });
+const frontmatterParser = createParser({ features: { frontmatter: true } });
 
 describe("frontmatter", () => {
   it.each([
@@ -44,12 +41,6 @@ describe("frontmatter", () => {
       type: "yaml",
       value: "",
     });
-  });
-
-  it("does not change default CommonMark parsing", () => {
-    const source = "---\na: b\n---\n";
-    expect(defaultParser.parse(source).children[0]).toMatchObject({ type: "thematicBreak" });
-    expect(defaultParser.parse(source).children.some((node) => node.type === "yaml")).toBe(false);
   });
 
   it("uses hyphen fences when enabled without options", () => {

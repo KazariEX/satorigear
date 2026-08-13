@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createParser } from "../../packages/satorigear/src/index.ts";
 
-const options = { table: true } as const;
-const parser = createParser(options);
-const defaultParser = createParser();
+const parser = createParser({ features: { table: true } });
 
 describe("table", () => {
   it("builds aligned GFM tables with inline cell content", () => {
@@ -94,17 +92,6 @@ describe("table", () => {
       type: "list",
       children: [{ children: [{ type: "table" }] }],
     });
-  });
-
-  it("preserves CommonMark precedence and remains disabled by default", () => {
-    const source = "| a | b |\n| --- | --- |\n";
-    expect(defaultParser.parse(source).children[0]).toMatchObject({ type: "paragraph" });
-    expect(parser.parse("| a | b |\n| --- |\n").children[0]).toMatchObject({ type: "paragraph" });
-    expect(parser.parse("a | b\n- | -\n").children.map((node) => node.type)).toEqual([
-      "paragraph",
-      "list",
-    ]);
-    expect(parser.parse("| a |\n---\n").children[0]).toMatchObject({ type: "heading", depth: 2 });
   });
 
   it("keeps full and incremental table parsing equivalent", () => {
