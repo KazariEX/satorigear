@@ -13,8 +13,4 @@ export default zin({
       }],
     },
   },
-  ignores: [
-    "test/corpus/**",
-    "vendors/**",
-  ],
 });
