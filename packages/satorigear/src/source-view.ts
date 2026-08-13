@@ -22,6 +22,7 @@ export interface SourceView {
   readonly text: string;
   mapPoint: (offset: number) => number;
   mapSpan: (start: number, end: number) => SourceSpan;
+  shift: (delta: number) => void;
 }
 
 export class ContiguousSourceView implements SourceView {
@@ -40,6 +41,10 @@ export class ContiguousSourceView implements SourceView {
 
   mapSpan(start: number, end: number): SourceSpan {
     return { start: this.#offset + start, end: this.#offset + end };
+  }
+
+  shift(delta: number): void {
+    this.#offset += delta;
   }
 }
 
@@ -95,6 +100,13 @@ export class SegmentedSourceView implements SourceView {
       start: first.start + start - first.viewStart,
       end: last.start + end - last.viewStart,
     };
+  }
+
+  shift(delta: number): void {
+    for (const segment of this.#segments) {
+      segment.start += delta;
+      segment.end += delta;
+    }
   }
 
   #containingSegment(offset: number): SourceViewSegment {

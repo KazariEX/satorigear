@@ -78,6 +78,12 @@ export class InlineRegion implements InlineRegionSyntax {
     }
   }
 
+  shift(delta: number): void {
+    this.span.start += delta;
+    this.span.end += delta;
+    this.view.shift(delta);
+  }
+
   #dependenciesChanged(definitions: ReadonlySet<string>): boolean {
     if (!this.#definitionDependencies || !this.#definitions) {
       return true;
