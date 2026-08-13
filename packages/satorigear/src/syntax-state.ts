@@ -137,18 +137,24 @@ export class SyntaxState {
       }
     }
 
+    const firstSuffixBlock = previousBlocks[oldEnd];
+    const firstSuffixRecord = arena.records[newEnd];
+    // Relative arena edges make every record in the converged suffix share these two shifts.
+    const suffixOffsetDelta = firstSuffixBlock && firstSuffixRecord
+      ? arena.tokens.start(firstSuffixRecord.tokenStart) - firstSuffixBlock.offset
+      : 0;
+    const suffixTokenDelta = firstSuffixBlock && firstSuffixRecord
+      ? firstSuffixRecord.tokenStart - firstSuffixBlock.tokenBase
+      : 0;
     for (let index = oldEnd; index < previousBlocks.length; index++) {
       const block = previousBlocks[index];
-      const record = arena.records[newEnd + index - oldEnd];
-      const offset = arena.tokens.start(record.tokenStart);
-      const offsetDelta = offset - block.offset;
-      if (offsetDelta !== 0) {
+      if (suffixOffsetDelta !== 0) {
         for (const region of block.regions) {
-          region.shift(offsetDelta);
+          region.shift(suffixOffsetDelta);
         }
       }
-      block.offset = offset;
-      block.tokenBase = record.tokenStart;
+      block.offset += suffixOffsetDelta;
+      block.tokenBase += suffixTokenDelta;
       blocks.push(block);
     }
 
