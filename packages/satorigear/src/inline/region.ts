@@ -3,12 +3,12 @@ import type { SourceSpan, SourceView } from "../source-view.ts";
 import type { InlineProfile, InlineResolutionContext } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
-interface DefinitionContext extends InlineResolutionContext {
+interface TrackedResolutionContext extends InlineResolutionContext {
   definitions: ReadonlySet<string>;
   dependencies?: Set<string>;
 }
 
-function hasDefinition(this: DefinitionContext, key: string): boolean {
+function hasDefinition(this: TrackedResolutionContext, key: string): boolean {
   (this.dependencies ??= new Set()).add(key);
   return this.definitions.has(key);
 }
@@ -20,7 +20,14 @@ export interface InlineRegionBinding {
   view: SourceView;
 }
 
-export class InlineRegion {
+export interface InlineRegionSyntax {
+  readonly id: number;
+  readonly rule: string;
+  readonly tokens: InlineTokenStream;
+  readonly view: SourceView;
+}
+
+export class InlineRegion implements InlineRegionSyntax {
   // Track only definitions consulted by this region so unrelated definitions do not invalidate it.
   #definitionDependencies?: ReadonlySet<string>;
   #definitions?: ReadonlySet<string>;
@@ -99,7 +106,8 @@ export class InlineRegion {
       return false;
     }
 
-    const context: DefinitionContext = {
+    // Incremental regions retain exactly the definition lookups that can invalidate them.
+    const context: TrackedResolutionContext = {
       definitions,
       hasDefinition,
       tokenize: this.#syntax.tokenize,
@@ -115,5 +123,24 @@ export class InlineRegion {
     this.#rawTokens = rawTokens;
     this.#tokens = tokens;
     return true;
+  }
+}
+
+// Block building follows source order, so projection needs only one forward cursor.
+export class InlineRegionCursor {
+  #index = 0;
+  #regions: readonly InlineRegionSyntax[];
+
+  constructor(regions: readonly InlineRegionSyntax[]) {
+    this.#regions = regions;
+  }
+
+  take(nodeId: number): InlineRegionSyntax | undefined {
+    const region = this.#regions[this.#index];
+    if (region?.id !== nodeId) {
+      return;
+    }
+    this.#index++;
+    return region;
   }
 }

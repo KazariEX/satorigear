@@ -66,8 +66,8 @@ export class BlockArena {
     this.#tokens = new BlockTokenStream();
   }
 
+  // One-shot parses reuse array capacity, but no node identity survives across documents.
   build(tokens: BlockTokenStream): void {
-    // One-shot parses reuse array capacity, but no node identity survives across documents.
     this.#edgeLength = 0;
     this.#freeEdges.length = 0;
     this.#freeIds.length = 0;

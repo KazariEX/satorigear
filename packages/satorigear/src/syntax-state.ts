@@ -1,13 +1,9 @@
 import { BlockKind } from "./block/kinds.ts";
-import { InlineRegion, type InlineRegionBinding } from "./inline/region.ts";
+import { InlineRegion, type InlineRegionBinding, type InlineRegionSyntax } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
-import {
-  ContiguousSourceView,
-  SegmentedSourceView,
-  type SourceSpan,
-  type SourceView,
-} from "./source-view.ts";
+import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { BlockArenaChange, BlockHandle, BlockSyntaxView } from "./block/arena.ts";
+import type { InlineResolutionContext } from "./inline/profile.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 
 export interface SyntaxBlock {
@@ -18,71 +14,9 @@ export interface SyntaxBlock {
   version: number;
 }
 
-// Block building follows source order, so inline regions need only one forward cursor.
-export class InlineRegionBatch {
-  #index = 0;
-  #regions: readonly InlineRegion[];
-
-  constructor(blocks: readonly SyntaxBlock[]) {
-    const regions: InlineRegion[] = [];
-    for (const block of blocks) {
-      for (const region of block.regions) {
-        regions.push(region);
-      }
-    }
-    this.#regions = regions;
-  }
-
-  take(nodeId: number): InlineRegion | undefined {
-    const region = this.#regions[this.#index];
-    if (region?.id !== nodeId) {
-      return;
-    }
-    this.#index++;
-    return region;
-  }
-}
-
 interface BlockDefinition {
   blockIndex: number;
   key: string;
-}
-
-function inlineViewOf(
-  source: string,
-  view: BlockSyntaxView,
-  arena: BlockSyntaxView["arena"],
-  nodeId: number,
-  tokenBase: number,
-): SourceView | undefined {
-  let firstStart = -1;
-  let firstEnd = -1;
-  let spans: SourceSpan[] | undefined;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const entry = arena.childAt(nodeId, index);
-    if (entry < 0) {
-      const token = arena.leafToken(entry, tokenBase);
-      if (view.tokens.kind(token) === BlockKind.InlineChunk) {
-        const start = view.tokens.start(token);
-        const end = view.tokens.end(token);
-        if (firstStart < 0) {
-          firstStart = start;
-          firstEnd = end;
-        }
-        else {
-          spans ??= [{ start: firstStart, end: firstEnd }];
-          spans.push({ start, end });
-        }
-      }
-    }
-  }
-  if (spans) {
-    return new SegmentedSourceView(source, spans);
-  }
-  if (firstStart >= 0) {
-    return new ContiguousSourceView(source, firstStart, firstEnd);
-  }
 }
 
 export class SyntaxState {
@@ -94,8 +28,8 @@ export class SyntaxState {
 
   constructor(
     source: string,
-    view: BlockSyntaxView,
     profile: SyntaxProfile,
+    view: BlockSyntaxView,
   ) {
     this.#profile = profile;
     this.#view = view;
@@ -146,7 +80,7 @@ export class SyntaxState {
         definitions.add(key);
       }
       if (rule.inlineContent) {
-        const inlineView = inlineViewOf(source, view, arena, nodeId, tokenBase);
+        const inlineView = inlineViewOf(source, view, nodeId, tokenBase);
         if (inlineView) {
           bindings.push({
             id: nodeId,
@@ -309,5 +243,97 @@ export class SyntaxState {
       }
     }
     this.#definitions = definitions;
+  }
+}
+
+export function createInlineRegions(
+  source: string,
+  profile: SyntaxProfile,
+  view: BlockSyntaxView,
+): readonly InlineRegionSyntax[] {
+  const arena = view.arena;
+  const definitions = new Set<string>();
+  const regions: InlineRegionSyntax[] = [];
+
+  const collect = (nodeId: number, tokenBase: number): void => {
+    const rule = arena.ruleOf(nodeId);
+    if (rule.definitionKey) {
+      definitions.add(rule.definitionKey(view.tokens, tokenBase));
+    }
+    if (rule.inlineContent) {
+      const inlineView = inlineViewOf(source, view, nodeId, tokenBase);
+      if (inlineView) {
+        regions.push({
+          id: nodeId,
+          rule: rule.name,
+          tokens: emptyArray,
+          view: inlineView,
+        });
+      }
+      return;
+    }
+    const childCount = arena.childCount(nodeId);
+    for (let index = 0; index < childCount; index++) {
+      const child = arena.childAt(nodeId, index);
+      if (child >= 0) {
+        collect(child, tokenBase + arena.childTokRelAt(nodeId, index));
+      }
+    }
+  };
+  for (const block of view.blocks) {
+    collect(block.id, block.tokenStart);
+  }
+
+  // One-shot parsing needs definition visibility, but has no future edit to track dependencies for.
+  const context: InlineResolutionContext = {
+    hasDefinition: (key) => definitions.has(key),
+    tokenize: profile.inline.tokenize,
+  };
+  for (const region of regions) {
+    const text = region.view.text;
+    // @ts-expect-error override readonly tokens
+    region.tokens = profile.inline.resolve(
+      text,
+      profile.inline.tokenize(text),
+      context,
+    );
+  }
+  return regions;
+}
+
+function inlineViewOf(
+  source: string,
+  view: BlockSyntaxView,
+  nodeId: number,
+  tokenBase: number,
+): SourceView | undefined {
+  const arena = view.arena;
+  let firstStart = -1;
+  let firstEnd = -1;
+  let spans: SourceSpan[] | undefined;
+  const childCount = arena.childCount(nodeId);
+  for (let index = 0; index < childCount; index++) {
+    const entry = arena.childAt(nodeId, index);
+    if (entry < 0) {
+      const token = arena.leafToken(entry, tokenBase);
+      if (view.tokens.kind(token) === BlockKind.InlineChunk) {
+        const start = view.tokens.start(token);
+        const end = view.tokens.end(token);
+        if (firstStart < 0) {
+          firstStart = start;
+          firstEnd = end;
+        }
+        else {
+          spans ??= [{ start: firstStart, end: firstEnd }];
+          spans.push({ start, end });
+        }
+      }
+    }
+  }
+  if (spans) {
+    return new SegmentedSourceView(source, spans);
+  }
+  if (firstStart >= 0) {
+    return new ContiguousSourceView(source, firstStart, firstEnd);
   }
 }

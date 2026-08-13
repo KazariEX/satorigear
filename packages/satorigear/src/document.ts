@@ -1,9 +1,10 @@
 import type { Root } from "mdast";
+import { BlockArena, type BlockHandle } from "./block/arena.ts";
+import { BlockScanner } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, snapshot } from "./fragment/output/materialize.ts";
-import { InlineRegionBatch, type SyntaxBlock, SyntaxState } from "./syntax-state.ts";
-import type { BlockArena, BlockHandle } from "./block/arena.ts";
-import type { BlockScanner } from "./block/scanner.ts";
+import { type InlineRegion, InlineRegionCursor } from "./inline/region.ts";
+import { createInlineRegions, SyntaxState } from "./syntax-state.ts";
 import type { BlockFragment } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceSpan, TextEdit } from "./source-view.ts";
@@ -57,28 +58,15 @@ export class DocumentImpl implements Document {
   #fragments: BlockFragment[] = [];
   #previousFragments?: Map<BlockHandle, BlockFragment>;
   #profile: SyntaxProfile;
-  #syntaxState!: SyntaxState;
+  #syntaxState: SyntaxState;
 
-  constructor(
-    profile: SyntaxProfile,
-    blockScanner: BlockScanner,
-    blockArena: BlockArena,
-  ) {
+  constructor(source: string, profile: SyntaxProfile) {
     this.#profile = profile;
-    this.#blockScanner = blockScanner;
-    this.#blockArena = blockArena;
-  }
-
-  // The parser-owned one-shot document never builds cached snapshot fragments,
-  // so reinitialization only replaces source-derived syntax state.
-  initialize(source: string): void {
+    this.#blockScanner = new BlockScanner(profile.block);
+    this.#blockArena = new BlockArena(profile.block.schema);
     this.#blockScanner.scan(source);
     this.#blockArena.build(this.#blockScanner.tokens);
-    this.#syntaxState = new SyntaxState(
-      source,
-      this.#blockArena.view(),
-      this.#profile,
-    );
+    this.#syntaxState = new SyntaxState(source, profile, this.#blockArena.view());
   }
 
   get source(): string {
@@ -116,31 +104,6 @@ export class DocumentImpl implements Document {
     return snapshot(this.#buildBlockFragments(), this.source.length, this.#blockScanner.locator());
   }
 
-  materialize(): Root {
-    const blocks = this.#syntaxState.blocks();
-    const context = this.#createBuildContext(blocks);
-
-    return materialize(
-      blocks.map((block) => buildBlockNode(
-        block.handle.id,
-        block.offset,
-        block.tokenBase,
-        context,
-      )),
-      this.source.length,
-      this.#blockScanner.locator(),
-    );
-  }
-
-  #createBuildContext(blocks: readonly SyntaxBlock[]): BlockBuildContext {
-    return {
-      inline: new InlineRegionBatch(blocks),
-      profile: this.#profile,
-      source: this.source,
-      view: this.#syntaxState.blockView(),
-    };
-  }
-
   #buildBlockFragments(): BlockFragment[] {
     const previousFragments = this.#previousFragments;
     if (this.#fragments.length > 0 && previousFragments === void 0) {
@@ -151,8 +114,20 @@ export class DocumentImpl implements Document {
     const changedBlocks = previousFragments === void 0
       ? blocks
       : blocks.filter((block) => previousFragments.get(block.handle)?.version !== block.version);
+
+    const regions: InlineRegion[] = [];
+    for (const block of changedBlocks) {
+      for (const region of block.regions) {
+        regions.push(region);
+      }
+    }
     // Changed regions share one build workspace; no arena reference escapes the resulting fragments.
-    const context = this.#createBuildContext(changedBlocks);
+    const context: BlockBuildContext = {
+      inline: new InlineRegionCursor(regions),
+      profile: this.#profile,
+      source: this.source,
+      view: this.#syntaxState.blockView(),
+    };
 
     const nextFragments = blocks.map((block) => {
       const previous = previousFragments?.get(block.handle);
@@ -171,5 +146,35 @@ export class DocumentImpl implements Document {
     this.#previousFragments = void 0;
     this.#fragments = nextFragments;
     return nextFragments;
+  }
+
+  static parse(
+    source: string,
+    profile: SyntaxProfile,
+    blockScanner: BlockScanner,
+    blockArena: BlockArena,
+  ): Root {
+    blockScanner.scan(source);
+    blockArena.build(blockScanner.tokens);
+
+    const view = blockArena.view();
+    const regions = createInlineRegions(source, profile, view);
+    const context: BlockBuildContext = {
+      inline: new InlineRegionCursor(regions),
+      profile,
+      source,
+      view,
+    };
+
+    return materialize(
+      view.blocks.map((block) => buildBlockNode(
+        block.id,
+        view.tokens.start(block.tokenStart),
+        block.tokenStart,
+        context,
+      )),
+      source.length,
+      blockScanner.locator(),
+    );
   }
 }

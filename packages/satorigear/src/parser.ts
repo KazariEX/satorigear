@@ -15,25 +15,18 @@ export function createParser(options?: SyntaxOptions): Parser {
   // Incremental documents receive an independent workspace below.
   let blockScanner: BlockScanner | undefined;
   let blockArena: BlockArena | undefined;
-  let document: DocumentImpl | undefined;
+
   return {
-    createDocument: (source) => {
-      const document = new DocumentImpl(
-        profile,
-        new BlockScanner(profile.block),
-        new BlockArena(profile.block.schema),
-      );
-      document.initialize(source);
-      return document;
-    },
+    createDocument: (source) => new DocumentImpl(source, profile),
     parse: (source) => {
-      document ??= new DocumentImpl(
+      blockScanner ??= new BlockScanner(profile.block);
+      blockArena ??= new BlockArena(profile.block.schema);
+      return DocumentImpl.parse(
+        source,
         profile,
-        blockScanner ??= new BlockScanner(profile.block),
-        blockArena ??= new BlockArena(profile.block.schema),
+        blockScanner,
+        blockArena,
       );
-      document.initialize(source);
-      return document.materialize();
     },
   };
 }

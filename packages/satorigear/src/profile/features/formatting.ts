@@ -6,7 +6,6 @@ import {
 import { InlineKind } from "../../inline/kinds.ts";
 import { buildInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
-import type { InlineSyntaxDefinition } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {
@@ -65,11 +64,6 @@ const buildInlineStrongOrDelete: InlineNodeBuilder = (
   build(openToken, closeToken, children, sourceSpan, accumulator);
 };
 
-const inlineSyntax: readonly InlineSyntaxDefinition[] = [
-  { kind: "leaf", token: InlineKind.Delimiter, build: buildInlineText },
-  { kind: "leaf", token: InlineKind.TildeRun, build: buildInlineText },
-];
-
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {
   const delimiters = [asteriskDelimiter, underscoreDelimiter];
   if (strikethroughOptions) {
@@ -87,7 +81,8 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
     inline: {
       resolution: { delimiters },
       syntax: [
-        ...inlineSyntax,
+        { kind: "leaf", token: InlineKind.Delimiter, build: buildInlineText },
+        { kind: "leaf", token: InlineKind.TildeRun, build: buildInlineText },
         {
           kind: "pair",
           open: InlineKind.EmphasisOpen,

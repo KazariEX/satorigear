@@ -1,15 +1,15 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
 import type { BlockSyntaxView } from "../block/arena.ts";
 import type { BlockKind } from "../block/kinds.ts";
+import type { InlineRegionCursor } from "../inline/region.ts";
 import type { SyntaxProfile } from "../profile/types.ts";
 import type { SourceSpan } from "../source-view.ts";
-import type { InlineRegionBatch } from "../syntax-state.ts";
 import type { SpannedNode } from "./node.ts";
 
 export interface BlockBuildContext {
   profile: SyntaxProfile;
   source: string;
-  inline: InlineRegionBatch;
+  inline: InlineRegionCursor;
   view: BlockSyntaxView;
 }
 
