@@ -228,6 +228,10 @@ export const feature: SyntaxFeature = {
 };
 
 function transformAttributeTokens(source: string, tokens: InlineTokenStream): InlineTokenStream {
+  // Avoid scanning token boundaries when no attribute carrier can start.
+  if (!source.includes("{")) {
+    return tokens;
+  }
   const ranges = rangesOf(source, tokens);
   if (ranges.length === 0) {
     return tokens;

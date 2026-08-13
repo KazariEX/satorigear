@@ -361,6 +361,10 @@ export function transformComponentTokens(
   source: string,
   tokens: InlineTokenStream,
 ): InlineTokenStream {
+  // Avoid building the bracket index when no component or span can start.
+  if (!source.includes(":") && !source.includes("[")) {
+    return tokens;
+  }
   const syntax = candidates(source, tokens);
   if (syntax.roots.length === 0) {
     return tokens;
