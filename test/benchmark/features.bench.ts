@@ -10,7 +10,7 @@ for (const corpus of corpora) {
   summary(() => {
     const suffix = corpusLabel(corpus);
     for (const engine of engines) {
-      bench(`${engine.name}, parse return (${suffix})`, () => {
+      bench(`${engine.name}, parse only (${suffix})`, () => {
         parseCorpus(engine, corpus, false);
       });
     }
@@ -18,11 +18,15 @@ for (const corpus of corpora) {
   summary(() => {
     const suffix = corpusLabel(corpus);
     for (const engine of engines) {
-      bench(`${engine.name}, fully read (${suffix})`, () => {
+      bench(`${engine.name}, fully materialized (${suffix})`, () => {
         parseCorpus(engine, corpus, true);
       });
     }
   });
 }
 
-await run();
+await run(
+  process.env.BENCHMARK_FORMAT === "json"
+    ? { format: { json: { debug: false, samples: false } } }
+    : void 0,
+);

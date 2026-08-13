@@ -1,16 +1,26 @@
 import zin from "@zinkawaii/eslint-config";
 
-export default zin({
-  javascript: {
-    overrides: {
-      curly: ["warn", "all"],
+export default zin(
+  {
+    javascript: {
+      overrides: {
+        curly: ["warn", "all"],
+      },
+    },
+    typescript: {
+      overrides: {
+        "ts/explicit-function-return-type": ["warn", {
+          allowExpressions: true,
+        }],
+      },
     },
   },
-  typescript: {
-    overrides: {
-      "ts/explicit-function-return-type": ["warn", {
-        allowExpressions: true,
-      }],
+  {
+    files: [
+      "README.md",
+    ],
+    rules: {
+      "markdown/heading-increment": "off",
     },
   },
-});
+);

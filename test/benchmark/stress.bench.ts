@@ -9,7 +9,7 @@ const engines = createCommonmarkEngines();
 summary(() => {
   const suffix = `synthetic delimiter stress, ${Buffer.byteLength(source)} bytes`;
   for (const engine of engines) {
-    bench(`${engine.name}, fully read (${suffix})`, () => {
+    bench(`${engine.name}, fully materialized (${suffix})`, () => {
       const tree = engine.parse(source);
       do_not_optimize(fullyRead(tree));
       do_not_optimize(tree);

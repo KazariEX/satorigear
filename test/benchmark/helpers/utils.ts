@@ -21,8 +21,8 @@ export function fullyRead(node: unknown): number {
   return fields;
 }
 
-export function parseCorpus(engine: Engine, corpus: BenchmarkCorpus, full: boolean): void {
-  if (full) {
+export function parseCorpus(engine: Engine, corpus: BenchmarkCorpus, materialize: boolean): void {
+  if (materialize) {
     for (const source of corpus.documents) {
       const tree = engine.parse(source);
       do_not_optimize(fullyRead(tree));
