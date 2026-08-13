@@ -62,8 +62,12 @@ function destinationTitle(bodySource: string): Resource {
         depth--;
         offset++;
       }
-      else if (/[ \t\r\n]/.test(body[offset]) && depth === 0) {
-        break;
+      else if (depth === 0) {
+        const code = body.charCodeAt(offset);
+        if (code === 9 || code === 10 || code === 13 || code === 32) {
+          break;
+        }
+        offset++;
       }
       else {
         offset++;
