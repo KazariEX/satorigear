@@ -164,12 +164,18 @@ export class BlockTokenStream {
       }
     }
 
-    // 3. Splice the packed fields. Tail edits retain the buffer and its capacity;
-    // a middle edit needs a fresh dense array so a longer replacement cannot make it holey.
+    // 3. Replace the packed fields in place whenever their count is stable. Only a size-changing
+    // middle edit needs a fresh dense array so a longer replacement cannot make it holey.
     if (end === previousLength) {
       this.#fields.length = start * blockTokenStride;
       for (let index = 0; index < replacement.#fields.length; index++) {
         this.#fields.push(replacement.#fields[index]);
+      }
+    }
+    else if (replacementLength === replacedLength) {
+      const fieldStart = start * blockTokenStride;
+      for (let index = 0; index < replacement.#fields.length; index++) {
+        this.#fields[fieldStart + index] = replacement.#fields[index];
       }
     }
     else {
