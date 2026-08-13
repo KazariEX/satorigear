@@ -409,7 +409,8 @@ export class BlockScanner {
     );
     const prefixCheckpoints = this.#checkpoints.slice(0, Math.max(0, restart));
     const scannedCheckpoints = scanned.map((value) => ({
-      ...value,
+      lineStart: value.lineStart,
+      lineEnd: value.lineEnd,
       tokenStart: oldTokenStart + value.tokenStart,
       tokenEnd: oldTokenStart + value.tokenEnd,
     }));
