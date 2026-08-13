@@ -2,11 +2,10 @@
   "name": "satorigear",
   "type": "module",
   "version": "0.0.0",
-  "description": "",
+  "description": "Blazing fast Markdown parser with full incremental support that outputs MDAST",
   "author": "KazariEX",
   "license": "MIT",
   "repository": "KazariEX/satorigear",
-  "keywords": [],
   "exports": {
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"
