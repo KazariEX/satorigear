@@ -2,13 +2,13 @@ import { BlockKind } from "./block/kinds.ts";
 import { InlineRegion, type InlineRegionBinding, type InlineRegionSyntax } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
-import type { BlockArena, BlockArenaChange, BlockHandle } from "./block/arena.ts";
+import type { BlockArena, BlockArenaChange, BlockRecord } from "./block/arena.ts";
 import type { InlineResolutionContext } from "./inline/profile.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 
 export interface SyntaxBlock {
-  handle: BlockHandle;
   offset: number;
+  record: BlockRecord;
   regions: readonly InlineRegion[];
   tokenBase: number;
   version: number;
@@ -103,15 +103,15 @@ export class SyntaxState {
     // Inline resolution needs the complete definition set, so one flat list records block boundaries
     // without allocating temporary binding arrays for every block.
     const bindingOffsets: number[] = [];
-    for (let index = stableBlockCount; index < arena.blocks.length; index++) {
-      const arenaBlock = arena.blocks[index];
-      const tokenBase = arenaBlock.tokenStart;
+    for (let index = stableBlockCount; index < arena.records.length; index++) {
+      const record = arena.records[index];
+      const tokenBase = record.tokenStart;
       const offset = arena.tokens.start(tokenBase);
       bindingOffsets.push(bindings.length);
-      collectNode(arenaBlock.id, offset, tokenBase, index);
+      collectNode(record.id, offset, tokenBase, index);
       blocks.push({
-        handle: arenaBlock,
         offset,
+        record,
         regions: emptyArray,
         tokenBase,
         version: 0,
@@ -143,7 +143,7 @@ export class SyntaxState {
     // 4. Refresh the stable prefix, then reconcile rebuilt blocks with reusable inline regions.
     const oldStart = change?.oldStart ?? 0;
     const oldEnd = change?.oldEnd ?? 0;
-    const newEnd = change?.newEnd ?? arena.blocks.length;
+    const newEnd = change?.newEnd ?? arena.records.length;
     const definitionsChanged = stableBlockCount > 0 && !isSetEqual(this.#definitions, definitions);
     if (definitionsChanged) {
       for (let index = 0; index < stableBlockCount; index++) {
@@ -273,8 +273,8 @@ export function createInlineRegions(
       }
     }
   };
-  for (const block of arena.blocks) {
-    collect(block.id, block.tokenStart);
+  for (const record of arena.records) {
+    collect(record.id, record.tokenStart);
   }
 
   // One-shot parsing needs definition visibility, but has no future edit to track dependencies for.

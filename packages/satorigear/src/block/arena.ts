@@ -3,11 +3,8 @@ import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
 
 // Object identity remains stable for unchanged top-level blocks while released numeric IDs may be reused.
-export interface BlockHandle {
+export interface BlockRecord {
   readonly id: number;
-}
-
-interface TopLevelBlock extends BlockHandle {
   tokenEnd: number;
   tokenStart: number;
 }
@@ -37,7 +34,6 @@ function leaf(tokenIndex: number): number {
 // Relative edges make unchanged top-level trees independent of later source and token shifts.
 // The workspace reclaims ranges across edits and retains array capacity across one-shot documents.
 export class BlockArena {
-  #blocks: TopLevelBlock[] = [];
   #buildStarts: number[] = [];
   #buildTokenEnds: number[] = [];
   #buildTokenStarts: number[] = [];
@@ -49,6 +45,7 @@ export class BlockArena {
   #freeIds: number[] = [];
   #lengths: number[] = [0];
   #nodeCount = 0;
+  #records: BlockRecord[] = [];
   #releaseStack: number[] = [];
   #rules: CompiledBlockRule[];
   #schema: BlockSyntaxSchema;
@@ -67,11 +64,11 @@ export class BlockArena {
     this.#freeIds.length = 0;
     this.#nodeCount = 0;
     this.#tokens = tokens;
-    this.#blocks = this.#buildRange(0, tokens.length);
+    this.#records = this.#buildRange(0, tokens.length);
   }
 
-  get blocks(): readonly TopLevelBlock[] {
-    return this.#blocks;
+  get records(): readonly BlockRecord[] {
+    return this.#records;
   }
 
   get tokens(): BlockTokenStream {
@@ -79,7 +76,7 @@ export class BlockArena {
   }
 
   update(tokens: BlockTokenStream, change: BlockTokenChange): BlockArenaChange {
-    const previous = this.#blocks;
+    const previous = this.#records;
     // Token damage can begin inside a block, so widen it to complete top-level records.
     let prefixEnd = 0;
     while (prefixEnd < previous.length && previous[prefixEnd].tokenEnd <= change.oldStart) {
@@ -108,7 +105,7 @@ export class BlockArena {
         block.tokenEnd += tokenDelta;
       }
     }
-    this.#blocks = [
+    this.#records = [
       ...previous.slice(0, prefixEnd),
       ...changed,
       ...suffix,
@@ -174,7 +171,7 @@ export class BlockArena {
     return start;
   }
 
-  #buildRange(start: number, end: number): TopLevelBlock[] {
+  #buildRange(start: number, end: number): BlockRecord[] {
     const document: Frame = {
       close: BlockKind.None,
       children: [],

@@ -1,5 +1,5 @@
 import type { Root } from "mdast";
-import { BlockArena, type BlockHandle } from "./block/arena.ts";
+import { BlockArena, type BlockRecord } from "./block/arena.ts";
 import { BlockScanner } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, snapshot } from "./fragment/output/materialize.ts";
@@ -56,7 +56,7 @@ export class DocumentImpl implements Document {
   #blockArena: BlockArena;
   #blockScanner: BlockScanner;
   #fragments: BlockFragment[] = [];
-  #previousFragments?: Map<BlockHandle, BlockFragment>;
+  #previousFragments?: Map<BlockRecord, BlockFragment>;
   #profile: SyntaxProfile;
   #syntaxState: SyntaxState;
 
@@ -82,9 +82,9 @@ export class DocumentImpl implements Document {
     if (this.#fragments.length > 0 && this.#previousFragments === void 0) {
       // Preserve fragment identity before the syntax update changes block order and offsets.
       const blocks = this.#syntaxState.blocks();
-      const fragments = new Map<BlockHandle, BlockFragment>();
+      const fragments = new Map<BlockRecord, BlockFragment>();
       for (let index = 0; index < blocks.length; index++) {
-        fragments.set(blocks[index].handle, this.#fragments[index]);
+        fragments.set(blocks[index].record, this.#fragments[index]);
       }
       this.#previousFragments = fragments;
     }
@@ -113,7 +113,7 @@ export class DocumentImpl implements Document {
     const blocks = this.#syntaxState.blocks();
     const changedBlocks = previousFragments === void 0
       ? blocks
-      : blocks.filter((block) => previousFragments.get(block.handle)?.version !== block.version);
+      : blocks.filter((block) => previousFragments.get(block.record)?.version !== block.version);
 
     const regions: InlineRegion[] = [];
     for (const block of changedBlocks) {
@@ -130,11 +130,11 @@ export class DocumentImpl implements Document {
     };
 
     const nextFragments = blocks.map((block) => {
-      const previous = previousFragments?.get(block.handle);
+      const previous = previousFragments?.get(block.record);
       const fragment = previous?.version === block.version
         ? previous
         : {
-          node: buildBlockNode(block.handle.id, block.offset, block.tokenBase, context),
+          node: buildBlockNode(block.record.id, block.offset, block.tokenBase, context),
           offset: block.offset,
           origin: block.offset,
           version: block.version,
@@ -166,7 +166,7 @@ export class DocumentImpl implements Document {
     };
 
     return materialize(
-      blockArena.blocks.map((block) => buildBlockNode(
+      blockArena.records.map((block) => buildBlockNode(
         block.id,
         blockArena.tokens.start(block.tokenStart),
         block.tokenStart,
