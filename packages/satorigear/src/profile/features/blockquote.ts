@@ -54,7 +54,7 @@ export const feature: SyntaxFeature = {
             position: {
               start: firstNonspace(
                 context.source,
-                context.view.tokens.start(marker),
+                context.arena.tokens.start(marker),
                 lineEnd(context.source, offset),
               ),
               end: blockEnd(nodeId, offset, context),

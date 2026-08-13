@@ -63,10 +63,10 @@ export const buildInlineCode: InlineLeafBuilder = (tokenIndex, sourceSpan, accum
 
 function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockBuildContext): number {
   const token = blockToken(nodeId, tokenBase, BlockKind.IndentedCodeBlockToken, context);
-  const count = context.view.tokens.rangeCount(token);
+  const count = context.arena.tokens.rangeCount(token);
   for (let index = count - 1; index >= 0; index--) {
-    const start = context.view.tokens.rangeStart(token, index);
-    const rangeEnd = context.view.tokens.rangeEnd(token, index);
+    const start = context.arena.tokens.rangeStart(token, index);
+    const rangeEnd = context.arena.tokens.rangeEnd(token, index);
     if (/[^\r\n]/.test(context.source.slice(start, rangeEnd))) {
       let end = rangeEnd;
       while (end > start && /[\r\n]/.test(context.source[end - 1])) {
@@ -101,9 +101,9 @@ export const feature: SyntaxFeature = {
           token: BlockKind.FencedCodeBlock,
         },
         build(nodeId, offset, tokenBase, context) {
-          const end = offset + context.view.arena.lenOf(nodeId);
+          const end = offset + context.arena.lenOf(nodeId);
           const source = normalizeLines(
-            context.view.tokens.text(
+            context.arena.tokens.text(
               context.source,
               blockToken(nodeId, tokenBase, BlockKind.FencedCodeBlock, context),
             ),
@@ -135,7 +135,7 @@ export const feature: SyntaxFeature = {
         },
         build(nodeId, offset, tokenBase, context) {
           const token = blockToken(nodeId, tokenBase, BlockKind.IndentedCodeBlockToken, context);
-          const lines = normalizeLines(context.view.tokens.text(context.source, token))
+          const lines = normalizeLines(context.arena.tokens.text(context.source, token))
             .split("\n")
             .map((line) => removeIndent(line, 4));
           while (lines.length && /^[ \t]*$/.test(lines[lines.length - 1])) {

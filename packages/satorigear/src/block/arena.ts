@@ -2,12 +2,6 @@ import { BlockKind } from "./kinds.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
 
-export interface BlockSyntaxView {
-  readonly arena: BlockArena;
-  readonly blocks: readonly TopLevelBlock[];
-  readonly tokens: BlockTokenStream;
-}
-
 // Object identity remains stable for unchanged top-level blocks while released numeric IDs may be reused.
 export interface BlockHandle {
   readonly id: number;
@@ -76,12 +70,12 @@ export class BlockArena {
     this.#blocks = this.#buildRange(0, tokens.length);
   }
 
-  view(): BlockSyntaxView {
-    return {
-      arena: this,
-      blocks: this.#blocks,
-      tokens: this.#tokens,
-    };
+  get blocks(): readonly TopLevelBlock[] {
+    return this.#blocks;
+  }
+
+  get tokens(): BlockTokenStream {
+    return this.#tokens;
   }
 
   update(tokens: BlockTokenStream, change: BlockTokenChange): BlockArenaChange {

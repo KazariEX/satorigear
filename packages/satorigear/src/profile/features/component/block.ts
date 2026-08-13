@@ -358,7 +358,7 @@ function parseYamlAttributes(
   token: NonNullable<ReturnType<typeof directBlockToken>>,
   context: Parameters<BlockNodeBuilder>[3],
 ): Attributes {
-  const value: unknown = parseYaml(context.view.tokens.text(context.source, token), { schema: "core" });
+  const value: unknown = parseYaml(context.arena.tokens.text(context.source, token), { schema: "core" });
   if (value === null || value === void 0) {
     return {};
   }
@@ -375,7 +375,7 @@ function directRule(
   rule: string,
   context: Parameters<BlockNodeBuilder>[3],
 ): { id: number; offset: number; tokenBase: number } | undefined {
-  const arena = context.view.arena;
+  const arena = context.arena;
   for (let index = 0; index < arena.childCount(nodeId); index++) {
     const child = arena.childAt(nodeId, index);
     if (child >= 0 && arena.ruleNameOf(child) === rule) {
@@ -395,8 +395,8 @@ const buildBlockLabel: BlockNodeBuilder<Paragraph> = (nodeId, offset, tokenBase,
     type: "paragraph",
     children: buildInlineChildren(nodeId, context, true),
     position: {
-      start: context.view.tokens.start(open),
-      end: context.view.tokens.end(close),
+      start: context.arena.tokens.start(open),
+      end: context.arena.tokens.end(close),
     },
   };
 };
@@ -454,7 +454,7 @@ export const blockRules: BlockFeature["rules"] = [
       const close = blockToken(nodeId, tokenBase, BlockKind.BlockComponentClose, context);
       const attributesToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentAttributes, context);
       const parsed = attributesToken !== void 0
-        ? parseAttributes(context.source, context.view.tokens.start(attributesToken))
+        ? parseAttributes(context.source, context.arena.tokens.start(attributesToken))
         : void 0;
       const yamlToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentYamlProps, context);
       const label = directRule(nodeId, offset, tokenBase, "BlockComponentLabel", context);
@@ -463,7 +463,7 @@ export const blockRules: BlockFeature["rules"] = [
         children.push(buildBlockLabel(label.id, label.offset, label.tokenBase, context));
       }
       children.push(...buildBlockChildren(nodeId, offset, tokenBase, context));
-      const opening = context.view.tokens.text(context.source, open);
+      const opening = context.arena.tokens.text(context.source, open);
       return {
         type: "blockComponent",
         name: normalizeComponentName(opening.slice(opening.lastIndexOf(":") + 1).trim()),
@@ -471,8 +471,8 @@ export const blockRules: BlockFeature["rules"] = [
           ? { ...parseYamlAttributes(yamlToken, context), ...parsed?.attributes }
           : (parsed?.attributes ?? {}),
         position: {
-          start: context.view.tokens.start(open),
-          end: context.view.tokens.end(close),
+          start: context.arena.tokens.start(open),
+          end: context.arena.tokens.end(close),
         },
         children,
       };
@@ -490,7 +490,7 @@ export const blockRules: BlockFeature["rules"] = [
       const close = blockToken(nodeId, tokenBase, BlockKind.BlockComponentSlotClose, context);
       const attributesToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentAttributes, context);
       const parsed = attributesToken !== void 0
-        ? parseAttributes(context.source, context.view.tokens.start(attributesToken))
+        ? parseAttributes(context.source, context.arena.tokens.start(attributesToken))
         : void 0;
       const children = buildBlockChildren(nodeId, offset, tokenBase, context);
       return {
@@ -498,12 +498,12 @@ export const blockRules: BlockFeature["rules"] = [
         name: "template",
         attributes: {
           ...parsed?.attributes,
-          name: normalizeComponentName(context.view.tokens.text(context.source, open).slice(1).trim()),
+          name: normalizeComponentName(context.arena.tokens.text(context.source, open).slice(1).trim()),
         },
         children,
         position: {
-          start: context.view.tokens.start(open),
-          end: context.view.tokens.end(close),
+          start: context.arena.tokens.start(open),
+          end: context.arena.tokens.end(close),
         },
       };
     },

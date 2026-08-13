@@ -122,8 +122,8 @@ function htmlStartAt(source: string, line: BlockLine): HtmlStart | undefined {
 }
 
 function htmlBlockUnterminated(token: number, context: BlockBuildContext): boolean {
-  const result = context.view.tokens.value<boolean>(token);
-  if (context.view.tokens.kind(token) !== BlockKind.HtmlBlockToken || result === void 0) {
+  const result = context.arena.tokens.value<boolean>(token);
+  if (context.arena.tokens.kind(token) !== BlockKind.HtmlBlockToken || result === void 0) {
     throw new Error("Expected HtmlBlockToken to contain its termination state");
   }
   return result;
@@ -149,10 +149,10 @@ export const feature: SyntaxFeature = {
           token: BlockKind.HtmlBlockToken,
         },
         build(nodeId, offset, tokenBase, context) {
-          const end = offset + context.view.arena.lenOf(nodeId);
+          const end = offset + context.arena.lenOf(nodeId);
           const token = blockToken(nodeId, tokenBase, BlockKind.HtmlBlockToken, context);
           const unterminated = htmlBlockUnterminated(token, context);
-          let html = normalizeLines(context.view.tokens.text(context.source, token));
+          let html = normalizeLines(context.arena.tokens.text(context.source, token));
           if (!unterminated && html.endsWith("\n")) {
             html = html.slice(0, -1);
           }

@@ -63,13 +63,13 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
           },
           build(nodeId, offset, tokenBase, context) {
             const token = blockToken(nodeId, tokenBase, BlockKind.FrontmatterToken, context);
-            const rangeCount = context.view.tokens.rangeCount(token);
+            const rangeCount = context.arena.tokens.rangeCount(token);
             if (rangeCount < 2) {
               throw new Error("FrontmatterToken does not contain two fences");
             }
             let value = normalizeLines(context.source.slice(
-              context.view.tokens.rangeEnd(token, 0),
-              context.view.tokens.rangeStart(token, rangeCount - 1),
+              context.arena.tokens.rangeEnd(token, 0),
+              context.arena.tokens.rangeStart(token, rangeCount - 1),
             ));
             if (value.endsWith("\n")) {
               value = value.slice(0, -1);
@@ -78,7 +78,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
               type: "yaml",
               value,
               position: {
-                start: context.view.tokens.start(token),
+                start: context.arena.tokens.start(token),
                 end: blockEnd(nodeId, offset, context),
               },
             };

@@ -1,5 +1,5 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
-import type { BlockSyntaxView } from "../block/arena.ts";
+import type { BlockArena } from "../block/arena.ts";
 import type { BlockKind } from "../block/kinds.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
 import type { SyntaxProfile } from "../profile/types.ts";
@@ -7,10 +7,10 @@ import type { SourceSpan } from "../source-view.ts";
 import type { SpannedNode } from "./node.ts";
 
 export interface BlockBuildContext {
+  arena: BlockArena;
   profile: SyntaxProfile;
   source: string;
   inline: InlineRegionCursor;
-  view: BlockSyntaxView;
 }
 
 // Core owns fragment state and traversal; profiles supply every syntax-specific node builder.
@@ -22,7 +22,7 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 ) => SpannedNode<T>;
 
 export function blockEnd(nodeId: number, offset: number, context: BlockBuildContext): number {
-  let end = offset + context.view.arena.lenOf(nodeId);
+  let end = offset + context.arena.lenOf(nodeId);
   if (end > offset && context.source[end - 1] === "\n") {
     end--;
   }
@@ -45,13 +45,13 @@ export function directBlockToken(
   kind: BlockKind,
   context: BlockBuildContext,
 ): number | undefined {
-  const arena = context.view.arena;
+  const arena = context.arena;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const entry = arena.childAt(nodeId, index);
     if (entry < 0) {
       const token = arena.leafToken(entry, tokenBase);
-      if (context.view.tokens.kind(token) === kind) {
+      if (arena.tokens.kind(token) === kind) {
         return token;
       }
     }
@@ -66,7 +66,7 @@ export function blockToken(
 ): number {
   const token = directBlockToken(nodeId, tokenBase, kind, context);
   if (token === void 0) {
-    throw new Error(`Expected ${context.view.arena.ruleNameOf(nodeId)} syntax to contain block token ${kind}`);
+    throw new Error(`Expected ${context.arena.ruleNameOf(nodeId)} syntax to contain block token ${kind}`);
   }
   return token;
 }
@@ -77,7 +77,7 @@ export function payloadBounds(
   tokenBase: number,
   context: BlockBuildContext,
 ): SourceSpan {
-  const arena = context.view.arena;
+  const arena = context.arena;
   const result = { start: offset + arena.lenOf(nodeId), end: offset };
   const visit = (currentId: number, currentTokenBase: number): void => {
     const childCount = arena.childCount(currentId);
@@ -85,8 +85,8 @@ export function payloadBounds(
       const child = arena.childAt(currentId, index);
       if (child < 0) {
         const token = arena.leafToken(child, currentTokenBase);
-        const start = context.view.tokens.start(token);
-        const end = context.view.tokens.end(token);
+        const start = arena.tokens.start(token);
+        const end = arena.tokens.end(token);
         if (end > start) {
           result.start = Math.min(result.start, start);
           result.end = Math.max(result.end, end);
@@ -111,7 +111,7 @@ export const buildBlockNode = <T extends object = TopLevelContent>(
   tokenBase: number,
   context: BlockBuildContext,
 ): SpannedNode<T> => {
-  const arena = context.view.arena;
+  const arena = context.arena;
   const rule = arena.ruleOf(nodeId);
   const build = rule.build;
   if (!build) {
@@ -126,12 +126,12 @@ export const buildBlockChildren: (
   tokenBase: number,
   context: BlockBuildContext,
 ) => SpannedNode<BlockContent | DefinitionContent>[] = (nodeId, offset, tokenBase, context) => {
-  const arena = context.view.arena;
+  const arena = context.arena;
   const children: SpannedNode<BlockContent | DefinitionContent>[] = [];
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
     const childId = arena.childAt(nodeId, index);
-    if (childId >= 0 && context.view.arena.isBlock(childId)) {
+    if (childId >= 0 && arena.isBlock(childId)) {
       children.push(
         buildBlockNode<typeof children[number]>(
           childId,

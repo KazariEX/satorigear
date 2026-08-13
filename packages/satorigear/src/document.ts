@@ -66,7 +66,7 @@ export class DocumentImpl implements Document {
     this.#blockArena = new BlockArena(profile.block.schema);
     this.#blockScanner.scan(source);
     this.#blockArena.build(this.#blockScanner.tokens);
-    this.#syntaxState = new SyntaxState(source, profile, this.#blockArena.view());
+    this.#syntaxState = new SyntaxState(source, profile, this.#blockArena);
   }
 
   get source(): string {
@@ -95,7 +95,7 @@ export class DocumentImpl implements Document {
       applied.oldChangedEnd,
     );
     const arenaChange = this.#blockArena.update(this.#blockScanner.tokens, tokenChange);
-    this.#syntaxState.update(this.source, this.#blockArena.view(), arenaChange, stableBlockCount);
+    this.#syntaxState.update(this.source, arenaChange, stableBlockCount);
 
     return { changedSpan: applied.changedSpan };
   }
@@ -123,10 +123,10 @@ export class DocumentImpl implements Document {
     }
     // Changed regions share one build workspace; no arena reference escapes the resulting fragments.
     const context: BlockBuildContext = {
+      arena: this.#blockArena,
       inline: new InlineRegionCursor(regions),
       profile: this.#profile,
       source: this.source,
-      view: this.#syntaxState.blockView(),
     };
 
     const nextFragments = blocks.map((block) => {
@@ -157,19 +157,18 @@ export class DocumentImpl implements Document {
     blockScanner.scan(source);
     blockArena.build(blockScanner.tokens);
 
-    const view = blockArena.view();
-    const regions = createInlineRegions(source, profile, view);
+    const regions = createInlineRegions(source, profile, blockArena);
     const context: BlockBuildContext = {
+      arena: blockArena,
       inline: new InlineRegionCursor(regions),
       profile,
       source,
-      view,
     };
 
     return materialize(
-      view.blocks.map((block) => buildBlockNode(
+      blockArena.blocks.map((block) => buildBlockNode(
         block.id,
-        view.tokens.start(block.tokenStart),
+        blockArena.tokens.start(block.tokenStart),
         block.tokenStart,
         context,
       )),

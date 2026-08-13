@@ -2,7 +2,7 @@ import { BlockKind } from "./block/kinds.ts";
 import { InlineRegion, type InlineRegionBinding, type InlineRegionSyntax } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
-import type { BlockArenaChange, BlockHandle, BlockSyntaxView } from "./block/arena.ts";
+import type { BlockArena, BlockArenaChange, BlockHandle } from "./block/arena.ts";
 import type { InlineResolutionContext } from "./inline/profile.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 
@@ -24,29 +24,25 @@ export class SyntaxState {
   #definitionEntries?: BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
   #profile: SyntaxProfile;
-  #view: BlockSyntaxView;
+  #arena: BlockArena;
 
   constructor(
     source: string,
     profile: SyntaxProfile,
-    view: BlockSyntaxView,
+    arena: BlockArena,
   ) {
     this.#profile = profile;
-    this.#view = view;
-    this.update(source, view);
+    this.#arena = arena;
+    this.update(source);
   }
 
   blocks(): readonly SyntaxBlock[] {
     return this.#blocks;
   }
 
-  blockView(): BlockSyntaxView {
-    return this.#view;
-  }
-
-  update(source: string, view: BlockSyntaxView, change?: BlockArenaChange, stableBlockCount = 0): void {
+  update(source: string, change?: BlockArenaChange, stableBlockCount = 0): void {
     // 1. Preserve definitions owned by the scanner-stable block prefix.
-    const arena = view.arena;
+    const arena = this.#arena;
     const previousBlocks = this.#blocks;
     const blocks: SyntaxBlock[] = stableBlockCount === 0 ? [] : previousBlocks.slice(0, stableBlockCount);
     const previousDefinitionEntries = this.#definitionEntries;
@@ -75,12 +71,12 @@ export class SyntaxState {
       const rule = arena.ruleOf(nodeId);
       const definitionKey = rule.definitionKey;
       if (definitionKey) {
-        const key = definitionKey(view.tokens, tokenBase);
+        const key = definitionKey(arena.tokens, tokenBase);
         (suffixDefinitionEntries ??= []).push({ blockIndex, key });
         definitions.add(key);
       }
       if (rule.inlineContent) {
-        const inlineView = inlineViewOf(source, view, nodeId, tokenBase);
+        const inlineView = inlineViewOf(source, arena, nodeId, tokenBase);
         if (inlineView) {
           bindings.push({
             id: nodeId,
@@ -107,10 +103,10 @@ export class SyntaxState {
     // Inline resolution needs the complete definition set, so one flat list records block boundaries
     // without allocating temporary binding arrays for every block.
     const bindingOffsets: number[] = [];
-    for (let index = stableBlockCount; index < view.blocks.length; index++) {
-      const arenaBlock = view.blocks[index];
+    for (let index = stableBlockCount; index < arena.blocks.length; index++) {
+      const arenaBlock = arena.blocks[index];
       const tokenBase = arenaBlock.tokenStart;
-      const offset = view.tokens.start(tokenBase);
+      const offset = arena.tokens.start(tokenBase);
       bindingOffsets.push(bindings.length);
       collectNode(arenaBlock.id, offset, tokenBase, index);
       blocks.push({
@@ -138,7 +134,6 @@ export class SyntaxState {
         }
         blocks[blockIndex].regions = regions;
       }
-      this.#view = view;
       this.#blocks = blocks;
       this.#definitionEntries = suffixDefinitionEntries;
       this.#definitions = definitions;
@@ -148,7 +143,7 @@ export class SyntaxState {
     // 4. Refresh the stable prefix, then reconcile rebuilt blocks with reusable inline regions.
     const oldStart = change?.oldStart ?? 0;
     const oldEnd = change?.oldEnd ?? 0;
-    const newEnd = change?.newEnd ?? view.blocks.length;
+    const newEnd = change?.newEnd ?? arena.blocks.length;
     const definitionsChanged = stableBlockCount > 0 && !isSetEqual(this.#definitions, definitions);
     if (definitionsChanged) {
       for (let index = 0; index < stableBlockCount; index++) {
@@ -229,7 +224,6 @@ export class SyntaxState {
     }
 
     // 5. Commit the new view and reuse the flat definition prefix storage when possible.
-    this.#view = view;
     this.#blocks = blocks;
     if (stableDefinitionCount === 0) {
       this.#definitionEntries = suffixDefinitionEntries;
@@ -249,19 +243,18 @@ export class SyntaxState {
 export function createInlineRegions(
   source: string,
   profile: SyntaxProfile,
-  view: BlockSyntaxView,
+  arena: BlockArena,
 ): readonly InlineRegionSyntax[] {
-  const arena = view.arena;
   const definitions = new Set<string>();
   const regions: InlineRegionSyntax[] = [];
 
   const collect = (nodeId: number, tokenBase: number): void => {
     const rule = arena.ruleOf(nodeId);
     if (rule.definitionKey) {
-      definitions.add(rule.definitionKey(view.tokens, tokenBase));
+      definitions.add(rule.definitionKey(arena.tokens, tokenBase));
     }
     if (rule.inlineContent) {
-      const inlineView = inlineViewOf(source, view, nodeId, tokenBase);
+      const inlineView = inlineViewOf(source, arena, nodeId, tokenBase);
       if (inlineView) {
         regions.push({
           id: nodeId,
@@ -280,7 +273,7 @@ export function createInlineRegions(
       }
     }
   };
-  for (const block of view.blocks) {
+  for (const block of arena.blocks) {
     collect(block.id, block.tokenStart);
   }
 
@@ -303,11 +296,10 @@ export function createInlineRegions(
 
 function inlineViewOf(
   source: string,
-  view: BlockSyntaxView,
+  arena: BlockArena,
   nodeId: number,
   tokenBase: number,
 ): SourceView | undefined {
-  const arena = view.arena;
   let firstStart = -1;
   let firstEnd = -1;
   let spans: SourceSpan[] | undefined;
@@ -316,9 +308,9 @@ function inlineViewOf(
     const entry = arena.childAt(nodeId, index);
     if (entry < 0) {
       const token = arena.leafToken(entry, tokenBase);
-      if (view.tokens.kind(token) === BlockKind.InlineChunk) {
-        const start = view.tokens.start(token);
-        const end = view.tokens.end(token);
+      if (arena.tokens.kind(token) === BlockKind.InlineChunk) {
+        const start = arena.tokens.start(token);
+        const end = arena.tokens.end(token);
         if (firstStart < 0) {
           firstStart = start;
           firstEnd = end;

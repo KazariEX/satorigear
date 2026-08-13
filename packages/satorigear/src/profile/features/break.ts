@@ -33,7 +33,7 @@ export const feature: SyntaxFeature = {
           token: BlockKind.ThematicBreakToken,
         },
         build(nodeId, offset, tokenBase, context) {
-          const end = offset + context.view.arena.lenOf(nodeId);
+          const end = offset + context.arena.lenOf(nodeId);
           return {
             type: "thematicBreak",
             position: {

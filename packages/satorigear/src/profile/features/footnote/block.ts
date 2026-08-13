@@ -68,14 +68,14 @@ export const blockRules: BlockFeature["rules"] = [
     },
     build(nodeId, offset, tokenBase, context) {
       const token = blockToken(nodeId, tokenBase, BlockKind.FootnoteDefinitionOpen, context);
-      const fields = definitionFields(context.view.tokens, token);
+      const fields = definitionFields(context.arena.tokens, token);
       return {
         type: "footnoteDefinition",
         identifier: fields.normalizedLabel.toLowerCase(),
         label: semanticText(fields.label),
         children: buildBlockChildren(nodeId, offset, tokenBase, context),
         position: {
-          start: context.view.tokens.start(token),
+          start: context.arena.tokens.start(token),
           end: blockEnd(nodeId, offset, context),
         },
       };

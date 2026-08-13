@@ -160,7 +160,7 @@ function childRules(
   rule: string,
   context: BlockBuildContext,
 ): RuleLocation[] {
-  const arena = context.view.arena;
+  const arena = context.arena;
   const result: RuleLocation[] = [];
   for (let index = 0; index < arena.childCount(nodeId); index++) {
     const child = arena.childAt(nodeId, index);
@@ -182,8 +182,8 @@ const buildTableCell: BlockNodeBuilder<TableCell> = (nodeId, offset, tokenBase, 
     type: "tableCell",
     children: buildInlineChildren(nodeId, context, true),
     position: {
-      start: context.view.tokens.start(open),
-      end: context.view.tokens.start(close),
+      start: context.arena.tokens.start(open),
+      end: context.arena.tokens.start(close),
     },
   };
 };
@@ -198,8 +198,8 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (nodeId, offset, tokenBase, co
     type: "tableRow",
     children,
     position: {
-      start: context.view.tokens.start(open),
-      end: context.view.tokens.start(close),
+      start: context.arena.tokens.start(open),
+      end: context.arena.tokens.start(close),
     },
   };
 };
@@ -209,7 +209,7 @@ function tableAlignment(
   tokenBase: number,
   context: BlockBuildContext,
 ): AlignType[] {
-  const arena = context.view.arena;
+  const arena = context.arena;
   const result: AlignType[] = [];
   for (let index = 0; index < arena.childCount(nodeId); index++) {
     const child = arena.childAt(nodeId, index);
@@ -318,8 +318,8 @@ export const feature: SyntaxFeature = {
             align: tableAlignment(delimiter.id, delimiter.tokenBase, context),
             children: rows,
             position: {
-              start: context.view.tokens.start(open),
-              end: context.view.tokens.start(close),
+              start: context.arena.tokens.start(open),
+              end: context.arena.tokens.start(close),
             },
           };
         },

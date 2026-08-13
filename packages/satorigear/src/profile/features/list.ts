@@ -176,7 +176,7 @@ function childrenSpread(
   context: BlockBuildContext,
   nestedRule?: string,
 ): boolean {
-  const arena = context.view.arena;
+  const arena = context.arena;
   let previous: { end: number; start: number } | undefined;
   const childCount = arena.childCount(nodeId);
   for (let index = 0; index < childCount; index++) {
@@ -201,7 +201,7 @@ function childrenSpread(
 }
 
 const buildListItem: BlockNodeBuilder<ListItem> = (nodeId, offset, tokenBase, context) => {
-  const rule = context.view.arena.ruleNameOf(nodeId);
+  const rule = context.arena.ruleNameOf(nodeId);
   if (rule !== "OrderedListItem" && rule !== "UnorderedListItem") {
     throw new Error(`Expected list item syntax, received ${rule}`);
   }
@@ -218,7 +218,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (nodeId, offset, tokenBase, co
     checked: null,
     children,
     position: {
-      start: context.view.tokens.start(marker),
+      start: context.arena.tokens.start(marker),
       end: lastChildEnd(children, blockEnd(nodeId, offset, context)),
     },
   };
@@ -226,7 +226,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (nodeId, offset, tokenBase, co
 
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (nodeId, offset, tokenBase, context) => {
-    const arena = context.view.arena;
+    const arena = context.arena;
     const itemRule = ordered ? "OrderedListItem" : "UnorderedListItem";
     const listMarker = blockToken(
       nodeId,
@@ -250,12 +250,12 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     return {
       type: "list",
       ordered,
-      start: ordered ? Number.parseInt(context.view.tokens.text(context.source, listMarker), 10) : null,
+      start: ordered ? Number.parseInt(context.arena.tokens.text(context.source, listMarker), 10) : null,
       spread: childrenSpread(nodeId, offset, tokenBase, false, context, itemRule),
       children: items,
       position: {
-        start: context.view.tokens.start(listMarker),
-        end: lastChildEnd(items, context.view.tokens.end(listMarker)),
+        start: context.arena.tokens.start(listMarker),
+        end: lastChildEnd(items, context.arena.tokens.end(listMarker)),
       },
     };
   };
