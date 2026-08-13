@@ -43,13 +43,6 @@ export type InlineNodeBuilder = (
   accumulator: InlineAccumulator,
 ) => void;
 
-function inlineTokenIndex(context: InlineBuildContext, tokenIndex: number): number {
-  if (tokenIndex < 0 || tokenIndex >= inlineTokenCount(context.tokens)) {
-    throw new Error("inline arena returned a leaf outside its token stream");
-  }
-  return tokenIndex;
-}
-
 function lineStart(source: string, offset: number): number {
   while (offset > 0) {
     const character = source.charCodeAt(--offset);
@@ -202,7 +195,7 @@ function appendInlineRange(
     const childEnd = inlineTokenEnd(context.tokens, next === void 0 ? index : next - 1);
     const childEmitted = next === void 0
       ? appendInlineLeaf(
-        inlineTokenIndex(context, index),
+        index,
         context.view.mapSpan(childOffset, childEnd),
         accumulator,
       )
@@ -312,7 +305,7 @@ export function buildInlineChildren(
     if (allowEmpty) {
       return [];
     }
-    throw new Error(`Expected ${rule} syntax to contain InlineLines`);
+    throw new Error(`Expected ${rule} syntax to contain inline content`);
   }
   const inlineContext: InlineBuildContext = {
     blockRule: region.rule,
