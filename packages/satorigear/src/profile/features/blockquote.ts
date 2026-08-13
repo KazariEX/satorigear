@@ -97,7 +97,7 @@ export const feature: SyntaxFeature = {
             index++;
           }
           out.push(BlockKind.BlockQuoteOpen, line.start, line.start + 1);
-          context.resolveLines(source, quoteLines, out);
+          context.scanLines(source, quoteLines, out);
           const end = quoteLines.at(-1)?.next ?? line.start;
           out.push(BlockKind.BlockQuoteClose, end, end);
           return index;

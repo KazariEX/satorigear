@@ -140,7 +140,7 @@ export const blockStarts: BlockFeature["starts"] = [
           normalizedLabel: match.normalizedLabel,
         } },
       );
-      context.resolveLines(source, definitionLines, out);
+      context.scanLines(source, definitionLines, out);
       const end = definitionLines.at(-1)?.next ?? match.markerEnd;
       out.push(BlockKind.FootnoteDefinitionClose, end, end);
       return index;

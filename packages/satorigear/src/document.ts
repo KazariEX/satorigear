@@ -1,9 +1,9 @@
 import type { Root } from "mdast";
-import { BlockScanner } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, snapshot } from "./fragment/output/materialize.ts";
-import { type SyntaxBlock, SyntaxState } from "./syntax-state.ts";
+import { InlineRegionBatch, type SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 import type { BlockArena, BlockHandle } from "./block/arena.ts";
+import type { BlockScanner } from "./block/scanner.ts";
 import type { BlockFragment } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceSpan, TextEdit } from "./source-view.ts";
@@ -57,21 +57,27 @@ export class DocumentImpl implements Document {
   #fragments: BlockFragment[] = [];
   #previousFragments?: Map<BlockHandle, BlockFragment>;
   #profile: SyntaxProfile;
-  #syntaxState: SyntaxState;
+  #syntaxState!: SyntaxState;
 
   constructor(
-    source: string,
     profile: SyntaxProfile,
+    blockScanner: BlockScanner,
     blockArena: BlockArena,
   ) {
     this.#profile = profile;
-    this.#blockScanner = new BlockScanner(source, profile.block);
-    blockArena.build(this.#blockScanner.tokens);
+    this.#blockScanner = blockScanner;
     this.#blockArena = blockArena;
+  }
+
+  // The parser-owned one-shot document never builds cached snapshot fragments,
+  // so reinitialization only replaces source-derived syntax state.
+  initialize(source: string): void {
+    this.#blockScanner.scan(source);
+    this.#blockArena.build(this.#blockScanner.tokens);
     this.#syntaxState = new SyntaxState(
       source,
       this.#blockArena.view(),
-      profile,
+      this.#profile,
     );
   }
 
@@ -106,9 +112,29 @@ export class DocumentImpl implements Document {
     return { changedSpan: applied.changedSpan };
   }
 
+  snapshot(): Root {
+    return snapshot(this.#buildBlockFragments(), this.source.length, this.#blockScanner.locator());
+  }
+
+  materialize(): Root {
+    const blocks = this.#syntaxState.blocks();
+    const context = this.#createBuildContext(blocks);
+
+    return materialize(
+      blocks.map((block) => buildBlockNode(
+        block.handle.id,
+        block.offset,
+        block.tokenBase,
+        context,
+      )),
+      this.source.length,
+      this.#blockScanner.locator(),
+    );
+  }
+
   #createBuildContext(blocks: readonly SyntaxBlock[]): BlockBuildContext {
     return {
-      inline: this.#syntaxState.inlineBatch(blocks),
+      inline: new InlineRegionBatch(blocks),
       profile: this.#profile,
       source: this.source,
       view: this.#syntaxState.blockView(),
@@ -145,25 +171,5 @@ export class DocumentImpl implements Document {
     this.#previousFragments = void 0;
     this.#fragments = nextFragments;
     return nextFragments;
-  }
-
-  snapshot(): Root {
-    return snapshot(this.#buildBlockFragments(), this.source.length, this.#blockScanner.locator());
-  }
-
-  materialize(): Root {
-    const blocks = this.#syntaxState.blocks();
-    const context = this.#createBuildContext(blocks);
-
-    return materialize(
-      blocks.map((block) => buildBlockNode(
-        block.handle.id,
-        block.offset,
-        block.tokenBase,
-        context,
-      )),
-      this.source.length,
-      this.#blockScanner.locator(),
-    );
   }
 }

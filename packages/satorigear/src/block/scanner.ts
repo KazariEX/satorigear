@@ -5,8 +5,8 @@ import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanContext {
   endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
+  scanLines: (source: string, lines: readonly BlockLine[], tokens: BlockTokenStream) => void;
   startsInterruptingBlock: (source: string, line: BlockLine) => boolean;
-  resolveLines: (source: string, lines: readonly BlockLine[], tokens: BlockTokenStream) => void;
 }
 
 export interface BlockScanChange {
@@ -86,7 +86,7 @@ function endsWithParagraphLeaf(
   }
 }
 
-function resolveBlock(
+function scanBlock(
   profile: BlockProfile,
   context: BlockScanContext,
   source: string,
@@ -114,7 +114,7 @@ interface BlockCheckpoint {
   tokenStart: number;
 }
 
-function resolveLines(
+function scanBlockLines(
   profile: BlockProfile,
   context: BlockScanContext,
   source: string,
@@ -129,7 +129,7 @@ function resolveLines(
     }
     const lineStart = index;
     const tokenStart = out.length;
-    index = resolveBlock(profile, context, source, lines, index, out);
+    index = scanBlock(profile, context, source, lines, index, out);
     if (visit?.(lineStart, index, tokenStart, out.length)) {
       return;
     }
@@ -139,8 +139,8 @@ function resolveLines(
 function createBlockScanContext(profile: BlockProfile): BlockScanContext {
   const context: BlockScanContext = {
     endsWithParagraphLeaf: (source, line) => endsWithParagraphLeaf(profile, context, source, line),
+    scanLines: (source, lines, tokens) => scanBlockLines(profile, context, source, lines, tokens),
     startsInterruptingBlock: (source, line) => startsInterruptingBlock(profile, source, line),
-    resolveLines: (source, lines, tokens) => resolveLines(profile, context, source, lines, tokens),
   };
   return context;
 }
@@ -276,27 +276,44 @@ export class BlockScanner {
   #source: string;
   #tokens: BlockTokenStream;
 
-  constructor(source: string, profile: BlockProfile) {
-    const context = createBlockScanContext(profile);
+  constructor(profile: BlockProfile) {
+    this.#context = createBlockScanContext(profile);
+    this.#profile = profile;
+    this.#source = "";
+    this.#lines = [];
+    this.#tokens = new BlockTokenStream();
+    this.#checkpoints = [];
+  }
+
+  scan(source: string): void {
     const lines = linesOf(source);
-    const tokens = new BlockTokenStream(source.length);
-    const checkpoints: BlockCheckpoint[] = [];
-    resolveLines(profile, context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
-      checkpoints.push({
-        lineStart: lines[lineStart].start,
-        lineEnd: lines[lineEnd - 1].next,
-        tokenStart,
-        tokenEnd,
-      });
+    const tokens = this.#tokens;
+    tokens.reset(source.length);
+    const checkpoints = this.#checkpoints;
+    let checkpointIndex = 0;
+    scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+      const checkpoint = checkpoints[checkpointIndex++];
+      // Reuse checkpoint records across one-shot parses instead of allocating one per block.
+      if (checkpoint) {
+        checkpoint.lineStart = lines[lineStart].start;
+        checkpoint.lineEnd = lines[lineEnd - 1].next;
+        checkpoint.tokenStart = tokenStart;
+        checkpoint.tokenEnd = tokenEnd;
+      }
+      else {
+        checkpoints.push({
+          lineStart: lines[lineStart].start,
+          lineEnd: lines[lineEnd - 1].next,
+          tokenStart,
+          tokenEnd,
+        });
+      }
       return false;
     });
+    checkpoints.length = checkpointIndex;
 
-    this.#context = context;
-    this.#profile = profile;
     this.#source = source;
     this.#lines = lines;
-    this.#tokens = tokens;
-    this.#checkpoints = checkpoints;
   }
 
   get source(): string {
@@ -345,7 +362,7 @@ export class BlockScanner {
     let converged = -1;
     // Old checkpoints and rescanned blocks share source order, so candidates only move forward.
     let convergenceCandidate = affected;
-    resolveLines(this.#profile, this.#context, nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+    scanBlockLines(this.#profile, this.#context, nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
       const blockStart = scanLines[lineStart].start;
       const blockEnd = scanLines[lineEnd - 1].next;
       if (blockEnd >= changedSpan.end) {

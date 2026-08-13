@@ -373,7 +373,7 @@ export const feature: SyntaxFeature = {
               itemLines.push({ ...lines[index], lazy: true });
               index++;
             }
-            context.resolveLines(source, itemLines, out);
+            context.scanLines(source, itemLines, out);
             listEnd = itemLines.at(-1)?.next ?? marker.offset;
             out.push(itemClose, listEnd, listEnd);
           }

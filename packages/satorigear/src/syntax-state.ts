@@ -23,7 +23,13 @@ export class InlineRegionBatch {
   #index = 0;
   #regions: readonly InlineRegion[];
 
-  constructor(regions: readonly InlineRegion[]) {
+  constructor(blocks: readonly SyntaxBlock[]) {
+    const regions: InlineRegion[] = [];
+    for (const block of blocks) {
+      for (const region of block.regions) {
+        regions.push(region);
+      }
+    }
     this.#regions = regions;
   }
 
@@ -100,36 +106,33 @@ export class SyntaxState {
     return this.#blocks;
   }
 
-  update(
-    source: string,
-    view: BlockSyntaxView,
-    change?: BlockArenaChange,
-    stableBlockCount = 0,
-  ): void {
+  blockView(): BlockSyntaxView {
+    return this.#view;
+  }
+
+  update(source: string, view: BlockSyntaxView, change?: BlockArenaChange, stableBlockCount = 0): void {
+    // 1. Preserve definitions owned by the scanner-stable block prefix.
     const arena = view.arena;
     const previousBlocks = this.#blocks;
-    const oldStart = change?.oldStart ?? 0;
-    const oldEnd = change?.oldEnd ?? 0;
-    const newEnd = change?.newEnd ?? view.blocks.length;
     const blocks: SyntaxBlock[] = stableBlockCount === 0 ? [] : previousBlocks.slice(0, stableBlockCount);
     const previousDefinitionEntries = this.#definitionEntries;
     let stableDefinitionCount = 0;
-    const availableDefinitions = new Set<string>();
+    const definitions = new Set<string>();
     if (previousDefinitionEntries) {
       while (
         stableDefinitionCount < previousDefinitionEntries.length &&
         previousDefinitionEntries[stableDefinitionCount].blockIndex < stableBlockCount
       ) {
+        definitions.add(previousDefinitionEntries[stableDefinitionCount].key);
         stableDefinitionCount++;
-      }
-      for (let index = 0; index < stableDefinitionCount; index++) {
-        availableDefinitions.add(previousDefinitionEntries[index].key);
       }
     }
 
+    // 2. Collect the rebuilt suffix before resolving inline regions,
+    // because later definitions can affect references in earlier blocks.
     const bindings: InlineRegionBinding[] = [];
-    let tailDefinitionEntries: BlockDefinition[] | undefined;
-    const collect = (
+    let suffixDefinitionEntries: BlockDefinition[] | undefined;
+    const collectNode = (
       nodeId: number,
       offset: number,
       tokenBase: number,
@@ -139,8 +142,8 @@ export class SyntaxState {
       const definitionKey = rule.definitionKey;
       if (definitionKey) {
         const key = definitionKey(view.tokens, tokenBase);
-        (tailDefinitionEntries ??= []).push({ blockIndex, key });
-        availableDefinitions.add(key);
+        (suffixDefinitionEntries ??= []).push({ blockIndex, key });
+        definitions.add(key);
       }
       if (rule.inlineContent) {
         const inlineView = inlineViewOf(source, view, arena, nodeId, tokenBase);
@@ -158,7 +161,7 @@ export class SyntaxState {
       for (let index = 0; index < childCount; index++) {
         const child = arena.childAt(nodeId, index);
         if (child >= 0) {
-          collect(
+          collectNode(
             child,
             offset + arena.childRelAt(nodeId, index),
             tokenBase + arena.childTokRelAt(nodeId, index),
@@ -169,32 +172,57 @@ export class SyntaxState {
     };
     // Inline resolution needs the complete definition set, so one flat list records block boundaries
     // without allocating temporary binding arrays for every block.
-    const bindingStarts: number[] = [];
+    const bindingOffsets: number[] = [];
     for (let index = stableBlockCount; index < view.blocks.length; index++) {
-      const syntaxBlock = view.blocks[index];
-      const childId = syntaxBlock.id;
-      const tokenBase = syntaxBlock.tokenStart;
+      const arenaBlock = view.blocks[index];
+      const tokenBase = arenaBlock.tokenStart;
       const offset = view.tokens.start(tokenBase);
-      bindingStarts.push(bindings.length);
-      collect(childId, offset, tokenBase, blocks.length);
+      bindingOffsets.push(bindings.length);
+      collectNode(arenaBlock.id, offset, tokenBase, index);
       blocks.push({
-        handle: syntaxBlock,
+        handle: arenaBlock,
         offset,
         regions: emptyArray,
         tokenBase,
         version: 0,
       });
     }
+    bindingOffsets.push(bindings.length);
 
-    // Inline resolution starts after the full definition map is known; later definitions affect earlier uses.
-    const definitionsChanged = stableBlockCount > 0 && !isSetEqual(this.#definitions, availableDefinitions);
+    // 3. A fresh state has no region identity or fragment version to reconcile.
+    if (previousBlocks.length === 0) {
+      for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+        const bindingStart = bindingOffsets[blockIndex];
+        const bindingEnd = bindingOffsets[blockIndex + 1];
+        const regions = new Array<InlineRegion>(bindingEnd - bindingStart);
+        for (let bindingIndex = bindingStart; bindingIndex < bindingEnd; bindingIndex++) {
+          regions[bindingIndex - bindingStart] = new InlineRegion(
+            this.#profile.inline,
+            bindings[bindingIndex],
+            definitions,
+          );
+        }
+        blocks[blockIndex].regions = regions;
+      }
+      this.#view = view;
+      this.#blocks = blocks;
+      this.#definitionEntries = suffixDefinitionEntries;
+      this.#definitions = definitions;
+      return;
+    }
+
+    // 4. Refresh the stable prefix, then reconcile rebuilt blocks with reusable inline regions.
+    const oldStart = change?.oldStart ?? 0;
+    const oldEnd = change?.oldEnd ?? 0;
+    const newEnd = change?.newEnd ?? view.blocks.length;
+    const definitionsChanged = stableBlockCount > 0 && !isSetEqual(this.#definitions, definitions);
     if (definitionsChanged) {
       for (let index = 0; index < stableBlockCount; index++) {
         const block = blocks[index];
         let changed = false;
         for (const region of block.regions) {
           const revision = region.revision;
-          region.updateDefinitions(availableDefinitions);
+          region.updateDefinitions(definitions);
           changed ||= revision !== region.revision;
         }
         if (changed) {
@@ -212,83 +240,74 @@ export class SyntaxState {
 
     for (let blockIndex = stableBlockCount; blockIndex < blocks.length; blockIndex++) {
       const block = blocks[blockIndex];
-      let previous: SyntaxBlock | undefined;
+      let previousBlock: SyntaxBlock | undefined;
       if (blockIndex < oldStart) {
-        previous = previousBlocks[blockIndex];
+        previousBlock = previousBlocks[blockIndex];
       }
       else if (blockIndex >= newEnd) {
-        previous = previousBlocks[oldEnd + blockIndex - newEnd];
+        previousBlock = previousBlocks[oldEnd + blockIndex - newEnd];
       }
-      const bindingStart = bindingStarts[blockIndex - stableBlockCount];
-      const bindingEnd = bindingStarts[blockIndex - stableBlockCount + 1] ?? bindings.length;
+      const bindingOffset = blockIndex - stableBlockCount;
+      const bindingStart = bindingOffsets[bindingOffset];
+      const bindingEnd = bindingOffsets[bindingOffset + 1];
       const regions = new Array<InlineRegion>(bindingEnd - bindingStart);
-      let regionsStable = previous !== void 0 && previous.regions.length === regions.length;
+      let regionsUnchanged = previousBlock !== void 0 && previousBlock.regions.length === regions.length;
       for (let bindingIndex = bindingStart; bindingIndex < bindingEnd; bindingIndex++) {
         const binding = bindings[bindingIndex];
         const regionIndex = bindingIndex - bindingStart;
-        let candidate = previous?.regions[regionIndex];
+        let candidate = previousBlock?.regions[regionIndex];
         if (!candidate && displacedRegions.length > 0) {
-          let nearest = displacedRegions.findIndex((value) => value.id === binding.id);
-          // Changed blocks retain lexer state by matching their displaced inline regions in source order.
-          if (nearest < 0) {
-            let distance = Number.POSITIVE_INFINITY;
-            for (let index = 0; index < displacedRegions.length; index++) {
-              const value = displacedRegions[index];
-              const candidateDistance = value.rule === binding.rule
-                ? Math.abs(value.span.start - binding.span.start)
-                : Number.POSITIVE_INFINITY;
-              if (candidateDistance < distance) {
-                distance = candidateDistance;
-                nearest = index;
+          let candidateIndex = -1;
+          let nearestDistance = Number.POSITIVE_INFINITY;
+          // Prefer arena identity; otherwise retain the nearest compatible lexer state.
+          for (let index = 0; index < displacedRegions.length; index++) {
+            const value = displacedRegions[index];
+            if (value.id === binding.id) {
+              candidateIndex = index;
+              break;
+            }
+            if (value.rule === binding.rule) {
+              const distance = Math.abs(value.span.start - binding.span.start);
+              if (distance < nearestDistance) {
+                nearestDistance = distance;
+                candidateIndex = index;
               }
             }
           }
-          candidate = nearest < 0 ? void 0 : displacedRegions.splice(nearest, 1)[0];
+          candidate = candidateIndex < 0 ? void 0 : displacedRegions.splice(candidateIndex, 1)[0];
         }
         const revision = candidate?.revision;
         const region = candidate
-          ? candidate.update(binding, availableDefinitions)
-          : new InlineRegion(this.#profile.inline, binding, availableDefinitions);
+          ? candidate.update(binding, definitions)
+          : new InlineRegion(this.#profile.inline, binding, definitions);
         regions[regionIndex] = region;
-        regionsStable &&= candidate === previous?.regions[regionIndex] && revision === region.revision;
+        regionsUnchanged &&= candidate === previousBlock?.regions[regionIndex] && revision === region.revision;
       }
 
       // Arena prefix handles may survive token-equivalent edits with different source geometry.
       // Only the converged suffix can reuse fragments without comparing duplicate block text.
-      const fragmentStable = blockIndex >= newEnd && regionsStable;
       block.regions = regions;
-      block.version = previous === void 0
-        ? 0
-        : fragmentStable ? previous.version : previous.version + 1;
+      if (previousBlock) {
+        block.version = blockIndex >= newEnd && regionsUnchanged
+          ? previousBlock.version
+          : previousBlock.version + 1;
+      }
     }
 
+    // 5. Commit the new view and reuse the flat definition prefix storage when possible.
     this.#view = view;
     this.#blocks = blocks;
     if (stableDefinitionCount === 0) {
-      this.#definitionEntries = tailDefinitionEntries;
+      this.#definitionEntries = suffixDefinitionEntries;
     }
     else if (previousDefinitionEntries) {
       previousDefinitionEntries.length = stableDefinitionCount;
-      if (tailDefinitionEntries) {
-        for (const entry of tailDefinitionEntries) {
+      if (suffixDefinitionEntries) {
+        for (const entry of suffixDefinitionEntries) {
           previousDefinitionEntries.push(entry);
         }
       }
     }
-    this.#definitions = availableDefinitions;
-  }
-
-  blockView(): BlockSyntaxView {
-    return this.#view;
-  }
-
-  inlineBatch(blocks: readonly SyntaxBlock[]): InlineRegionBatch {
-    const regions: InlineRegion[] = [];
-    for (const block of blocks) {
-      for (const region of block.regions) {
-        regions.push(region);
-      }
-    }
-    return new InlineRegionBatch(regions);
+    this.#definitions = definitions;
   }
 }

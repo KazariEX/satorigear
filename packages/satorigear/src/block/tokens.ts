@@ -18,12 +18,21 @@ export interface BlockTokenChange {
 }
 
 export class BlockTokenStream {
-  #fields: number[] = [];
-  #metadata: (BlockTokenMeta | undefined)[] = [];
-  #relativeStart = Number.POSITIVE_INFINITY;
+  #fields: number[];
+  #metadata: Map<number, BlockTokenMeta> | undefined;
+  #relativeStart: number;
   #sourceLength: number;
 
   constructor(sourceLength = 0) {
+    this.#fields = [];
+    this.#relativeStart = Number.POSITIVE_INFINITY;
+    this.#sourceLength = sourceLength;
+  }
+
+  reset(sourceLength: number): void {
+    this.#fields.length = 0;
+    this.#metadata = void 0;
+    this.#relativeStart = Number.POSITIVE_INFINITY;
     this.#sourceLength = sourceLength;
   }
 
@@ -33,7 +42,10 @@ export class BlockTokenStream {
 
   push(kind: BlockKind, start: number, end: number, meta?: BlockTokenMeta): void {
     this.#fields.push(kind, start, end, 0);
-    this.#metadata.push(meta);
+    if (meta) {
+      this.#metadata ??= new Map();
+      this.#metadata.set(this.length - 1, meta);
+    }
   }
 
   equalsAfterShift(
@@ -51,8 +63,8 @@ export class BlockTokenStream {
     ) {
       return false;
     }
-    const ranges = this.#metadata[index]?.rangeOffsets;
-    const nextRanges = next.#metadata[nextIndex]?.rangeOffsets;
+    const ranges = this.#metadata?.get(index)?.rangeOffsets;
+    const nextRanges = next.#metadata?.get(nextIndex)?.rangeOffsets;
     if ((ranges?.length ?? 0) !== (nextRanges?.length ?? 0)) {
       return false;
     }
@@ -63,8 +75,8 @@ export class BlockTokenStream {
         }
       }
     }
-    const text = this.#metadata[index]?.text;
-    const nextText = next.#metadata[nextIndex]?.text;
+    const text = this.#metadata?.get(index)?.text;
+    const nextText = next.#metadata?.get(nextIndex)?.text;
     if (text !== void 0 || nextText !== void 0) {
       return text === nextText;
     }
@@ -78,21 +90,19 @@ export class BlockTokenStream {
     );
   }
 
-  kind(index: number): BlockKind {
-    return this.#fields[index * blockTokenStride] as BlockKind;
-  }
-
   rangeCount(index: number): number {
-    return (this.#metadata[index]?.rangeOffsets?.length ?? 2) / 2;
+    return (this.#metadata?.get(index)?.rangeOffsets?.length ?? 2) / 2;
   }
 
   rangeEnd(index: number, range: number): number {
-    const offsets = this.#metadata[index]?.rangeOffsets;
+    const offsets = this.#metadata?.get(index)?.rangeOffsets;
     return offsets ? this.start(index) + offsets[range * 2 + 1] : this.end(index);
   }
 
   rangeStart(index: number, range: number): number {
-    return this.start(index) + (this.#metadata[index]?.rangeOffsets?.[range * 2] ?? 0);
+    return this.start(index) + (
+      this.#metadata?.get(index)?.rangeOffsets?.[range * 2] ?? 0
+    );
   }
 
   replace(
@@ -102,40 +112,42 @@ export class BlockTokenStream {
     end: number,
     replacement: BlockTokenStream,
   ): BlockTokenChange {
-    const oldLength = this.length;
-    const inserted = replacement.length;
-    const suffixStart = start + inserted;
-    const delta = nextSource.length - source.length;
-    const common = Math.min(end - start, inserted);
-    let unchangedPrefix = 0;
+    const previousLength = this.length;
+    const replacedLength = end - start;
+    const replacementLength = replacement.length;
+    const sourceDelta = nextSource.length - source.length;
+
+    // 1. Narrow the reported damage to the tokens that actually changed.
+    const overlapLength = Math.min(replacedLength, replacementLength);
+    let stablePrefixLength = 0;
     while (
-      unchangedPrefix < common &&
-      this.equalsAfterShift(start + unchangedPrefix, source, replacement, unchangedPrefix, nextSource, 0)
+      stablePrefixLength < overlapLength &&
+      this.equalsAfterShift(start + stablePrefixLength, source, replacement, stablePrefixLength, nextSource, 0)
     ) {
-      unchangedPrefix++;
+      stablePrefixLength++;
     }
-    let unchangedSuffix = 0;
+    let stableSuffixLength = 0;
     while (
-      unchangedSuffix < common - unchangedPrefix &&
+      stableSuffixLength < overlapLength - stablePrefixLength &&
       this.equalsAfterShift(
-        end - 1 - unchangedSuffix,
+        end - 1 - stableSuffixLength,
         source,
         replacement,
-        inserted - 1 - unchangedSuffix,
+        replacementLength - 1 - stableSuffixLength,
         nextSource,
-        delta,
+        sourceDelta,
       )
     ) {
-      unchangedSuffix++;
+      stableSuffixLength++;
     }
     const change = {
-      oldStart: start + unchangedPrefix,
-      oldEnd: end - unchangedSuffix,
-      newEnd: start + inserted - unchangedSuffix,
+      oldStart: start + stablePrefixLength,
+      oldEnd: end - stableSuffixLength,
+      newEnd: start + replacementLength - stableSuffixLength,
     };
 
-    // Positions before the edit stay absolute; stable suffix positions stay EOF-relative.
-    // Updating sourceLength below then rebases the whole suffix without walking it.
+    // 2. Align coordinate encoding with the replacement boundary. Positions before it
+    // stay absolute; the retained suffix becomes EOF-relative so sourceLength rebases it.
     if (this.#relativeStart < end) {
       for (let index = this.#relativeStart; index < end; index++) {
         const field = index * blockTokenStride;
@@ -144,24 +156,20 @@ export class BlockTokenStream {
       }
     }
     else if (this.#relativeStart > end) {
-      const relativeEnd = Math.min(this.#relativeStart, oldLength);
+      const relativeEnd = Math.min(this.#relativeStart, previousLength);
       for (let index = end; index < relativeEnd; index++) {
         const field = index * blockTokenStride;
         this.#fields[field + 1] -= this.#sourceLength + 1;
         this.#fields[field + 2] -= this.#sourceLength + 1;
       }
     }
-    const replacementMetadata = replacement.#metadata;
-    // Tail edits retain the existing buffers and their capacity. A middle edit needs
-    // fresh dense arrays so shifting a longer replacement cannot make them holey.
-    if (end === oldLength) {
+
+    // 3. Splice the packed fields. Tail edits retain the buffer and its capacity;
+    // a middle edit needs a fresh dense array so a longer replacement cannot make it holey.
+    if (end === previousLength) {
       this.#fields.length = start * blockTokenStride;
       for (let index = 0; index < replacement.#fields.length; index++) {
         this.#fields.push(replacement.#fields[index]);
-      }
-      this.#metadata.length = start;
-      for (let index = 0; index < inserted; index++) {
-        this.#metadata.push(replacementMetadata[index]);
       }
     }
     else {
@@ -169,14 +177,67 @@ export class BlockTokenStream {
         replacement.#fields,
         this.#fields.slice(end * blockTokenStride),
       );
-      this.#metadata = this.#metadata.slice(0, start).concat(
-        replacementMetadata,
-        this.#metadata.slice(end, oldLength),
-      );
     }
-    this.#relativeStart = suffixStart < this.length ? suffixStart : Number.POSITIVE_INFINITY;
+
+    // 4. Splice sparse metadata. Stable indexes update in place; a size-changing
+    // middle replacement shifts suffix keys into a new map.
+    const indexDelta = replacementLength - replacedLength;
+    if (end === previousLength || indexDelta === 0) {
+      if (this.#metadata) {
+        for (const index of this.#metadata.keys()) {
+          if (index >= start && index < end) {
+            this.#metadata.delete(index);
+          }
+        }
+      }
+      if (replacement.#metadata) {
+        const metadata = this.#metadata ??= new Map();
+        for (const [index, value] of replacement.#metadata) {
+          metadata.set(start + index, value);
+        }
+      }
+      if (this.#metadata?.size === 0) {
+        this.#metadata = void 0;
+      }
+    }
+    else {
+      const metadata = new Map<number, BlockTokenMeta>();
+      for (const [index, value] of this.#metadata ?? []) {
+        if (index < start) {
+          metadata.set(index, value);
+        }
+        else if (index >= end) {
+          metadata.set(index + indexDelta, value);
+        }
+      }
+      for (const [index, value] of replacement.#metadata ?? []) {
+        metadata.set(start + index, value);
+      }
+      this.#metadata = metadata.size > 0 ? metadata : void 0;
+    }
+
+    const newSuffixStart = start + replacementLength;
+    this.#relativeStart = newSuffixStart < this.length ? newSuffixStart : Number.POSITIVE_INFINITY;
     this.#sourceLength = nextSource.length;
     return change;
+  }
+
+  truncate(length: number): void {
+    this.#fields.length = length * blockTokenStride;
+    if (this.#metadata) {
+      for (const index of this.#metadata.keys()) {
+        if (index >= length) {
+          this.#metadata.delete(index);
+        }
+      }
+      if (this.#metadata.size === 0) {
+        this.#metadata = void 0;
+      }
+    }
+  }
+
+  kind(index: number): BlockKind {
+    return this.#fields[index * blockTokenStride] as BlockKind;
   }
 
   start(index: number): number {
@@ -188,16 +249,11 @@ export class BlockTokenStream {
   }
 
   text(source: string, index: number): string {
-    return this.#metadata[index]?.text ?? source.slice(this.start(index), this.end(index));
-  }
-
-  truncate(length: number): void {
-    this.#fields.length = length * blockTokenStride;
-    this.#metadata.length = length;
+    return this.#metadata?.get(index)?.text ?? source.slice(this.start(index), this.end(index));
   }
 
   value<T>(index: number): T | undefined {
-    return this.#metadata[index]?.value as T | undefined;
+    return this.#metadata?.get(index)?.value as T | undefined;
   }
 
   #position(position: number): number {
