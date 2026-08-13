@@ -84,6 +84,11 @@ function bracketIndex(tokens: InlineTokenStream): BracketIndex {
           pairs.set(open.start, close);
           normalClosers.add(close);
           if (kind === linkTailKind || kind === referenceTailKind) {
+            let nested = linkLabels.at(-1);
+            while (nested && nested.start > open.start) {
+              linkLabels.pop();
+              nested = linkLabels.at(-1);
+            }
             linkLabels.push({ start: open.start, end: close });
           }
           if (kind === referenceTailKind) {
@@ -142,8 +147,23 @@ function componentCandidate(
   };
 }
 
-function insideLinkLabel(offset: number, labels: readonly { end: number; start: number }[]): boolean {
-  return labels.some((label) => offset > label.start && offset < label.end);
+function insideLinkLabel(
+  offset: number,
+  labels: readonly { end: number; start: number }[],
+): boolean {
+  let start = 0;
+  let end = labels.length;
+  while (start < end) {
+    const middle = (start + end) >>> 1;
+    if (labels[middle].end <= offset) {
+      start = middle + 1;
+    }
+    else {
+      end = middle;
+    }
+  }
+  const label = labels[start];
+  return label !== void 0 && offset > label.start;
 }
 
 function candidates(
@@ -214,7 +234,8 @@ function candidates(
       }
       attributed = attributesEnd(source, attributesStart, attributeLineEnd) !== void 0;
     }
-    if (!attributed && insideLinkLabel(start, brackets.linkLabels)) {
+    const inLinkLabel = insideLinkLabel(start, brackets.linkLabels);
+    if (!attributed && inLinkLabel) {
       continue;
     }
     result.push({
@@ -224,7 +245,7 @@ function candidates(
       contentStart: start + 1,
       end: close + 1,
       flags: inlineTokenFlags(tokens, index),
-      inLinkLabel: insideLinkLabel(start, brackets.linkLabels),
+      inLinkLabel,
       kind: "span",
       nameEnd: start + 1,
       start,
