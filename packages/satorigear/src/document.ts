@@ -4,7 +4,7 @@ import { type BlockRecord, BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, snapshot } from "./fragment/output/materialize.ts";
 import { type InlineRegion, InlineRegionCursor } from "./inline/region.ts";
-import { createInlineRegions, SyntaxState } from "./syntax-state.ts";
+import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
 import type { BlockFragment } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceSpan, TextEdit } from "./source-view.ts";
@@ -158,7 +158,7 @@ export class DocumentImpl implements Document {
     blockScanner.scan(source);
     blockStructure.build();
 
-    const regions = createInlineRegions(source, profile.inline, blockStructure);
+    const regions = resolveInlineRegions(source, profile.inline, blockStructure);
     const context: BlockBuildContext = {
       structure: blockStructure,
       inline: new InlineRegionCursor(regions),

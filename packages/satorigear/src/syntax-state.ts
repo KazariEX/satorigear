@@ -5,7 +5,7 @@ import {
   type BlockStructureChange,
   noBlockEntry,
 } from "./block/structure.ts";
-import { InlineRegion, type InlineRegionBinding, type InlineRegionSyntax } from "./inline/region.ts";
+import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
@@ -44,7 +44,7 @@ export class SyntaxState {
   }
 
   update(source: string, change?: BlockStructureChange, stableBlockCount = 0): void {
-    // 1. Keep the scanner-stable prefix and collect syntax only through the rebuilt record range.
+    // 1. Keep the scanner-stable prefix and collect definitions and inline bindings through the rebuilt range.
     const structure = this.#structure;
     const previousBlocks = this.#blocks;
     const oldStart = change?.oldStart ?? 0;
@@ -200,7 +200,7 @@ export class SyntaxState {
         regions[regionIndex] = region;
       }
 
-      // Arena prefix records may survive token-equivalent edits with different source geometry.
+      // Scanner-stable prefix records may survive token-equivalent edits with different source geometry.
       // Only the converged suffix can reuse fragments without comparing duplicate block text.
       block.regions = regions;
       if (previousBlock) {
@@ -236,13 +236,13 @@ export class SyntaxState {
   }
 }
 
-export function createInlineRegions(
+export function resolveInlineRegions(
   source: string,
   profile: InlineProfile,
   structure: BlockStructure,
-): readonly InlineRegionSyntax[] {
+): readonly ResolvedInlineRegion[] {
   const definitions = new Set<string>();
-  const regions: InlineRegionSyntax[] = [];
+  const regions: ResolvedInlineRegion[] = [];
 
   const collect = (tokenStart: number, tokenBase: number): void => {
     const rule = structure.ruleOf(tokenStart);

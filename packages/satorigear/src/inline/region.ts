@@ -20,20 +20,20 @@ export interface InlineRegionBinding {
   view: SourceView;
 }
 
-export interface InlineRegionSyntax {
+export interface ResolvedInlineRegion {
   readonly rule: string;
   readonly tokenStart: number;
   readonly tokens: InlineTokenStream;
   readonly view: SourceView;
 }
 
-export class InlineRegion implements InlineRegionSyntax {
+export class InlineRegion implements ResolvedInlineRegion {
   // Track only definitions consulted by this region so unrelated definitions do not invalidate it.
   #definitionDependencies!: ReadonlySet<string>;
   #definitions!: ReadonlySet<string>;
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
-  #syntax: InlineProfile;
+  #profile: InlineProfile;
   #tokenSource?: string;
   #tokens?: InlineTokenStream;
   offset: number;
@@ -43,11 +43,11 @@ export class InlineRegion implements InlineRegionSyntax {
   view: SourceView;
 
   constructor(
-    syntax: InlineProfile,
+    profile: InlineProfile,
     binding: InlineRegionBinding,
     definitions: ReadonlySet<string>,
   ) {
-    this.#syntax = syntax;
+    this.#profile = profile;
     this.offset = binding.offset;
     this.rule = binding.rule;
     this.tokenStart = binding.tokenStart;
@@ -116,8 +116,8 @@ export class InlineRegion implements InlineRegionSyntax {
     };
     const rawTokens = source === this.#tokenSource && this.#rawTokens
       ? this.#rawTokens
-      : this.#syntax.tokenize(source);
-    const tokens = this.#syntax.resolve(source, rawTokens, context);
+      : this.#profile.tokenize(source);
+    const tokens = this.#profile.resolve(source, rawTokens, context);
 
     this.#tokenSource = source;
     this.#definitionDependencies = context.dependencies ?? emptySet;
@@ -131,13 +131,13 @@ export class InlineRegion implements InlineRegionSyntax {
 // Block building follows source order, so projection needs only one forward cursor.
 export class InlineRegionCursor {
   #index = 0;
-  #regions: readonly InlineRegionSyntax[];
+  #regions: readonly ResolvedInlineRegion[];
 
-  constructor(regions: readonly InlineRegionSyntax[]) {
+  constructor(regions: readonly ResolvedInlineRegion[]) {
     this.#regions = regions;
   }
 
-  take(tokenStart: number): InlineRegionSyntax | undefined {
+  take(tokenStart: number): ResolvedInlineRegion | undefined {
     const region = this.#regions[this.#index];
     if (region?.tokenStart !== tokenStart) {
       return;

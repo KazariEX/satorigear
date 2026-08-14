@@ -1,7 +1,7 @@
 export type InlineTokenStream = readonly number[];
 
-// The lexer, resolver, semantic arena, and node builders share this one
-// region-local record layout. Markdown inline tokens never need discontiguous ranges.
+// The lexer, resolver, and node builders share this region-local record layout.
+// Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = 4;
 
 // Token flags survive lexer and feature rewrites, so their bits are allocated here
