@@ -82,8 +82,6 @@ export interface InlineProfile {
   tokenize: InlineTokenizer;
 }
 
-const ignoreInlineToken: InlineLeafBuilder = () => void 0;
-
 function composeTransforms(...rewrites: readonly InlineTokenTransform[]): InlineTokenTransform {
   if (rewrites.length === 1) {
     return rewrites[0];
@@ -134,10 +132,6 @@ export function compileInlineProfile(
   const tokenHandlers: (InlineTokenHandler | undefined)[] = [];
   const containerByKind: (InlineContainer | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
-  const registerToken = (kind: InlineKind, build: InlineLeafBuilder): InlineKind => {
-    tokenHandlers[kind] = build;
-    return kind;
-  };
 
   for (const definition of syntaxDefinitions) {
     if (definition.kind === "decorate") {
@@ -145,23 +139,21 @@ export function compileInlineProfile(
       continue;
     }
     if (definition.kind === "leaf") {
-      registerToken(definition.token, definition.build);
+      tokenHandlers[definition.token] = definition.build;
       continue;
     }
 
     if (definition.kind === "container") {
-      const tokenKind = registerToken(definition.token, ignoreInlineToken);
-      containerByKind[tokenKind] = {
-        closeKind: registerToken(definition.close, ignoreInlineToken),
-        contentOpenKind: registerToken(definition.contentOpen, ignoreInlineToken),
+      containerByKind[definition.token] = {
+        closeKind: definition.close,
+        contentOpenKind: definition.contentOpen,
         build: definition.build,
       };
       continue;
     }
 
-    const openKind = registerToken(definition.open, ignoreInlineToken);
-    pairByOpenKind[openKind] = {
-      closeKind: registerToken(definition.close, ignoreInlineToken),
+    pairByOpenKind[definition.open] = {
+      closeKind: definition.close,
       build: definition.build,
     };
   }
