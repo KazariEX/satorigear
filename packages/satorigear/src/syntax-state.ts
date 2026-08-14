@@ -81,8 +81,8 @@ export class SyntaxState {
         if (inlineView) {
           bindings.push({
             id: nodeId,
+            offset,
             rule: rule.name,
-            span: { start: offset, end: offset + arena.lenOf(nodeId) },
             view: inlineView,
           });
         }
@@ -189,7 +189,7 @@ export class SyntaxState {
               break;
             }
             if (value.rule === binding.rule) {
-              const distance = Math.abs(value.span.start - binding.span.start);
+              const distance = Math.abs(value.offset - binding.offset);
               if (distance < nearestDistance) {
                 nearestDistance = distance;
                 candidateIndex = index;
