@@ -1,9 +1,10 @@
 import {
   closesFence,
   fenceAt,
+  fencedBlock,
+  type FencedBlock,
   fencedBlockContent,
   type FenceRule,
-  readFencedBlock,
 } from "../../../block/fence.ts";
 import { BlockKind } from "../../../block/kinds.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
@@ -28,11 +29,12 @@ export const blockRules: BlockFeature["rules"] = [
     build(tokenStart, context) {
       const offset = context.structure.tokens.start(tokenStart);
       const end = offset + context.structure.lenOf(tokenStart);
-      const value = context.structure.tokens.text(
-        context.source,
-        blockToken(tokenStart, BlockKind.MathBlockToken, context),
-      );
-      const block = readFencedBlock(value, mathFenceRule);
+      const token = blockToken(tokenStart, BlockKind.MathBlockToken, context);
+      const value = context.structure.tokens.text(context.source, token);
+      const block = context.structure.tokens.value<FencedBlock>(token);
+      if (!block) {
+        throw new Error("MathBlockToken has no fence metadata");
+      }
       const meta = semanticText(block.info);
       return {
         type: "math",
@@ -62,10 +64,19 @@ export const blockStarts: BlockFeature["starts"] = [
       while (end < lines.length && !closesFence(source, lines[end], fence)) {
         end++;
       }
+      const closed = end < lines.length;
       if (end < lines.length) {
         end++;
       }
-      appendLogicalToken(out, BlockKind.MathBlockToken, source, lines, start, end);
+      appendLogicalToken(
+        out,
+        BlockKind.MathBlockToken,
+        source,
+        lines,
+        start,
+        end,
+        fencedBlock(source, lines[start], fence, closed),
+      );
       return end;
     },
   },

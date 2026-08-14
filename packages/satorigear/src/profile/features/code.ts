@@ -2,9 +2,10 @@ import {
   closesFence,
   type Fence,
   fenceAt,
+  fencedBlock,
+  type FencedBlock,
   fencedBlockContent,
   type FenceRule,
-  readFencedBlock,
 } from "../../block/fence.ts";
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, indentOf, isBlank, removeIndent } from "../../block/lines.ts";
@@ -75,13 +76,14 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const offset = context.structure.tokens.start(tokenStart);
           const end = offset + context.structure.lenOf(tokenStart);
+          const token = blockToken(tokenStart, BlockKind.FencedCodeBlock, context);
           const source = normalizeLines(
-            context.structure.tokens.text(
-              context.source,
-              blockToken(tokenStart, BlockKind.FencedCodeBlock, context),
-            ),
+            context.structure.tokens.text(context.source, token),
           );
-          const block = readFencedBlock(source, codeFenceRule);
+          const block = context.structure.tokens.value<FencedBlock>(token);
+          if (!block) {
+            throw new Error("FencedCodeBlock token has no fence metadata");
+          }
           const rawInfo = semanticText(block.info);
           const langEnd = rawInfo.search(/[ \t]/);
           const lang = rawInfo ? langEnd < 0 ? rawInfo : rawInfo.slice(0, langEnd) : null;
@@ -140,10 +142,19 @@ export const feature: SyntaxFeature = {
           while (end < lines.length && !closesFence(source, lines[end], fence)) {
             end++;
           }
+          const closed = end < lines.length;
           if (end < lines.length) {
             end++;
           }
-          appendLogicalToken(out, BlockKind.FencedCodeBlock, source, lines, start, end);
+          appendLogicalToken(
+            out,
+            BlockKind.FencedCodeBlock,
+            source,
+            lines,
+            start,
+            end,
+            fencedBlock(source, lines[start], fence, closed),
+          );
           return end;
         },
       },

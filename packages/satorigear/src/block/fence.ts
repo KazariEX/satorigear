@@ -1,6 +1,7 @@
 import { type BlockLine, lineIndent, removeIndent } from "./lines.ts";
 
 export interface Fence {
+  indent: number;
   length: number;
   marker: string;
   offset: number;
@@ -14,10 +15,9 @@ export interface FenceRule {
 
 export type FenceIndentation = "columns" | "spaces";
 
+// Scanning owns fence recognition; projection consumes this payload without recognizing it again.
 export interface FencedBlock {
   closed: boolean;
-  contentEnd: number;
-  contentStart: number;
   indent: number;
   info: string;
 }
@@ -46,7 +46,7 @@ export function fenceAt(source: string, line: BlockLine, rule: FenceRule): Fence
       }
     }
   }
-  return { marker, length, offset: indent.offset };
+  return { indent: indent.columns, marker, length, offset: indent.offset };
 }
 
 export function closesFence(source: string, line: BlockLine, fence: Fence): boolean {
@@ -77,44 +77,9 @@ function lineContentEnd(source: string, start: number, end: number): number {
   return source.charCodeAt(end - 1) === 13 ? end - 1 : end;
 }
 
-export function readFencedBlock(source: string, rule: FenceRule): FencedBlock {
-  if (!source) {
-    throw new Error("Fenced block token is empty");
-  }
-
-  let openingEnd = 0;
-  while (openingEnd < source.length && source[openingEnd] !== "\n" && source[openingEnd] !== "\r") {
-    openingEnd++;
-  }
-  let contentStart = openingEnd;
-  if (source[contentStart] === "\r") {
-    contentStart += source[contentStart + 1] === "\n" ? 2 : 1;
-  }
-  else if (source[contentStart] === "\n") {
-    contentStart++;
-  }
-
-  const fence = fenceAt(source, { start: 0, end: openingEnd, next: contentStart }, rule);
-  if (!fence) {
-    throw new Error("Fenced block token has no opening fence");
-  }
-
-  const finalLineEnd = lineContentEnd(source, 0, source.length);
-  let finalLineStart = finalLineEnd;
-  while (
-    finalLineStart > 0 &&
-    source[finalLineStart - 1] !== "\n" &&
-    source[finalLineStart - 1] !== "\r"
-  ) {
-    finalLineStart--;
-  }
-  const closed = (
-    finalLineStart >= contentStart &&
-    closesFence(source, { start: finalLineStart, end: finalLineEnd, next: source.length }, fence)
-  );
-
+export function fencedBlock(source: string, line: BlockLine, fence: Fence, closed: boolean): FencedBlock {
   let infoStart = fence.offset + fence.length;
-  while (infoStart < openingEnd) {
+  while (infoStart < line.end) {
     const code = source.charCodeAt(infoStart);
     if (code !== 32 && code !== 9) {
       break;
@@ -123,10 +88,8 @@ export function readFencedBlock(source: string, rule: FenceRule): FencedBlock {
   }
   return {
     closed,
-    contentEnd: closed ? finalLineStart : source.length,
-    contentStart,
-    indent: fence.offset,
-    info: source.slice(infoStart, openingEnd),
+    indent: fence.indent,
+    info: source.slice(infoStart, line.end),
   };
 }
 
@@ -135,13 +98,35 @@ export function fencedBlockContent(
   block: FencedBlock,
   indentation: FenceIndentation = "spaces",
 ): string {
-  const end = lineContentEnd(source, block.contentStart, block.contentEnd);
+  let contentStart = 0;
+  while (contentStart < source.length && source[contentStart] !== "\n" && source[contentStart] !== "\r") {
+    contentStart++;
+  }
+  if (source[contentStart] === "\r") {
+    contentStart += source[contentStart + 1] === "\n" ? 2 : 1;
+  }
+  else if (source[contentStart] === "\n") {
+    contentStart++;
+  }
+
+  let contentEnd = source.length;
+  if (block.closed) {
+    contentEnd = lineContentEnd(source, contentStart, contentEnd);
+    while (
+      contentEnd > contentStart &&
+      source[contentEnd - 1] !== "\n" &&
+      source[contentEnd - 1] !== "\r"
+    ) {
+      contentEnd--;
+    }
+  }
+  const end = lineContentEnd(source, contentStart, contentEnd);
   if (!block.indent) {
-    return source.slice(block.contentStart, end);
+    return source.slice(contentStart, end);
   }
 
   const chunks: string[] = [];
-  let lineStart = block.contentStart;
+  let lineStart = contentStart;
   while (lineStart < end) {
     const lf = source.indexOf("\n", lineStart);
     const cr = source.indexOf("\r", lineStart);
