@@ -1,6 +1,6 @@
 import type { Root } from "mdast";
-import { BlockArena } from "./block/arena.ts";
 import { BlockScanner } from "./block/scanner.ts";
+import { BlockStructure } from "./block/structure.ts";
 import { type Document, DocumentImpl } from "./document.ts";
 import { compileProfile, type FeatureOptions } from "./profile/index.ts";
 
@@ -18,18 +18,18 @@ export function createParser(options?: ParserOptions): Parser {
   // Snapshots own no syntax references, so one-shot parses can reuse the block workspace.
   // Incremental documents receive an independent workspace below.
   let blockScanner: BlockScanner | undefined;
-  let blockArena: BlockArena | undefined;
+  let blockStructure: BlockStructure | undefined;
 
   return {
     createDocument: (source) => new DocumentImpl(source, profile),
     parse: (source) => {
       blockScanner ??= new BlockScanner(profile.block);
-      blockArena ??= new BlockArena(profile.block.schema, blockScanner.tokens);
+      blockStructure ??= new BlockStructure(profile.block.schema, blockScanner.tokens);
       return DocumentImpl.parse(
         source,
         profile,
         blockScanner,
-        blockArena,
+        blockStructure,
       );
     },
   };

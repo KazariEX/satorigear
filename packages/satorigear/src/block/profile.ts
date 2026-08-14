@@ -1,5 +1,5 @@
 import type { BlockNodeBuilder } from "../fragment/block.ts";
-// Block features compile into the immutable scanner, arena, and node builders shared by a parser.
+// Block features compile into the immutable scanner, structure, and node builders shared by a parser.
 import type { BlockKind } from "./kinds.ts";
 import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";

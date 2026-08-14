@@ -80,10 +80,10 @@ export const feature: SyntaxFeature = {
           const marker = blockToken(tokenStart, BlockKind.AtxHeadingOpen, context);
           return {
             type: "heading",
-            depth: context.arena.tokens.end(marker) - context.arena.tokens.start(marker) as Heading["depth"],
+            depth: context.structure.tokens.end(marker) - context.structure.tokens.start(marker) as Heading["depth"],
             children: buildInlineChildren(tokenStart, context, true),
             position: {
-              start: context.arena.tokens.start(marker),
+              start: context.structure.tokens.start(marker),
               end: blockEnd(tokenStart, context),
             },
           };
@@ -112,7 +112,7 @@ export const feature: SyntaxFeature = {
             children,
             position: {
               start: firstChildStart(children),
-              end: context.arena.tokens.start(
+              end: context.structure.tokens.start(
                 blockToken(tokenStart, BlockKind.HeadingClose, context),
               ),
             },

@@ -1,6 +1,6 @@
 import type { Root } from "mdast";
-import { BlockArena, type BlockRecord } from "./block/arena.ts";
 import { BlockScanner } from "./block/scanner.ts";
+import { type BlockRecord, BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, snapshot } from "./fragment/output/materialize.ts";
 import { type InlineRegion, InlineRegionCursor } from "./inline/region.ts";
@@ -53,7 +53,7 @@ function applyEdits(source: string, edits: readonly TextEdit[]): AppliedEdits {
 }
 
 export class DocumentImpl implements Document {
-  #blockArena: BlockArena;
+  #blockStructure: BlockStructure;
   #blockScanner: BlockScanner;
   #fragments: BlockFragment[] = [];
   #previousFragments?: Map<BlockRecord, BlockFragment>;
@@ -63,10 +63,10 @@ export class DocumentImpl implements Document {
   constructor(source: string, profile: SyntaxProfile) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(profile.block);
-    this.#blockArena = new BlockArena(profile.block.schema, this.#blockScanner.tokens);
+    this.#blockStructure = new BlockStructure(profile.block.schema, this.#blockScanner.tokens);
     this.#blockScanner.scan(source);
-    this.#blockArena.build();
-    this.#syntaxState = new SyntaxState(source, profile.inline, this.#blockArena);
+    this.#blockStructure.build();
+    this.#syntaxState = new SyntaxState(source, profile.inline, this.#blockStructure);
   }
 
   get source(): string {
@@ -94,8 +94,8 @@ export class DocumentImpl implements Document {
       applied.changedSpan,
       applied.oldChangedEnd,
     );
-    const arenaChange = this.#blockArena.update(tokenChange);
-    this.#syntaxState.update(this.source, arenaChange, stableBlockCount);
+    const structureChange = this.#blockStructure.update(tokenChange);
+    this.#syntaxState.update(this.source, structureChange, stableBlockCount);
 
     return { changedSpan: applied.changedSpan };
   }
@@ -121,9 +121,9 @@ export class DocumentImpl implements Document {
         regions.push(region);
       }
     }
-    // Changed regions share one build workspace; no arena reference escapes the resulting fragments.
+    // Changed regions share one build workspace; no syntax reference escapes the resulting fragments.
     const context: BlockBuildContext = {
-      arena: this.#blockArena,
+      structure: this.#blockStructure,
       inline: new InlineRegionCursor(regions),
       profile: this.#profile.inline,
       source: this.source,
@@ -152,21 +152,21 @@ export class DocumentImpl implements Document {
     source: string,
     profile: SyntaxProfile,
     blockScanner: BlockScanner,
-    blockArena: BlockArena,
+    blockStructure: BlockStructure,
   ): Root {
     blockScanner.scan(source);
-    blockArena.build();
+    blockStructure.build();
 
-    const regions = createInlineRegions(source, profile.inline, blockArena);
+    const regions = createInlineRegions(source, profile.inline, blockStructure);
     const context: BlockBuildContext = {
-      arena: blockArena,
+      structure: blockStructure,
       inline: new InlineRegionCursor(regions),
       profile: profile.inline,
       source,
     };
 
     return materialize(
-      blockArena.records.map((block) => buildBlockNode(block.tokenStart, context)),
+      blockStructure.records.map((block) => buildBlockNode(block.tokenStart, context)),
       source.length,
       blockScanner.locator(),
     );

@@ -26,9 +26,9 @@ export const blockRules: BlockFeature["rules"] = [
       token: BlockKind.MathBlockToken,
     },
     build(tokenStart, context) {
-      const offset = context.arena.tokens.start(tokenStart);
-      const end = offset + context.arena.lenOf(tokenStart);
-      const value = context.arena.tokens.text(
+      const offset = context.structure.tokens.start(tokenStart);
+      const end = offset + context.structure.lenOf(tokenStart);
+      const value = context.structure.tokens.text(
         context.source,
         blockToken(tokenStart, BlockKind.MathBlockToken, context),
       );

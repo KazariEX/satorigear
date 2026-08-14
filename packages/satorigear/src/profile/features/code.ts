@@ -35,10 +35,10 @@ export function codeFenceAt(source: string, line: BlockLine): Fence | undefined 
 
 function indentedCodeEnd(tokenStart: number, context: BlockBuildContext): number {
   const token = blockToken(tokenStart, BlockKind.IndentedCodeBlockToken, context);
-  const count = context.arena.tokens.rangeCount(token);
+  const count = context.structure.tokens.rangeCount(token);
   for (let index = count - 1; index >= 0; index--) {
-    const start = context.arena.tokens.rangeStart(token, index);
-    const rangeEnd = context.arena.tokens.rangeEnd(token, index);
+    const start = context.structure.tokens.rangeStart(token, index);
+    const rangeEnd = context.structure.tokens.rangeEnd(token, index);
     if (/[^\r\n]/.test(context.source.slice(start, rangeEnd))) {
       let end = rangeEnd;
       while (end > start && /[\r\n]/.test(context.source[end - 1])) {
@@ -73,10 +73,10 @@ export const feature: SyntaxFeature = {
           token: BlockKind.FencedCodeBlock,
         },
         build(tokenStart, context) {
-          const offset = context.arena.tokens.start(tokenStart);
-          const end = offset + context.arena.lenOf(tokenStart);
+          const offset = context.structure.tokens.start(tokenStart);
+          const end = offset + context.structure.lenOf(tokenStart);
           const source = normalizeLines(
-            context.arena.tokens.text(
+            context.structure.tokens.text(
               context.source,
               blockToken(tokenStart, BlockKind.FencedCodeBlock, context),
             ),
@@ -107,9 +107,9 @@ export const feature: SyntaxFeature = {
           token: BlockKind.IndentedCodeBlockToken,
         },
         build(tokenStart, context) {
-          const offset = context.arena.tokens.start(tokenStart);
+          const offset = context.structure.tokens.start(tokenStart);
           const token = blockToken(tokenStart, BlockKind.IndentedCodeBlockToken, context);
-          const lines = normalizeLines(context.arena.tokens.text(context.source, token))
+          const lines = normalizeLines(context.structure.tokens.text(context.source, token))
             .split("\n")
             .map((line) => removeIndent(line, 4));
           while (lines.length && /^[ \t]*$/.test(lines[lines.length - 1])) {

@@ -47,7 +47,7 @@ export const feature: SyntaxFeature = {
           close: BlockKind.BlockQuoteClose,
         },
         build(tokenStart, context) {
-          const offset = context.arena.tokens.start(tokenStart);
+          const offset = context.structure.tokens.start(tokenStart);
           const marker = blockToken(tokenStart, BlockKind.BlockQuoteOpen, context);
           return {
             type: "blockquote",
@@ -55,7 +55,7 @@ export const feature: SyntaxFeature = {
             position: {
               start: firstNonspace(
                 context.source,
-                context.arena.tokens.start(marker),
+                context.structure.tokens.start(marker),
                 lineEnd(context.source, offset),
               ),
               end: blockEnd(tokenStart, context),

@@ -336,7 +336,7 @@ export function buildInlineChildren(
 ): SpannedNode<PhrasingContent>[] {
   const region = context.inline.take(nodeId);
   if (!region) {
-    const rule = context.arena.ruleNameOf(nodeId);
+    const rule = context.structure.ruleNameOf(nodeId);
     if (allowEmpty) {
       return [];
     }

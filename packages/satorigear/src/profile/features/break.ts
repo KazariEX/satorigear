@@ -32,8 +32,8 @@ export const feature: SyntaxFeature = {
           token: BlockKind.ThematicBreakToken,
         },
         build(tokenStart, context) {
-          const offset = context.arena.tokens.start(tokenStart);
-          const end = offset + context.arena.lenOf(tokenStart);
+          const offset = context.structure.tokens.start(tokenStart);
+          const end = offset + context.structure.lenOf(tokenStart);
           return {
             type: "thematicBreak",
             position: {

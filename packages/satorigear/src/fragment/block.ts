@@ -1,5 +1,5 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
-import { type BlockArena, noBlockEntry } from "../block/arena.ts";
+import { type BlockStructure, noBlockEntry } from "../block/structure.ts";
 import type { BlockKind } from "../block/kinds.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
@@ -7,7 +7,7 @@ import type { SourceSpan } from "../source-view.ts";
 import type { SpannedNode } from "./node.ts";
 
 export interface BlockBuildContext {
-  arena: BlockArena;
+  structure: BlockStructure;
   inline: InlineRegionCursor;
   profile: InlineProfile;
   source: string;
@@ -20,8 +20,8 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 ) => SpannedNode<T>;
 
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
-  const offset = context.arena.tokens.start(tokenStart);
-  let end = offset + context.arena.lenOf(tokenStart);
+  const offset = context.structure.tokens.start(tokenStart);
+  let end = offset + context.structure.lenOf(tokenStart);
   if (end > offset && context.source[end - 1] === "\n") {
     end--;
   }
@@ -43,15 +43,15 @@ export function directBlockToken(
   kind: BlockKind,
   context: BlockBuildContext,
 ): number | undefined {
-  const arena = context.arena;
+  const structure = context.structure;
   for (
-    let entry = arena.firstChild(tokenStart);
+    let entry = structure.firstChild(tokenStart);
     entry !== noBlockEntry;
-    entry = arena.nextChild(tokenStart, entry)
+    entry = structure.nextChild(tokenStart, entry)
   ) {
     if (entry < 0) {
-      const token = arena.leafToken(entry);
-      if (arena.tokens.kind(token) === kind) {
+      const token = structure.leafToken(entry);
+      if (structure.tokens.kind(token) === kind) {
         return token;
       }
     }
@@ -65,7 +65,7 @@ export function blockToken(
 ): number {
   const token = directBlockToken(tokenStart, kind, context);
   if (token === void 0) {
-    throw new Error(`Expected ${context.arena.ruleNameOf(tokenStart)} syntax to contain block token ${kind}`);
+    throw new Error(`Expected ${context.structure.ruleNameOf(tokenStart)} syntax to contain block token ${kind}`);
   }
   return token;
 }
@@ -74,13 +74,13 @@ export function payloadBounds(
   tokenStart: number,
   context: BlockBuildContext,
 ): SourceSpan {
-  const arena = context.arena;
-  const offset = arena.tokens.start(tokenStart);
-  const result = { start: offset + arena.lenOf(tokenStart), end: offset };
-  const endToken = tokenStart + arena.tokens.nodeLength(tokenStart);
+  const structure = context.structure;
+  const offset = structure.tokens.start(tokenStart);
+  const result = { start: offset + structure.lenOf(tokenStart), end: offset };
+  const endToken = tokenStart + structure.tokens.nodeLength(tokenStart);
   for (let token = tokenStart; token < endToken; token++) {
-    const start = arena.tokens.start(token);
-    const end = arena.tokens.end(token);
+    const start = structure.tokens.start(token);
+    const end = structure.tokens.end(token);
     if (end > start) {
       result.start = Math.min(result.start, start);
       result.end = Math.max(result.end, end);
@@ -97,8 +97,8 @@ export const buildBlockNode = <T extends object = TopLevelContent>(
   tokenStart: number,
   context: BlockBuildContext,
 ): SpannedNode<T> => {
-  const arena = context.arena;
-  const rule = arena.ruleOf(tokenStart);
+  const structure = context.structure;
+  const rule = structure.ruleOf(tokenStart);
   const build = rule.build;
   if (!build) {
     throw new Error(`Unexpected block syntax rule: ${rule.name}`);
@@ -110,14 +110,14 @@ export const buildBlockChildren: (
   tokenStart: number,
   context: BlockBuildContext,
 ) => SpannedNode<BlockContent | DefinitionContent>[] = (tokenStart, context) => {
-  const arena = context.arena;
+  const structure = context.structure;
   const children: SpannedNode<BlockContent | DefinitionContent>[] = [];
   for (
-    let childId = arena.firstChild(tokenStart);
+    let childId = structure.firstChild(tokenStart);
     childId !== noBlockEntry;
-    childId = arena.nextChild(tokenStart, childId)
+    childId = structure.nextChild(tokenStart, childId)
   ) {
-    if (childId >= 0 && arena.isBlock(childId)) {
+    if (childId >= 0 && structure.isBlock(childId)) {
       children.push(
         buildBlockNode<typeof children[number]>(
           childId,

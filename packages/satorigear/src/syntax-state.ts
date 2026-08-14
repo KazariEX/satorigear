@@ -1,5 +1,10 @@
-import { type BlockArena, type BlockArenaChange, type BlockRecord, noBlockEntry } from "./block/arena.ts";
 import { BlockKind } from "./block/kinds.ts";
+import {
+  type BlockRecord,
+  type BlockStructure,
+  type BlockStructureChange,
+  noBlockEntry,
+} from "./block/structure.ts";
 import { InlineRegion, type InlineRegionBinding, type InlineRegionSyntax } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
@@ -23,15 +28,15 @@ export class SyntaxState {
   #definitionEntries?: BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
   #profile: InlineProfile;
-  #arena: BlockArena;
+  #structure: BlockStructure;
 
   constructor(
     source: string,
     profile: InlineProfile,
-    arena: BlockArena,
+    structure: BlockStructure,
   ) {
     this.#profile = profile;
-    this.#arena = arena;
+    this.#structure = structure;
     this.update(source);
   }
 
@@ -39,13 +44,13 @@ export class SyntaxState {
     return this.#blocks;
   }
 
-  update(source: string, change?: BlockArenaChange, stableBlockCount = 0): void {
+  update(source: string, change?: BlockStructureChange, stableBlockCount = 0): void {
     // 1. Keep the scanner-stable prefix and collect syntax only through the rebuilt record range.
-    const arena = this.#arena;
+    const structure = this.#structure;
     const previousBlocks = this.#blocks;
     const oldStart = change?.oldStart ?? 0;
     const oldEnd = change?.oldEnd ?? 0;
-    const newEnd = change?.newEnd ?? arena.records.length;
+    const newEnd = change?.newEnd ?? structure.records.length;
     const blocks: SyntaxBlock[] = stableBlockCount === 0 ? [] : previousBlocks.slice(0, stableBlockCount);
     const previousDefinitionEntries = this.#definitionEntries;
     const definitions = new Set<string>();
@@ -69,15 +74,15 @@ export class SyntaxState {
       tokenBase: number,
       blockIndex: number,
     ): void => {
-      const rule = arena.ruleOf(tokenStart);
+      const rule = structure.ruleOf(tokenStart);
       const definitionKey = rule.definitionKey;
       if (definitionKey) {
-        const key = definitionKey(arena.tokens, tokenBase);
+        const key = definitionKey(structure.tokens, tokenBase);
         (definitionEntries ??= []).push({ blockIndex, key });
         definitions.add(key);
       }
       if (rule.inlineContent) {
-        const inlineView = inlineViewOf(source, arena, tokenStart);
+        const inlineView = inlineViewOf(source, structure, tokenStart);
         if (inlineView) {
           bindings.push({
             id: tokenStart,
@@ -89,14 +94,14 @@ export class SyntaxState {
         return;
       }
       for (
-        let child = arena.firstChild(tokenStart);
+        let child = structure.firstChild(tokenStart);
         child !== noBlockEntry;
-        child = arena.nextChild(tokenStart, child)
+        child = structure.nextChild(tokenStart, child)
       ) {
         if (child >= 0) {
           collectNode(
             child,
-            arena.tokens.start(child),
+            structure.tokens.start(child),
             child,
             blockIndex,
           );
@@ -106,9 +111,9 @@ export class SyntaxState {
     // One flat list records changed-block boundaries without allocating a binding array per block.
     const bindingOffsets: number[] = [];
     for (let index = stableBlockCount; index < newEnd; index++) {
-      const record = arena.records[index];
+      const record = structure.records[index];
       const tokenBase = record.tokenStart;
-      const offset = arena.tokens.start(tokenBase);
+      const offset = structure.tokens.start(tokenBase);
       bindingOffsets.push(bindings.length);
       collectNode(record.tokenStart, offset, tokenBase, index);
       blocks.push({
@@ -140,10 +145,10 @@ export class SyntaxState {
     }
 
     const firstSuffixBlock = previousBlocks[oldEnd];
-    const firstSuffixRecord = arena.records[newEnd];
+    const firstSuffixRecord = structure.records[newEnd];
     // Scanner convergence makes every record in the retained suffix share these two shifts.
     const suffixOffsetDelta = firstSuffixBlock && firstSuffixRecord
-      ? arena.tokens.start(firstSuffixRecord.tokenStart) - firstSuffixBlock.offset
+      ? structure.tokens.start(firstSuffixRecord.tokenStart) - firstSuffixBlock.offset
       : 0;
     const suffixTokenDelta = firstSuffixBlock && firstSuffixRecord
       ? firstSuffixRecord.tokenStart - firstSuffixBlock.tokenBase
@@ -244,18 +249,18 @@ export class SyntaxState {
 export function createInlineRegions(
   source: string,
   profile: InlineProfile,
-  arena: BlockArena,
+  structure: BlockStructure,
 ): readonly InlineRegionSyntax[] {
   const definitions = new Set<string>();
   const regions: InlineRegionSyntax[] = [];
 
   const collect = (tokenStart: number, tokenBase: number): void => {
-    const rule = arena.ruleOf(tokenStart);
+    const rule = structure.ruleOf(tokenStart);
     if (rule.definitionKey) {
-      definitions.add(rule.definitionKey(arena.tokens, tokenBase));
+      definitions.add(rule.definitionKey(structure.tokens, tokenBase));
     }
     if (rule.inlineContent) {
-      const inlineView = inlineViewOf(source, arena, tokenStart);
+      const inlineView = inlineViewOf(source, structure, tokenStart);
       if (inlineView) {
         regions.push({
           id: tokenStart,
@@ -267,16 +272,16 @@ export function createInlineRegions(
       return;
     }
     for (
-      let child = arena.firstChild(tokenStart);
+      let child = structure.firstChild(tokenStart);
       child !== noBlockEntry;
-      child = arena.nextChild(tokenStart, child)
+      child = structure.nextChild(tokenStart, child)
     ) {
       if (child >= 0) {
         collect(child, child);
       }
     }
   };
-  for (const record of arena.records) {
+  for (const record of structure.records) {
     collect(record.tokenStart, record.tokenStart);
   }
 
@@ -298,22 +303,22 @@ export function createInlineRegions(
 
 function inlineViewOf(
   source: string,
-  arena: BlockArena,
+  structure: BlockStructure,
   tokenStart: number,
 ): SourceView | undefined {
   let firstStart = -1;
   let firstEnd = -1;
   let spans: SourceSpan[] | undefined;
   for (
-    let entry = arena.firstChild(tokenStart);
+    let entry = structure.firstChild(tokenStart);
     entry !== noBlockEntry;
-    entry = arena.nextChild(tokenStart, entry)
+    entry = structure.nextChild(tokenStart, entry)
   ) {
     if (entry < 0) {
-      const token = arena.leafToken(entry);
-      if (arena.tokens.kind(token) === BlockKind.InlineChunk) {
-        const start = arena.tokens.start(token);
-        const end = arena.tokens.end(token);
+      const token = structure.leafToken(entry);
+      if (structure.tokens.kind(token) === BlockKind.InlineChunk) {
+        const start = structure.tokens.start(token);
+        const end = structure.tokens.end(token);
         if (firstStart < 0) {
           firstStart = start;
           firstEnd = end;

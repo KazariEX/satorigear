@@ -1,9 +1,9 @@
 import { parse as parseYaml } from "yaml";
 import type { Paragraph, RootContent } from "mdast";
-import { noBlockEntry } from "../../../block/arena.ts";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { BlockKind } from "../../../block/kinds.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
+import { noBlockEntry } from "../../../block/structure.ts";
 import {
   appendLogicalToken,
 } from "../../../block/tokens.ts";
@@ -359,7 +359,7 @@ function parseYamlAttributes(
   token: NonNullable<ReturnType<typeof directBlockToken>>,
   context: Parameters<BlockNodeBuilder>[1],
 ): Attributes {
-  const value: unknown = parseYaml(context.arena.tokens.text(context.source, token), { schema: "core" });
+  const value: unknown = parseYaml(context.structure.tokens.text(context.source, token), { schema: "core" });
   if (value === null || value === void 0) {
     return {};
   }
@@ -374,13 +374,13 @@ function directRule(
   rule: string,
   context: Parameters<BlockNodeBuilder>[1],
 ): number | undefined {
-  const arena = context.arena;
+  const structure = context.structure;
   for (
-    let child = arena.firstChild(tokenStart);
+    let child = structure.firstChild(tokenStart);
     child !== noBlockEntry;
-    child = arena.nextChild(tokenStart, child)
+    child = structure.nextChild(tokenStart, child)
   ) {
-    if (child >= 0 && arena.ruleNameOf(child) === rule) {
+    if (child >= 0 && structure.ruleNameOf(child) === rule) {
       return child;
     }
   }
@@ -393,8 +393,8 @@ const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
     type: "paragraph",
     children: buildInlineChildren(tokenStart, context, true),
     position: {
-      start: context.arena.tokens.start(open),
-      end: context.arena.tokens.end(close),
+      start: context.structure.tokens.start(open),
+      end: context.structure.tokens.end(close),
     },
   };
 };
@@ -452,7 +452,7 @@ export const blockRules: BlockFeature["rules"] = [
       const close = blockToken(tokenStart, BlockKind.BlockComponentClose, context);
       const attributesToken = directBlockToken(tokenStart, BlockKind.BlockComponentAttributes, context);
       const parsed = attributesToken !== void 0
-        ? parseAttributes(context.source, context.arena.tokens.start(attributesToken))
+        ? parseAttributes(context.source, context.structure.tokens.start(attributesToken))
         : void 0;
       const yamlToken = directBlockToken(tokenStart, BlockKind.BlockComponentYamlProps, context);
       const label = directRule(tokenStart, "BlockComponentLabel", context);
@@ -461,7 +461,7 @@ export const blockRules: BlockFeature["rules"] = [
         children.push(buildBlockLabel(label, context));
       }
       children.push(...buildBlockChildren(tokenStart, context));
-      const opening = context.arena.tokens.text(context.source, open);
+      const opening = context.structure.tokens.text(context.source, open);
       return {
         type: "blockComponent",
         name: normalizeComponentName(opening.slice(opening.lastIndexOf(":") + 1).trim()),
@@ -469,8 +469,8 @@ export const blockRules: BlockFeature["rules"] = [
           ? { ...parseYamlAttributes(yamlToken, context), ...parsed?.attributes }
           : (parsed?.attributes ?? {}),
         position: {
-          start: context.arena.tokens.start(open),
-          end: context.arena.tokens.end(close),
+          start: context.structure.tokens.start(open),
+          end: context.structure.tokens.end(close),
         },
         children,
       };
@@ -488,7 +488,7 @@ export const blockRules: BlockFeature["rules"] = [
       const close = blockToken(tokenStart, BlockKind.BlockComponentSlotClose, context);
       const attributesToken = directBlockToken(tokenStart, BlockKind.BlockComponentAttributes, context);
       const parsed = attributesToken !== void 0
-        ? parseAttributes(context.source, context.arena.tokens.start(attributesToken))
+        ? parseAttributes(context.source, context.structure.tokens.start(attributesToken))
         : void 0;
       const children = buildBlockChildren(tokenStart, context);
       return {
@@ -496,12 +496,12 @@ export const blockRules: BlockFeature["rules"] = [
         name: "template",
         attributes: {
           ...parsed?.attributes,
-          name: normalizeComponentName(context.arena.tokens.text(context.source, open).slice(1).trim()),
+          name: normalizeComponentName(context.structure.tokens.text(context.source, open).slice(1).trim()),
         },
         children,
         position: {
-          start: context.arena.tokens.start(open),
-          end: context.arena.tokens.end(close),
+          start: context.structure.tokens.start(open),
+          end: context.structure.tokens.end(close),
         },
       };
     },

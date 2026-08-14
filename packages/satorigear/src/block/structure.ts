@@ -9,15 +9,15 @@ export interface BlockRecord {
   tokenStart: number;
 }
 
-export interface BlockArenaChange {
-  // The record update replaces old [oldStart, oldEnd) with new [oldStart, newEnd).
+// The record update replaces old [oldStart, oldEnd) with new [oldStart, newEnd).
+export interface BlockStructureChange {
   readonly newEnd: number;
   readonly oldEnd: number;
   readonly oldStart: number;
 }
 
 // Semantic nodes are ranges in the scanner-owned token stream. Only top-level records carry identity.
-export class BlockArena {
+export class BlockStructure {
   #records: BlockRecord[] = [];
   #schema: BlockSyntaxSchema;
   readonly #tokens: BlockTokenStream;
@@ -39,7 +39,7 @@ export class BlockArena {
     return this.#tokens;
   }
 
-  update(change: BlockTokenChange): BlockArenaChange {
+  update(change: BlockTokenChange): BlockStructureChange {
     const previous = this.#records;
     let prefixEnd = 0;
     while (prefixEnd < previous.length && previous[prefixEnd].tokenEnd <= change.oldStart) {

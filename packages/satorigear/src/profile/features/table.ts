@@ -1,7 +1,7 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
-import { noBlockEntry } from "../../block/arena.ts";
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
+import { noBlockEntry } from "../../block/structure.ts";
 import { type BlockBuildContext, type BlockNodeBuilder, blockToken } from "../../fragment/block.ts";
 import { buildInlineChildren } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -144,14 +144,14 @@ function childRules(
   rule: string,
   context: BlockBuildContext,
 ): number[] {
-  const arena = context.arena;
+  const structure = context.structure;
   const result: number[] = [];
   for (
-    let child = arena.firstChild(tokenStart);
+    let child = structure.firstChild(tokenStart);
     child !== noBlockEntry;
-    child = arena.nextChild(tokenStart, child)
+    child = structure.nextChild(tokenStart, child)
   ) {
-    if (child >= 0 && arena.ruleNameOf(child) === rule) {
+    if (child >= 0 && structure.ruleNameOf(child) === rule) {
       result.push(child);
     }
   }
@@ -165,8 +165,8 @@ const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context) => {
     type: "tableCell",
     children: buildInlineChildren(tokenStart, context, true),
     position: {
-      start: context.arena.tokens.start(open),
-      end: context.arena.tokens.start(close),
+      start: context.structure.tokens.start(open),
+      end: context.structure.tokens.start(close),
     },
   };
 };
@@ -181,8 +181,8 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
     type: "tableRow",
     children,
     position: {
-      start: context.arena.tokens.start(open),
-      end: context.arena.tokens.start(close),
+      start: context.structure.tokens.start(open),
+      end: context.structure.tokens.start(close),
     },
   };
 };
@@ -191,17 +191,17 @@ function tableAlignment(
   tokenStart: number,
   context: BlockBuildContext,
 ): AlignType[] {
-  const arena = context.arena;
+  const structure = context.structure;
   const result: AlignType[] = [];
   for (
-    let child = arena.firstChild(tokenStart);
+    let child = structure.firstChild(tokenStart);
     child !== noBlockEntry;
-    child = arena.nextChild(tokenStart, child)
+    child = structure.nextChild(tokenStart, child)
   ) {
     if (child >= 0) {
       continue;
     }
-    const kind = arena.tokens.kind(arena.leafToken(child));
+    const kind = structure.tokens.kind(structure.leafToken(child));
     result.push(
       kind === BlockKind.TableAlignLeft
         ? "left"
@@ -303,8 +303,8 @@ export const feature: SyntaxFeature = {
             align: tableAlignment(delimiter, context),
             children: rows,
             position: {
-              start: context.arena.tokens.start(open),
-              end: context.arena.tokens.start(close),
+              start: context.structure.tokens.start(open),
+              end: context.structure.tokens.start(close),
             },
           };
         },

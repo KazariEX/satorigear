@@ -1,5 +1,4 @@
 import type { List, ListItem } from "mdast";
-import { noBlockEntry } from "../../block/arena.ts";
 import { BlockKind } from "../../block/kinds.ts";
 import {
   type BlockLine,
@@ -8,6 +7,7 @@ import {
   isBlank,
   lineIndent,
 } from "../../block/lines.ts";
+import { noBlockEntry } from "../../block/structure.ts";
 import {
   type BlockBuildContext,
   blockEnd,
@@ -176,18 +176,18 @@ function childrenSpread(
   context: BlockBuildContext,
   nestedRule?: string,
 ): boolean {
-  const arena = context.arena;
+  const structure = context.structure;
   let previous: SourceSpan | undefined;
   for (
-    let childId = arena.firstChild(tokenStart);
+    let childId = structure.firstChild(tokenStart);
     childId !== noBlockEntry;
-    childId = arena.nextChild(tokenStart, childId)
+    childId = structure.nextChild(tokenStart, childId)
   ) {
     if (
       childId >= 0 && (
         nestedRule === void 0
-          ? arena.isBlock(childId)
-          : arena.ruleNameOf(childId) === nestedRule
+          ? structure.isBlock(childId)
+          : structure.ruleNameOf(childId) === nestedRule
       )
     ) {
       const current = payloadBounds(childId, context);
@@ -201,7 +201,7 @@ function childrenSpread(
 }
 
 const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
-  const rule = context.arena.ruleNameOf(tokenStart);
+  const rule = context.structure.ruleNameOf(tokenStart);
   if (rule !== "OrderedListItem" && rule !== "UnorderedListItem") {
     throw new Error(`Expected list item syntax, received ${rule}`);
   }
@@ -217,7 +217,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
     checked: null,
     children,
     position: {
-      start: context.arena.tokens.start(marker),
+      start: context.structure.tokens.start(marker),
       end: lastChildEnd(children, blockEnd(tokenStart, context)),
     },
   };
@@ -225,7 +225,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
 
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context) => {
-    const arena = context.arena;
+    const structure = context.structure;
     const itemRule = ordered ? "OrderedListItem" : "UnorderedListItem";
     const listMarker = blockToken(
       tokenStart,
@@ -234,23 +234,23 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     );
     const items: SpannedNode<ListItem>[] = [];
     for (
-      let childId = arena.firstChild(tokenStart);
+      let childId = structure.firstChild(tokenStart);
       childId !== noBlockEntry;
-      childId = arena.nextChild(tokenStart, childId)
+      childId = structure.nextChild(tokenStart, childId)
     ) {
-      if (childId >= 0 && arena.ruleNameOf(childId) === itemRule) {
+      if (childId >= 0 && structure.ruleNameOf(childId) === itemRule) {
         items.push(buildListItem(childId, context));
       }
     }
     return {
       type: "list",
       ordered,
-      start: ordered ? Number.parseInt(context.arena.tokens.text(context.source, listMarker), 10) : null,
+      start: ordered ? Number.parseInt(context.structure.tokens.text(context.source, listMarker), 10) : null,
       spread: childrenSpread(tokenStart, false, context, itemRule),
       children: items,
       position: {
-        start: context.arena.tokens.start(listMarker),
-        end: lastChildEnd(items, context.arena.tokens.end(listMarker)),
+        start: context.structure.tokens.start(listMarker),
+        end: lastChildEnd(items, context.structure.tokens.end(listMarker)),
       },
     };
   };
