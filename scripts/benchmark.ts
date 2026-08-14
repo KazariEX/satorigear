@@ -6,6 +6,7 @@ import { corpusLabel } from "../test/benchmark/helpers/utils.ts";
 
 const modes = ["parse only", "fully materialized"] as const;
 const engines = ["satorigear", "satteri", "remark"] as const;
+const comparedEngines = ["satorigear", "satteri"] as const;
 const rounds = 5;
 
 type BenchmarkMode = typeof modes[number];
@@ -29,6 +30,8 @@ interface MitataOutput {
   context: BenchmarkContext;
 }
 
+type BenchmarkRound = ReadonlyMap<string, number>;
+
 const root = join(import.meta.dirname, "..");
 const readmePath = join(root, "README.md");
 const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
@@ -39,11 +42,15 @@ const engineNames: Record<Engine, string> = {
   satteri: "Sätteri",
 };
 
-function runBenchmark(file: string): MitataOutput {
+function runSuite(file: string, engine: Engine): MitataOutput {
   const result = spawnSync(process.execPath, ["--expose-gc", join(root, file)], {
     cwd: root,
     encoding: "utf8",
-    env: { ...process.env, BENCHMARK_FORMAT: "json" },
+    env: {
+      ...process.env,
+      BENCHMARK_ENGINE: engine,
+      BENCHMARK_FORMAT: "json",
+    },
     maxBuffer: 16 * 1024 * 1024,
   });
   if (result.error) {
@@ -56,28 +63,43 @@ function runBenchmark(file: string): MitataOutput {
   return JSON.parse(result.stdout) as MitataOutput;
 }
 
-function collectTimes(outputs: readonly MitataOutput[]): Map<string, number> {
-  const samples = new Map<string, number[]>();
-  for (const output of outputs) {
-    for (const trial of output.benchmarks) {
-      for (const run of trial.runs) {
-        if (run.error || !run.stats) {
-          throw new Error(`${run.name}: ${run.error?.message ?? "benchmark produced no statistics"}`);
-        }
-        const values = samples.get(run.name);
-        if (values) {
-          values.push(run.stats.avg);
-        }
-        else {
-          samples.set(run.name, [run.stats.avg]);
-        }
-      }
+function median(values: readonly number[]): number {
+  const sorted = values.toSorted((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+function addOutput(times: Map<string, number>, output: MitataOutput): void {
+  for (const run of output.benchmarks.flatMap((benchmark) => benchmark.runs)) {
+    if (run.error || !run.stats) {
+      throw new Error(`${run.name}: ${run.error?.message ?? "benchmark produced no statistics"}`);
     }
+    if (times.has(run.name)) {
+      throw new Error(`Duplicate benchmark result: ${run.name}`);
+    }
+    times.set(run.name, run.stats.avg);
   }
-  return new Map([...samples].map(([name, values]) => {
-    values.sort((a, b) => a - b);
-    return [name, values[Math.floor(values.length / 2)]];
-  }));
+}
+
+function benchmarkResult(
+  rounds: readonly BenchmarkRound[],
+  name: string,
+  baselineName: string,
+): { relativeTime: number; time: number } | undefined {
+  const times: number[] = [];
+  const relativeTimes: number[] = [];
+  for (const round of rounds) {
+    const time = round.get(name);
+    const baseline = round.get(baselineName);
+    if (time === void 0 || baseline === void 0) {
+      return;
+    }
+    times.push(time);
+    relativeTimes.push(time / baseline);
+  }
+  return {
+    relativeTime: median(relativeTimes),
+    time: median(times),
+  };
 }
 
 function formatTime(nanoseconds: number): string {
@@ -92,13 +114,13 @@ function formatTime(nanoseconds: number): string {
   return `${value.toFixed(digits)} ${unit}`;
 }
 
-function formatRelativeSpeed(time: number, baseline: number): string {
-  if (time === baseline) {
+function formatRelativeSpeed(relativeTime: number): string {
+  if (relativeTime === 1) {
     return "baseline";
   }
-  return time < baseline
-    ? `↑ ${(baseline / time).toFixed(2)}×`
-    : `↓ ${(time / baseline).toFixed(2)}×`;
+  return relativeTime < 1
+    ? `↑ ${(1 / relativeTime).toFixed(2)}×`
+    : `↓ ${relativeTime.toFixed(2)}×`;
 }
 
 function formatThroughput(bytes: number, nanoseconds: number): string {
@@ -112,14 +134,11 @@ function benchmarkName(engine: Engine, mode: BenchmarkMode, corpus: BenchmarkCor
 }
 
 function renderCorpus(
-  times: ReadonlyMap<string, number>,
+  rounds: readonly BenchmarkRound[],
   mode: BenchmarkMode,
   corpus: BenchmarkCorpus,
 ): string {
-  const baseline = times.get(benchmarkName("satorigear", mode, corpus));
-  if (baseline === void 0) {
-    throw new Error(`Missing SatoriGear baseline for ${corpus.name}`);
-  }
+  const baselineName = benchmarkName("satorigear", mode, corpus);
   const lines = [
     `##### ${corpusLabel(corpus)}`,
     "",
@@ -127,41 +146,45 @@ function renderCorpus(
     "| --- | ---: | ---: | ---: |",
   ];
   for (const engine of engines) {
-    const time = times.get(benchmarkName(engine, mode, corpus));
-    if (time === void 0) {
+    const name = benchmarkName(engine, mode, corpus);
+    const result = benchmarkResult(rounds, name, baselineName);
+    if (!result) {
       continue;
     }
     const engineName = engine === "satorigear" ? `**${engineNames[engine]}**` : engineNames[engine];
     lines.push(
-      `| ${engineName} | ${formatTime(time)} | ${formatRelativeSpeed(time, baseline)} | ${formatThroughput(corpus.bytes, time)} |`,
+      `| ${engineName} | ${formatTime(result.time)} | ${formatRelativeSpeed(result.relativeTime)} | ${formatThroughput(corpus.bytes, result.time)} |`,
     );
+  }
+  if (lines.length === 4) {
+    throw new Error(`Missing benchmark results for ${corpus.name}`);
   }
   return lines.join("\n");
 }
 
 function renderProfile(
-  times: ReadonlyMap<string, number>,
+  rounds: readonly BenchmarkRound[],
   mode: BenchmarkMode,
   profile: BenchmarkCorpus["profile"],
 ): string {
   return corpora
     .filter((corpus) => corpus.profile === profile)
-    .map((corpus) => renderCorpus(times, mode, corpus))
+    .map((corpus) => renderCorpus(rounds, mode, corpus))
     .join("\n\n");
 }
 
-function section(times: ReadonlyMap<string, number>, mode: BenchmarkMode): string {
+function section(rounds: readonly BenchmarkRound[], mode: BenchmarkMode): string {
   return [
     "<details>",
     `<summary><strong>${mode === "parse only" ? "Parse only" : "Fully materialized"}</strong></summary>`,
     "",
     "#### CommonMark",
     "",
-    renderProfile(times, mode, "commonmark"),
+    renderProfile(rounds, mode, "commonmark"),
     "",
     "#### Built-in features",
     "",
-    renderProfile(times, mode, "features"),
+    renderProfile(rounds, mode, "features"),
     "",
     "</details>",
   ].join("\n");
@@ -178,21 +201,45 @@ function replaceSection(source: string, name: string, content: string): string {
   return `${source.slice(0, startIndex + start.length)}\n\n${content}\n\n${source.slice(endIndex)}`;
 }
 
-const outputs: MitataOutput[] = [];
-for (let round = 1; round <= rounds; round++) {
-  console.log(`Benchmark round ${round}/${rounds}`);
-  outputs.push(
-    runBenchmark("test/benchmark/parse.bench.ts"),
-    runBenchmark("test/benchmark/features.bench.ts"),
-  );
+const times = Array.from({ length: rounds }, () => new Map<string, number>());
+const suites = [
+  { file: "test/benchmark/parse.bench.ts", references: ["remark"] },
+  { file: "test/benchmark/features.bench.ts", references: [] },
+] as const;
+
+let context: BenchmarkContext | undefined;
+for (const suite of suites) {
+  console.log(`Benchmarking ${suite.file}`);
+  for (let round = 0; round < rounds; round++) {
+    const order = round % 2 === 0 ? comparedEngines : comparedEngines.toReversed();
+    console.log(`  paired round ${round + 1}/${rounds}`);
+    for (const engine of order) {
+      const output = runSuite(suite.file, engine);
+      context ??= output.context;
+      addOutput(times[round], output);
+    }
+  }
 }
-const times = collectTimes(outputs);
+// Keep slower reference engines outside the compared engines' thermal chain.
+for (const suite of suites) {
+  console.log(`Benchmarking ${suite.file}`);
+  for (const engine of suite.references) {
+    for (let round = 0; round < rounds; round++) {
+      console.log(`  ${engine} round ${round + 1}/${rounds}`);
+      addOutput(times[round], runSuite(suite.file, engine));
+    }
+  }
+}
+if (context === void 0) {
+  throw new Error("No benchmark results");
+}
+
 let readme = readFileSync(readmePath, "utf8");
-const { arch, cpu, runtime, version } = outputs[0].context;
+const { arch, cpu, runtime, version } = context;
 readme = replaceSection(
   readme,
   "environment",
-  `> Median of ${rounds} mean-time runs at commit [\`${commit.slice(0, 7)}\`](https://github.com/KazariEX/satorigear/commit/${commit}) on ${cpu.name}, ${runtime} ${version}, ${arch}. Comparisons are relative to SatoriGear (↑ faster, ↓ slower); lower time and higher throughput are better.`,
+  `> Median of ${rounds} isolated mean-time runs at commit [\`${commit.slice(0, 7)}\`](https://github.com/KazariEX/satorigear/commit/${commit}) on ${cpu.name}, ${runtime} ${version}, ${arch}. SatoriGear and Sätteri run in paired AB/BA order; comparisons are normalized to SatoriGear (↑ faster, ↓ slower). Lower time and higher throughput are better.`,
 );
 for (const mode of modes) {
   readme = replaceSection(readme, mode, section(times, mode));

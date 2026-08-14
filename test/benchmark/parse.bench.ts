@@ -7,12 +7,14 @@ import { corpusLabel, parseCorpus } from "./helpers/utils.ts";
 const engines = createCommonmarkEngines();
 const corpora = load().filter((corpus) => corpus.profile === "commonmark");
 
-// Parser (profile) construction is intentionally separate from steady-state document parsing.
-summary(() => {
-  bench("satorigear, create parser", () => {
-    do_not_optimize(createParser());
+if (process.env.BENCHMARK_ENGINE === void 0 || process.env.BENCHMARK_ENGINE === "satorigear") {
+  // Parser (profile) construction is intentionally separate from steady-state document parsing.
+  summary(() => {
+    bench("satorigear, create parser", () => {
+      do_not_optimize(createParser());
+    });
   });
-});
+}
 
 for (const corpus of corpora) {
   summary(() => {
