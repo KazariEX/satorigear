@@ -68,11 +68,6 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
   ];
   const syntax: InlineSyntaxDefinition[] = [
     {
-      kind: "leaf",
-      token: InlineKind.Delimiter,
-      build: buildInlineText,
-    },
-    {
       kind: "pair",
       open: InlineKind.EmphasisOpen,
       close: InlineKind.EmphasisClose,

@@ -84,6 +84,7 @@ export const feature: SyntaxFeature = {
     ],
     syntax: [
       { kind: "leaf", token: InlineKind.Text, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.Delimiter, build: buildInlineText },
       { kind: "leaf", token: InlineKind.Escape, build: buildInlineText },
       { kind: "leaf", token: InlineKind.Entity, build: buildInlineText },
     ],
