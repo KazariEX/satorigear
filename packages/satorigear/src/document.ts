@@ -130,16 +130,17 @@ export class DocumentImpl implements Document {
     };
 
     const nextFragments = blocks.map((block) => {
+      const offset = this.#blockStructure.tokens.start(block.record.tokenStart);
       const previous = previousFragments?.get(block.record);
       const fragment = previous?.version === block.version
         ? previous
         : {
           node: buildBlockNode(block.record.tokenStart, context),
-          offset: block.offset,
-          origin: block.offset,
+          offset,
+          origin: offset,
           version: block.version,
         };
-      fragment.offset = block.offset;
+      fragment.offset = offset;
       return fragment;
     });
 

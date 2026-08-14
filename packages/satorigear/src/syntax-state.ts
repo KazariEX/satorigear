@@ -11,7 +11,6 @@ import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type Source
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
 
 interface SyntaxBlock {
-  offset: number;
   record: BlockRecord;
   regions: readonly InlineRegion[];
   version: number;
@@ -27,6 +26,7 @@ export class SyntaxState {
   #definitionEntries?: BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
   #profile: InlineProfile;
+  #sourceLength = 0;
   #structure: BlockStructure;
 
   constructor(
@@ -116,7 +116,6 @@ export class SyntaxState {
       bindingOffsets.push(bindings.length);
       collectNode(record.tokenStart, offset, tokenBase, index);
       blocks.push({
-        offset,
         record,
         regions: emptyArray,
         version: 0,
@@ -142,12 +141,8 @@ export class SyntaxState {
       }
     }
 
-    const firstSuffixBlock = previousBlocks[oldEnd];
-    const firstSuffixRecord = structure.records[newEnd];
-    // Scanner convergence makes every record in the retained suffix share these two shifts.
-    const suffixOffsetDelta = firstSuffixBlock && firstSuffixRecord
-      ? structure.tokens.start(firstSuffixRecord.tokenStart) - firstSuffixBlock.offset
-      : 0;
+    // Scanner convergence makes every record in the retained suffix share the document-length shift.
+    const suffixOffsetDelta = source.length - this.#sourceLength;
     const suffixTokenDelta = change?.tokenDelta ?? 0;
     for (let index = oldEnd; index < previousBlocks.length; index++) {
       const block = previousBlocks[index];
@@ -156,7 +151,6 @@ export class SyntaxState {
           region.shift(suffixOffsetDelta, suffixTokenDelta);
         }
       }
-      block.offset += suffixOffsetDelta;
       blocks.push(block);
     }
 
@@ -238,6 +232,7 @@ export class SyntaxState {
     this.#blocks = blocks;
     this.#definitionEntries = definitionEntries;
     this.#definitions = definitions;
+    this.#sourceLength = source.length;
   }
 }
 
