@@ -42,5 +42,4 @@ export const enum InlineKind {
   InlineSpanClose,
   Delimiter,
   Newline,
-  InlineBoundary,
 }

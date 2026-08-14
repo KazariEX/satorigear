@@ -49,10 +49,7 @@ function bracketIndex(tokens: InlineTokenStream): BracketIndex {
   const referenceSuffixes = new Map<number, number>();
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const kind = inlineTokenKind(tokens, index);
-    if (kind === InlineKind.InlineBoundary) {
-      stack.length = 0;
-    }
-    else if (kind === InlineKind.BracketOpen) {
+    if (kind === InlineKind.BracketOpen) {
       stack.push({ image: false, start: inlineTokenStart(tokens, index) });
     }
     else if (kind === InlineKind.ImageOpen) {

@@ -87,27 +87,12 @@ function attributeSpansOf(source: string, tokens: InlineTokenStream): AttributeS
   const spans: AttributeSpan[] = [];
   let consumedEnd = 0;
   let hasContent = false;
-  let regionEnd = source.length;
-  const boundaries: number[] = [];
-  for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    if (inlineTokenKind(tokens, index) === InlineKind.InlineBoundary) {
-      boundaries.push(inlineTokenStart(tokens, index));
-    }
-  }
-  regionEnd = boundaries[0] ?? source.length;
-  let boundaryIndex = 0;
   let attributeLineEnd = 0;
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const kind = inlineTokenKind(tokens, index);
     const start = inlineTokenStart(tokens, index);
     const end = inlineTokenEnd(tokens, index);
-    while (boundaryIndex < boundaries.length && boundaries[boundaryIndex] <= start) {
-      regionEnd = boundaries[boundaryIndex + 1] ?? source.length;
-      boundaryIndex++;
-      hasContent = false;
-      attributeLineEnd = 0;
-    }
-    if (kind === InlineKind.InlineBoundary || end <= consumedEnd) {
+    if (end <= consumedEnd) {
       continue;
     }
     if (kind !== InlineKind.Text) {
@@ -121,7 +106,7 @@ function attributeSpansOf(source: string, tokens: InlineTokenStream): AttributeS
       }
       const invalidPrefix = source[offset + 1] === "{" || source[offset - 1] === "{" || source[offset - 1] === "$";
       if (!invalidPrefix && offset >= attributeLineEnd) {
-        attributeLineEnd = lineEnd(source, offset, regionEnd);
+        attributeLineEnd = lineEnd(source, offset, source.length);
       }
       const parsedEnd = invalidPrefix ? void 0 : attributesEnd(source, offset, attributeLineEnd);
       if (parsedEnd === void 0) {
@@ -255,10 +240,7 @@ function transformAttributeTokens(source: string, tokens: InlineTokenStream): In
   let terminal = true;
   for (let index = inlineTokenCount(result) - 1; index >= 0; index--) {
     const kind = inlineTokenKind(result, index);
-    if (kind === InlineKind.InlineBoundary) {
-      terminal = true;
-    }
-    else if (kind === InlineKind.AttributesToken) {
+    if (kind === InlineKind.AttributesToken) {
       if (terminal) {
         setInlineTokenFlags(
           result,
