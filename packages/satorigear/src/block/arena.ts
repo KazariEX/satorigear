@@ -1,68 +1,34 @@
-import { BlockKind } from "./kinds.ts";
 import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
 import type { BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 
-// Object identity remains stable for unchanged top-level blocks while released numeric IDs may be reused.
+export const noBlockEntry = Number.MIN_SAFE_INTEGER;
+
+// Object identity remains stable for unchanged top-level blocks.
 export interface BlockRecord {
-  readonly id: number;
+  id: number;
   tokenEnd: number;
   tokenStart: number;
 }
 
 export interface BlockArenaChange {
-  // Arena surgery replaces old [oldStart, oldEnd) with new [oldStart, newEnd).
+  // The record update replaces old [oldStart, oldEnd) with new [oldStart, newEnd).
   readonly newEnd: number;
   readonly oldEnd: number;
   readonly oldStart: number;
 }
 
-interface Frame {
-  close: BlockKind;
-  children: number[];
-  rule?: CompiledBlockRule;
-}
-
-interface FreeEdgeRange {
-  count: number;
-  start: number;
-}
-
-function leaf(tokenIndex: number): number {
-  return ~tokenIndex;
-}
-
-// Relative edges make unchanged top-level trees independent of later source and token shifts.
-// The workspace reclaims ranges across edits and retains array capacity across one-shot documents.
+// Semantic nodes are ranges in the scanner-owned token stream. Only top-level records carry identity.
 export class BlockArena {
-  #buildStarts: number[] = [];
-  #buildTokenEnds: number[] = [];
-  #buildTokenStarts: number[] = [];
-  #edgeCounts: number[] = [0];
-  #edgeLength = 0;
-  #edges: number[] = [];
-  #edgeStarts: number[] = [0];
-  #freeEdges: FreeEdgeRange[] = [];
-  #freeIds: number[] = [];
-  #lengths: number[] = [0];
-  #nodeCount = 0;
   #records: BlockRecord[] = [];
-  #releaseStack: number[] = [];
-  #rules: CompiledBlockRule[];
   #schema: BlockSyntaxSchema;
-  // The scanner owns and mutates this stream; the arena retains the same view for its lifetime.
   readonly #tokens: BlockTokenStream;
 
   constructor(schema: BlockSyntaxSchema, tokens: BlockTokenStream) {
-    this.#rules = [];
     this.#schema = schema;
     this.#tokens = tokens;
   }
 
   build(): void {
-    this.#edgeLength = 0;
-    this.#freeEdges.length = 0;
-    this.#freeIds.length = 0;
-    this.#nodeCount = 0;
     this.#records = this.#buildRange(0, this.#tokens.length);
   }
 
@@ -76,7 +42,6 @@ export class BlockArena {
 
   update(change: BlockTokenChange): BlockArenaChange {
     const previous = this.#records;
-    // Token damage can begin inside a block, so widen it to complete top-level records.
     let prefixEnd = 0;
     while (prefixEnd < previous.length && previous[prefixEnd].tokenEnd <= change.oldStart) {
       prefixEnd++;
@@ -90,15 +55,11 @@ export class BlockArena {
     const buildStart = previous[prefixEnd - 1]?.tokenEnd ?? 0;
     const oldSuffixTokenStart = previous[suffixStart]?.tokenStart;
     const buildEnd = oldSuffixTokenStart === void 0 ? this.#tokens.length : oldSuffixTokenStart + tokenDelta;
-    for (let index = prefixEnd; index < suffixStart; index++) {
-      this.#release(previous[index].id);
-    }
-    this.#coalesceFreeEdges();
-
     const changed = this.#buildRange(buildStart, buildEnd);
     const suffix = previous.slice(suffixStart);
     if (tokenDelta !== 0) {
       for (const block of suffix) {
+        block.id += tokenDelta;
         block.tokenStart += tokenDelta;
         block.tokenEnd += tokenDelta;
       }
@@ -115,221 +76,56 @@ export class BlockArena {
     };
   }
 
-  #allocate(rule: CompiledBlockRule, children: readonly number[]): number {
-    const id = this.#freeIds.pop() ?? this.#nodeCount++;
-    const first = children[0];
-    const last = children.at(-1);
-    const start = first === void 0 ? 0 : this.#entryStart(first);
-    const end = last === void 0 ? start : this.#entryEnd(last);
-    const tokenBase = first === void 0 ? 0 : this.#entryTokenStart(first);
-    const tokenLimit = last === void 0 ? tokenBase : this.#entryTokenEnd(last);
-    const edgeStart = this.#allocateEdges(children.length);
-    this.#edgeStarts[id] = edgeStart;
-    this.#edgeCounts[id] = children.length;
-    for (let index = 0; index < children.length; index++) {
-      const entry = children[index];
-      const edge = (edgeStart + index) * 3;
-      this.#edges[edge] = entry < 0 ? leaf((~entry) - tokenBase) : entry;
-      this.#edges[edge + 1] = this.#entryStart(entry) - start;
-      this.#edges[edge + 2] = this.#entryTokenStart(entry) - tokenBase;
-    }
-    this.#lengths[id] = end - start;
-    this.#rules[id] = rule;
-    this.#buildStarts[id] = start;
-    this.#buildTokenStarts[id] = tokenBase;
-    this.#buildTokenEnds[id] = tokenLimit;
-    return id;
-  }
-
-  #allocateEdges(count: number): number {
-    if (count === 0) {
-      return 0;
-    }
-    let selected = -1;
-    for (let index = 0; index < this.#freeEdges.length; index++) {
-      const candidate = this.#freeEdges[index];
-      if (candidate.count >= count && (selected < 0 || candidate.count < this.#freeEdges[selected].count)) {
-        selected = index;
-      }
-    }
-    if (selected < 0) {
-      const start = this.#edgeLength;
-      this.#edgeLength += count;
-      return start;
-    }
-    const range = this.#freeEdges[selected];
-    const start = range.start;
-    if (range.count === count) {
-      this.#freeEdges.splice(selected, 1);
-    }
-    else {
-      range.start += count;
-      range.count -= count;
-    }
-    return start;
-  }
-
   #buildRange(start: number, end: number): BlockRecord[] {
-    const document: Frame = {
-      close: BlockKind.None,
-      children: [],
-    };
-    const stack = [document];
-
-    for (let index = start; index < end; index++) {
-      const kind = this.#tokens.kind(index);
-      const current = stack.at(-1)!;
-      const spec = this.#schema.frameByOpen[kind];
-      if (spec !== void 0) {
-        stack.push({
-          close: spec.close,
-          children: [leaf(index)],
-          rule: spec.rule,
-        });
-        continue;
+    const records: BlockRecord[] = [];
+    while (start < end) {
+      const length = this.#tokens.nodeLength(start);
+      if (length === 0) {
+        throw new Error(`Block token ${start} does not begin a semantic node`);
       }
-
-      const groupedRule = this.#schema.groupedRuleByToken[kind];
-      if (groupedRule !== void 0) {
-        const children: number[] = [];
-        do {
-          children.push(leaf(index++));
-        } while (
-          index < end &&
-          this.#schema.groupedRuleByToken[this.#tokens.kind(index)] === groupedRule
-        );
-        index--;
-        current.children.push(this.#allocate(groupedRule, children));
-        continue;
-      }
-
-      if (current.close === kind) {
-        current.children.push(leaf(index));
-        stack.pop();
-        const id = this.#allocate(current.rule!, current.children);
-        stack.at(-1)!.children.push(id);
-        continue;
-      }
-
-      const leafRule = this.#schema.ruleByLeaf[kind];
-      if (leafRule !== void 0) {
-        current.children.push(this.#allocate(leafRule, [leaf(index)]));
-        continue;
-      }
-
-      current.children.push(leaf(index));
+      records.push({ id: start, tokenStart: start, tokenEnd: start + length });
+      start += length;
     }
+    return records;
+  }
 
-    if (stack.length !== 1) {
-      throw new Error(`Block token stream did not close ${stack.at(-1)!.rule?.name}`);
+  firstChild(tokenStart: number): number {
+    return ~tokenStart;
+  }
+
+  nextChild(tokenStart: number, entry: number): number {
+    const next = entry < 0 ? ~entry + 1 : entry + this.#tokens.nodeLength(entry);
+    if (next >= tokenStart + this.#tokens.nodeLength(tokenStart)) {
+      return noBlockEntry;
     }
-    return document.children.map((id) => ({
-      id,
-      tokenStart: this.#buildTokenStarts[id],
-      tokenEnd: this.#buildTokenEnds[id],
-    }));
+    return this.#tokens.nodeLength(next) > 0 ? next : ~next;
   }
 
-  #entryEnd(entry: number): number {
-    return entry < 0 ? this.#tokens.end(~entry) : this.#buildStarts[entry] + this.#lengths[entry];
+  leafToken(entry: number): number {
+    return ~entry;
   }
 
-  #entryStart(entry: number): number {
-    return entry < 0 ? this.#tokens.start(~entry) : this.#buildStarts[entry];
+  lenOf(tokenStart: number): number {
+    const end = tokenStart + this.#tokens.nodeLength(tokenStart);
+    return this.#tokens.end(end - 1) - this.#tokens.start(tokenStart);
   }
 
-  #entryTokenEnd(entry: number): number {
-    return entry < 0 ? ~entry + 1 : this.#buildTokenEnds[entry];
+  isBlock(tokenStart: number): boolean {
+    return this.ruleOf(tokenStart).block;
   }
 
-  #entryTokenStart(entry: number): number {
-    return entry < 0 ? ~entry : this.#buildTokenStarts[entry];
+  ruleNameOf(tokenStart: number): string {
+    return this.ruleOf(tokenStart).name;
   }
 
-  #release(id: number): void {
-    const stack = this.#releaseStack;
-    stack.length = 1;
-    stack[0] = id;
-    while (stack.length > 0) {
-      const released = stack.pop()!;
-      const edgeStart = this.#edgeStarts[released];
-      const edgeCount = this.#edgeCounts[released];
-      for (let index = 0; index < edgeCount; index++) {
-        const child = this.#edges[(edgeStart + index) * 3];
-        if (child >= 0) {
-          stack.push(child);
-        }
-      }
-      this.#releaseEdges(released);
-      this.#freeIds.push(released);
+  ruleOf(tokenStart: number): CompiledBlockRule {
+    const kind = this.#tokens.kind(tokenStart);
+    const rule = this.#schema.frameByOpen[kind]?.rule ??
+      this.#schema.groupedRuleByToken[kind] ??
+      this.#schema.ruleByLeaf[kind];
+    if (!rule) {
+      throw new Error(`Block token ${tokenStart} does not begin a semantic node`);
     }
-  }
-
-  #releaseEdges(id: number): void {
-    const count = this.#edgeCounts[id];
-    if (count > 0) {
-      this.#freeEdges.push({ start: this.#edgeStarts[id], count });
-      this.#edgeCounts[id] = 0;
-    }
-  }
-
-  #coalesceFreeEdges(): void {
-    const ranges = this.#freeEdges;
-    if (ranges.length < 2) {
-      return;
-    }
-    ranges.sort((left, right) => left.start - right.start);
-    let write = 0;
-    for (let read = 1; read < ranges.length; read++) {
-      const current = ranges[write];
-      const next = ranges[read];
-      if (current.start + current.count === next.start) {
-        current.count += next.count;
-      }
-      else {
-        ranges[++write] = next;
-      }
-    }
-    ranges.length = write + 1;
-  }
-
-  childAt(id: number, index: number): number {
-    return this.#edges[(this.#edgeStarts[id] + index) * 3];
-  }
-
-  childCount(id: number): number {
-    return this.#edgeCounts[id];
-  }
-
-  childRelAt(id: number, index: number): number {
-    return this.#edges[(this.#edgeStarts[id] + index) * 3 + 1];
-  }
-
-  childTokRelAt(id: number, index: number): number {
-    return this.#edges[(this.#edgeStarts[id] + index) * 3 + 2];
-  }
-
-  leafToken(entry: number, tokenBase: number): number {
-    return tokenBase + ~entry;
-  }
-
-  leafTokenKind(entry: number, tokenBase: number): BlockKind {
-    return this.#tokens.kind(this.leafToken(entry, tokenBase));
-  }
-
-  lenOf(id: number): number {
-    return this.#lengths[id];
-  }
-
-  isBlock(id: number): boolean {
-    return this.#rules[id].block;
-  }
-
-  ruleNameOf(id: number): string {
-    return this.#rules[id].name;
-  }
-
-  ruleOf(id: number): CompiledBlockRule {
-    return this.#rules[id];
+    return rule;
   }
 }

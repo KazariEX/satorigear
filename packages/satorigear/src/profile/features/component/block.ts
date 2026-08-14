@@ -1,5 +1,6 @@
 import { parse as parseYaml } from "yaml";
 import type { Paragraph, RootContent } from "mdast";
+import { noBlockEntry } from "../../../block/arena.ts";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { BlockKind } from "../../../block/kinds.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
@@ -376,13 +377,16 @@ function directRule(
   context: Parameters<BlockNodeBuilder>[3],
 ): { id: number; offset: number; tokenBase: number } | undefined {
   const arena = context.arena;
-  for (let index = 0; index < arena.childCount(nodeId); index++) {
-    const child = arena.childAt(nodeId, index);
+  for (
+    let child = arena.firstChild(nodeId);
+    child !== noBlockEntry;
+    child = arena.nextChild(nodeId, child)
+  ) {
     if (child >= 0 && arena.ruleNameOf(child) === rule) {
       return {
         id: child,
-        offset: offset + arena.childRelAt(nodeId, index),
-        tokenBase: tokenBase + arena.childTokRelAt(nodeId, index),
+        offset: arena.tokens.start(child),
+        tokenBase: child,
       };
     }
   }

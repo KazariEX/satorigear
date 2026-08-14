@@ -1,4 +1,5 @@
 import type { List, ListItem } from "mdast";
+import { noBlockEntry } from "../../block/arena.ts";
 import { BlockKind } from "../../block/kinds.ts";
 import {
   type BlockLine,
@@ -179,24 +180,26 @@ function childrenSpread(
 ): boolean {
   const arena = context.arena;
   let previous: SourceSpan | undefined;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const childId = arena.childAt(nodeId, index);
+  for (
+    let childId = arena.firstChild(nodeId);
+    childId !== noBlockEntry;
+    childId = arena.nextChild(nodeId, childId)
+  ) {
     if (
-      childId < 0 ||
-      (nestedRule === void 0
-        ? !arena.isBlock(childId)
-        : arena.ruleNameOf(childId) !== nestedRule)
+      childId >= 0 && (
+        nestedRule === void 0
+          ? arena.isBlock(childId)
+          : arena.ruleNameOf(childId) === nestedRule
+      )
     ) {
-      continue;
+      const childOffset = arena.tokens.start(childId);
+      const childTokenBase = childId;
+      const current = payloadBounds(childId, childOffset, childTokenBase, context);
+      if (previous && hasBlankLineBetween(context.source, previous.end, current.start, stripBlockQuotes)) {
+        return true;
+      }
+      previous = current;
     }
-    const childOffset = offset + arena.childRelAt(nodeId, index);
-    const childTokenBase = tokenBase + arena.childTokRelAt(nodeId, index);
-    const current = payloadBounds(childId, childOffset, childTokenBase, context);
-    if (previous && hasBlankLineBetween(context.source, previous.end, current.start, stripBlockQuotes)) {
-      return true;
-    }
-    previous = current;
   }
   return false;
 }
@@ -236,14 +239,16 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
       context,
     );
     const items: SpannedNode<ListItem>[] = [];
-    const childCount = arena.childCount(nodeId);
-    for (let index = 0; index < childCount; index++) {
-      const childId = arena.childAt(nodeId, index);
+    for (
+      let childId = arena.firstChild(nodeId);
+      childId !== noBlockEntry;
+      childId = arena.nextChild(nodeId, childId)
+    ) {
       if (childId >= 0 && arena.ruleNameOf(childId) === itemRule) {
         items.push(buildListItem(
           childId,
-          offset + arena.childRelAt(nodeId, index),
-          tokenBase + arena.childTokRelAt(nodeId, index),
+          arena.tokens.start(childId),
+          childId,
           context,
         ));
       }

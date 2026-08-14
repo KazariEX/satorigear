@@ -324,6 +324,7 @@ export class BlockScanner {
       }
       return false;
     });
+    tokens.indexStructure(this.#profile.schema);
     checkpoints.length = checkpointIndex;
 
     this.#source = source;
@@ -420,6 +421,7 @@ export class BlockScanner {
       });
       return false;
     });
+    replacement.indexStructure(this.#profile.schema);
 
     // 3. Replace the damaged token range and rebase the converged checkpoint suffix.
     const oldTokenEnd = converged < 0

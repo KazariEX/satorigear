@@ -1,8 +1,8 @@
+import { type BlockArena, type BlockArenaChange, type BlockRecord, noBlockEntry } from "./block/arena.ts";
 import { BlockKind } from "./block/kinds.ts";
 import { InlineRegion, type InlineRegionBinding, type InlineRegionSyntax } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
-import type { BlockArena, BlockArenaChange, BlockRecord } from "./block/arena.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
 
 interface SyntaxBlock {
@@ -40,7 +40,7 @@ export class SyntaxState {
   }
 
   update(source: string, change?: BlockArenaChange, stableBlockCount = 0): void {
-    // 1. Keep the scanner-stable prefix and collect syntax only through the arena damage range.
+    // 1. Keep the scanner-stable prefix and collect syntax only through the rebuilt record range.
     const arena = this.#arena;
     const previousBlocks = this.#blocks;
     const oldStart = change?.oldStart ?? 0;
@@ -64,12 +64,12 @@ export class SyntaxState {
 
     const bindings: InlineRegionBinding[] = [];
     const collectNode = (
-      nodeId: number,
+      tokenStart: number,
       offset: number,
       tokenBase: number,
       blockIndex: number,
     ): void => {
-      const rule = arena.ruleOf(nodeId);
+      const rule = arena.ruleOf(tokenStart);
       const definitionKey = rule.definitionKey;
       if (definitionKey) {
         const key = definitionKey(arena.tokens, tokenBase);
@@ -77,10 +77,10 @@ export class SyntaxState {
         definitions.add(key);
       }
       if (rule.inlineContent) {
-        const inlineView = inlineViewOf(source, arena, nodeId, tokenBase);
+        const inlineView = inlineViewOf(source, arena, tokenStart);
         if (inlineView) {
           bindings.push({
-            id: nodeId,
+            id: tokenStart,
             offset,
             rule: rule.name,
             view: inlineView,
@@ -88,14 +88,16 @@ export class SyntaxState {
         }
         return;
       }
-      const childCount = arena.childCount(nodeId);
-      for (let index = 0; index < childCount; index++) {
-        const child = arena.childAt(nodeId, index);
+      for (
+        let child = arena.firstChild(tokenStart);
+        child !== noBlockEntry;
+        child = arena.nextChild(tokenStart, child)
+      ) {
         if (child >= 0) {
           collectNode(
             child,
-            offset + arena.childRelAt(nodeId, index),
-            tokenBase + arena.childTokRelAt(nodeId, index),
+            arena.tokens.start(child),
+            child,
             blockIndex,
           );
         }
@@ -119,7 +121,7 @@ export class SyntaxState {
     }
     bindingOffsets.push(bindings.length);
 
-    // 2. Restore the arena-converged suffix. Its definitions, regions and tokens remain valid;
+    // 2. Restore the scanner-converged suffix. Its definitions, regions and tokens remain valid;
     // only block indexes and absolute source geometry may move after an insertion or deletion.
     if (previousDefinitionEntries) {
       while (
@@ -139,7 +141,7 @@ export class SyntaxState {
 
     const firstSuffixBlock = previousBlocks[oldEnd];
     const firstSuffixRecord = arena.records[newEnd];
-    // Relative arena edges make every record in the converged suffix share these two shifts.
+    // Scanner convergence makes every record in the retained suffix share these two shifts.
     const suffixOffsetDelta = firstSuffixBlock && firstSuffixRecord
       ? arena.tokens.start(firstSuffixRecord.tokenStart) - firstSuffixBlock.offset
       : 0;
@@ -148,9 +150,9 @@ export class SyntaxState {
       : 0;
     for (let index = oldEnd; index < previousBlocks.length; index++) {
       const block = previousBlocks[index];
-      if (suffixOffsetDelta !== 0) {
+      if (suffixOffsetDelta !== 0 || suffixTokenDelta !== 0) {
         for (const region of block.regions) {
-          region.shift(suffixOffsetDelta);
+          region.shift(suffixOffsetDelta, suffixTokenDelta);
         }
       }
       block.offset += suffixOffsetDelta;
@@ -181,7 +183,7 @@ export class SyntaxState {
         if (!candidate && displacedRegions.length > 0) {
           let candidateIndex = -1;
           let nearestDistance = Number.POSITIVE_INFINITY;
-          // Prefer arena identity; otherwise retain the nearest compatible lexer state.
+          // Prefer the same token slot; otherwise retain the nearest compatible lexer state.
           for (let index = 0; index < displacedRegions.length; index++) {
             const value = displacedRegions[index];
             if (value.id === binding.id) {
@@ -247,16 +249,16 @@ export function createInlineRegions(
   const definitions = new Set<string>();
   const regions: InlineRegionSyntax[] = [];
 
-  const collect = (nodeId: number, tokenBase: number): void => {
-    const rule = arena.ruleOf(nodeId);
+  const collect = (tokenStart: number, tokenBase: number): void => {
+    const rule = arena.ruleOf(tokenStart);
     if (rule.definitionKey) {
       definitions.add(rule.definitionKey(arena.tokens, tokenBase));
     }
     if (rule.inlineContent) {
-      const inlineView = inlineViewOf(source, arena, nodeId, tokenBase);
+      const inlineView = inlineViewOf(source, arena, tokenStart);
       if (inlineView) {
         regions.push({
-          id: nodeId,
+          id: tokenStart,
           rule: rule.name,
           tokens: emptyArray,
           view: inlineView,
@@ -264,11 +266,13 @@ export function createInlineRegions(
       }
       return;
     }
-    const childCount = arena.childCount(nodeId);
-    for (let index = 0; index < childCount; index++) {
-      const child = arena.childAt(nodeId, index);
+    for (
+      let child = arena.firstChild(tokenStart);
+      child !== noBlockEntry;
+      child = arena.nextChild(tokenStart, child)
+    ) {
       if (child >= 0) {
-        collect(child, tokenBase + arena.childTokRelAt(nodeId, index));
+        collect(child, child);
       }
     }
   };
@@ -295,17 +299,18 @@ export function createInlineRegions(
 function inlineViewOf(
   source: string,
   arena: BlockArena,
-  nodeId: number,
-  tokenBase: number,
+  tokenStart: number,
 ): SourceView | undefined {
   let firstStart = -1;
   let firstEnd = -1;
   let spans: SourceSpan[] | undefined;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const entry = arena.childAt(nodeId, index);
+  for (
+    let entry = arena.firstChild(tokenStart);
+    entry !== noBlockEntry;
+    entry = arena.nextChild(tokenStart, entry)
+  ) {
     if (entry < 0) {
-      const token = arena.leafToken(entry, tokenBase);
+      const token = arena.leafToken(entry);
       if (arena.tokens.kind(token) === BlockKind.InlineChunk) {
         const start = arena.tokens.start(token);
         const end = arena.tokens.end(token);

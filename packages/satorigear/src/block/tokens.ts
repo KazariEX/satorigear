@@ -1,8 +1,8 @@
 import { type BlockLine, logicalLine } from "./lines.ts";
 import type { BlockKind } from "./kinds.ts";
+import type { BlockSyntaxSchema } from "./profile.ts";
 
-// The fourth slot is reserved for flags. Besides matching inline token records,
-// the power-of-two stride is measurably faster in V8 than packing only three fields.
+// The fourth slot stores the token length of a semantic node beginning here. Raw tokens use zero.
 const blockTokenStride = 4;
 
 interface BlockTokenMeta {
@@ -46,6 +46,51 @@ export class BlockTokenStream {
       this.#metadata ??= new Map();
       this.#metadata.set(this.length - 1, meta);
     }
+  }
+
+  indexStructure(schema: BlockSyntaxSchema): void {
+    const fields = this.#fields;
+    const opens: number[] = [];
+    const closes: BlockKind[] = [];
+    // Scanning writes each token once with an empty node length, so indexing needs no clearing pass.
+    for (let index = 0; index < this.length; index++) {
+      const kind = this.kind(index);
+      const frame = schema.frameByOpen[kind];
+      if (frame) {
+        opens.push(index);
+        closes.push(frame.close);
+        continue;
+      }
+      const groupedRule = schema.groupedRuleByToken[kind];
+      if (groupedRule) {
+        const start = index;
+        do {
+          index++;
+        } while (
+          index < this.length &&
+          schema.groupedRuleByToken[this.kind(index)] === groupedRule
+        );
+        fields[start * blockTokenStride + 3] = index - start;
+        index--;
+        continue;
+      }
+      if (closes.at(-1) === kind) {
+        const open = opens.pop()!;
+        closes.pop();
+        fields[open * blockTokenStride + 3] = index - open + 1;
+        continue;
+      }
+      if (schema.ruleByLeaf[kind]) {
+        fields[index * blockTokenStride + 3] = 1;
+      }
+    }
+    if (opens.length > 0) {
+      throw new Error(`Block token stream did not close token ${this.kind(opens.at(-1)!)}`);
+    }
+  }
+
+  nodeLength(index: number): number {
+    return this.#fields[index * blockTokenStride + 3];
   }
 
   equalsAfterShift(

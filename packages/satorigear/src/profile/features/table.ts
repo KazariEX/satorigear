@@ -1,4 +1,5 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
+import { noBlockEntry } from "../../block/arena.ts";
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { type BlockBuildContext, type BlockNodeBuilder, blockToken } from "../../fragment/block.ts";
@@ -153,13 +154,16 @@ function childRules(
 ): RuleLocation[] {
   const arena = context.arena;
   const result: RuleLocation[] = [];
-  for (let index = 0; index < arena.childCount(nodeId); index++) {
-    const child = arena.childAt(nodeId, index);
+  for (
+    let child = arena.firstChild(nodeId);
+    child !== noBlockEntry;
+    child = arena.nextChild(nodeId, child)
+  ) {
     if (child >= 0 && arena.ruleNameOf(child) === rule) {
       result.push({
         id: child,
-        offset: offset + arena.childRelAt(nodeId, index),
-        tokenBase: tokenBase + arena.childTokRelAt(nodeId, index),
+        offset: arena.tokens.start(child),
+        tokenBase: child,
       });
     }
   }
@@ -202,12 +206,15 @@ function tableAlignment(
 ): AlignType[] {
   const arena = context.arena;
   const result: AlignType[] = [];
-  for (let index = 0; index < arena.childCount(nodeId); index++) {
-    const child = arena.childAt(nodeId, index);
+  for (
+    let child = arena.firstChild(nodeId);
+    child !== noBlockEntry;
+    child = arena.nextChild(nodeId, child)
+  ) {
     if (child >= 0) {
       continue;
     }
-    const kind = arena.leafTokenKind(child, tokenBase);
+    const kind = arena.tokens.kind(arena.leafToken(child));
     result.push(
       kind === BlockKind.TableAlignLeft
         ? "left"

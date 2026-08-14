@@ -1,5 +1,5 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
-import type { BlockArena } from "../block/arena.ts";
+import { type BlockArena, noBlockEntry } from "../block/arena.ts";
 import type { BlockKind } from "../block/kinds.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
@@ -46,11 +46,13 @@ export function directBlockToken(
   context: BlockBuildContext,
 ): number | undefined {
   const arena = context.arena;
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const entry = arena.childAt(nodeId, index);
+  for (
+    let entry = arena.firstChild(nodeId);
+    entry !== noBlockEntry;
+    entry = arena.nextChild(nodeId, entry)
+  ) {
     if (entry < 0) {
-      const token = arena.leafToken(entry, tokenBase);
+      const token = tokenBase + arena.leafToken(entry) - nodeId;
       if (arena.tokens.kind(token) === kind) {
         return token;
       }
@@ -79,25 +81,15 @@ export function payloadBounds(
 ): SourceSpan {
   const arena = context.arena;
   const result = { start: offset + arena.lenOf(nodeId), end: offset };
-  const visit = (currentId: number, currentTokenBase: number): void => {
-    const childCount = arena.childCount(currentId);
-    for (let index = 0; index < childCount; index++) {
-      const child = arena.childAt(currentId, index);
-      if (child < 0) {
-        const token = arena.leafToken(child, currentTokenBase);
-        const start = arena.tokens.start(token);
-        const end = arena.tokens.end(token);
-        if (end > start) {
-          result.start = Math.min(result.start, start);
-          result.end = Math.max(result.end, end);
-        }
-      }
-      else {
-        visit(child, currentTokenBase + arena.childTokRelAt(currentId, index));
-      }
+  const endToken = tokenBase + arena.tokens.nodeLength(nodeId);
+  for (let token = tokenBase; token < endToken; token++) {
+    const start = arena.tokens.start(token);
+    const end = arena.tokens.end(token);
+    if (end > start) {
+      result.start = Math.min(result.start, start);
+      result.end = Math.max(result.end, end);
     }
-  };
-  visit(nodeId, tokenBase);
+  }
   return result;
 }
 
@@ -128,15 +120,17 @@ export const buildBlockChildren: (
 ) => SpannedNode<BlockContent | DefinitionContent>[] = (nodeId, offset, tokenBase, context) => {
   const arena = context.arena;
   const children: SpannedNode<BlockContent | DefinitionContent>[] = [];
-  const childCount = arena.childCount(nodeId);
-  for (let index = 0; index < childCount; index++) {
-    const childId = arena.childAt(nodeId, index);
+  for (
+    let childId = arena.firstChild(nodeId);
+    childId !== noBlockEntry;
+    childId = arena.nextChild(nodeId, childId)
+  ) {
     if (childId >= 0 && arena.isBlock(childId)) {
       children.push(
         buildBlockNode<typeof children[number]>(
           childId,
-          offset + arena.childRelAt(nodeId, index),
-          tokenBase + arena.childTokRelAt(nodeId, index),
+          offset + arena.tokens.start(childId) - arena.tokens.start(nodeId),
+          tokenBase + childId - nodeId,
           context,
         ),
       );

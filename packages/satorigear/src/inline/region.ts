@@ -78,7 +78,8 @@ export class InlineRegion implements InlineRegionSyntax {
     }
   }
 
-  shift(delta: number): void {
+  shift(delta: number, tokenDelta: number): void {
+    this.id += tokenDelta;
     this.offset += delta;
     this.view.shift(delta);
   }
