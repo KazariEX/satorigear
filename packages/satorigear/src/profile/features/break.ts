@@ -31,13 +31,14 @@ export const feature: SyntaxFeature = {
           kind: "leaf",
           token: BlockKind.ThematicBreakToken,
         },
-        build(nodeId, offset, tokenBase, context) {
-          const end = offset + context.arena.lenOf(nodeId);
+        build(tokenStart, context) {
+          const offset = context.arena.tokens.start(tokenStart);
+          const end = offset + context.arena.lenOf(tokenStart);
           return {
             type: "thematicBreak",
             position: {
               start: firstNonspace(context.source, offset, end),
-              end: blockEnd(nodeId, offset, context),
+              end: blockEnd(tokenStart, context),
             },
           };
         },

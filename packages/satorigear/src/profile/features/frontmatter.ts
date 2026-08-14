@@ -61,8 +61,8 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
             kind: "leaf",
             token: BlockKind.FrontmatterToken,
           },
-          build(nodeId, offset, tokenBase, context) {
-            const token = blockToken(nodeId, tokenBase, BlockKind.FrontmatterToken, context);
+          build(tokenStart, context) {
+            const token = blockToken(tokenStart, BlockKind.FrontmatterToken, context);
             const rangeCount = context.arena.tokens.rangeCount(token);
             if (rangeCount < 2) {
               throw new Error("FrontmatterToken does not contain two fences");
@@ -79,7 +79,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
               value,
               position: {
                 start: context.arena.tokens.start(token),
-                end: blockEnd(nodeId, offset, context),
+                end: blockEnd(tokenStart, context),
               },
             };
           },

@@ -76,15 +76,15 @@ export const feature: SyntaxFeature = {
           close: BlockKind.HeadingClose,
         },
         inlineContent: true,
-        build(nodeId, offset, tokenBase, context) {
-          const marker = blockToken(nodeId, tokenBase, BlockKind.AtxHeadingOpen, context);
+        build(tokenStart, context) {
+          const marker = blockToken(tokenStart, BlockKind.AtxHeadingOpen, context);
           return {
             type: "heading",
             depth: context.arena.tokens.end(marker) - context.arena.tokens.start(marker) as Heading["depth"],
-            children: buildInlineChildren(nodeId, context, true),
+            children: buildInlineChildren(tokenStart, context, true),
             position: {
               start: context.arena.tokens.start(marker),
-              end: blockEnd(nodeId, offset, context),
+              end: blockEnd(tokenStart, context),
             },
           };
         },
@@ -100,12 +100,12 @@ export const feature: SyntaxFeature = {
           close: BlockKind.HeadingClose,
         },
         inlineContent: true,
-        build(nodeId, offset, tokenBase, context) {
-          const levelOne = directBlockToken(nodeId, tokenBase, BlockKind.SetextHeading1Open, context);
+        build(tokenStart, context) {
+          const levelOne = directBlockToken(tokenStart, BlockKind.SetextHeading1Open, context);
           if (levelOne === void 0) {
-            blockToken(nodeId, tokenBase, BlockKind.SetextHeading2Open, context);
+            blockToken(tokenStart, BlockKind.SetextHeading2Open, context);
           }
-          const children = buildInlineChildren(nodeId, context);
+          const children = buildInlineChildren(tokenStart, context);
           return {
             type: "heading",
             depth: levelOne === void 0 ? 2 : 1,
@@ -113,7 +113,7 @@ export const feature: SyntaxFeature = {
             position: {
               start: firstChildStart(children),
               end: context.arena.tokens.start(
-                blockToken(nodeId, tokenBase, BlockKind.HeadingClose, context),
+                blockToken(tokenStart, BlockKind.HeadingClose, context),
               ),
             },
           };

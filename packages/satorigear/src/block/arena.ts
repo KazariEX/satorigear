@@ -5,7 +5,6 @@ export const noBlockEntry = Number.MIN_SAFE_INTEGER;
 
 // Object identity remains stable for unchanged top-level blocks.
 export interface BlockRecord {
-  id: number;
   tokenEnd: number;
   tokenStart: number;
 }
@@ -59,7 +58,6 @@ export class BlockArena {
     const suffix = previous.slice(suffixStart);
     if (tokenDelta !== 0) {
       for (const block of suffix) {
-        block.id += tokenDelta;
         block.tokenStart += tokenDelta;
         block.tokenEnd += tokenDelta;
       }
@@ -83,7 +81,7 @@ export class BlockArena {
       if (length === 0) {
         throw new Error(`Block token ${start} does not begin a semantic node`);
       }
-      records.push({ id: start, tokenStart: start, tokenEnd: start + length });
+      records.push({ tokenStart: start, tokenEnd: start + length });
       start += length;
     }
     return records;

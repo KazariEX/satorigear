@@ -110,7 +110,7 @@ export class SyntaxState {
       const tokenBase = record.tokenStart;
       const offset = arena.tokens.start(tokenBase);
       bindingOffsets.push(bindings.length);
-      collectNode(record.id, offset, tokenBase, index);
+      collectNode(record.tokenStart, offset, tokenBase, index);
       blocks.push({
         offset,
         record,
@@ -277,7 +277,7 @@ export function createInlineRegions(
     }
   };
   for (const record of arena.records) {
-    collect(record.id, record.tokenStart);
+    collect(record.tokenStart, record.tokenStart);
   }
 
   // One-shot parsing needs definition visibility, but has no future edit to track dependencies for.

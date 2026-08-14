@@ -388,8 +388,8 @@ export const feature: SyntaxFeature = {
           open: BlockKind.LinkDefinitionOpen,
           close: BlockKind.LinkDefinitionClose,
         },
-        build(nodeId, offset, tokenBase, context) {
-          const token = blockToken(nodeId, tokenBase, BlockKind.LinkDefinitionOpen, context);
+        build(tokenStart, context) {
+          const token = blockToken(tokenStart, BlockKind.LinkDefinitionOpen, context);
           const fields = linkDefinitionFields(context.arena.tokens, token);
           return {
             type: "definition",
@@ -399,7 +399,7 @@ export const feature: SyntaxFeature = {
             title: fields.title === void 0 ? null : semanticText(fields.title),
             position: {
               start: context.arena.tokens.start(token) + fields.markerOffset,
-              end: blockEnd(nodeId, offset, context),
+              end: blockEnd(tokenStart, context),
             },
           };
         },

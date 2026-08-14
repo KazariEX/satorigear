@@ -73,14 +73,14 @@ export const feature: SyntaxFeature = {
           close: BlockKind.ParagraphClose,
         },
         inlineContent: true,
-        build(nodeId, offset, tokenBase, context) {
-          const children = buildInlineChildren(nodeId, context);
+        build(tokenStart, context) {
+          const children = buildInlineChildren(tokenStart, context);
           return {
             type: "paragraph",
             children,
             position: {
               start: firstChildStart(children),
-              end: blockEnd(nodeId, offset, context),
+              end: blockEnd(tokenStart, context),
             },
           };
         },

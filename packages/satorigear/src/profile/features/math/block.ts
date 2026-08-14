@@ -25,11 +25,12 @@ export const blockRules: BlockFeature["rules"] = [
       kind: "leaf",
       token: BlockKind.MathBlockToken,
     },
-    build(nodeId, offset, tokenBase, context) {
-      const end = offset + context.arena.lenOf(nodeId);
+    build(tokenStart, context) {
+      const offset = context.arena.tokens.start(tokenStart);
+      const end = offset + context.arena.lenOf(tokenStart);
       const value = context.arena.tokens.text(
         context.source,
-        blockToken(nodeId, tokenBase, BlockKind.MathBlockToken, context),
+        blockToken(tokenStart, BlockKind.MathBlockToken, context),
       );
       const block = readFencedBlock(value, mathFenceRule);
       const meta = semanticText(block.info);
@@ -39,7 +40,7 @@ export const blockRules: BlockFeature["rules"] = [
         value: fencedBlockContent(value, block, "columns"),
         position: {
           start: firstNonspace(context.source, offset, lineEnd(context.source, offset)),
-          end: block.closed || end < context.source.length ? blockEnd(nodeId, offset, context) : end,
+          end: block.closed || end < context.source.length ? blockEnd(tokenStart, context) : end,
         },
       };
     },

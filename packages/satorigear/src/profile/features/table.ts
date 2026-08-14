@@ -13,12 +13,6 @@ interface CellSpan extends SourceSpan {
   contentStart: number;
 }
 
-interface RuleLocation {
-  id: number;
-  offset: number;
-  tokenBase: number;
-}
-
 function tableCell(
   source: string,
   start: number,
@@ -146,36 +140,30 @@ function emitTableRow(line: BlockLine, cells: readonly CellSpan[], out: BlockTok
 }
 
 function childRules(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
+  tokenStart: number,
   rule: string,
   context: BlockBuildContext,
-): RuleLocation[] {
+): number[] {
   const arena = context.arena;
-  const result: RuleLocation[] = [];
+  const result: number[] = [];
   for (
-    let child = arena.firstChild(nodeId);
+    let child = arena.firstChild(tokenStart);
     child !== noBlockEntry;
-    child = arena.nextChild(nodeId, child)
+    child = arena.nextChild(tokenStart, child)
   ) {
     if (child >= 0 && arena.ruleNameOf(child) === rule) {
-      result.push({
-        id: child,
-        offset: arena.tokens.start(child),
-        tokenBase: child,
-      });
+      result.push(child);
     }
   }
   return result;
 }
 
-const buildTableCell: BlockNodeBuilder<TableCell> = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, BlockKind.TableCellOpen, context);
-  const close = blockToken(nodeId, tokenBase, BlockKind.TableCellClose, context);
+const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context) => {
+  const open = blockToken(tokenStart, BlockKind.TableCellOpen, context);
+  const close = blockToken(tokenStart, BlockKind.TableCellClose, context);
   return {
     type: "tableCell",
-    children: buildInlineChildren(nodeId, context, true),
+    children: buildInlineChildren(tokenStart, context, true),
     position: {
       start: context.arena.tokens.start(open),
       end: context.arena.tokens.start(close),
@@ -183,11 +171,11 @@ const buildTableCell: BlockNodeBuilder<TableCell> = (nodeId, offset, tokenBase, 
   };
 };
 
-const buildTableRow: BlockNodeBuilder<TableRow> = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, BlockKind.TableRowOpen, context);
-  const close = blockToken(nodeId, tokenBase, BlockKind.TableRowClose, context);
-  const children = childRules(nodeId, offset, tokenBase, "TableCell", context).map((cell) => (
-    buildTableCell(cell.id, cell.offset, cell.tokenBase, context)
+const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
+  const open = blockToken(tokenStart, BlockKind.TableRowOpen, context);
+  const close = blockToken(tokenStart, BlockKind.TableRowClose, context);
+  const children = childRules(tokenStart, "TableCell", context).map((cell) => (
+    buildTableCell(cell, context)
   ));
   return {
     type: "tableRow",
@@ -200,16 +188,15 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (nodeId, offset, tokenBase, co
 };
 
 function tableAlignment(
-  nodeId: number,
-  tokenBase: number,
+  tokenStart: number,
   context: BlockBuildContext,
 ): AlignType[] {
   const arena = context.arena;
   const result: AlignType[] = [];
   for (
-    let child = arena.firstChild(nodeId);
+    let child = arena.firstChild(tokenStart);
     child !== noBlockEntry;
-    child = arena.nextChild(nodeId, child)
+    child = arena.nextChild(tokenStart, child)
   ) {
     if (child >= 0) {
       continue;
@@ -301,19 +288,19 @@ export const feature: SyntaxFeature = {
           open: BlockKind.TableOpen,
           close: BlockKind.TableClose,
         },
-        build(nodeId, offset, tokenBase, context) {
-          const open = blockToken(nodeId, tokenBase, BlockKind.TableOpen, context);
-          const close = blockToken(nodeId, tokenBase, BlockKind.TableClose, context);
-          const rows = childRules(nodeId, offset, tokenBase, "TableRow", context).map((row) => (
-            buildTableRow(row.id, row.offset, row.tokenBase, context)
+        build(tokenStart, context) {
+          const open = blockToken(tokenStart, BlockKind.TableOpen, context);
+          const close = blockToken(tokenStart, BlockKind.TableClose, context);
+          const rows = childRules(tokenStart, "TableRow", context).map((row) => (
+            buildTableRow(row, context)
           ));
-          const delimiter = childRules(nodeId, offset, tokenBase, "TableDelimiter", context)[0];
+          const delimiter = childRules(tokenStart, "TableDelimiter", context)[0];
           if (!delimiter) {
             throw new Error("Table syntax does not contain a delimiter");
           }
           return {
             type: "table",
-            align: tableAlignment(delimiter.id, delimiter.tokenBase, context),
+            align: tableAlignment(delimiter, context),
             children: rows,
             position: {
               start: context.arena.tokens.start(open),

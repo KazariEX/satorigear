@@ -33,8 +33,8 @@ export function codeFenceAt(source: string, line: BlockLine): Fence | undefined 
   return fenceAt(source, line, codeFenceRule);
 }
 
-function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockBuildContext): number {
-  const token = blockToken(nodeId, tokenBase, BlockKind.IndentedCodeBlockToken, context);
+function indentedCodeEnd(tokenStart: number, context: BlockBuildContext): number {
+  const token = blockToken(tokenStart, BlockKind.IndentedCodeBlockToken, context);
   const count = context.arena.tokens.rangeCount(token);
   for (let index = count - 1; index >= 0; index--) {
     const start = context.arena.tokens.rangeStart(token, index);
@@ -72,12 +72,13 @@ export const feature: SyntaxFeature = {
           kind: "leaf",
           token: BlockKind.FencedCodeBlock,
         },
-        build(nodeId, offset, tokenBase, context) {
-          const end = offset + context.arena.lenOf(nodeId);
+        build(tokenStart, context) {
+          const offset = context.arena.tokens.start(tokenStart);
+          const end = offset + context.arena.lenOf(tokenStart);
           const source = normalizeLines(
             context.arena.tokens.text(
               context.source,
-              blockToken(nodeId, tokenBase, BlockKind.FencedCodeBlock, context),
+              blockToken(tokenStart, BlockKind.FencedCodeBlock, context),
             ),
           );
           const block = readFencedBlock(source, codeFenceRule);
@@ -93,7 +94,7 @@ export const feature: SyntaxFeature = {
             position: {
               start: firstNonspace(context.source, offset, lineEnd(context.source, offset)),
               end: block.closed || end < context.source.length
-                ? blockEnd(nodeId, offset, context)
+                ? blockEnd(tokenStart, context)
                 : end,
             },
           };
@@ -105,8 +106,9 @@ export const feature: SyntaxFeature = {
           kind: "leaf",
           token: BlockKind.IndentedCodeBlockToken,
         },
-        build(nodeId, offset, tokenBase, context) {
-          const token = blockToken(nodeId, tokenBase, BlockKind.IndentedCodeBlockToken, context);
+        build(tokenStart, context) {
+          const offset = context.arena.tokens.start(tokenStart);
+          const token = blockToken(tokenStart, BlockKind.IndentedCodeBlockToken, context);
           const lines = normalizeLines(context.arena.tokens.text(context.source, token))
             .split("\n")
             .map((line) => removeIndent(line, 4));
@@ -118,7 +120,7 @@ export const feature: SyntaxFeature = {
             lang: null,
             meta: null,
             value: lines.join("\n"),
-            position: { start: offset, end: indentedCodeEnd(nodeId, tokenBase, context) },
+            position: { start: offset, end: indentedCodeEnd(tokenStart, context) },
           };
         },
       },

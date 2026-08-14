@@ -151,9 +151,10 @@ export const feature: SyntaxFeature = {
           kind: "leaf",
           token: BlockKind.HtmlBlockToken,
         },
-        build(nodeId, offset, tokenBase, context) {
-          const end = offset + context.arena.lenOf(nodeId);
-          const token = blockToken(nodeId, tokenBase, BlockKind.HtmlBlockToken, context);
+        build(tokenStart, context) {
+          const offset = context.arena.tokens.start(tokenStart);
+          const end = offset + context.arena.lenOf(tokenStart);
+          const token = blockToken(tokenStart, BlockKind.HtmlBlockToken, context);
           const unterminated = htmlBlockUnterminated(token, context);
           let html = normalizeLines(context.arena.tokens.text(context.source, token));
           if (!unterminated && html.endsWith("\n")) {
@@ -164,7 +165,7 @@ export const feature: SyntaxFeature = {
             value: html,
             position: {
               start: offset,
-              end: html.endsWith("\n") ? end : blockEnd(nodeId, offset, context),
+              end: html.endsWith("\n") ? end : blockEnd(tokenStart, context),
             },
           };
         },

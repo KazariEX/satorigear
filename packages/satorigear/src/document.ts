@@ -134,7 +134,7 @@ export class DocumentImpl implements Document {
       const fragment = previous?.version === block.version
         ? previous
         : {
-          node: buildBlockNode(block.record.id, block.offset, block.tokenBase, context),
+          node: buildBlockNode(block.record.tokenStart, context),
           offset: block.offset,
           origin: block.offset,
           version: block.version,
@@ -166,12 +166,7 @@ export class DocumentImpl implements Document {
     };
 
     return materialize(
-      blockArena.records.map((block) => buildBlockNode(
-        block.id,
-        blockArena.tokens.start(block.tokenStart),
-        block.tokenStart,
-        context,
-      )),
+      blockArena.records.map((block) => buildBlockNode(block.tokenStart, context)),
       source.length,
       blockScanner.locator(),
     );

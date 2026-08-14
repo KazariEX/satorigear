@@ -357,7 +357,7 @@ function emitOpening(
 
 function parseYamlAttributes(
   token: NonNullable<ReturnType<typeof directBlockToken>>,
-  context: Parameters<BlockNodeBuilder>[3],
+  context: Parameters<BlockNodeBuilder>[1],
 ): Attributes {
   const value: unknown = parseYaml(context.arena.tokens.text(context.source, token), { schema: "core" });
   if (value === null || value === void 0) {
@@ -370,34 +370,28 @@ function parseYamlAttributes(
 }
 
 function directRule(
-  nodeId: number,
-  offset: number,
-  tokenBase: number,
+  tokenStart: number,
   rule: string,
-  context: Parameters<BlockNodeBuilder>[3],
-): { id: number; offset: number; tokenBase: number } | undefined {
+  context: Parameters<BlockNodeBuilder>[1],
+): number | undefined {
   const arena = context.arena;
   for (
-    let child = arena.firstChild(nodeId);
+    let child = arena.firstChild(tokenStart);
     child !== noBlockEntry;
-    child = arena.nextChild(nodeId, child)
+    child = arena.nextChild(tokenStart, child)
   ) {
     if (child >= 0 && arena.ruleNameOf(child) === rule) {
-      return {
-        id: child,
-        offset: arena.tokens.start(child),
-        tokenBase: child,
-      };
+      return child;
     }
   }
 }
 
-const buildBlockLabel: BlockNodeBuilder<Paragraph> = (nodeId, offset, tokenBase, context) => {
-  const open = blockToken(nodeId, tokenBase, BlockKind.BlockComponentLabelOpen, context);
-  const close = blockToken(nodeId, tokenBase, BlockKind.BlockComponentLabelClose, context);
+const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
+  const open = blockToken(tokenStart, BlockKind.BlockComponentLabelOpen, context);
+  const close = blockToken(tokenStart, BlockKind.BlockComponentLabelClose, context);
   return {
     type: "paragraph",
-    children: buildInlineChildren(nodeId, context, true),
+    children: buildInlineChildren(tokenStart, context, true),
     position: {
       start: context.arena.tokens.start(open),
       end: context.arena.tokens.end(close),
@@ -453,20 +447,20 @@ export const blockRules: BlockFeature["rules"] = [
       open: BlockKind.BlockComponentOpen,
       close: BlockKind.BlockComponentClose,
     },
-    build(nodeId, offset, tokenBase, context) {
-      const open = blockToken(nodeId, tokenBase, BlockKind.BlockComponentOpen, context);
-      const close = blockToken(nodeId, tokenBase, BlockKind.BlockComponentClose, context);
-      const attributesToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentAttributes, context);
+    build(tokenStart, context) {
+      const open = blockToken(tokenStart, BlockKind.BlockComponentOpen, context);
+      const close = blockToken(tokenStart, BlockKind.BlockComponentClose, context);
+      const attributesToken = directBlockToken(tokenStart, BlockKind.BlockComponentAttributes, context);
       const parsed = attributesToken !== void 0
         ? parseAttributes(context.source, context.arena.tokens.start(attributesToken))
         : void 0;
-      const yamlToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentYamlProps, context);
-      const label = directRule(nodeId, offset, tokenBase, "BlockComponentLabel", context);
+      const yamlToken = directBlockToken(tokenStart, BlockKind.BlockComponentYamlProps, context);
+      const label = directRule(tokenStart, "BlockComponentLabel", context);
       const children: SpannedNode<RootContent>[] = [];
       if (label) {
-        children.push(buildBlockLabel(label.id, label.offset, label.tokenBase, context));
+        children.push(buildBlockLabel(label, context));
       }
-      children.push(...buildBlockChildren(nodeId, offset, tokenBase, context));
+      children.push(...buildBlockChildren(tokenStart, context));
       const opening = context.arena.tokens.text(context.source, open);
       return {
         type: "blockComponent",
@@ -489,14 +483,14 @@ export const blockRules: BlockFeature["rules"] = [
       open: BlockKind.BlockComponentSlotOpen,
       close: BlockKind.BlockComponentSlotClose,
     },
-    build(nodeId, offset, tokenBase, context) {
-      const open = blockToken(nodeId, tokenBase, BlockKind.BlockComponentSlotOpen, context);
-      const close = blockToken(nodeId, tokenBase, BlockKind.BlockComponentSlotClose, context);
-      const attributesToken = directBlockToken(nodeId, tokenBase, BlockKind.BlockComponentAttributes, context);
+    build(tokenStart, context) {
+      const open = blockToken(tokenStart, BlockKind.BlockComponentSlotOpen, context);
+      const close = blockToken(tokenStart, BlockKind.BlockComponentSlotClose, context);
+      const attributesToken = directBlockToken(tokenStart, BlockKind.BlockComponentAttributes, context);
       const parsed = attributesToken !== void 0
         ? parseAttributes(context.source, context.arena.tokens.start(attributesToken))
         : void 0;
-      const children = buildBlockChildren(nodeId, offset, tokenBase, context);
+      const children = buildBlockChildren(tokenStart, context);
       return {
         type: "blockComponent",
         name: "template",
