@@ -14,15 +14,15 @@ function hasDefinition(this: TrackedResolutionContext, key: string): boolean {
 }
 
 export interface InlineRegionBinding {
-  id: number;
   offset: number;
   rule: string;
+  tokenStart: number;
   view: SourceView;
 }
 
 export interface InlineRegionSyntax {
-  readonly id: number;
   readonly rule: string;
+  readonly tokenStart: number;
   readonly tokens: InlineTokenStream;
   readonly view: SourceView;
 }
@@ -36,10 +36,10 @@ export class InlineRegion implements InlineRegionSyntax {
   #syntax: InlineProfile;
   #tokenSource?: string;
   #tokens?: InlineTokenStream;
-  id: number;
   offset: number;
   revision = 0;
   rule: string;
+  tokenStart: number;
   view: SourceView;
 
   constructor(
@@ -48,9 +48,9 @@ export class InlineRegion implements InlineRegionSyntax {
     definitions: ReadonlySet<string>,
   ) {
     this.#syntax = syntax;
-    this.id = binding.id;
     this.offset = binding.offset;
     this.rule = binding.rule;
+    this.tokenStart = binding.tokenStart;
     this.view = binding.view;
     this.#updateTokens(binding.view.text, definitions);
   }
@@ -79,7 +79,7 @@ export class InlineRegion implements InlineRegionSyntax {
   }
 
   shift(delta: number, tokenDelta: number): void {
-    this.id += tokenDelta;
+    this.tokenStart += tokenDelta;
     this.offset += delta;
     this.view.shift(delta);
   }
@@ -94,9 +94,9 @@ export class InlineRegion implements InlineRegionSyntax {
   }
 
   #rebind(binding: InlineRegionBinding): void {
-    this.id = binding.id;
     this.offset = binding.offset;
     this.rule = binding.rule;
+    this.tokenStart = binding.tokenStart;
     this.view = binding.view;
   }
 
@@ -137,9 +137,9 @@ export class InlineRegionCursor {
     this.#regions = regions;
   }
 
-  take(nodeId: number): InlineRegionSyntax | undefined {
+  take(tokenStart: number): InlineRegionSyntax | undefined {
     const region = this.#regions[this.#index];
-    if (region?.id !== nodeId) {
+    if (region?.tokenStart !== tokenStart) {
       return;
     }
     this.#index++;

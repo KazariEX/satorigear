@@ -330,13 +330,13 @@ function buildInlineSemantic(
 }
 
 export function buildInlineChildren(
-  nodeId: number,
+  tokenStart: number,
   context: BlockBuildContext,
   allowEmpty = false,
 ): SpannedNode<PhrasingContent>[] {
-  const region = context.inline.take(nodeId);
+  const region = context.inline.take(tokenStart);
   if (!region) {
-    const rule = context.structure.ruleNameOf(nodeId);
+    const rule = context.structure.ruleNameOf(tokenStart);
     if (allowEmpty) {
       return [];
     }

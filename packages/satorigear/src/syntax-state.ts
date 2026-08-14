@@ -84,9 +84,9 @@ export class SyntaxState {
         const inlineView = inlineViewOf(source, structure, tokenStart);
         if (inlineView) {
           bindings.push({
-            id: tokenStart,
             offset,
             rule: rule.name,
+            tokenStart,
             view: inlineView,
           });
         }
@@ -186,7 +186,7 @@ export class SyntaxState {
           // Prefer the same token slot; otherwise retain the nearest compatible lexer state.
           for (let index = 0; index < displacedRegions.length; index++) {
             const value = displacedRegions[index];
-            if (value.id === binding.id) {
+            if (value.tokenStart === binding.tokenStart) {
               candidateIndex = index;
               break;
             }
@@ -258,8 +258,8 @@ export function createInlineRegions(
       const inlineView = inlineViewOf(source, structure, tokenStart);
       if (inlineView) {
         regions.push({
-          id: tokenStart,
           rule: rule.name,
+          tokenStart,
           tokens: emptyArray,
           view: inlineView,
         });
