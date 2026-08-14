@@ -39,6 +39,7 @@ import { createParser } from "satorigear";
 const parser = createParser({
   features: {
     attributes: true,
+    binding: true,
     component: true,
     footnote: true,
     frontmatter: true,

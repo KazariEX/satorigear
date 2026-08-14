@@ -1,6 +1,7 @@
 import { type BlockFeature, compileBlockProfile } from "../block/profile.ts";
 import { compileInlineProfile, type InlineFeature } from "../inline/profile.ts";
 import { feature as featureAttributes } from "./features/attributes/index.ts";
+import { feature as featureBinding } from "./features/binding.ts";
 import { feature as featureBlockQuote } from "./features/blockquote.ts";
 import { feature as featureBreak } from "./features/break.ts";
 import { feature as featureCode } from "./features/code.ts";
@@ -22,6 +23,7 @@ import type { SyntaxProfile } from "./types.ts";
 
 export interface FeatureOptions {
   attributes?: boolean;
+  binding?: boolean;
   component?: boolean;
   footnote?: boolean;
   frontmatter?: boolean | FrontmatterOptions;
@@ -71,11 +73,14 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
     featureLink,
   );
 
-  if (options.component) {
-    features.push(featureComponent);
-  }
   if (options.attributes) {
     features.push(featureAttributes);
+  }
+  if (options.binding) {
+    features.push(featureBinding);
+  }
+  if (options.component) {
+    features.push(featureComponent);
   }
 
   const blockFeatures: BlockFeature[] = [];
