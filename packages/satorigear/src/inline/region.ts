@@ -29,8 +29,8 @@ export interface InlineRegionSyntax {
 
 export class InlineRegion implements InlineRegionSyntax {
   // Track only definitions consulted by this region so unrelated definitions do not invalidate it.
-  #definitionDependencies?: ReadonlySet<string>;
-  #definitions?: ReadonlySet<string>;
+  #definitionDependencies!: ReadonlySet<string>;
+  #definitions!: ReadonlySet<string>;
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
   #syntax: InlineProfile;
@@ -84,9 +84,6 @@ export class InlineRegion implements InlineRegionSyntax {
   }
 
   #dependenciesChanged(definitions: ReadonlySet<string>): boolean {
-    if (!this.#definitionDependencies || !this.#definitions) {
-      return true;
-    }
     for (const candidate of this.#definitionDependencies) {
       if (this.#definitions.has(candidate) !== definitions.has(candidate)) {
         return true;
