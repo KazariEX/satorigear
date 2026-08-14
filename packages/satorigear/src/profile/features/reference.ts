@@ -1,5 +1,5 @@
 import { BlockKind } from "../../block/kinds.ts";
-import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "../../block/lines.ts";
+import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank } from "../../block/lines.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import {
@@ -45,52 +45,48 @@ function linkDefinitionAt(
   source: string,
   lines: readonly BlockLine[],
   startIndex: number,
+  contentOffset: number,
 ): LinkDefinitionMatch | undefined {
-  const indent = lineIndent(source, lines[startIndex]);
-  if (!indent || source[indent.offset] !== "[") {
-    return;
-  }
   let lineIndex = startIndex;
-  let offset = indent.offset + 1;
+  let offset = contentOffset + 1;
   let label = "";
   let labelLength = 0;
   let labelHasContent = false;
   let labelStart = offset;
 
-  while (true) {
+  scanLabel: while (true) {
     const line = lines[lineIndex];
-    if (!line || offset >= line.end) {
-      if (!line || lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
+    while (offset < line.end) {
+      if (source[offset] === "\\" && offset + 1 < line.end) {
+        labelHasContent = true;
+        labelLength += 2;
+        offset += 2;
+        continue;
+      }
+      if (source[offset] === "[") {
         return;
+      }
+      if (source[offset] === "]" && source[offset + 1] === ":") {
+        break scanLabel;
+      }
+      if (source[offset] !== " " && source[offset] !== "\t") {
+        labelHasContent = true;
       }
       if (++labelLength > 999) {
         return;
       }
-      label += source.slice(labelStart, line.next);
-      lineIndex++;
-      offset = lines[lineIndex].start;
-      labelStart = offset;
-      continue;
+      offset++;
     }
-    if (source[offset] === "\\" && offset + 1 < line.end) {
-      labelHasContent = true;
-      labelLength += 2;
-      offset += 2;
-      continue;
-    }
-    if (source[offset] === "[") {
+    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
       return;
-    }
-    if (source[offset] === "]" && source[offset + 1] === ":") {
-      break;
-    }
-    if (source[offset] !== " " && source[offset] !== "\t") {
-      labelHasContent = true;
     }
     if (++labelLength > 999) {
       return;
     }
-    offset++;
+    label += source.slice(labelStart, line.next);
+    lineIndex++;
+    offset = lines[lineIndex].start;
+    labelStart = offset;
   }
   label += source.slice(labelStart, offset);
   if (!labelHasContent) {
@@ -176,7 +172,7 @@ function linkDefinitionAt(
     definitionKey: normalizeAssociationLabel(label),
     destination,
     label,
-    markerOffset: indent.offset - lines[startIndex].start,
+    markerOffset: contentOffset - lines[startIndex].start,
     title: void 0,
   };
   if (!closer) {
@@ -411,8 +407,8 @@ export const feature: SyntaxFeature = {
     starts: [
       {
         codes: [91],
-        start(source, lines, start, out) {
-          const definition = linkDefinitionAt(source, lines, start);
+        start(source, lines, start, out, contentOffset) {
+          const definition = linkDefinitionAt(source, lines, start, contentOffset);
           if (!definition) {
             return;
           }
