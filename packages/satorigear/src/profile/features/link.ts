@@ -1,9 +1,4 @@
 import type { PhrasingContent } from "mdast";
-import {
-  appendInline,
-  type InlineAccumulator,
-  type InlineNodeBuilder,
-} from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -14,6 +9,7 @@ import {
 } from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { buildInlineText, semanticText } from "./text.ts";
+import type { InlineBuildContext, InlineNodeBuilder } from "../../fragment/inline.ts";
 import type { SpannedNode } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -253,7 +249,7 @@ function reference(
   close: number,
   syntaxStart: number,
   syntaxEnd: number,
-  context: InlineAccumulator["context"],
+  context: InlineBuildContext,
   image: boolean,
 ): Reference {
   const closeText = inlineTokenText(context.view.text, context.tokens, close);
@@ -291,8 +287,7 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
   const image = media === "image";
   const referenceNode = resourceKind === "reference";
 
-  return (openToken, closeToken, children, sourceSpan, accumulator) => {
-    const context = accumulator.context;
+  return (openToken, closeToken, sourceSpan, children, context) => {
     if (referenceNode) {
       const association = reference(
         closeToken,
@@ -301,26 +296,38 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
         context,
         image,
       );
-      appendInline(
-        accumulator,
-        image
-          ? { type: "imageReference", alt: phrasingText(children), ...association, position: sourceSpan }
-          : { type: "linkReference", children, ...association, position: sourceSpan },
-      );
+      return image
+        ? {
+          type: "imageReference",
+          alt: phrasingText(children),
+          ...association,
+          position: sourceSpan,
+        }
+        : {
+          type: "linkReference",
+          children,
+          ...association,
+          position: sourceSpan,
+        };
     }
-    else {
-      const resource = resourceAt(
-        context.view.text,
-        inlineTokenStart(context.tokens, closeToken),
-        inlineTokenEnd(context.tokens, closeToken),
-      );
-      appendInline(
-        accumulator,
-        image
-          ? { type: "image", alt: phrasingText(children), ...resource, position: sourceSpan }
-          : { type: "link", children, ...resource, position: sourceSpan },
-      );
-    }
+    const resource = resourceAt(
+      context.view.text,
+      inlineTokenStart(context.tokens, closeToken),
+      inlineTokenEnd(context.tokens, closeToken),
+    );
+    return image
+      ? {
+        type: "image",
+        alt: phrasingText(children),
+        ...resource,
+        position: sourceSpan,
+      }
+      : {
+        type: "link",
+        children,
+        ...resource,
+        position: sourceSpan,
+      };
   };
 }
 
@@ -401,11 +408,10 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.Autolink,
-        build(tokenIndex, sourceSpan, accumulator) {
-          const { context } = accumulator;
+        build(tokenIndex, sourceSpan, context) {
           const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
           const label = text.slice(1, -1);
-          appendInline(accumulator, {
+          return {
             type: "link",
             url: label.includes(":") ? label : `mailto:${label}`,
             title: null,
@@ -417,8 +423,7 @@ export const feature: SyntaxFeature = {
               },
             ],
             position: sourceSpan,
-          });
-          return true;
+          };
         },
       },
       { kind: "leaf", token: InlineKind.BracketOpen, build: buildInlineText },

@@ -1,4 +1,3 @@
-import { appendInline } from "../../../fragment/inline.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
 import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../../inline/tokens.ts";
@@ -63,17 +62,12 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "leaf",
     token: InlineKind.MathText,
-    build(tokenIndex, sourceSpan, accumulator) {
-      const { context } = accumulator;
-      appendInline(
-        accumulator,
-        {
-          type: "inlineMath",
-          value: mathTextValue(inlineTokenText(context.view.text, context.tokens, tokenIndex)),
-          position: sourceSpan,
-        },
-      );
-      return true;
+    build(tokenIndex, sourceSpan, context) {
+      return {
+        type: "inlineMath",
+        value: mathTextValue(inlineTokenText(context.view.text, context.tokens, tokenIndex)),
+        position: sourceSpan,
+      };
     },
   },
 ];

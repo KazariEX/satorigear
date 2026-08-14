@@ -3,8 +3,6 @@ import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { type BlockBuildContext, type BlockNodeBuilder, blockToken } from "../../fragment/block.ts";
 import { buildInlineChildren } from "../../fragment/inline.ts";
-import { InlineKind } from "../../inline/kinds.ts";
-import { buildInlineCode } from "./code.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -316,16 +314,6 @@ export const feature: SyntaxFeature = {
             },
           };
         },
-      },
-    ],
-  },
-  inline: {
-    syntax: [
-      {
-        kind: "leaf",
-        token: InlineKind.CodeSpan,
-        // GFM removes a pipe escape inside table code spans, while CommonMark code spans preserve it.
-        build: buildInlineCode,
       },
     ],
   },

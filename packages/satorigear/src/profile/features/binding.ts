@@ -1,4 +1,3 @@
-import { appendInline } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -43,8 +42,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.Binding,
-        build(tokenIndex, sourceSpan, accumulator) {
-          const { context } = accumulator;
+        build(tokenIndex, sourceSpan, context) {
           const source = context.view.text;
           const start = inlineTokenStart(context.tokens, tokenIndex) + 2;
           const end = inlineTokenEnd(context.tokens, tokenIndex) - 2;
@@ -56,14 +54,13 @@ export const feature: SyntaxFeature = {
           if (defaultValue) {
             attributes.defaultValue = defaultValue;
           }
-          appendInline(accumulator, {
+          return {
             type: "inlineComponent",
             name: "binding",
             attributes,
             children: [],
             position: sourceSpan,
-          });
-          return true;
+          };
         },
       },
     ],

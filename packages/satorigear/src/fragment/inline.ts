@@ -16,13 +16,13 @@ export interface InlineBuildContext {
   decodeText: (value: string) => string;
   schema: InlineSyntaxSchema;
   source: string;
-  tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
+  tokenHandlers: readonly (InlineTokenHandler | undefined)[];
   tokens: InlineTokenStream;
   view: SourceView;
 }
 
-export interface InlineAccumulator {
-  context: InlineBuildContext;
+interface InlineOutput {
+  // Nested semantic nodes share the region context but own their output position and gaps.
   cursor: number | undefined;
   gapEnd: number;
   gapStart: number;
@@ -32,16 +32,30 @@ export interface InlineAccumulator {
 export type InlineLeafBuilder = (
   tokenIndex: number,
   sourceSpan: SourceSpan,
-  accumulator: InlineAccumulator,
-) => boolean;
+  context: InlineBuildContext,
+) => SpannedNode<PhrasingContent> | undefined;
 
 export type InlineNodeBuilder = (
   openToken: number,
   closeToken: number,
-  children: SpannedNode<PhrasingContent>[],
   sourceSpan: SourceSpan,
-  accumulator: InlineAccumulator,
-) => void;
+  children: SpannedNode<PhrasingContent>[],
+  context: InlineBuildContext,
+) => SpannedNode<PhrasingContent>;
+
+export type InlineTokenDecorator = (
+  tokenIndex: number,
+  sourceSpan: SourceSpan,
+  context: InlineBuildContext,
+  target: SpannedNode<PhrasingContent>[],
+) => boolean;
+
+export type InlineTokenHandler = (
+  tokenIndex: number,
+  sourceSpan: SourceSpan,
+  context: InlineBuildContext,
+  target: SpannedNode<PhrasingContent>[],
+) => SpannedNode<PhrasingContent> | boolean | undefined;
 
 function lineStart(source: string, offset: number): number {
   while (offset > 0) {
@@ -97,41 +111,38 @@ function appendPhrasing(
   }
 }
 
-export function createInlineAccumulator(
+function appendInlineGap(
+  output: InlineOutput,
   context: InlineBuildContext,
-  target: SpannedNode<PhrasingContent>[],
-  cursor?: number,
-): InlineAccumulator {
-  return { context, cursor, gapEnd: -1, gapStart: -1, target };
-}
-
-function appendInlineGap(accumulator: InlineAccumulator, start: number, end: number): void {
-  accumulator.gapStart = -1;
-  accumulator.gapEnd = -1;
-  const { context, target } = accumulator;
+  start: number,
+  end: number,
+): void {
+  output.gapStart = -1;
+  output.gapEnd = -1;
   const gapSpan = context.view.mapSpan(start, end);
   appendText(
-    target,
+    output.target,
     context.decodeText(context.view.text.slice(start, end).replace(/[\r\n]/g, "")),
     gapSpan.start,
     gapSpan.end,
   );
 }
 
-export function appendInline(
-  accumulator: InlineAccumulator,
+function appendInline(
+  output: InlineOutput,
+  context: InlineBuildContext,
   value: SpannedNode<PhrasingContent>,
 ): void {
-  const { context, target } = accumulator;
+  const { target } = output;
   const nextLineOffset = value.position.start;
   const newline = value.type === "text" && value.value.startsWith("\n");
-  if (accumulator.gapStart >= 0) {
+  if (output.gapStart >= 0) {
     if (!newline) {
-      appendInlineGap(accumulator, accumulator.gapStart, accumulator.gapEnd);
+      appendInlineGap(output, context, output.gapStart, output.gapEnd);
     }
     else {
-      accumulator.gapStart = -1;
-      accumulator.gapEnd = -1;
+      output.gapStart = -1;
+      output.gapEnd = -1;
     }
   }
   if (newline) {
@@ -153,14 +164,23 @@ export function appendInline(
 function appendInlineLeaf(
   tokenIndex: number,
   sourceSpan: SourceSpan,
-  accumulator: InlineAccumulator,
+  output: InlineOutput,
+  context: InlineBuildContext,
 ): boolean {
-  const { context } = accumulator;
-  const build = context.tokenBuilders[inlineTokenKind(context.tokens, tokenIndex)];
-  if (!build) {
-    throw new Error(`Unexpected inline token kind ${inlineTokenKind(context.tokens, tokenIndex)}`);
+  const kind = inlineTokenKind(context.tokens, tokenIndex);
+  const handle = context.tokenHandlers[kind];
+  if (!handle) {
+    throw new Error(`Unexpected inline token kind ${kind}`);
   }
-  return build(tokenIndex, sourceSpan, accumulator);
+  const value = handle(tokenIndex, sourceSpan, context, output.target);
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (!value) {
+    return false;
+  }
+  appendInline(output, context, value);
+  return true;
 }
 
 function trailingWhitespaceStart(value: string): number {
@@ -176,10 +196,12 @@ function trailingWhitespaceStart(value: string): number {
 function appendInlineRange(
   startToken: number,
   endToken: number,
-  accumulator: InlineAccumulator,
+  context: InlineBuildContext,
+  target: SpannedNode<PhrasingContent>[],
+  cursor?: number,
   closeKind?: number,
 ): number {
-  const { context } = accumulator;
+  const output: InlineOutput = { cursor, gapEnd: -1, gapStart: -1, target };
   let index = startToken;
   while (index < endToken) {
     const kind = inlineTokenKind(context.tokens, index);
@@ -187,24 +209,35 @@ function appendInlineRange(
       break;
     }
     const childOffset = inlineTokenStart(context.tokens, index);
-    if (accumulator.cursor !== void 0 && childOffset > accumulator.cursor) {
-      accumulator.gapStart = accumulator.cursor;
-      accumulator.gapEnd = childOffset;
+    if (output.cursor !== void 0 && childOffset > output.cursor) {
+      output.gapStart = output.cursor;
+      output.gapEnd = childOffset;
     }
-    const next = buildInlineSemantic(index, endToken, accumulator);
+    const next = buildInlineSemantic(index, endToken, output, context);
     const childEnd = inlineTokenEnd(context.tokens, next === void 0 ? index : next - 1);
     const childEmitted = next === void 0
       ? appendInlineLeaf(
         index,
         context.view.mapSpan(childOffset, childEnd),
-        accumulator,
+        output,
+        context,
       )
       : true;
     index = next ?? index + 1;
     if (!childEmitted) {
       continue;
     }
-    accumulator.cursor = childEnd;
+    output.cursor = childEnd;
+  }
+  if (
+    closeKind !== void 0 &&
+    index < endToken &&
+    output.cursor !== void 0
+  ) {
+    const contentEnd = inlineTokenStart(context.tokens, index);
+    if (contentEnd > output.cursor) {
+      appendInlineGap(output, context, output.cursor, contentEnd);
+    }
   }
   return index;
 }
@@ -212,9 +245,9 @@ function appendInlineRange(
 function buildInlineSemantic(
   openToken: number,
   endToken: number,
-  accumulator: InlineAccumulator,
+  output: InlineOutput,
+  context: InlineBuildContext,
 ): number | undefined {
-  const { context } = accumulator;
   const kind = inlineTokenKind(context.tokens, openToken);
   const container = context.schema.containerByKind[kind];
   if (container) {
@@ -226,11 +259,12 @@ function buildInlineSemantic(
       inlineTokenKind(context.tokens, next) === container.contentOpenKind
     ) {
       const contentStart = inlineTokenEnd(context.tokens, next++);
-      const childAccumulator = createInlineAccumulator(context, children, contentStart);
       closeToken = appendInlineRange(
         next,
         endToken,
-        childAccumulator,
+        context,
+        children,
+        contentStart,
         container.closeKind,
       );
       if (
@@ -239,21 +273,21 @@ function buildInlineSemantic(
       ) {
         throw new Error(`Resolved inline stream did not close token kind ${kind}`);
       }
-      const contentEnd = inlineTokenStart(context.tokens, closeToken);
-      if (childAccumulator.cursor !== void 0 && contentEnd > childAccumulator.cursor) {
-        appendInlineGap(childAccumulator, childAccumulator.cursor, contentEnd);
-      }
       next = closeToken + 1;
     }
-    container.build(
-      openToken,
-      closeToken,
-      children,
-      context.view.mapSpan(
-        inlineTokenStart(context.tokens, openToken),
-        inlineTokenEnd(context.tokens, closeToken),
+    appendInline(
+      output,
+      context,
+      container.build(
+        openToken,
+        closeToken,
+        context.view.mapSpan(
+          inlineTokenStart(context.tokens, openToken),
+          inlineTokenEnd(context.tokens, closeToken),
+        ),
+        children,
+        context,
       ),
-      accumulator,
     );
     return next;
   }
@@ -264,11 +298,12 @@ function buildInlineSemantic(
   }
   const contentStart = inlineTokenEnd(context.tokens, openToken);
   const children: SpannedNode<PhrasingContent>[] = [];
-  const childAccumulator = createInlineAccumulator(context, children, contentStart);
   const closeToken = appendInlineRange(
     openToken + 1,
     endToken,
-    childAccumulator,
+    context,
+    children,
+    contentStart,
     pair.closeKind,
   );
   if (
@@ -277,19 +312,19 @@ function buildInlineSemantic(
   ) {
     throw new Error(`Resolved inline stream did not close token kind ${kind}`);
   }
-  const contentEnd = inlineTokenStart(context.tokens, closeToken);
-  if (childAccumulator.cursor !== void 0 && contentEnd > childAccumulator.cursor) {
-    appendInlineGap(childAccumulator, childAccumulator.cursor, contentEnd);
-  }
-  pair.build(
-    openToken,
-    closeToken,
-    children,
-    context.view.mapSpan(
-      inlineTokenStart(context.tokens, openToken),
-      inlineTokenEnd(context.tokens, closeToken),
+  appendInline(
+    output,
+    context,
+    pair.build(
+      openToken,
+      closeToken,
+      context.view.mapSpan(
+        inlineTokenStart(context.tokens, openToken),
+        inlineTokenEnd(context.tokens, closeToken),
+      ),
+      children,
+      context,
     ),
-    accumulator,
   );
   return closeToken + 1;
 }
@@ -312,7 +347,7 @@ export function buildInlineChildren(
     decodeText: context.profile.decodeText,
     schema: context.profile.schema,
     source: context.source,
-    tokenBuilders: context.profile.tokenBuilders,
+    tokenHandlers: context.profile.tokenHandlers,
     tokens: region.tokens,
     view: region.view,
   };
@@ -320,7 +355,8 @@ export function buildInlineChildren(
   appendInlineRange(
     0,
     inlineTokenCount(region.tokens),
-    createInlineAccumulator(inlineContext, result),
+    inlineContext,
+    result,
   );
   const last = result.at(-1);
   if (last?.type === "text") {

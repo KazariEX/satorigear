@@ -1,4 +1,3 @@
-import { appendInline } from "../../../fragment/inline.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -134,17 +133,15 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "leaf",
     token: InlineKind.FootnoteReference,
-    build(tokenIndex, sourceSpan, accumulator) {
-      const { context } = accumulator;
+    build(tokenIndex, sourceSpan, context) {
       const source = inlineTokenText(context.view.text, context.tokens, tokenIndex);
       const label = source.slice(2, -1);
-      appendInline(accumulator, {
+      return {
         type: "footnoteReference",
         identifier: normalizeAssociationLabel(label).toLowerCase(),
         label: semanticText(label),
         position: sourceSpan,
-      });
-      return true;
+      };
     },
   },
 ];

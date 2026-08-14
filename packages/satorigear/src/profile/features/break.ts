@@ -1,6 +1,5 @@
 import { BlockKind } from "../../block/kinds.ts";
 import { blockEnd, firstNonspace } from "../../fragment/block.ts";
-import { appendInline } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -66,23 +65,22 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.HardBreak,
-        build(tokenIndex, sourceSpan, accumulator) {
-          appendInline(
-            accumulator,
-            { type: "break", position: sourceSpan },
-          );
-          return true;
+        build(tokenIndex, sourceSpan) {
+          return {
+            type: "break",
+            position: sourceSpan,
+          };
         },
       },
       {
         kind: "leaf",
         token: InlineKind.Newline,
-        build(tokenIndex, sourceSpan, accumulator) {
-          appendInline(
-            accumulator,
-            { type: "text", value: "\n", position: sourceSpan },
-          );
-          return true;
+        build(tokenIndex, sourceSpan) {
+          return {
+            type: "text",
+            value: "\n",
+            position: sourceSpan,
+          };
         },
       },
     ],

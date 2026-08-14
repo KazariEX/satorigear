@@ -1,4 +1,4 @@
-import type { Blockquote, Heading, List, Paragraph } from "mdast";
+import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdast";
 import { lineEnd } from "../../../fragment/inline.ts";
 import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
@@ -25,10 +25,13 @@ import { attributesEnd, parseAttributes } from "./syntax.ts";
 import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
 import type { SourceSpan } from "../../../source-view.ts";
 import type { SyntaxFeature } from "../../types.ts";
+import type { Attributes } from "./types.ts";
 
 interface AttributeSpan extends SourceSpan {
   detached: boolean;
 }
+
+type AttributableNode = SpannedNode<PhrasingContent> & { attributes?: Attributes };
 
 const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (nodeId, offset, tokenBase, context) => {
   const result = build(nodeId, offset, tokenBase, context) as SpannedNode<Paragraph | Heading>;
@@ -187,25 +190,29 @@ export const feature: SyntaxFeature = {
     resolution: { transform: transformAttributeTokens },
     syntax: [
       {
-        kind: "leaf",
+        kind: "decorate",
         token: InlineKind.AttributesToken,
-        build(tokenIndex, sourceSpan, accumulator) {
-          const previous = accumulator.target.at(-1);
-          const parsed = parseAttributes(accumulator.context.view.text, inlineTokenStart(accumulator.context.tokens, tokenIndex));
+        apply(tokenIndex, sourceSpan, context, target) {
+          // mdast extensions may declare unrelated `attributes` shapes; this parser only emits ours.
+          const previous = target.at(-1) as AttributableNode | undefined;
+          const parsed = parseAttributes(
+            context.view.text,
+            inlineTokenStart(context.tokens, tokenIndex),
+          );
           if (!previous || !parsed) {
             return false;
           }
-          const flags = inlineTokenFlags(accumulator.context.tokens, tokenIndex);
+          const flags = inlineTokenFlags(context.tokens, tokenIndex);
           const terminal = Boolean(flags & InlineTokenFlag.AttributeTerminal);
           const detached = Boolean(flags & InlineTokenFlag.AttributeDetached);
           if (
             terminal && (
               detached ||
               previous.type === "text" ||
-              hasTerminalAttributes(accumulator.target)
+              hasTerminalAttributes(target)
             )
           ) {
-            carryTerminalAttributes(accumulator.target, parsed.attributes);
+            carryTerminalAttributes(target, parsed.attributes);
             return true;
           }
           if (previous.attributes) {

@@ -1,6 +1,11 @@
 import { compileInlineTokenizer, type InlineLexicalRule, type InlineTokenizer } from "./lexer.ts";
 import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
-import type { InlineLeafBuilder, InlineNodeBuilder } from "../fragment/inline.ts";
+import type {
+  InlineLeafBuilder,
+  InlineNodeBuilder,
+  InlineTokenDecorator,
+  InlineTokenHandler,
+} from "../fragment/inline.ts";
 import type { InlineKind } from "./kinds.ts";
 // Inline features compile into one token pipeline and the projection tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
@@ -16,6 +21,11 @@ export type InlineTokenTransform = (
 ) => InlineTokenStream;
 
 export type InlineSyntaxDefinition =
+  | {
+    kind: "decorate";
+    token: InlineKind;
+    apply: InlineTokenDecorator;
+  }
   | {
     kind: "leaf";
     token: InlineKind;
@@ -68,11 +78,11 @@ export interface InlineProfile {
   decodeText: (value: string) => string;
   resolve: InlineTokenTransform;
   schema: InlineSyntaxSchema;
-  tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
+  tokenHandlers: readonly (InlineTokenHandler | undefined)[];
   tokenize: InlineTokenizer;
 }
 
-const ignoreInlineToken: InlineLeafBuilder = () => false;
+const ignoreInlineToken: InlineLeafBuilder = () => void 0;
 
 function composeTransforms(...rewrites: readonly InlineTokenTransform[]): InlineTokenTransform {
   if (rewrites.length === 1) {
@@ -121,15 +131,19 @@ export function compileInlineProfile(
     }
   }
 
-  const tokenBuilders: (InlineLeafBuilder | undefined)[] = [];
+  const tokenHandlers: (InlineTokenHandler | undefined)[] = [];
   const containerByKind: (InlineContainer | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
   const registerToken = (kind: InlineKind, build: InlineLeafBuilder): InlineKind => {
-    tokenBuilders[kind] = build;
+    tokenHandlers[kind] = build;
     return kind;
   };
 
   for (const definition of syntaxDefinitions) {
+    if (definition.kind === "decorate") {
+      tokenHandlers[definition.token] = definition.apply;
+      continue;
+    }
     if (definition.kind === "leaf") {
       registerToken(definition.token, definition.build);
       continue;
@@ -163,7 +177,7 @@ export function compileInlineProfile(
       containerByKind,
       pairByOpenKind,
     },
-    tokenBuilders,
+    tokenHandlers,
     tokenize: compileInlineTokenizer(lexicalRules),
   };
 }

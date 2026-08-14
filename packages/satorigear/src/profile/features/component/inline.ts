@@ -1,8 +1,4 @@
-import {
-  appendInline,
-  type InlineNodeBuilder,
-  lineEnd,
-} from "../../../fragment/inline.ts";
+import { lineEnd } from "../../../fragment/inline.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -366,55 +362,38 @@ export function transformComponentTokens(
   return result;
 }
 
-const buildInlineComponent: InlineNodeBuilder = (
-  open,
-  close,
-  children,
-  sourceSpan,
-  accumulator,
-) => {
-  const { context } = accumulator;
-  const text = context.view.text.slice(
-    inlineTokenStart(context.tokens, open) + 1,
-    inlineTokenEnd(context.tokens, open),
-  );
-  appendInline(accumulator, {
-    type: "inlineComponent",
-    name: normalizeComponentName(text),
-    attributes: {},
-    children,
-    position: sourceSpan,
-  });
-};
-
-const buildInlineSpan: InlineNodeBuilder = (
-  open,
-  close,
-  children,
-  sourceSpan,
-  accumulator,
-) => {
-  appendInline(accumulator, {
-    type: "inlineComponent",
-    name: "span",
-    attributes: {},
-    children,
-    position: sourceSpan,
-  });
-};
-
 export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "container",
     token: InlineKind.InlineComponentOpen,
     contentOpen: InlineKind.InlineComponentLabelOpen,
     close: InlineKind.InlineComponentLabelClose,
-    build: buildInlineComponent,
+    build(open, close, sourceSpan, children, context) {
+      const text = context.view.text.slice(
+        inlineTokenStart(context.tokens, open) + 1,
+        inlineTokenEnd(context.tokens, open),
+      );
+      return {
+        type: "inlineComponent",
+        name: normalizeComponentName(text),
+        attributes: {},
+        children,
+        position: sourceSpan,
+      };
+    },
   },
   {
     kind: "pair",
     open: InlineKind.InlineSpanOpen,
     close: InlineKind.InlineSpanClose,
-    build: buildInlineSpan,
+    build(open, close, sourceSpan, children) {
+      return {
+        type: "inlineComponent",
+        name: "span",
+        attributes: {},
+        children,
+        position: sourceSpan,
+      };
+    },
   },
 ];

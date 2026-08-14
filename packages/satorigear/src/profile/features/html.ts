@@ -7,10 +7,10 @@ import {
   blockToken,
   normalizeLines,
 } from "../../fragment/block.ts";
-import { appendInline, type InlineLeafBuilder } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
+import type { InlineLeafBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface HtmlStart {
@@ -133,14 +133,13 @@ function htmlBlockUnterminated(token: number, context: BlockBuildContext): boole
   return result;
 }
 
-const buildInlineHtml: InlineLeafBuilder = (tokenIndex, sourceSpan, accumulator) => {
-  const { context } = accumulator;
+const buildInlineHtml: InlineLeafBuilder = (tokenIndex, sourceSpan, context) => {
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  appendInline(
-    accumulator,
-    { type: "html", value: text, position: sourceSpan },
-  );
-  return true;
+  return {
+    type: "html",
+    value: text,
+    position: sourceSpan,
+  };
 };
 
 export const feature: SyntaxFeature = {

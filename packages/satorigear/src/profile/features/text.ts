@@ -1,8 +1,4 @@
 import { decodeHTMLStrict } from "entities";
-import {
-  appendInline,
-  type InlineLeafBuilder,
-} from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import {
@@ -11,6 +7,7 @@ import {
   inlineTokenFlags,
   inlineTokenText,
 } from "../../inline/tokens.ts";
+import type { InlineLeafBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
@@ -32,20 +29,15 @@ export function semanticText(value: string): string {
   return value.replace(semanticCharacter, (match, escaped) => escaped ?? decodeHTMLStrict(match));
 }
 
-export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, accumulator) => {
-  const { context } = accumulator;
+export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, context) => {
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  appendInline(
-    accumulator,
-    {
-      type: "text",
-      value: inlineTokenFlags(context.tokens, tokenIndex) & InlineTokenFlag.DecodeText
-        ? semanticText(text)
-        : text,
-      position: sourceSpan,
-    },
-  );
-  return true;
+  return {
+    type: "text",
+    value: inlineTokenFlags(context.tokens, tokenIndex) & InlineTokenFlag.DecodeText
+      ? semanticText(text)
+      : text,
+    position: sourceSpan,
+  };
 };
 
 export const feature: SyntaxFeature = {

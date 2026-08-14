@@ -1,12 +1,9 @@
 import type { Delete, Emphasis, Strong } from "mdast";
-import {
-  appendInline,
-  type InlineNodeBuilder,
-} from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken } from "../../inline/tokens.ts";
 import { buildInlineText } from "./text.ts";
+import type { InlineNodeBuilder } from "../../fragment/inline.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -54,9 +51,11 @@ export interface StrikethroughOptions {
 type Formatting = Delete | Emphasis | Strong;
 
 function createBuildFormatting(type: Formatting["type"]): InlineNodeBuilder {
-  return (openToken, closeToken, children, sourceSpan, accumulator) => {
-    appendInline(accumulator, { type, children, position: sourceSpan });
-  };
+  return (openToken, closeToken, sourceSpan, children) => ({
+    type,
+    children,
+    position: sourceSpan,
+  });
 }
 
 const buildInlineEmphasis = createBuildFormatting("emphasis");
@@ -66,14 +65,14 @@ const buildInlineDelete = createBuildFormatting("delete");
 const buildInlineStrongOrDelete: InlineNodeBuilder = (
   openToken,
   closeToken,
-  children,
   sourceSpan,
-  accumulator,
+  children,
+  context,
 ) => {
-  const build = accumulator.context.source[sourceSpan.start] === "~"
+  const build = context.source[sourceSpan.start] === "~"
     ? buildInlineDelete
     : buildInlineStrong;
-  build(openToken, closeToken, children, sourceSpan, accumulator);
+  return build(openToken, closeToken, sourceSpan, children, context);
 };
 
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {

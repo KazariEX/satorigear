@@ -16,7 +16,7 @@ import {
   firstNonspace,
   normalizeLines,
 } from "../../fragment/block.ts";
-import { appendInline, type InlineLeafBuilder, lineEnd } from "../../fragment/inline.ts";
+import { lineEnd } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
@@ -32,35 +32,6 @@ const codeFenceRule: FenceRule = {
 export function codeFenceAt(source: string, line: BlockLine): Fence | undefined {
   return fenceAt(source, line, codeFenceRule);
 }
-
-function codeSpanValue(value: string): string {
-  const markerLength = /^`+/.exec(value)?.[0].length;
-  if (!markerLength) {
-    throw new Error("CodeSpan token does not start with a backtick run");
-  }
-  let result = normalizeLines(value.slice(markerLength, -markerLength));
-  if (/^[ \n]/.test(result) && /[ \n]$/.test(result) && /[^ \n]/.test(result)) {
-    result = result.slice(1, -1);
-  }
-  return result;
-}
-
-export const buildInlineCode: InlineLeafBuilder = (tokenIndex, sourceSpan, accumulator) => {
-  const { context } = accumulator;
-  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  const value = codeSpanValue(text);
-  appendInline(
-    accumulator,
-    {
-      type: "inlineCode",
-      value: context.blockRule === "TableCell"
-        ? value.replace(/\\\|/g, "|")
-        : value,
-      position: sourceSpan,
-    },
-  );
-  return true;
-};
 
 function indentedCodeEnd(nodeId: number, tokenBase: number, context: BlockBuildContext): number {
   const token = blockToken(nodeId, tokenBase, BlockKind.IndentedCodeBlockToken, context);
@@ -216,7 +187,24 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.CodeSpan,
-        build: buildInlineCode,
+        build: (tokenIndex, sourceSpan, context) => {
+          const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
+          const markerLength = /^`+/.exec(text)?.[0].length;
+          if (!markerLength) {
+            throw new Error("CodeSpan token does not start with a backtick run");
+          }
+          let value = normalizeLines(text.slice(markerLength, -markerLength));
+          if (/^[ \n]/.test(value) && /[ \n]$/.test(value) && /[^ \n]/.test(value)) {
+            value = value.slice(1, -1);
+          }
+          return {
+            type: "inlineCode",
+            value: context.blockRule === "TableCell"
+              ? value.replace(/\\\|/g, "|")
+              : value,
+            position: sourceSpan,
+          };
+        },
       },
     ],
   },
