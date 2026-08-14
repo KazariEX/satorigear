@@ -16,6 +16,8 @@ export const enum InlineKind {
   EmphasisClose,
   StrongOpen,
   StrongClose,
+  DeleteOpen,
+  DeleteClose,
   ImageOpen,
   BracketOpen,
   LinkTail,

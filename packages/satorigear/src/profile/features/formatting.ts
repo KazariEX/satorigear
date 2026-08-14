@@ -5,17 +5,8 @@ import { appendInlineToken } from "../../inline/tokens.ts";
 import { buildInlineText } from "./text.ts";
 import type { InlineNodeBuilder } from "../../fragment/inline.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
+import type { InlineSyntaxDefinition } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
-
-const scanFormatting: InlineLexicalRule["scan"] = (source, start, tokens) => {
-  const code = source.charCodeAt(start);
-  const end = inlineMarkerRunEnd(source, start);
-  const kind = code === 42
-    ? InlineKind.AsteriskRun
-    : code === 95 ? InlineKind.UnderscoreRun : InlineKind.TildeRun;
-  appendInlineToken(tokens, kind, start, end);
-  return end;
-};
 
 const asteriskDelimiter: DelimiterConfig = {
   token: InlineKind.AsteriskRun,
@@ -40,17 +31,21 @@ const strikethroughDelimiter: DelimiterConfig = {
   token: InlineKind.TildeRun,
   marker: "~",
   fallbackToken: InlineKind.Delimiter,
-  double: { open: InlineKind.StrongOpen, close: InlineKind.StrongClose },
+  double: { open: InlineKind.DeleteOpen, close: InlineKind.DeleteClose },
   pairing: { kind: "whole" },
 };
 
-export interface StrikethroughOptions {
-  singleTilde?: boolean;
-}
+const scanFormatting: InlineLexicalRule["scan"] = (source, start, tokens) => {
+  const code = source.charCodeAt(start);
+  const end = inlineMarkerRunEnd(source, start);
+  const kind = code === 42
+    ? InlineKind.AsteriskRun
+    : code === 95 ? InlineKind.UnderscoreRun : InlineKind.TildeRun;
+  appendInlineToken(tokens, kind, start, end);
+  return end;
+};
 
-type Formatting = Delete | Emphasis | Strong;
-
-function createBuildFormatting(type: Formatting["type"]): InlineNodeBuilder {
+function createBuildFormatting(type: (Emphasis | Strong | Delete)["type"]): InlineNodeBuilder {
   return (openToken, closeToken, sourceSpan, children) => ({
     type,
     children,
@@ -58,60 +53,65 @@ function createBuildFormatting(type: Formatting["type"]): InlineNodeBuilder {
   });
 }
 
-const buildInlineEmphasis = createBuildFormatting("emphasis");
-const buildInlineStrong = createBuildFormatting("strong");
-const buildInlineDelete = createBuildFormatting("delete");
-
-const buildInlineStrongOrDelete: InlineNodeBuilder = (
-  openToken,
-  closeToken,
-  sourceSpan,
-  children,
-  context,
-) => {
-  const build = context.source[sourceSpan.start] === "~"
-    ? buildInlineDelete
-    : buildInlineStrong;
-  return build(openToken, closeToken, sourceSpan, children, context);
-};
+export interface StrikethroughOptions {
+  singleTilde?: boolean;
+}
 
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {
-  const delimiters = [asteriskDelimiter, underscoreDelimiter];
+  const delimiters = [
+    asteriskDelimiter,
+    underscoreDelimiter,
+  ];
+  const lexical: InlineLexicalRule[] = [
+    { marker: "*", scan: scanFormatting },
+    { marker: "_", scan: scanFormatting },
+  ];
+  const syntax: InlineSyntaxDefinition[] = [
+    {
+      kind: "leaf",
+      token: InlineKind.Delimiter,
+      build: buildInlineText,
+    },
+    {
+      kind: "pair",
+      open: InlineKind.EmphasisOpen,
+      close: InlineKind.EmphasisClose,
+      build: createBuildFormatting("emphasis"),
+    },
+    {
+      kind: "pair",
+      open: InlineKind.StrongOpen,
+      close: InlineKind.StrongClose,
+      build: createBuildFormatting("strong"),
+    },
+  ];
+
   if (strikethroughOptions) {
+    lexical.push({ marker: "~", scan: scanFormatting });
     delimiters.push(
       typeof strikethroughOptions !== "object" || strikethroughOptions.singleTilde !== false
-        ? { ...strikethroughDelimiter, single: strikethroughDelimiter.double }
+        ? {
+          ...strikethroughDelimiter,
+          single: strikethroughDelimiter.double,
+        }
         : strikethroughDelimiter,
+    );
+    syntax.push(
+      { kind: "leaf", token: InlineKind.TildeRun, build: buildInlineText },
+      {
+        kind: "pair",
+        open: InlineKind.DeleteOpen,
+        close: InlineKind.DeleteClose,
+        build: createBuildFormatting("delete"),
+      },
     );
   }
 
-  // Reuse the double-delimiter structure so enabling `~` does not add another semantic rule.
-  const buildStrong = strikethroughOptions ? buildInlineStrongOrDelete : buildInlineStrong;
-
   return {
     inline: {
-      lexical: [
-        { marker: "*", scan: scanFormatting },
-        { marker: "_", scan: scanFormatting },
-        { marker: "~", scan: scanFormatting },
-      ],
+      lexical,
       resolution: { delimiters },
-      syntax: [
-        { kind: "leaf", token: InlineKind.Delimiter, build: buildInlineText },
-        { kind: "leaf", token: InlineKind.TildeRun, build: buildInlineText },
-        {
-          kind: "pair",
-          open: InlineKind.EmphasisOpen,
-          close: InlineKind.EmphasisClose,
-          build: buildInlineEmphasis,
-        },
-        {
-          kind: "pair",
-          open: InlineKind.StrongOpen,
-          close: InlineKind.StrongClose,
-          build: buildStrong,
-        },
-      ],
+      syntax,
     },
   };
 }
