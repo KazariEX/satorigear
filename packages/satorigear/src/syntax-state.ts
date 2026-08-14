@@ -14,7 +14,6 @@ interface SyntaxBlock {
   offset: number;
   record: BlockRecord;
   regions: readonly InlineRegion[];
-  tokenBase: number;
   version: number;
 }
 
@@ -120,7 +119,6 @@ export class SyntaxState {
         offset,
         record,
         regions: emptyArray,
-        tokenBase,
         version: 0,
       });
     }
@@ -150,9 +148,7 @@ export class SyntaxState {
     const suffixOffsetDelta = firstSuffixBlock && firstSuffixRecord
       ? structure.tokens.start(firstSuffixRecord.tokenStart) - firstSuffixBlock.offset
       : 0;
-    const suffixTokenDelta = firstSuffixBlock && firstSuffixRecord
-      ? firstSuffixRecord.tokenStart - firstSuffixBlock.tokenBase
-      : 0;
+    const suffixTokenDelta = change?.tokenDelta ?? 0;
     for (let index = oldEnd; index < previousBlocks.length; index++) {
       const block = previousBlocks[index];
       if (suffixOffsetDelta !== 0 || suffixTokenDelta !== 0) {
@@ -161,7 +157,6 @@ export class SyntaxState {
         }
       }
       block.offset += suffixOffsetDelta;
-      block.tokenBase += suffixTokenDelta;
       blocks.push(block);
     }
 

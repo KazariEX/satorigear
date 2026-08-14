@@ -14,6 +14,7 @@ export interface BlockStructureChange {
   readonly newEnd: number;
   readonly oldEnd: number;
   readonly oldStart: number;
+  readonly tokenDelta: number;
 }
 
 // Semantic nodes are ranges in the scanner-owned token stream. Only top-level records carry identity.
@@ -71,6 +72,7 @@ export class BlockStructure {
       newEnd: prefixEnd + changed.length,
       oldEnd: suffixStart,
       oldStart: prefixEnd,
+      tokenDelta,
     };
   }
 
