@@ -22,63 +22,64 @@ interface Resource {
   url: string;
 }
 
-function trimLinkWhitespace(value: string): string {
-  return value.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+function isLinkWhitespace(code: number): boolean {
+  return code === 9 || code === 10 || code === 13 || code === 32;
 }
 
-function destinationTitle(bodySource: string): Resource {
-  const body = trimLinkWhitespace(bodySource);
-  if (!body) {
+// LinkTail is already validated by the lexer; projection only separates its output fields.
+function resourceAt(source: string, tokenStart: number, tokenEnd: number): Resource {
+  let start = tokenStart + 2;
+  let end = tokenEnd - 1;
+  while (start < end && isLinkWhitespace(source.charCodeAt(start))) {
+    start++;
+  }
+  while (end > start && isLinkWhitespace(source.charCodeAt(end - 1))) {
+    end--;
+  }
+  if (start === end) {
     return { url: "", title: null };
   }
-  let offset = 0;
-  let destination = "";
-  if (body[0] === "<") {
-    offset = 1;
-    while (offset < body.length) {
-      if (body[offset] === "\\") {
-        offset += 2;
+
+  let destinationStart = start;
+  let destinationEnd = start;
+  if (source[start] === "<") {
+    destinationStart++;
+    destinationEnd = destinationStart;
+    while (destinationEnd < end) {
+      if (source[destinationEnd] === "\\") {
+        destinationEnd += 2;
       }
-      else if (body[offset] === ">") {
+      else if (source[destinationEnd] === ">") {
         break;
       }
       else {
-        offset++;
+        destinationEnd++;
       }
     }
-    destination = body.slice(1, offset++);
+    start = destinationEnd + 1;
   }
   else {
-    let depth = 0;
-    while (offset < body.length) {
-      if (body[offset] === "\\") {
-        offset += 2;
+    destinationEnd = start;
+    while (destinationEnd < end) {
+      if (source[destinationEnd] === "\\") {
+        destinationEnd += 2;
       }
-      else if (body[offset] === "(") {
-        depth++;
-        offset++;
-      }
-      else if (body[offset] === ")") {
-        depth--;
-        offset++;
-      }
-      else if (depth === 0) {
-        const code = body.charCodeAt(offset);
-        if (code === 9 || code === 10 || code === 13 || code === 32) {
-          break;
-        }
-        offset++;
+      else if (isLinkWhitespace(source.charCodeAt(destinationEnd))) {
+        break;
       }
       else {
-        offset++;
+        destinationEnd++;
       }
     }
-    destination = body.slice(0, offset);
+    start = destinationEnd;
   }
-  const titleSource = trimLinkWhitespace(body.slice(offset));
+
+  while (start < end && isLinkWhitespace(source.charCodeAt(start))) {
+    start++;
+  }
   return {
-    url: semanticText(destination),
-    title: titleSource ? semanticText(titleSource.slice(1, -1)) : null,
+    url: semanticText(source.slice(destinationStart, destinationEnd)),
+    title: start < end ? semanticText(source.slice(start + 1, end - 1)) : null,
   };
 }
 
@@ -142,8 +143,10 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
       );
     }
     else {
-      const resource = destinationTitle(
-        inlineTokenText(context.view.text, context.tokens, closeToken).slice(2, -1),
+      const resource = resourceAt(
+        context.view.text,
+        inlineTokenStart(context.tokens, closeToken),
+        inlineTokenEnd(context.tokens, closeToken),
       );
       appendInline(
         accumulator,
