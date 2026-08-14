@@ -2,5 +2,4 @@ test/corpus
 dist
 node_modules
 packages/satorigear/README.md
-packages/satorigear/src/generated
 tsconfig.*.tsbuildinfo
