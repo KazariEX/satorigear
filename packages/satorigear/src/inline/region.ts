@@ -116,7 +116,6 @@ export class InlineRegion implements InlineRegionSyntax {
     const context: TrackedResolutionContext = {
       definitions,
       hasDefinition,
-      tokenize: this.#syntax.tokenize,
     };
     const rawTokens = source === this.#tokenSource && this.#rawTokens
       ? this.#rawTokens

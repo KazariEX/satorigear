@@ -6,7 +6,6 @@ export const inlineTokenStride = 4;
 
 // Token flags survive lexer and feature rewrites, so their bits are allocated here
 // even when a particular feature owns their interpretation.
-// eslint-disable-next-line no-restricted-syntax
 export const enum InlineTokenFlag {
   AttributeDetached = 4,
   AttributeTerminal = 8,

@@ -1,146 +1,44 @@
 import { appendInline } from "../../../fragment/inline.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
-import {
-  appendInlineToken,
-  firstInlineTokenEndingAfter,
-  inlineTokenCount,
-  inlineTokenEnd,
-  inlineTokenFlags,
-  inlineTokenKind,
-  inlineTokenStart,
-  type InlineTokenStream,
-  inlineTokenText,
-} from "../../../inline/tokens.ts";
-import type { InlineSyntaxDefinition, InlineTokenTransform } from "../../../inline/profile.ts";
-import type { SourceSpan } from "../../../source-view.ts";
+import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../../inline/lexer.ts";
+import { appendInlineToken, inlineTokenText } from "../../../inline/tokens.ts";
+import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
 
-interface MathSpan extends SourceSpan {
-  flags: number;
-}
-
-function textTokenAt(tokens: InlineTokenStream, offset: number): number | undefined {
-  const index = firstInlineTokenEndingAfter(tokens, offset);
-  if (
-    index < inlineTokenCount(tokens) &&
-    inlineTokenStart(tokens, index) <= offset &&
-    inlineTokenKind(tokens, index) === InlineKind.Text
-  ) {
-    return index;
-  }
-}
-
-function markerRunEnd(source: string, start: number): number {
-  let end = start;
-  while (source[end] === "$") {
-    end++;
-  }
-  return end;
-}
-
-function firstMathSpan(
-  source: string,
-  tokens: InlineTokenStream,
-  minimum: number,
-): MathSpan | undefined {
-  let search = 0;
-  while (search < source.length) {
-    const start = source.indexOf("$", search);
-    if (start < 0) {
-      break;
-    }
-    const tokenIndex = textTokenAt(tokens, start);
-    if (
-      tokenIndex === void 0 || (
-        source[start - 1] === "$" && textTokenAt(tokens, start - 1) !== void 0
-      )
-    ) {
-      search = start + 1;
-      continue;
-    }
-    const openerEnd = markerRunEnd(source, start);
-    const markerLength = openerEnd - start;
-    search = openerEnd;
-    if (markerLength < minimum) {
-      continue;
-    }
-    let close = openerEnd;
-    while (close < source.length) {
-      close = source.indexOf("$", close);
-      if (close < 0) {
-        break;
-      }
-      const closeEnd = markerRunEnd(source, close);
-      if (closeEnd - close === markerLength) {
-        return {
-          start,
-          end: closeEnd,
-          flags: inlineTokenFlags(tokens, tokenIndex),
-        };
-      }
-      close = closeEnd;
-    }
-  }
-}
-
-function copyRange(
-  target: number[],
-  tokens: InlineTokenStream,
-  start: number,
-  end: number,
-  offset: number,
-): void {
-  for (let index = firstInlineTokenEndingAfter(tokens, start); index < inlineTokenCount(tokens); index++) {
-    const tokenStart = inlineTokenStart(tokens, index);
-    if (tokenStart >= end) {
-      break;
-    }
-    const tokenEnd = inlineTokenEnd(tokens, index);
-    const fragmentStart = Math.max(start, tokenStart);
-    const fragmentEnd = Math.min(end, tokenEnd);
-    appendInlineToken(
-      target,
-      inlineTokenKind(tokens, index),
-      fragmentStart + offset,
-      fragmentEnd + offset,
-      fragmentStart === tokenStart ? inlineTokenFlags(tokens, index) : 0,
-    );
-  }
-}
-
-export function createMathTokensTransform(singleDollarTextMath: boolean): InlineTokenTransform {
-  return (source, tokens, context) => {
-    const minimum = singleDollarTextMath ? 1 : 2;
-    let segmentSource = source;
-    let segmentStart = 0;
-    let segmentTokens = tokens;
-    let result: number[] | undefined;
-    while (true) {
-      const span = firstMathSpan(segmentSource, segmentTokens, minimum);
-      if (!span) {
-        if (!result) {
-          return tokens;
+export function createMathLexicalRule(singleDollarTextMath: boolean): InlineLexicalRule {
+  const minimum = singleDollarTextMath ? 1 : 2;
+  return {
+    marker: "$",
+    scan(source, start, tokens) {
+      // Math must claim its closer before ordinary tokens can span across that boundary.
+      const openEnd = inlineMarkerRunEnd(source, start);
+      const markerLength = openEnd - start;
+      let end = -1;
+      if (markerLength >= minimum) {
+        let close = openEnd;
+        while (close < source.length) {
+          close = source.indexOf("$", close);
+          if (close < 0) {
+            break;
+          }
+          const closeEnd = inlineMarkerRunEnd(source, close);
+          if (closeEnd - close === markerLength) {
+            end = closeEnd;
+            break;
+          }
+          close = closeEnd;
         }
-        copyRange(result, segmentTokens, 0, segmentSource.length, segmentStart);
-        return result;
       }
-
-      result ??= [];
-      copyRange(result, segmentTokens, 0, span.start, segmentStart);
+      if (end < 0) {
+        end = openEnd;
+      }
       appendInlineToken(
-        result,
-        InlineKind.MathText,
-        segmentStart + span.start,
-        segmentStart + span.end,
-        span.flags,
+        tokens,
+        end === openEnd ? InlineKind.Text : InlineKind.MathText,
+        start,
+        end,
       );
-      segmentStart += span.end;
-      if (segmentStart === source.length) {
-        return result;
-      }
-      // The closer can cut through a token formed before math claimed its contents.
-      segmentSource = source.slice(segmentStart);
-      segmentTokens = context.tokenize(segmentSource);
-    }
+      return end;
+    },
   };
 }
 

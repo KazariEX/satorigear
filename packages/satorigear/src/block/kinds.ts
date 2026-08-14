@@ -1,4 +1,3 @@
-// eslint-disable-next-line no-restricted-syntax
 export const enum BlockKind {
   None,
   InlineChunk,

@@ -5,7 +5,13 @@ import {
   type InlineNodeBuilder,
 } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
-import { inlineTokenEnd, inlineTokenStart, inlineTokenText } from "../../inline/tokens.ts";
+import {
+  appendInlineToken,
+  inlineTokenEnd,
+  InlineTokenFlag,
+  inlineTokenStart,
+  inlineTokenText,
+} from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { buildInlineText, semanticText } from "./text.ts";
 import type { SpannedNode } from "../../fragment/node.ts";
@@ -20,6 +26,166 @@ interface Reference {
 interface Resource {
   title: string | null;
   url: string;
+}
+
+function skipWhitespace(source: string, start: number): number {
+  let end = start;
+  while (end < source.length) {
+    const code = source.charCodeAt(end);
+    if (code !== 9 && code !== 10 && code !== 13 && code !== 32) {
+      break;
+    }
+    end++;
+  }
+  return end;
+}
+
+function linkDestinationEnd(source: string, start: number): number {
+  if (source.charCodeAt(start) === 60) {
+    let end = start + 1;
+    while (end < source.length) {
+      const code = source.charCodeAt(end);
+      if (code === 62) {
+        return end + 1;
+      }
+      if (code === 10 || code === 13 || code === 60) {
+        return -1;
+      }
+      end += code === 92 && end + 1 < source.length ? 2 : 1;
+    }
+    return -1;
+  }
+
+  let depth = 0;
+  let end = start;
+  let consumed = false;
+  while (end < source.length) {
+    const code = source.charCodeAt(end);
+    if (code === 92) {
+      if (end + 1 >= source.length) {
+        break;
+      }
+      consumed = true;
+      end += 2;
+      continue;
+    }
+    if (code === 40) {
+      if (depth === 32) {
+        return -1;
+      }
+      depth++;
+      consumed = true;
+      end++;
+      continue;
+    }
+    if (code === 41) {
+      if (depth === 0) {
+        break;
+      }
+      depth--;
+      consumed = true;
+      end++;
+      continue;
+    }
+    if (isLinkWhitespace(code)) {
+      break;
+    }
+    consumed = true;
+    end++;
+  }
+  return consumed && depth === 0 ? end : -1;
+}
+
+function linkTitleEnd(source: string, start: number): number {
+  const marker = source.charCodeAt(start);
+  const close = marker === 40 ? 41 : marker;
+  if (marker !== 34 && marker !== 39 && marker !== 40) {
+    return -1;
+  }
+  let end = start + 1;
+  while (end < source.length) {
+    const code = source.charCodeAt(end);
+    if (code === close) {
+      return end + 1;
+    }
+    if (code === 10 || code === 13) {
+      return -1;
+    }
+    end += code === 92 && end + 1 < source.length ? 2 : 1;
+  }
+  return -1;
+}
+
+function linkTailEnd(source: string, start: number): number {
+  if (source.charCodeAt(start + 1) !== 40) {
+    return -1;
+  }
+  let offset = skipWhitespace(source, start + 2);
+  if (source.charCodeAt(offset) === 41) {
+    return offset + 1;
+  }
+  const destinationEnd = linkDestinationEnd(source, offset);
+  if (destinationEnd < 0) {
+    return -1;
+  }
+  offset = destinationEnd;
+  const whitespaceEnd = skipWhitespace(source, offset);
+  if (whitespaceEnd > offset && source.charCodeAt(whitespaceEnd) !== 41) {
+    const titleEnd = linkTitleEnd(source, whitespaceEnd);
+    if (titleEnd < 0) {
+      return -1;
+    }
+    offset = titleEnd;
+  }
+  else {
+    offset = whitespaceEnd;
+  }
+  offset = skipWhitespace(source, offset);
+  return source.charCodeAt(offset) === 41 ? offset + 1 : -1;
+}
+
+function referenceTailEnd(source: string, start: number): number {
+  if (source.charCodeAt(start + 1) !== 91) {
+    return -1;
+  }
+  let offset = start + 2;
+  if (source.charCodeAt(offset) === 93) {
+    return offset + 1;
+  }
+  let characters = 0;
+  let hasContent = false;
+  while (offset < source.length && characters < 999) {
+    const code = source.charCodeAt(offset);
+    if (code === 93) {
+      return hasContent ? offset + 1 : -1;
+    }
+    if (code === 91) {
+      return -1;
+    }
+    if (code === 92) {
+      if (offset + 1 >= source.length) {
+        return -1;
+      }
+      hasContent = true;
+      offset += 2;
+    }
+    else {
+      hasContent ||= !isLinkWhitespace(code);
+      offset++;
+    }
+    characters++;
+  }
+  return -1;
+}
+
+function needsTextDecode(source: string, start: number, end: number): number {
+  for (let index = start; index < end; index++) {
+    const code = source.charCodeAt(index);
+    if (code === 38 || code === 92) {
+      return InlineTokenFlag.DecodeText;
+    }
+  }
+  return 0;
 }
 
 function isLinkWhitespace(code: number): boolean {
@@ -165,6 +331,48 @@ const buildInlineReferenceLink = createBuildMedia("link", "reference");
 
 export const feature: SyntaxFeature = {
   inline: {
+    lexical: [
+      {
+        marker: "!",
+        scan(source, start, tokens) {
+          const image = source.charCodeAt(start + 1) === 91;
+          const end = start + (image ? 2 : 1);
+          appendInlineToken(tokens, image ? InlineKind.ImageOpen : InlineKind.Delimiter, start, end);
+          return end;
+        },
+      },
+      {
+        marker: "[",
+        scan(source, start, tokens) {
+          const end = start + 1;
+          appendInlineToken(tokens, InlineKind.BracketOpen, start, end);
+          return end;
+        },
+      },
+      {
+        marker: "]",
+        scan(source, start, tokens) {
+          let end = linkTailEnd(source, start);
+          let kind = InlineKind.LinkTail;
+          if (end < 0) {
+            end = referenceTailEnd(source, start);
+            kind = InlineKind.ReferenceTail;
+          }
+          if (end < 0) {
+            end = start + 1;
+            kind = InlineKind.ShortcutReferenceTail;
+          }
+          appendInlineToken(
+            tokens,
+            kind,
+            start,
+            end,
+            kind === InlineKind.ShortcutReferenceTail ? 0 : needsTextDecode(source, start, end),
+          );
+          return end;
+        },
+      },
+    ],
     syntax: [
       {
         kind: "pair",

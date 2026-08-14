@@ -18,7 +18,8 @@ import {
 } from "../../fragment/block.ts";
 import { appendInline, type InlineLeafBuilder, lineEnd } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
-import { inlineTokenText } from "../../inline/tokens.ts";
+import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
+import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -176,6 +177,41 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
+    lexical: [
+      {
+        marker: "`",
+        scan(source, start, tokens) {
+          let end = -1;
+          if (source.charCodeAt(start - 1) !== 96) {
+            const openEnd = inlineMarkerRunEnd(source, start);
+            const markerLength = openEnd - start;
+            let offset = openEnd;
+            while (offset < source.length) {
+              if (source.charCodeAt(offset) !== 96) {
+                offset++;
+                continue;
+              }
+              const closeEnd = inlineMarkerRunEnd(source, offset);
+              if (closeEnd - offset === markerLength) {
+                end = closeEnd;
+                break;
+              }
+              offset = closeEnd;
+            }
+          }
+          if (end < 0) {
+            end = start + 1;
+          }
+          appendInlineToken(
+            tokens,
+            end === start + 1 ? InlineKind.Delimiter : InlineKind.CodeSpan,
+            start,
+            end,
+          );
+          return end;
+        },
+      },
+    ],
     syntax: [
       {
         kind: "leaf",

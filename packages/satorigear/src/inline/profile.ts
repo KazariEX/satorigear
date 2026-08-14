@@ -1,15 +1,12 @@
-import { tokenizeInline } from "./lexer.ts";
+import { compileInlineTokenizer, type InlineLexicalRule, type InlineTokenizer } from "./lexer.ts";
 import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
 import type { InlineLeafBuilder, InlineNodeBuilder } from "../fragment/inline.ts";
 import type { InlineKind } from "./kinds.ts";
 // Inline features compile into one token pipeline and the projection tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
 
-type InlineTokenizer = (source: string) => InlineTokenStream;
-
 export interface InlineResolutionContext {
   hasDefinition: (key: string) => boolean;
-  tokenize: InlineTokenizer;
 }
 
 export type InlineTokenTransform = (
@@ -54,11 +51,6 @@ export interface InlineSyntaxSchema {
   pairByOpenKind: readonly (InlinePair | undefined)[];
 }
 
-interface InlineSyntaxCompilation {
-  schema: InlineSyntaxSchema;
-  tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
-}
-
 export interface InlineResolutionDefinition {
   delimiters?: readonly DelimiterConfig[];
   pairs?: readonly PairedTokenConfig[];
@@ -67,6 +59,7 @@ export interface InlineResolutionDefinition {
 }
 
 export interface InlineFeature {
+  lexical?: readonly InlineLexicalRule[];
   resolution?: InlineResolutionDefinition;
   syntax?: readonly InlineSyntaxDefinition[];
 }
@@ -75,15 +68,59 @@ export interface InlineProfile {
   decodeText: (value: string) => string;
   resolve: InlineTokenTransform;
   schema: InlineSyntaxSchema;
-  tokenize: InlineTokenizer;
   tokenBuilders: readonly (InlineLeafBuilder | undefined)[];
+  tokenize: InlineTokenizer;
 }
 
 const ignoreInlineToken: InlineLeafBuilder = () => false;
 
-function compileInlineSyntax(
-  definitions: readonly InlineSyntaxDefinition[],
-): InlineSyntaxCompilation {
+function composeTransforms(...rewrites: readonly InlineTokenTransform[]): InlineTokenTransform {
+  if (rewrites.length === 1) {
+    return rewrites[0];
+  }
+  return (source, tokens, context) => {
+    for (const rewrite of rewrites) {
+      tokens = rewrite(source, tokens, context);
+    }
+    return tokens;
+  };
+}
+
+export function compileInlineProfile(
+  features: readonly InlineFeature[],
+  decodeText: (value: string) => string,
+): InlineProfile {
+  const delimiters: DelimiterConfig[] = [];
+  const lexicalRules: InlineLexicalRule[] = [];
+  const syntaxDefinitions: InlineSyntaxDefinition[] = [];
+  const pairs: PairedTokenConfig[] = [];
+  const postTransforms: InlineTokenTransform[] = [];
+  const transforms: InlineTokenTransform[] = [];
+
+  for (const feature of features) {
+    if (feature.lexical) {
+      lexicalRules.push(...feature.lexical);
+    }
+    if (feature.syntax) {
+      syntaxDefinitions.push(...feature.syntax);
+    }
+    const resolution = feature.resolution;
+    if (resolution) {
+      if (resolution.delimiters) {
+        delimiters.push(...resolution.delimiters);
+      }
+      if (resolution.pairs) {
+        pairs.push(...resolution.pairs);
+      }
+      if (resolution.transform) {
+        transforms.push(resolution.transform);
+      }
+      if (resolution.postTransform) {
+        postTransforms.push(resolution.postTransform);
+      }
+    }
+  }
+
   const tokenBuilders: (InlineLeafBuilder | undefined)[] = [];
   const containerByKind: (InlineContainer | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
@@ -92,7 +129,7 @@ function compileInlineSyntax(
     return kind;
   };
 
-  for (const definition of definitions) {
+  for (const definition of syntaxDefinitions) {
     if (definition.kind === "leaf") {
       registerToken(definition.token, definition.build);
       continue;
@@ -116,66 +153,17 @@ function compileInlineSyntax(
   }
 
   return {
-    schema: {
-      containerByKind,
-      pairByOpenKind,
-    },
-    tokenBuilders,
-  };
-}
-
-function composeTransforms(...rewrites: readonly InlineTokenTransform[]): InlineTokenTransform {
-  if (rewrites.length === 1) {
-    return rewrites[0];
-  }
-  return (source, tokens, context) => {
-    for (const rewrite of rewrites) {
-      tokens = rewrite(source, tokens, context);
-    }
-    return tokens;
-  };
-}
-
-export function compileInlineProfile(
-  features: readonly InlineFeature[],
-  decodeText: (value: string) => string,
-): InlineProfile {
-  const delimiters: DelimiterConfig[] = [];
-  const syntax: InlineSyntaxDefinition[] = [];
-  const pairs: PairedTokenConfig[] = [];
-  const postTransforms: InlineTokenTransform[] = [];
-  const transforms: InlineTokenTransform[] = [];
-
-  for (const feature of features) {
-    if (feature.syntax) {
-      syntax.push(...feature.syntax);
-    }
-    const resolution = feature.resolution;
-    if (resolution) {
-      if (resolution.delimiters) {
-        delimiters.push(...resolution.delimiters);
-      }
-      if (resolution.pairs) {
-        pairs.push(...resolution.pairs);
-      }
-      if (resolution.transform) {
-        transforms.push(resolution.transform);
-      }
-      if (resolution.postTransform) {
-        postTransforms.push(resolution.postTransform);
-      }
-    }
-  }
-  const compiledSyntax = compileInlineSyntax(syntax);
-
-  return {
-    ...compiledSyntax,
     decodeText,
     resolve: composeTransforms(
       ...transforms,
       ...postTransforms,
       createPairingResolver(delimiters, pairs),
     ),
-    tokenize: tokenizeInline,
+    schema: {
+      containerByKind,
+      pairByOpenKind,
+    },
+    tokenBuilders,
+    tokenize: compileInlineTokenizer(lexicalRules),
   };
 }

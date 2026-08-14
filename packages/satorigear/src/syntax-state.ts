@@ -279,7 +279,6 @@ export function createInlineRegions(
   // One-shot parsing needs definition visibility, but has no future edit to track dependencies for.
   const context: InlineResolutionContext = {
     hasDefinition: (key) => definitions.has(key),
-    tokenize: profile.tokenize,
   };
   for (const region of regions) {
     const text = region.view.text;

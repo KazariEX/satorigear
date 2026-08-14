@@ -109,13 +109,11 @@ interface PairResolution {
   delimiterIsolations: TokenIsolationSpan[];
 }
 
-// eslint-disable-next-line no-restricted-syntax
 const enum Phase {
   Pair = 1,
   Delimiter = 2,
 }
 
-// eslint-disable-next-line no-restricted-syntax
 const enum Flanking {
   Open = 1,
   Close = 2,

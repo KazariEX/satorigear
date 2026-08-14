@@ -4,9 +4,21 @@ import {
   type InlineNodeBuilder,
 } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
+import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../inline/lexer.ts";
+import { appendInlineToken } from "../../inline/tokens.ts";
 import { buildInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
 import type { SyntaxFeature } from "../types.ts";
+
+const scanFormatting: InlineLexicalRule["scan"] = (source, start, tokens) => {
+  const code = source.charCodeAt(start);
+  const end = inlineMarkerRunEnd(source, start);
+  const kind = code === 42
+    ? InlineKind.AsteriskRun
+    : code === 95 ? InlineKind.UnderscoreRun : InlineKind.TildeRun;
+  appendInlineToken(tokens, kind, start, end);
+  return end;
+};
 
 const asteriskDelimiter: DelimiterConfig = {
   token: InlineKind.AsteriskRun,
@@ -79,6 +91,11 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
 
   return {
     inline: {
+      lexical: [
+        { marker: "*", scan: scanFormatting },
+        { marker: "_", scan: scanFormatting },
+        { marker: "~", scan: scanFormatting },
+      ],
       resolution: { delimiters },
       syntax: [
         { kind: "leaf", token: InlineKind.Delimiter, build: buildInlineText },

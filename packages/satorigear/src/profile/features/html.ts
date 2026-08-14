@@ -9,7 +9,8 @@ import {
 } from "../../fragment/block.ts";
 import { appendInline, type InlineLeafBuilder } from "../../fragment/inline.ts";
 import { InlineKind } from "../../inline/kinds.ts";
-import { inlineTokenText } from "../../inline/tokens.ts";
+import { matchInlinePatternEnd } from "../../inline/lexer.ts";
+import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface HtmlStart {
@@ -87,6 +88,9 @@ const htmlUnquotedValue = `[^\\s"'=<>\`]+`;
 const htmlAttributeValue = `(?:${htmlUnquotedValue}|'[^']*'|"[^"]*")`;
 const htmlAttribute = `\\s+${htmlAttributeName}(?:\\s*=\\s*${htmlAttributeValue})?`;
 const completeHtmlTag = new RegExp(`^(?:<${htmlTagName}(?:${htmlAttribute})*\\s*/?>|</${htmlTagName}\\s*>)[ \\t]*$`, "i");
+const htmlComment = /<!-->|<!--->|<!--[\s\S]*?(?:-->|$)/y;
+const autolink = /<(?:[A-Z][A-Z0-9+.\-]{1,31}:[^ \t\n\r<>]+|[\w!#$%&'*+\-/=?^`{|}~.]+@[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*(?:\.[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*)+)>/iy;
+const inlineHtml = /<[A-Za-z][A-Za-z0-9-]*(?:[ \t\n\r]+[A-Za-z_:][\w.:-]*(?:[ \t\n\r]*=[ \t\n\r]*(?:[^ \t\n\r"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t\n\r]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t\n\r]*>|<\?[\s\S]*?\?>|<![A-Z][\s\S]*?>|<!\[CDATA\[[\s\S]*?\]\]>/y;
 
 function htmlStartAt(source: string, line: BlockLine): HtmlStart | undefined {
   const indent = lineIndent(source, line);
@@ -207,6 +211,29 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
+    lexical: [
+      {
+        marker: "<",
+        scan(source, start, tokens) {
+          let end = matchInlinePatternEnd(htmlComment, source, start);
+          let kind = InlineKind.HtmlComment;
+          if (end < 0) {
+            end = matchInlinePatternEnd(autolink, source, start);
+            kind = InlineKind.Autolink;
+          }
+          if (end < 0) {
+            end = matchInlinePatternEnd(inlineHtml, source, start);
+            kind = InlineKind.InlineHtml;
+          }
+          if (end < 0) {
+            end = start + 1;
+            kind = InlineKind.Delimiter;
+          }
+          appendInlineToken(tokens, kind, start, end);
+          return end;
+        },
+      },
+    ],
     syntax: [
       { kind: "leaf", token: InlineKind.InlineHtml, build: buildInlineHtml },
       { kind: "leaf", token: InlineKind.HtmlComment, build: buildInlineHtml },

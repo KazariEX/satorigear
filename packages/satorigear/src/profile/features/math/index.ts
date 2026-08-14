@@ -1,5 +1,5 @@
 import { blockRules, blockStarts } from "./block.ts";
-import { createMathTokensTransform, inlineSyntax } from "./inline.ts";
+import { createMathLexicalRule, inlineSyntax } from "./inline.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { MathOptions } from "./types.ts";
 
@@ -11,9 +11,9 @@ export function feature(options: true | MathOptions): SyntaxFeature {
       starts: blockStarts,
     },
     inline: {
-      resolution: {
-        transform: createMathTokensTransform(singleDollarTextMath),
-      },
+      lexical: [
+        createMathLexicalRule(singleDollarTextMath),
+      ],
       syntax: inlineSyntax,
     },
   };

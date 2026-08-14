@@ -1,5 +1,4 @@
 // Raw lexing, feature rewrites, pairing, and node building share this stable vocabulary.
-// eslint-disable-next-line no-restricted-syntax
 export const enum InlineKind {
   HtmlComment = 1,
   CodeSpan,
