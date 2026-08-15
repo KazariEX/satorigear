@@ -160,14 +160,18 @@ function linkDefinitionAt(
   }
   skipSpaces();
   let titleOnNextLine = false;
-  if (offset === lines[lineIndex].end && lineIndex + 1 < lines.length && !isBlank(source, lines[lineIndex + 1])) {
+  if (offset === lines[lineIndex].end && lineIndex + 1 < lines.length) {
     lineIndex++;
     offset = lines[lineIndex].start;
     skipSpaces();
     titleOnNextLine = true;
   }
 
-  const closer = source[offset] === "(" ? ")" : source[offset] === "\"" || source[offset] === "'" ? source[offset] : void 0;
+  const closer = source[offset] === "("
+    ? ")"
+    : source[offset] === "\"" || source[offset] === "'"
+      ? source[offset]
+      : void 0;
   const fields: LinkDefinitionFields = {
     definitionKey: normalizeAssociationLabel(label),
     destination,
