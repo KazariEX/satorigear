@@ -58,19 +58,20 @@ function linkDefinitionAt(
   scanLabel: while (true) {
     const line = lines[lineIndex];
     while (offset < line.end) {
-      if (source[offset] === "\\" && offset + 1 < line.end) {
+      const code = source.charCodeAt(offset);
+      if (code === Character.ReverseSolidus && offset + 1 < line.end) {
         labelHasContent = true;
         labelLength += 2;
         offset += 2;
         continue;
       }
-      if (source[offset] === "[") {
+      if (code === Character.LeftSquareBracket) {
         return;
       }
-      if (source[offset] === "]" && source[offset + 1] === ":") {
+      if (code === Character.RightSquareBracket && source.charCodeAt(offset + 1) === Character.Colon) {
         break scanLabel;
       }
-      if (source[offset] !== " " && source[offset] !== "\t") {
+      if (code !== Character.Space && code !== Character.CharacterTabulation) {
         labelHasContent = true;
       }
       if (++labelLength > 999) {
