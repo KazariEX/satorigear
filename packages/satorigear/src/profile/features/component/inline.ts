@@ -292,7 +292,7 @@ function emitRange(
 }
 
 // Reclassify CommonMark bracket/text tokens as explicit semantic carriers.
-export function transformComponentTokens(
+export function rewriteComponentTokens(
   source: string,
   tokens: InlineTokenStream,
 ): InlineTokenStream {

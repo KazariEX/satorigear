@@ -105,7 +105,7 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
   return {
     inline: {
       lexical,
-      resolution: { delimiters },
+      delimiters,
       syntax,
     },
   };

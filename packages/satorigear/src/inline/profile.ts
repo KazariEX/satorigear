@@ -14,7 +14,7 @@ export interface InlineResolutionContext {
   hasDefinition: (key: string) => boolean;
 }
 
-export type InlineTokenTransform = (
+export type InlineTokenRewrite = (
   source: string,
   tokens: InlineTokenStream,
   context: InlineResolutionContext,
@@ -63,27 +63,23 @@ export interface InlineSyntaxSchema {
   pairByOpenKind: readonly (InlinePair | undefined)[];
 }
 
-export interface InlineResolutionDefinition {
-  delimiters?: readonly DelimiterConfig[];
-  pairs?: readonly PairedTokenConfig[];
-  transform?: InlineTokenTransform;
-}
-
 export interface InlineFeature {
+  delimiters?: readonly DelimiterConfig[];
   lexical?: readonly InlineLexicalRule[];
-  resolution?: InlineResolutionDefinition;
+  pairs?: readonly PairedTokenConfig[];
+  rewrite?: InlineTokenRewrite;
   syntax?: readonly InlineSyntaxDefinition[];
 }
 
 export interface InlineProfile {
   decodeText: (value: string) => string;
-  resolve: InlineTokenTransform;
+  resolve: InlineTokenRewrite;
   schema: InlineSyntaxSchema;
   tokenHandlers: readonly (InlineTokenHandler | undefined)[];
   tokenize: InlineTokenizer;
 }
 
-function composeTransforms(...rewrites: readonly InlineTokenTransform[]): InlineTokenTransform {
+function composeRewrites(...rewrites: readonly InlineTokenRewrite[]): InlineTokenRewrite {
   if (rewrites.length === 1) {
     return rewrites[0];
   }
@@ -103,26 +99,23 @@ export function compileInlineProfile(
   const lexicalRules: InlineLexicalRule[] = [];
   const syntaxDefinitions: InlineSyntaxDefinition[] = [];
   const pairs: PairedTokenConfig[] = [];
-  const transforms: InlineTokenTransform[] = [];
+  const rewrites: InlineTokenRewrite[] = [];
 
   for (const feature of features) {
+    if (feature.delimiters) {
+      delimiters.push(...feature.delimiters);
+    }
     if (feature.lexical) {
       lexicalRules.push(...feature.lexical);
     }
+    if (feature.pairs) {
+      pairs.push(...feature.pairs);
+    }
+    if (feature.rewrite) {
+      rewrites.push(feature.rewrite);
+    }
     if (feature.syntax) {
       syntaxDefinitions.push(...feature.syntax);
-    }
-    const resolution = feature.resolution;
-    if (resolution) {
-      if (resolution.delimiters) {
-        delimiters.push(...resolution.delimiters);
-      }
-      if (resolution.pairs) {
-        pairs.push(...resolution.pairs);
-      }
-      if (resolution.transform) {
-        transforms.push(resolution.transform);
-      }
     }
   }
 
@@ -165,8 +158,8 @@ export function compileInlineProfile(
 
   return {
     decodeText,
-    resolve: composeTransforms(
-      ...transforms,
+    resolve: composeRewrites(
+      ...rewrites,
       createPairingResolver(delimiters, pairs),
     ),
     schema: {

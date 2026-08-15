@@ -1,5 +1,5 @@
 import { blockRules, blockStarts } from "./block.ts";
-import { inlineLexical, inlineSyntax, transformComponentTokens } from "./inline.ts";
+import { inlineLexical, inlineSyntax, rewriteComponentTokens } from "./inline.ts";
 import type { SyntaxFeature } from "../../types.ts";
 
 export const feature: SyntaxFeature = {
@@ -9,9 +9,7 @@ export const feature: SyntaxFeature = {
   },
   inline: {
     lexical: inlineLexical,
+    rewrite: rewriteComponentTokens,
     syntax: inlineSyntax,
-    resolution: {
-      transform: transformComponentTokens,
-    },
   },
 };

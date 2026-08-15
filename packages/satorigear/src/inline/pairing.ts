@@ -13,7 +13,7 @@ import {
 } from "./tokens.ts";
 import type { SourceSpan } from "../source-view.ts";
 import type { InlineKind } from "./kinds.ts";
-import type { InlineResolutionContext, InlineTokenTransform } from "./profile.ts";
+import type { InlineResolutionContext, InlineTokenRewrite } from "./profile.ts";
 
 export interface DelimiterConfig {
   token: InlineKind;
@@ -551,7 +551,7 @@ function resolveDelimiterRuns(
 export function createPairingResolver(
   delimiterConfigs: readonly DelimiterConfig[],
   pairConfigs: readonly PairedTokenConfig[] = [],
-): InlineTokenTransform {
+): InlineTokenRewrite {
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[config.token] = {
