@@ -188,16 +188,6 @@ function referenceTailEnd(source: string, start: number): number {
   return -1;
 }
 
-function needsTextDecode(source: string, start: number, end: number): number {
-  for (let index = start; index < end; index++) {
-    const code = source.charCodeAt(index);
-    if (code === Character.Ampersand || code === Character.ReverseSolidus) {
-      return InlineTokenFlag.DecodeText;
-    }
-  }
-  return 0;
-}
-
 function isLinkWhitespace(code: number): boolean {
   return (
     code === Character.CharacterTabulation ||
@@ -393,7 +383,7 @@ export const feature: SyntaxFeature = {
             kind,
             start,
             end,
-            kind === InlineKind.ShortcutReferenceTail ? 0 : needsTextDecode(source, start, end),
+            kind === InlineKind.ShortcutReferenceTail ? 0 : InlineTokenFlag.DecodeText,
           );
           return end;
         },
