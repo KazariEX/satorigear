@@ -1,3 +1,4 @@
+import { emptyArray, isArrayEqual } from "../primitives.ts";
 import { type BlockLine, logicalLine } from "./lines.ts";
 import type { BlockKind } from "./kinds.ts";
 import type { BlockSyntaxSchema } from "./profile.ts";
@@ -109,37 +110,30 @@ export class BlockTokenStream {
     nextSource: string,
     delta: number,
   ): boolean {
+    const start = this.start(index);
+    const end = this.end(index);
+    const nextStart = next.start(nextIndex);
+    const nextEnd = next.end(nextIndex);
     if (
       this.kind(index) !== next.kind(nextIndex) ||
-      this.start(index) + delta !== next.start(nextIndex) ||
-      this.end(index) + delta !== next.end(nextIndex)
+      start + delta !== nextStart ||
+      end + delta !== nextEnd
     ) {
       return false;
     }
     const ranges = this.#metadata?.get(index)?.rangeOffsets;
     const nextRanges = next.#metadata?.get(nextIndex)?.rangeOffsets;
-    if ((ranges?.length ?? 0) !== (nextRanges?.length ?? 0)) {
+    if (ranges !== nextRanges && !isArrayEqual(ranges ?? emptyArray, nextRanges ?? emptyArray)) {
       return false;
-    }
-    if (ranges && nextRanges) {
-      for (let range = 0; range < ranges.length; range++) {
-        if (ranges[range] !== nextRanges[range]) {
-          return false;
-        }
-      }
     }
     const text = this.#metadata?.get(index)?.text;
     const nextText = next.#metadata?.get(nextIndex)?.text;
     if (text !== void 0 || nextText !== void 0) {
       return text === nextText;
     }
-    return equalSourceText(
-      source,
-      this.start(index),
-      this.end(index),
-      nextSource,
-      next.start(nextIndex),
-      next.end(nextIndex),
+    return (
+      end - start === nextEnd - nextStart &&
+      source.slice(start, end) === nextSource.slice(nextStart, nextEnd)
     );
   }
 
@@ -380,19 +374,5 @@ export function appendLogicalToken(
     lines[start].start,
     lines[end - 1].next,
     { rangeOffsets, text, value },
-  );
-}
-
-function equalSourceText(
-  previousSource: string,
-  previousStart: number,
-  previousEnd: number,
-  nextSource: string,
-  nextStart: number,
-  nextEnd: number,
-): boolean {
-  return (
-    previousEnd - previousStart === nextEnd - nextStart &&
-    previousSource.slice(previousStart, previousEnd) === nextSource.slice(nextStart, nextEnd)
   );
 }
