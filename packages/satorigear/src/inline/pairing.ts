@@ -18,7 +18,6 @@ import type { InlineResolutionContext, InlineTokenTransform } from "./profile.ts
 export interface DelimiterConfig {
   token: InlineKind;
   marker: string;
-  fallbackToken: InlineKind;
   single?: { open: InlineKind; close: InlineKind };
   double?: { open: InlineKind; close: InlineKind };
   pairing:
@@ -58,7 +57,6 @@ interface TokenIsolationSpan extends SourceSpan {
 
 interface CompiledDelimiterConfig {
   marker: string;
-  fallbackKind: number;
   single?: { open: number; close: number };
   double?: { open: number; close: number };
   allowIntraword?: boolean;
@@ -516,9 +514,14 @@ function resolveDelimiterRuns(
     }
   }
 
+  if (replacements.length === 0) {
+    return tokens;
+  }
+
   const result: number[] = [];
   for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-    const config = configByKind[inlineTokenKind(tokens, tokenIndex)];
+    const kind = inlineTokenKind(tokens, tokenIndex);
+    const config = configByKind[kind];
     if (!config) {
       copyInlineToken(result, tokens, tokenIndex);
       continue;
@@ -531,7 +534,7 @@ function resolveDelimiterRuns(
     if (matched) {
       for (const replacement of matched) {
         if (replacement.offset > offset) {
-          appendFragment(result, tokens, tokenIndex, offset, replacement.offset, config.fallbackKind);
+          appendFragment(result, tokens, tokenIndex, offset, replacement.offset, kind);
         }
         appendFragment(result, tokens, tokenIndex, replacement.offset, replacement.end, replacement.kind);
         offset = replacement.end;
@@ -539,7 +542,7 @@ function resolveDelimiterRuns(
     }
     const end = inlineTokenEnd(tokens, tokenIndex);
     if (offset < end) {
-      appendFragment(result, tokens, tokenIndex, offset, end, config.fallbackKind);
+      appendFragment(result, tokens, tokenIndex, offset, end, kind);
     }
   }
   return result;
@@ -553,7 +556,6 @@ export function createPairingResolver(
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[config.token] = {
       marker: config.marker,
-      fallbackKind: config.fallbackToken,
       single: config.single
         ? { open: config.single.open, close: config.single.close }
         : void 0,
