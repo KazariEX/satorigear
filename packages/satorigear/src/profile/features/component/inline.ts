@@ -14,6 +14,7 @@ import {
   componentNameEnd,
   normalizeComponentName,
 } from "../attributes/syntax.ts";
+import type { InlineLexicalRule } from "../../../inline/lexer.ts";
 import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
 import type { SourceSpan } from "../../../source-view.ts";
 
@@ -83,12 +84,7 @@ function bracketIndex(tokens: InlineTokenStream): BracketIndex {
   return { linkLabels, normalClosers, pairs, referenceSuffixes };
 }
 
-function componentCandidate(
-  source: string,
-  start: number,
-  flags: number,
-  pairs: ReadonlyMap<number, number>,
-): Candidate | undefined {
+function inlineComponentEnd(source: string, start: number): number | undefined {
   const previous = source[start - 1];
   if (
     start > 0 && previous !== " " && previous !== "\t" && previous !== "\n" &&
@@ -96,24 +92,36 @@ function componentCandidate(
   ) {
     return;
   }
-  const nameEnd = componentNameEnd(source, start + 1, false);
-  if (nameEnd === void 0) {
+  return componentNameEnd(source, start + 1, false);
+}
+
+export const inlineLexical: readonly InlineLexicalRule[] = [
+  {
+    marker: ":",
+    scan(source, start, tokens) {
+      const end = inlineComponentEnd(source, start);
+      if (end === void 0) {
+        return -1;
+      }
+      appendInlineToken(tokens, InlineKind.InlineComponentOpen, start, end);
+      return end;
+    },
+  },
+];
+
+function labeledComponent(
+  source: string,
+  start: number,
+  nameEnd: number,
+  flags: number,
+  pairs: ReadonlyMap<number, number>,
+): Candidate | undefined {
+  if (source[nameEnd] !== "[") {
     return;
   }
-  const close = source[nameEnd] === "[" ? pairs.get(nameEnd) : void 0;
+  const close = pairs.get(nameEnd);
   if (close === void 0) {
-    return {
-      children: [],
-      close: nameEnd,
-      contentEnd: nameEnd,
-      contentStart: nameEnd,
-      end: nameEnd,
-      flags,
-      inLinkLabel: false,
-      kind: "component",
-      nameEnd,
-      start,
-    };
+    return;
   }
   return {
     children: [],
@@ -156,43 +164,39 @@ function candidates(
   const result: Candidate[] = [];
   const componentLabels = new Set<number>();
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    if (inlineTokenKind(tokens, index) !== InlineKind.Text) {
+    if (inlineTokenKind(tokens, index) !== InlineKind.InlineComponentOpen) {
       continue;
     }
     const start = inlineTokenStart(tokens, index);
-    const end = inlineTokenEnd(tokens, index);
-    for (let offset = source.indexOf(":", start); offset >= start && offset < end; offset = source.indexOf(":", offset + 1)) {
-      const candidate = componentCandidate(
-        source,
-        offset,
-        inlineTokenFlags(tokens, index),
-        brackets.pairs,
-      );
-      if (candidate) {
-        candidate.inLinkLabel = insideLinkLabel(candidate.start, brackets.linkLabels);
-        result.push(candidate);
-        if (candidate.close > candidate.nameEnd) {
-          componentLabels.add(candidate.nameEnd);
-          const suffixEnd = brackets.referenceSuffixes.get(candidate.close);
-          if (suffixEnd !== void 0) {
-            const suffixStart = candidate.close + 1;
-            const suffixClose = suffixEnd - 1;
-            result.push({
-              children: [],
-              close: suffixClose,
-              contentEnd: suffixClose,
-              contentStart: suffixStart + 1,
-              end: suffixEnd,
-              flags: candidate.flags,
-              inLinkLabel: insideLinkLabel(suffixStart, brackets.linkLabels),
-              kind: "span",
-              nameEnd: suffixStart + 1,
-              start: suffixStart,
-            });
-          }
-        }
-        offset = candidate.nameEnd - 1;
-      }
+    const candidate = labeledComponent(
+      source,
+      start,
+      inlineTokenEnd(tokens, index),
+      inlineTokenFlags(tokens, index),
+      brackets.pairs,
+    );
+    if (!candidate) {
+      continue;
+    }
+    candidate.inLinkLabel = insideLinkLabel(candidate.start, brackets.linkLabels);
+    result.push(candidate);
+    componentLabels.add(candidate.nameEnd);
+    const suffixEnd = brackets.referenceSuffixes.get(candidate.close);
+    if (suffixEnd !== void 0) {
+      const suffixStart = candidate.close + 1;
+      const suffixClose = suffixEnd - 1;
+      result.push({
+        children: [],
+        close: suffixClose,
+        contentEnd: suffixClose,
+        contentStart: suffixStart + 1,
+        end: suffixEnd,
+        flags: candidate.flags,
+        inLinkLabel: insideLinkLabel(suffixStart, brackets.linkLabels),
+        kind: "span",
+        nameEnd: suffixStart + 1,
+        start: suffixStart,
+      });
     }
   }
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
@@ -338,8 +342,8 @@ export function transformComponentTokens(
   source: string,
   tokens: InlineTokenStream,
 ): InlineTokenStream {
-  // Avoid building the bracket index when no component or span can start.
-  if (!source.includes(":") && !source.includes("[")) {
+  // Bare components are already final lexical tokens; only labels and spans need bracket structure.
+  if (!source.includes("[")) {
     return tokens;
   }
   const syntax = candidates(source, tokens);

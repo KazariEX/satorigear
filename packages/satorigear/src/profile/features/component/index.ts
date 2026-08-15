@@ -1,6 +1,6 @@
 import { InlineKind } from "../../../inline/kinds.ts";
 import { blockRules, blockStarts } from "./block.ts";
-import { inlineSyntax, transformComponentTokens } from "./inline.ts";
+import { inlineLexical, inlineSyntax, transformComponentTokens } from "./inline.ts";
 import type { SyntaxFeature } from "../../types.ts";
 
 export const feature: SyntaxFeature = {
@@ -9,6 +9,7 @@ export const feature: SyntaxFeature = {
     starts: blockStarts,
   },
   inline: {
+    lexical: inlineLexical,
     syntax: inlineSyntax,
     resolution: {
       transform: transformComponentTokens,
