@@ -36,6 +36,7 @@ interface CandidateSet {
 }
 
 interface BracketOpening {
+  children: Candidate[];
   componentIndex: number;
   image: boolean;
   start: number;
@@ -67,23 +68,22 @@ export const inlineLexical: readonly InlineLexicalRule[] = [
   },
 ];
 
-function insideLinkLabel(
-  offset: number,
-  labels: readonly SourceSpan[],
-): boolean {
-  let start = 0;
-  let end = labels.length;
-  while (start < end) {
-    const middle = (start + end) >>> 1;
-    if (labels[middle].end <= offset) {
-      start = middle + 1;
+function appendLinkCandidates(target: Candidate[], candidates: readonly Candidate[]): void {
+  for (const candidate of candidates) {
+    candidate.inLinkLabel = true;
+    if (candidate.children.length > 0) {
+      const children: Candidate[] = [];
+      appendLinkCandidates(children, candidate.children);
+      candidate.children = children;
+    }
+    if (candidate.literalInLink) {
+      // Bare spans stay literal inside link labels, but explicit components nested in them do not.
+      target.push(...candidate.children);
     }
     else {
-      end = middle;
+      target.push(candidate);
     }
   }
-  const label = labels[start];
-  return label !== void 0 && offset > label.start;
 }
 
 function candidates(
@@ -91,15 +91,15 @@ function candidates(
   tokens: InlineTokenStream,
 ): CandidateSet {
   const bracketStack: BracketOpening[] = [];
-  const linkLabels: SourceSpan[] = [];
   const normalClosers = new Set<number>();
-  const result: Candidate[] = [];
+  const roots: Candidate[] = [];
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const kind = inlineTokenKind(tokens, index);
     if (kind === InlineKind.BracketOpen) {
       const start = inlineTokenStart(tokens, index);
       const componentIndex = index - 1;
       bracketStack.push({
+        children: [],
         componentIndex: componentIndex >= 0 &&
           inlineTokenKind(tokens, componentIndex) === InlineKind.InlineComponentOpen &&
           inlineTokenEnd(tokens, componentIndex) === start
@@ -113,6 +113,7 @@ function candidates(
     }
     if (kind === InlineKind.ImageOpen) {
       bracketStack.push({
+        children: [],
         componentIndex: -1,
         image: true,
         start: inlineTokenEnd(tokens, index) - 1,
@@ -128,24 +129,26 @@ function candidates(
       continue;
     }
     const open = bracketStack.pop();
-    if (!open || open.image) {
+    if (!open) {
+      continue;
+    }
+    const parent = bracketStack.at(-1)?.children ?? roots;
+    if (open.image) {
+      parent.push(...open.children);
       continue;
     }
     const close = inlineTokenStart(tokens, index);
     normalClosers.add(close);
+    let children = open.children;
     if (kind === InlineKind.LinkTail || kind === InlineKind.ReferenceTail) {
-      let nested = linkLabels.at(-1);
-      while (nested && nested.start > open.start) {
-        linkLabels.pop();
-        nested = linkLabels.at(-1);
-      }
-      linkLabels.push({ start: open.start, end: close });
+      children = [];
+      appendLinkCandidates(children, open.children);
     }
     if (open.componentIndex >= 0) {
       const start = inlineTokenStart(tokens, open.componentIndex);
       const flags = inlineTokenFlags(tokens, open.componentIndex);
-      result.push({
-        children: [],
+      parent.push({
+        children,
         close,
         contentEnd: close,
         contentStart: open.start + 1,
@@ -161,7 +164,7 @@ function candidates(
         const suffixStart = close + 1;
         const suffixEnd = inlineTokenEnd(tokens, index);
         const suffixClose = suffixEnd - 1;
-        result.push({
+        parent.push({
           children: [],
           close: suffixClose,
           contentEnd: suffixClose,
@@ -178,12 +181,13 @@ function candidates(
       continue;
     }
     if (source[close + 1] === "(" || source[close + 1] === "[") {
+      parent.push(...children);
       continue;
     }
     const attributesStart = close + 1;
     const attributed = source[attributesStart] === "{" && attributesEnd(source, attributesStart) !== void 0;
-    result.push({
-      children: [],
+    parent.push({
+      children,
       close,
       contentEnd: close,
       contentStart: open.start + 1,
@@ -196,34 +200,10 @@ function candidates(
       start: open.start,
     });
   }
-  let candidateCount = 0;
-  for (const candidate of result) {
-    candidate.inLinkLabel = insideLinkLabel(candidate.start, linkLabels);
-    if (!candidate.literalInLink || !candidate.inLinkLabel) {
-      result[candidateCount++] = candidate;
-    }
-  }
-  result.length = candidateCount;
-  result.sort((left, right) => left.start - right.start || right.end - left.end);
-  const roots: Candidate[] = [];
-  const stack: Candidate[] = [];
-  for (const candidate of result) {
-    while (stack.length > 0 && candidate.start >= stack.at(-1)!.end) {
-      stack.pop();
-    }
-    const parent = stack.at(-1);
-    if (parent && candidate.start >= parent.contentStart && candidate.end <= parent.contentEnd) {
-      parent.children.push(candidate);
-    }
-    else if (!parent) {
-      roots.push(candidate);
-    }
-    else {
-      continue;
-    }
-    if (candidate.end > candidate.start) {
-      stack.push(candidate);
-    }
+  while (bracketStack.length > 0) {
+    const opening = bracketStack.pop()!;
+    const parent = bracketStack.at(-1)?.children ?? roots;
+    parent.push(...opening.children);
   }
   return { normalClosers, roots };
 }
