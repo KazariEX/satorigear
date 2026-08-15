@@ -13,7 +13,14 @@ import {
 } from "./tokens.ts";
 import type { SourceSpan } from "../source-view.ts";
 import type { InlineKind } from "./kinds.ts";
-import type { InlineResolutionContext, InlineTokenRewrite } from "./profile.ts";
+import type { InlineResolutionContext } from "./profile.ts";
+
+type PairingResolver = (
+  source: string,
+  tokens: InlineTokenStream,
+  state: InlineResolutionContext,
+  ownsTokens?: boolean,
+) => InlineTokenStream;
 
 export interface DelimiterConfig {
   token: InlineKind;
@@ -318,11 +325,15 @@ function resolvePairedTokens(
   return { replacements, matchedClosers, delimiterIsolations };
 }
 
-function applyPairReplacements(tokens: InlineTokenStream, replacements: readonly number[]): InlineTokenStream {
+function applyPairReplacements(
+  tokens: InlineTokenStream,
+  replacements: readonly number[],
+  ownsTokens: boolean,
+): InlineTokenStream {
   if (replacements.length === 0) {
     return tokens;
   }
-  const result = tokens.slice();
+  const result = ownsTokens ? tokens as number[] : tokens.slice();
   for (let tokenIndex = 0; tokenIndex < replacements.length; tokenIndex++) {
     const kind = replacements[tokenIndex];
     if (kind !== void 0) {
@@ -551,7 +562,7 @@ function resolveDelimiterRuns(
 export function createPairingResolver(
   delimiterConfigs: readonly DelimiterConfig[],
   pairConfigs: readonly PairedTokenConfig[] = [],
-): InlineTokenRewrite {
+): PairingResolver {
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[config.token] = {
@@ -581,7 +592,7 @@ export function createPairingResolver(
     phasesByKind[closerKind] |= Phase.Pair;
   }
 
-  return (source, tokens, state) => {
+  return (source, tokens, state, ownsTokens = false) => {
     const count = inlineTokenCount(tokens);
     let activePhases = 0;
     for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
@@ -625,7 +636,11 @@ export function createPairingResolver(
       // Splitting an unmatched closer changes token boundaries, so pair the expanded stream again.
       paired = resolvePairedTokens(source, expanded, pairIndex, state);
     }
-    const resolvedPairs = applyPairReplacements(expanded ?? tokens, paired.replacements);
+    const resolvedPairs = applyPairReplacements(
+      expanded ?? tokens,
+      paired.replacements,
+      expanded !== void 0 || ownsTokens,
+    );
     return activePhases & Phase.Delimiter
       ? resolveDelimiterRuns(source, resolvedPairs, delimiterByKind, paired.delimiterIsolations)
       : resolvedPairs;

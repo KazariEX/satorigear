@@ -79,7 +79,7 @@ export interface InlineProfile {
   tokenize: InlineTokenizer;
 }
 
-function composeRewrites(...rewrites: readonly InlineTokenRewrite[]): InlineTokenRewrite {
+function composeRewrites(rewrites: readonly InlineTokenRewrite[]): InlineTokenRewrite {
   if (rewrites.length === 1) {
     return rewrites[0];
   }
@@ -156,12 +156,18 @@ export function compileInlineProfile(
     }
   }
 
+  const pair = createPairingResolver(delimiters, pairs);
+  const rewrite = rewrites.length === 0 ? void 0 : composeRewrites(rewrites);
+
   return {
     decodeText,
-    resolve: composeRewrites(
-      ...rewrites,
-      createPairingResolver(delimiters, pairs),
-    ),
+    resolve: rewrite === void 0
+      ? pair
+      : (source, tokens, context) => {
+        const rewritten = rewrite(source, tokens, context);
+        // A new stream is private to this resolution, so pairing may update kinds in place.
+        return pair(source, rewritten, context, rewritten !== tokens);
+      },
     schema: {
       containerByKind,
       pairByOpenKind,
