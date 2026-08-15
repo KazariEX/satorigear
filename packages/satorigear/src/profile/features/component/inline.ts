@@ -26,14 +26,8 @@ interface Candidate extends SourceSpan {
   flags: number;
   inLinkLabel: boolean;
   kind: "component" | "span";
+  literalInLink: boolean;
   nameEnd: number;
-}
-
-interface BracketIndex {
-  linkLabels: SourceSpan[];
-  normalClosers: Set<number>;
-  pairs: Map<number, number>;
-  referenceSuffixes: Map<number, number>;
 }
 
 interface CandidateSet {
@@ -41,47 +35,11 @@ interface CandidateSet {
   roots: Candidate[];
 }
 
-function bracketIndex(tokens: InlineTokenStream): BracketIndex {
-  const stack: Array<{ image: boolean; start: number }> = [];
-  const pairs = new Map<number, number>();
-  const linkLabels: SourceSpan[] = [];
-  const normalClosers = new Set<number>();
-  const referenceSuffixes = new Map<number, number>();
-  for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    const kind = inlineTokenKind(tokens, index);
-    if (kind === InlineKind.BracketOpen) {
-      stack.push({ image: false, start: inlineTokenStart(tokens, index) });
-    }
-    else if (kind === InlineKind.ImageOpen) {
-      stack.push({ image: true, start: inlineTokenEnd(tokens, index) - 1 });
-    }
-    else if (
-      kind === InlineKind.ShortcutReferenceTail ||
-      kind === InlineKind.LinkTail ||
-      kind === InlineKind.ReferenceTail
-    ) {
-      const open = stack.pop();
-      if (open !== void 0) {
-        const close = inlineTokenStart(tokens, index);
-        if (!open.image) {
-          pairs.set(open.start, close);
-          normalClosers.add(close);
-          if (kind === InlineKind.LinkTail || kind === InlineKind.ReferenceTail) {
-            let nested = linkLabels.at(-1);
-            while (nested && nested.start > open.start) {
-              linkLabels.pop();
-              nested = linkLabels.at(-1);
-            }
-            linkLabels.push({ start: open.start, end: close });
-          }
-          if (kind === InlineKind.ReferenceTail) {
-            referenceSuffixes.set(close, inlineTokenEnd(tokens, index));
-          }
-        }
-      }
-    }
-  }
-  return { linkLabels, normalClosers, pairs, referenceSuffixes };
+interface BracketOpening {
+  componentIndex: number;
+  image: boolean;
+  start: number;
+  tokenIndex: number;
 }
 
 function inlineComponentEnd(source: string, start: number): number | undefined {
@@ -109,34 +67,6 @@ export const inlineLexical: readonly InlineLexicalRule[] = [
   },
 ];
 
-function labeledComponent(
-  source: string,
-  start: number,
-  nameEnd: number,
-  flags: number,
-  pairs: ReadonlyMap<number, number>,
-): Candidate | undefined {
-  if (source[nameEnd] !== "[") {
-    return;
-  }
-  const close = pairs.get(nameEnd);
-  if (close === void 0) {
-    return;
-  }
-  return {
-    children: [],
-    close,
-    contentEnd: close,
-    contentStart: nameEnd + 1,
-    end: close + 1,
-    flags,
-    inLinkLabel: false,
-    kind: "component",
-    nameEnd,
-    start,
-  };
-}
-
 function insideLinkLabel(
   offset: number,
   labels: readonly SourceSpan[],
@@ -160,76 +90,120 @@ function candidates(
   source: string,
   tokens: InlineTokenStream,
 ): CandidateSet {
-  const brackets = bracketIndex(tokens);
+  const bracketStack: BracketOpening[] = [];
+  const linkLabels: SourceSpan[] = [];
+  const normalClosers = new Set<number>();
   const result: Candidate[] = [];
-  const componentLabels = new Set<number>();
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    if (inlineTokenKind(tokens, index) !== InlineKind.InlineComponentOpen) {
+    const kind = inlineTokenKind(tokens, index);
+    if (kind === InlineKind.BracketOpen) {
+      const start = inlineTokenStart(tokens, index);
+      const componentIndex = index - 1;
+      bracketStack.push({
+        componentIndex: componentIndex >= 0 &&
+          inlineTokenKind(tokens, componentIndex) === InlineKind.InlineComponentOpen &&
+          inlineTokenEnd(tokens, componentIndex) === start
+          ? componentIndex
+          : -1,
+        image: false,
+        start,
+        tokenIndex: index,
+      });
       continue;
     }
-    const start = inlineTokenStart(tokens, index);
-    const candidate = labeledComponent(
-      source,
-      start,
-      inlineTokenEnd(tokens, index),
-      inlineTokenFlags(tokens, index),
-      brackets.pairs,
-    );
-    if (!candidate) {
+    if (kind === InlineKind.ImageOpen) {
+      bracketStack.push({
+        componentIndex: -1,
+        image: true,
+        start: inlineTokenEnd(tokens, index) - 1,
+        tokenIndex: index,
+      });
       continue;
     }
-    candidate.inLinkLabel = insideLinkLabel(candidate.start, brackets.linkLabels);
-    result.push(candidate);
-    componentLabels.add(candidate.nameEnd);
-    const suffixEnd = brackets.referenceSuffixes.get(candidate.close);
-    if (suffixEnd !== void 0) {
-      const suffixStart = candidate.close + 1;
-      const suffixClose = suffixEnd - 1;
+    if (
+      kind !== InlineKind.ShortcutReferenceTail &&
+      kind !== InlineKind.LinkTail &&
+      kind !== InlineKind.ReferenceTail
+    ) {
+      continue;
+    }
+    const open = bracketStack.pop();
+    if (!open || open.image) {
+      continue;
+    }
+    const close = inlineTokenStart(tokens, index);
+    normalClosers.add(close);
+    if (kind === InlineKind.LinkTail || kind === InlineKind.ReferenceTail) {
+      let nested = linkLabels.at(-1);
+      while (nested && nested.start > open.start) {
+        linkLabels.pop();
+        nested = linkLabels.at(-1);
+      }
+      linkLabels.push({ start: open.start, end: close });
+    }
+    if (open.componentIndex >= 0) {
+      const start = inlineTokenStart(tokens, open.componentIndex);
+      const flags = inlineTokenFlags(tokens, open.componentIndex);
       result.push({
         children: [],
-        close: suffixClose,
-        contentEnd: suffixClose,
-        contentStart: suffixStart + 1,
-        end: suffixEnd,
-        flags: candidate.flags,
-        inLinkLabel: insideLinkLabel(suffixStart, brackets.linkLabels),
-        kind: "span",
-        nameEnd: suffixStart + 1,
-        start: suffixStart,
+        close,
+        contentEnd: close,
+        contentStart: open.start + 1,
+        end: close + 1,
+        flags,
+        inLinkLabel: false,
+        kind: "component",
+        literalInLink: false,
+        nameEnd: open.start,
+        start,
       });
-    }
-  }
-  for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    if (inlineTokenKind(tokens, index) !== InlineKind.BracketOpen) {
+      if (kind === InlineKind.ReferenceTail) {
+        const suffixStart = close + 1;
+        const suffixEnd = inlineTokenEnd(tokens, index);
+        const suffixClose = suffixEnd - 1;
+        result.push({
+          children: [],
+          close: suffixClose,
+          contentEnd: suffixClose,
+          contentStart: suffixStart + 1,
+          end: suffixEnd,
+          flags,
+          inLinkLabel: false,
+          kind: "span",
+          literalInLink: false,
+          nameEnd: suffixStart + 1,
+          start: suffixStart,
+        });
+      }
       continue;
     }
-    const start = inlineTokenStart(tokens, index);
-    if (componentLabels.has(start)) {
-      continue;
-    }
-    const close = brackets.pairs.get(start);
-    if (close === void 0 || source[close + 1] === "(" || source[close + 1] === "[") {
+    if (source[close + 1] === "(" || source[close + 1] === "[") {
       continue;
     }
     const attributesStart = close + 1;
     const attributed = source[attributesStart] === "{" && attributesEnd(source, attributesStart) !== void 0;
-    const inLinkLabel = insideLinkLabel(start, brackets.linkLabels);
-    if (!attributed && inLinkLabel) {
-      continue;
-    }
     result.push({
       children: [],
       close,
       contentEnd: close,
-      contentStart: start + 1,
+      contentStart: open.start + 1,
       end: close + 1,
-      flags: inlineTokenFlags(tokens, index),
-      inLinkLabel,
+      flags: inlineTokenFlags(tokens, open.tokenIndex),
+      inLinkLabel: false,
       kind: "span",
-      nameEnd: start + 1,
-      start,
+      literalInLink: !attributed,
+      nameEnd: open.start + 1,
+      start: open.start,
     });
   }
+  let candidateCount = 0;
+  for (const candidate of result) {
+    candidate.inLinkLabel = insideLinkLabel(candidate.start, linkLabels);
+    if (!candidate.literalInLink || !candidate.inLinkLabel) {
+      result[candidateCount++] = candidate;
+    }
+  }
+  result.length = candidateCount;
   result.sort((left, right) => left.start - right.start || right.end - left.end);
   const roots: Candidate[] = [];
   const stack: Candidate[] = [];
@@ -251,7 +225,7 @@ function candidates(
       stack.push(candidate);
     }
   }
-  return { normalClosers: brackets.normalClosers, roots };
+  return { normalClosers, roots };
 }
 
 function copyRange(
