@@ -1,4 +1,5 @@
 import { BlockKind } from "../../block/kinds.ts";
+import { Character } from "../../constants/character.ts";
 import { blockEnd, firstNonspace } from "../../fragment/block.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import type { BlockLine } from "../../block/lines.ts";
@@ -46,7 +47,11 @@ export const feature: SyntaxFeature = {
     ],
     starts: [
       {
-        codes: [42, 45, 95],
+        codes: [
+          Character.Asterisk,
+          Character.HyphenMinus,
+          Character.LowLine,
+        ],
         interrupt(source, line, contentOffset) {
           return isThematicBreak(source, line, contentOffset);
         },

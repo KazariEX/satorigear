@@ -1,3 +1,4 @@
+import { Character } from "../constants/character.ts";
 import { emptyArray } from "../primitives.ts";
 import {
   appendInlineToken,
@@ -127,9 +128,9 @@ function characterBefore(source: string, offset: number): string {
     return "\n";
   }
   const trailing = source.charCodeAt(offset - 1);
-  if (trailing >= 0xDC00 && trailing <= 0xDFFF && offset > 1) {
+  if (trailing >= Character.LowSurrogateStart && trailing <= Character.LowSurrogateEnd && offset > 1) {
     const leading = source.charCodeAt(offset - 2);
-    if (leading >= 0xD800 && leading <= 0xDBFF) {
+    if (leading >= Character.HighSurrogateStart && leading <= Character.HighSurrogateEnd) {
       return source.slice(offset - 2, offset);
     }
   }
@@ -186,9 +187,9 @@ function acceptsContent(
     }
     if (config.maxCharacters !== void 0) {
       const leading = source.charCodeAt(offset);
-      if (leading >= 0xD800 && leading <= 0xDBFF && offset + 1 < end) {
+      if (leading >= Character.HighSurrogateStart && leading <= Character.HighSurrogateEnd && offset + 1 < end) {
         const trailing = source.charCodeAt(offset + 1);
-        if (trailing >= 0xDC00 && trailing <= 0xDFFF) {
+        if (trailing >= Character.LowSurrogateStart && trailing <= Character.LowSurrogateEnd) {
           offset++;
         }
       }

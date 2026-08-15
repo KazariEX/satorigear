@@ -8,6 +8,7 @@ import {
   lineIndent,
 } from "../../block/lines.ts";
 import { noBlockEntry } from "../../block/structure.ts";
+import { Character } from "../../constants/character.ts";
 import {
   type BlockBuildContext,
   blockEnd,
@@ -81,14 +82,14 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | undefined {
     };
   }
   const markerCode = source.charCodeAt(indent.offset);
-  if (markerCode < 48 || markerCode > 57) {
+  if (markerCode < Character.DigitZero || markerCode > Character.DigitNine) {
     return;
   }
   let startNumber = 0;
   let orderedEnd = indent.offset;
   // CommonMark caps ordered markers at nine digits, so the prefix is cheaper to scan than to slice and match.
   while (orderedEnd < line.end && orderedEnd - indent.offset < 9) {
-    const digit = source.charCodeAt(orderedEnd) - 48;
+    const digit = source.charCodeAt(orderedEnd) - Character.DigitZero;
     if (digit < 0 || digit > 9) {
       break;
     }
@@ -296,7 +297,21 @@ export const feature: SyntaxFeature = {
     ],
     starts: [
       {
-        codes: [42, 43, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57],
+        codes: [
+          Character.Asterisk,
+          Character.PlusSign,
+          Character.HyphenMinus,
+          Character.DigitZero,
+          Character.DigitOne,
+          Character.DigitTwo,
+          Character.DigitThree,
+          Character.DigitFour,
+          Character.DigitFive,
+          Character.DigitSix,
+          Character.DigitSeven,
+          Character.DigitEight,
+          Character.DigitNine,
+        ],
         unwrapLazyContinuation(source, line) {
           const marker = listMarkerAt(source, line);
           return marker

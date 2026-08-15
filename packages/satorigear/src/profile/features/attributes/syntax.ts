@@ -1,3 +1,4 @@
+import { Character } from "../../../constants/character.ts";
 import type { Attributes, AttributeValue } from "./types.ts";
 
 const brackets: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
@@ -7,7 +8,10 @@ function isAsciiLetter(character: string): boolean {
     return false;
   }
   const code = character.charCodeAt(0);
-  return code >= 65 && code <= 90 || code >= 97 && code <= 122;
+  return (
+    code >= Character.LatinCapitalLetterA && code <= Character.LatinCapitalLetterZ ||
+    code >= Character.LatinSmallLetterA && code <= Character.LatinSmallLetterZ
+  );
 }
 
 function isAsciiDigit(character: string): boolean {
@@ -15,7 +19,7 @@ function isAsciiDigit(character: string): boolean {
     return false;
   }
   const code = character.charCodeAt(0);
-  return code >= 48 && code <= 57;
+  return code >= Character.DigitZero && code <= Character.DigitNine;
 }
 
 function isSpace(character: string): boolean {

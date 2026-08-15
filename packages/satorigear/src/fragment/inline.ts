@@ -1,4 +1,5 @@
 import type { PhrasingContent } from "mdast";
+import { Character } from "../constants/character.ts";
 import {
   inlineTokenCount,
   inlineTokenEnd,
@@ -60,7 +61,7 @@ export type InlineTokenHandler = (
 function lineStart(source: string, offset: number): number {
   while (offset > 0) {
     const character = source.charCodeAt(--offset);
-    if (character === 10 || character === 13) {
+    if (character === Character.LineFeed || character === Character.CarriageReturn) {
       return offset + 1;
     }
   }
@@ -70,7 +71,7 @@ function lineStart(source: string, offset: number): number {
 export function lineEnd(source: string, offset: number, limit = source.length): number {
   for (; offset < limit; offset++) {
     const character = source.charCodeAt(offset);
-    if (character === 10 || character === 13) {
+    if (character === Character.LineFeed || character === Character.CarriageReturn) {
       return offset;
     }
   }

@@ -10,6 +10,7 @@ import {
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, indentOf, isBlank, removeIndent } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
+import { Character } from "../../constants/character.ts";
 import {
   type BlockBuildContext,
   blockEnd,
@@ -129,7 +130,10 @@ export const feature: SyntaxFeature = {
     ],
     starts: [
       {
-        codes: [96, 126],
+        codes: [
+          Character.GraveAccent,
+          Character.Tilde,
+        ],
         interrupt(source, line) {
           return !!codeFenceAt(source, line);
         },
@@ -166,12 +170,12 @@ export const feature: SyntaxFeature = {
         marker: "`",
         scan(source, start, tokens) {
           let end = -1;
-          if (source.charCodeAt(start - 1) !== 96) {
+          if (source.charCodeAt(start - 1) !== Character.GraveAccent) {
             const openEnd = inlineMarkerRunEnd(source, start);
             const markerLength = openEnd - start;
             let offset = openEnd;
             while (offset < source.length) {
-              if (source.charCodeAt(offset) !== 96) {
+              if (source.charCodeAt(offset) !== Character.GraveAccent) {
                 offset++;
                 continue;
               }

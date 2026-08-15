@@ -1,4 +1,5 @@
 import type { Delete, Emphasis, Strong } from "mdast";
+import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken } from "../../inline/tokens.ts";
@@ -38,9 +39,9 @@ const strikethroughDelimiter: DelimiterConfig = {
 const scanFormatting: InlineLexicalRule["scan"] = (source, start, tokens) => {
   const code = source.charCodeAt(start);
   const end = inlineMarkerRunEnd(source, start);
-  const kind = code === 42
+  const kind = code === Character.Asterisk
     ? InlineKind.AsteriskRun
-    : code === 95 ? InlineKind.UnderscoreRun : InlineKind.TildeRun;
+    : code === Character.LowLine ? InlineKind.UnderscoreRun : InlineKind.TildeRun;
   appendInlineToken(tokens, kind, start, end);
   return end;
 };

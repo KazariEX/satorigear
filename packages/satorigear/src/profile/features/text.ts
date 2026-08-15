@@ -1,4 +1,5 @@
 import { decodeHTMLStrict } from "entities";
+import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import {
@@ -15,10 +16,10 @@ const entity = /&(?:#x[0-9A-F]{1,6}|#\d{1,7}|[A-Z][A-Z0-9]{0,30});/iy;
 
 function isAsciiPunctuation(code: number): boolean {
   return (
-    code >= 33 && code <= 47 ||
-    code >= 58 && code <= 64 ||
-    code >= 91 && code <= 96 ||
-    code >= 123 && code <= 126
+    code >= Character.ExclamationMark && code <= Character.Solidus ||
+    code >= Character.Colon && code <= Character.CommercialAt ||
+    code >= Character.LeftSquareBracket && code <= Character.GraveAccent ||
+    code >= Character.LeftCurlyBracket && code <= Character.Tilde
   );
 }
 
@@ -65,7 +66,7 @@ export const feature: SyntaxFeature = {
           let end = start + 1;
           let flags = 0;
           let kind = InlineKind.Delimiter;
-          if (next === 10 || next === 13) {
+          if (next === Character.LineFeed || next === Character.CarriageReturn) {
             kind = InlineKind.HardBreak;
           }
           else if (isAsciiPunctuation(next)) {
@@ -73,7 +74,7 @@ export const feature: SyntaxFeature = {
             flags = InlineTokenFlag.DecodeText;
             kind = InlineKind.Escape;
           }
-          else if (next === 32 || next === 9) {
+          else if (next === Character.Space || next === Character.CharacterTabulation) {
             end++;
             kind = InlineKind.Text;
           }

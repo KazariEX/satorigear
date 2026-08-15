@@ -1,4 +1,5 @@
 import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdast";
+import { Character } from "../../../constants/character.ts";
 import { lineEnd } from "../../../fragment/inline.ts";
 import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
@@ -71,7 +72,12 @@ const decorateBlockquote: BlockNodeBuilderDecorator = (build) => (tokenStart, co
 };
 
 function isMarkdownWhitespace(code: number): boolean {
-  return code === 9 || code === 10 || code === 13 || code === 32;
+  return (
+    code === Character.CharacterTabulation ||
+    code === Character.LineFeed ||
+    code === Character.CarriageReturn ||
+    code === Character.Space
+  );
 }
 
 function hasVisibleText(source: string, start: number, end: number): boolean {

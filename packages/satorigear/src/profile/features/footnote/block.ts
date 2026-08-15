@@ -6,6 +6,7 @@ import {
   isBlank,
   lineIndent,
 } from "../../../block/lines.ts";
+import { Character } from "../../../constants/character.ts";
 import { blockEnd, blockToken, buildBlockChildren } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
@@ -88,7 +89,9 @@ export const blockRules: BlockFeature["rules"] = [
 
 export const blockStarts: BlockFeature["starts"] = [
   {
-    codes: [91],
+    codes: [
+      Character.LeftSquareBracket,
+    ],
     unwrapLazyContinuation(source, line) {
       const match = definitionAt(source, line);
       return match ? firstContentLine(line, match) : void 0;

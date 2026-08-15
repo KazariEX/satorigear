@@ -1,4 +1,5 @@
 import type { PhrasingContent } from "mdast";
+import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -28,7 +29,12 @@ function skipWhitespace(source: string, start: number): number {
   let end = start;
   while (end < source.length) {
     const code = source.charCodeAt(end);
-    if (code !== 9 && code !== 10 && code !== 13 && code !== 32) {
+    if (
+      code !== Character.CharacterTabulation &&
+      code !== Character.LineFeed &&
+      code !== Character.CarriageReturn &&
+      code !== Character.Space
+    ) {
       break;
     }
     end++;
@@ -37,17 +43,21 @@ function skipWhitespace(source: string, start: number): number {
 }
 
 function linkDestinationEnd(source: string, start: number): number {
-  if (source.charCodeAt(start) === 60) {
+  if (source.charCodeAt(start) === Character.LessThanSign) {
     let end = start + 1;
     while (end < source.length) {
       const code = source.charCodeAt(end);
-      if (code === 62) {
+      if (code === Character.GreaterThanSign) {
         return end + 1;
       }
-      if (code === 10 || code === 13 || code === 60) {
+      if (
+        code === Character.LineFeed ||
+        code === Character.CarriageReturn ||
+        code === Character.LessThanSign
+      ) {
         return -1;
       }
-      end += code === 92 && end + 1 < source.length ? 2 : 1;
+      end += code === Character.ReverseSolidus && end + 1 < source.length ? 2 : 1;
     }
     return -1;
   }
@@ -57,7 +67,7 @@ function linkDestinationEnd(source: string, start: number): number {
   let consumed = false;
   while (end < source.length) {
     const code = source.charCodeAt(end);
-    if (code === 92) {
+    if (code === Character.ReverseSolidus) {
       if (end + 1 >= source.length) {
         break;
       }
@@ -65,7 +75,7 @@ function linkDestinationEnd(source: string, start: number): number {
       end += 2;
       continue;
     }
-    if (code === 40) {
+    if (code === Character.LeftParenthesis) {
       if (depth === 32) {
         return -1;
       }
@@ -74,7 +84,7 @@ function linkDestinationEnd(source: string, start: number): number {
       end++;
       continue;
     }
-    if (code === 41) {
+    if (code === Character.RightParenthesis) {
       if (depth === 0) {
         break;
       }
@@ -94,8 +104,12 @@ function linkDestinationEnd(source: string, start: number): number {
 
 function linkTitleEnd(source: string, start: number): number {
   const marker = source.charCodeAt(start);
-  const close = marker === 40 ? 41 : marker;
-  if (marker !== 34 && marker !== 39 && marker !== 40) {
+  const close = marker === Character.LeftParenthesis ? Character.RightParenthesis : marker;
+  if (
+    marker !== Character.QuotationMark &&
+    marker !== Character.Apostrophe &&
+    marker !== Character.LeftParenthesis
+  ) {
     return -1;
   }
   let end = start + 1;
@@ -104,20 +118,20 @@ function linkTitleEnd(source: string, start: number): number {
     if (code === close) {
       return end + 1;
     }
-    if (code === 10 || code === 13) {
+    if (code === Character.LineFeed || code === Character.CarriageReturn) {
       return -1;
     }
-    end += code === 92 && end + 1 < source.length ? 2 : 1;
+    end += code === Character.ReverseSolidus && end + 1 < source.length ? 2 : 1;
   }
   return -1;
 }
 
 function linkTailEnd(source: string, start: number): number {
-  if (source.charCodeAt(start + 1) !== 40) {
+  if (source.charCodeAt(start + 1) !== Character.LeftParenthesis) {
     return -1;
   }
   let offset = skipWhitespace(source, start + 2);
-  if (source.charCodeAt(offset) === 41) {
+  if (source.charCodeAt(offset) === Character.RightParenthesis) {
     return offset + 1;
   }
   const destinationEnd = linkDestinationEnd(source, offset);
@@ -126,7 +140,7 @@ function linkTailEnd(source: string, start: number): number {
   }
   offset = destinationEnd;
   const whitespaceEnd = skipWhitespace(source, offset);
-  if (whitespaceEnd > offset && source.charCodeAt(whitespaceEnd) !== 41) {
+  if (whitespaceEnd > offset && source.charCodeAt(whitespaceEnd) !== Character.RightParenthesis) {
     const titleEnd = linkTitleEnd(source, whitespaceEnd);
     if (titleEnd < 0) {
       return -1;
@@ -137,28 +151,28 @@ function linkTailEnd(source: string, start: number): number {
     offset = whitespaceEnd;
   }
   offset = skipWhitespace(source, offset);
-  return source.charCodeAt(offset) === 41 ? offset + 1 : -1;
+  return source.charCodeAt(offset) === Character.RightParenthesis ? offset + 1 : -1;
 }
 
 function referenceTailEnd(source: string, start: number): number {
-  if (source.charCodeAt(start + 1) !== 91) {
+  if (source.charCodeAt(start + 1) !== Character.LeftSquareBracket) {
     return -1;
   }
   let offset = start + 2;
-  if (source.charCodeAt(offset) === 93) {
+  if (source.charCodeAt(offset) === Character.RightSquareBracket) {
     return offset + 1;
   }
   let characters = 0;
   let hasContent = false;
   while (offset < source.length && characters < 999) {
     const code = source.charCodeAt(offset);
-    if (code === 93) {
+    if (code === Character.RightSquareBracket) {
       return hasContent ? offset + 1 : -1;
     }
-    if (code === 91) {
+    if (code === Character.LeftSquareBracket) {
       return -1;
     }
-    if (code === 92) {
+    if (code === Character.ReverseSolidus) {
       if (offset + 1 >= source.length) {
         return -1;
       }
@@ -177,7 +191,7 @@ function referenceTailEnd(source: string, start: number): number {
 function needsTextDecode(source: string, start: number, end: number): number {
   for (let index = start; index < end; index++) {
     const code = source.charCodeAt(index);
-    if (code === 38 || code === 92) {
+    if (code === Character.Ampersand || code === Character.ReverseSolidus) {
       return InlineTokenFlag.DecodeText;
     }
   }
@@ -185,7 +199,12 @@ function needsTextDecode(source: string, start: number, end: number): number {
 }
 
 function isLinkWhitespace(code: number): boolean {
-  return code === 9 || code === 10 || code === 13 || code === 32;
+  return (
+    code === Character.CharacterTabulation ||
+    code === Character.LineFeed ||
+    code === Character.CarriageReturn ||
+    code === Character.Space
+  );
 }
 
 // LinkTail is already validated by the lexer; projection only separates its output fields.
@@ -342,7 +361,7 @@ export const feature: SyntaxFeature = {
       {
         marker: "!",
         scan(source, start, tokens) {
-          const image = source.charCodeAt(start + 1) === 91;
+          const image = source.charCodeAt(start + 1) === Character.LeftSquareBracket;
           const end = start + (image ? 2 : 1);
           appendInlineToken(tokens, image ? InlineKind.ImageOpen : InlineKind.Delimiter, start, end);
           return end;

@@ -1,6 +1,7 @@
 import type { Heading } from "mdast";
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, lineIndent } from "../../block/lines.ts";
+import { Character } from "../../constants/character.ts";
 import {
   blockEnd,
   blockToken,
@@ -122,7 +123,9 @@ export const feature: SyntaxFeature = {
     ],
     starts: [
       {
-        codes: [35],
+        codes: [
+          Character.NumberSign,
+        ],
         interrupt(source, line) {
           return !!atxAt(source, line);
         },

@@ -1,3 +1,4 @@
+import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -8,7 +9,7 @@ import type { SyntaxFeature } from "../types.ts";
 import type { Attributes } from "./attributes/types.ts";
 
 function bindingEnd(source: string, start: number): number {
-  if (source.charCodeAt(start + 1) !== 123) {
+  if (source.charCodeAt(start + 1) !== Character.LeftCurlyBracket) {
     return -1;
   }
   const close = source.indexOf("}}", start + 2);

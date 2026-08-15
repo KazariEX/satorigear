@@ -8,6 +8,7 @@ import {
 } from "../../../block/fence.ts";
 import { BlockKind } from "../../../block/kinds.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
+import { Character } from "../../../constants/character.ts";
 import { blockEnd, blockToken, firstNonspace } from "../../../fragment/block.ts";
 import { lineEnd } from "../../../fragment/inline.ts";
 import { semanticText } from "../text.ts";
@@ -51,7 +52,9 @@ export const blockRules: BlockFeature["rules"] = [
 
 export const blockStarts: BlockFeature["starts"] = [
   {
-    codes: [36],
+    codes: [
+      Character.DollarSign,
+    ],
     interrupt(source, line) {
       return fenceAt(source, line, mathFenceRule) !== void 0;
     },

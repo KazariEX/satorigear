@@ -1,5 +1,6 @@
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent, physicalColumnAt } from "../../block/lines.ts";
+import { Character } from "../../constants/character.ts";
 import {
   blockEnd,
   blockToken,
@@ -66,7 +67,9 @@ export const feature: SyntaxFeature = {
     ],
     starts: [
       {
-        codes: [62],
+        codes: [
+          Character.GreaterThanSign,
+        ],
         unwrapLazyContinuation: unwrapBlockQuote,
         interrupt(source, line) {
           return blockQuoteOffset(source, line) !== void 0;

@@ -7,6 +7,7 @@ import { noBlockEntry } from "../../../block/structure.ts";
 import {
   appendLogicalToken,
 } from "../../../block/tokens.ts";
+import { Character } from "../../../constants/character.ts";
 import {
   type BlockNodeBuilder,
   blockToken,
@@ -510,7 +511,9 @@ export const blockRules: BlockFeature["rules"] = [
 
 export const blockStarts: BlockFeature["starts"] = [
   {
-    codes: [58],
+    codes: [
+      Character.Colon,
+    ],
     interrupt(source, line, contentOffset) {
       return (
         blockOpeningAt(source, line, contentOffset, false) !== void 0 ||
@@ -520,7 +523,9 @@ export const blockStarts: BlockFeature["starts"] = [
     start: createBlockStart(false),
   },
   {
-    codes: [58],
+    codes: [
+      Character.Colon,
+    ],
     start: createBlockStart(true),
   },
 ];

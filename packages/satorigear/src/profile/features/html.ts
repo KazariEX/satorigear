@@ -1,6 +1,7 @@
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
+import { Character } from "../../constants/character.ts";
 import {
   type BlockBuildContext,
   blockEnd,
@@ -173,7 +174,9 @@ export const feature: SyntaxFeature = {
     ],
     starts: [
       {
-        codes: [60],
+        codes: [
+          Character.LessThanSign,
+        ],
         interrupt(source, line) {
           return !!htmlStartAt(source, line)?.interruptParagraph;
         },

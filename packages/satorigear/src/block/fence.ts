@@ -1,3 +1,4 @@
+import { Character } from "../constants/character.ts";
 import { type BlockLine, lineIndent, removeIndent } from "./lines.ts";
 
 export interface Fence {
@@ -71,17 +72,21 @@ function lineContentEnd(source: string, start: number, end: number): number {
   if (end <= start) {
     return end;
   }
-  if (source.charCodeAt(end - 1) === 10) {
-    return end > start + 1 && source.charCodeAt(end - 2) === 13 ? end - 2 : end - 1;
+  if (source.charCodeAt(end - 1) === Character.LineFeed) {
+    return end - (
+      end > start + 1 && source.charCodeAt(end - 2) === Character.CarriageReturn
+        ? 2
+        : 1
+    );
   }
-  return source.charCodeAt(end - 1) === 13 ? end - 1 : end;
+  return source.charCodeAt(end - 1) === Character.CarriageReturn ? end - 1 : end;
 }
 
 export function fencedBlock(source: string, line: BlockLine, fence: Fence, closed: boolean): FencedBlock {
   let infoStart = fence.offset + fence.length;
   while (infoStart < line.end) {
     const code = source.charCodeAt(infoStart);
-    if (code !== 32 && code !== 9) {
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
       break;
     }
     infoStart++;
@@ -143,7 +148,7 @@ export function fencedBlockContent(
     }
     else {
       let contentStart = lineStart;
-      while (contentStart - lineStart < block.indent && source.charCodeAt(contentStart) === 32) {
+      while (contentStart - lineStart < block.indent && source.charCodeAt(contentStart) === Character.Space) {
         contentStart++;
       }
       chunks.push(source.slice(contentStart, next));

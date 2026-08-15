@@ -1,3 +1,4 @@
+import { Character } from "../constants/character.ts";
 import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocation, SourceSpan } from "../source-view.ts";
@@ -164,7 +165,7 @@ function linesOf(source: string, start = 0, limit = source.length): BlockLine[] 
     let next = end;
     if (next < limit) {
       if (next === carriageReturn) {
-        next += next + 1 < limit && source.charCodeAt(next + 1) === 10 ? 2 : 1;
+        next += next + 1 < limit && source.charCodeAt(next + 1) === Character.LineFeed ? 2 : 1;
         carriageReturn = source.indexOf("\r", next);
         if (lineFeed < next) {
           lineFeed = source.indexOf("\n", next);
@@ -279,7 +280,7 @@ function createForwardLocator(
 
 function endsInLineEnding(source: string): boolean {
   const ending = source.charCodeAt(source.length - 1);
-  return ending === 10 || ending === 13;
+  return ending === Character.LineFeed || ending === Character.CarriageReturn;
 }
 
 export class BlockScanner {

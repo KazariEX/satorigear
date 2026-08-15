@@ -1,3 +1,4 @@
+import { Character } from "../constants/character.ts";
 import { InlineKind } from "./kinds.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
@@ -33,9 +34,9 @@ export function inlineMarkerRunEnd(source: string, start: number): number {
 function inlineTextEnd(source: string, start: number, boundary: RegExp): number {
   boundary.lastIndex = start;
   let match = boundary.exec(source);
-  while (match !== null && source.charCodeAt(match.index) === 92) {
+  while (match !== null && source.charCodeAt(match.index) === Character.ReverseSolidus) {
     const next = source.charCodeAt(match.index + 1);
-    if (next !== 32 && next !== 9) {
+    if (next !== Character.Space && next !== Character.CharacterTabulation) {
       break;
     }
     boundary.lastIndex = match.index + 2;
@@ -55,29 +56,32 @@ function tokenize(
   while (offset < source.length) {
     if (lineStart) {
       let content = offset;
-      while (source.charCodeAt(content) === 32) {
+      while (source.charCodeAt(content) === Character.Space) {
         content++;
       }
       if (content === source.length) {
         break;
       }
       let code = source.charCodeAt(content);
-      if (code === 10 || code === 13) {
+      if (code === Character.LineFeed || code === Character.CarriageReturn) {
         offset = content + 1;
-        if (code === 13 && source.charCodeAt(offset) === 10) {
+        if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
           offset++;
         }
         continue;
       }
-      if (code === 9) {
+      if (code === Character.CharacterTabulation) {
         let blankEnd = content;
-        while (source.charCodeAt(blankEnd) === 9 || source.charCodeAt(blankEnd) === 32) {
+        while (
+          source.charCodeAt(blankEnd) === Character.CharacterTabulation ||
+          source.charCodeAt(blankEnd) === Character.Space
+        ) {
           blankEnd++;
         }
         code = source.charCodeAt(blankEnd);
-        if (blankEnd === source.length || code === 10 || code === 13) {
+        if (blankEnd === source.length || code === Character.LineFeed || code === Character.CarriageReturn) {
           offset = blankEnd + (blankEnd < source.length ? 1 : 0);
-          if (code === 13 && source.charCodeAt(offset) === 10) {
+          if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
             offset++;
           }
           continue;
@@ -92,11 +96,11 @@ function tokenize(
     }
 
     const code = source.charCodeAt(offset);
-    if (code === 32 || code === 9) {
-      if (code === 32) {
+    if (code === Character.Space || code === Character.CharacterTabulation) {
+      if (code === Character.Space) {
         const end = inlineMarkerRunEnd(source, offset);
         const next = source.charCodeAt(end);
-        if (end - offset >= 2 && (next === 10 || next === 13)) {
+        if (end - offset >= 2 && (next === Character.LineFeed || next === Character.CarriageReturn)) {
           tokens.push(InlineKind.HardBreak, offset, end, 0);
           offset = end;
           continue;
@@ -109,9 +113,9 @@ function tokenize(
       offset++;
       continue;
     }
-    if (code === 10 || code === 13) {
+    if (code === Character.LineFeed || code === Character.CarriageReturn) {
       offset++;
-      if (code === 13 && source.charCodeAt(offset) === 10) {
+      if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
         offset++;
       }
       lineStart = true;

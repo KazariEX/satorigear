@@ -1,5 +1,6 @@
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank } from "../../block/lines.ts";
+import { Character } from "../../constants/character.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import {
@@ -410,7 +411,9 @@ export const feature: SyntaxFeature = {
     ],
     starts: [
       {
-        codes: [91],
+        codes: [
+          Character.LeftSquareBracket,
+        ],
         start(source, lines, start, out, contentOffset) {
           const definition = linkDefinitionAt(source, lines, start, contentOffset);
           if (!definition) {
