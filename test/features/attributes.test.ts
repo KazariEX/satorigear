@@ -6,6 +6,7 @@ import {
 } from "../../packages/satorigear/src/index.ts";
 
 const parser = createParser({ features: { attributes: true } });
+const bindingParser = createParser({ features: { attributes: true, binding: true } });
 const componentParser = createParser({ features: { attributes: true, component: true } });
 const componentOnlyParser = createParser({ features: { component: true } });
 const disabledParser = createParser({ features: { attributes: false } });
@@ -86,6 +87,7 @@ describe("attributes", () => {
   it("does not consume mustaches, templates or leading attribute bags", () => {
     const source = ["{{ value }} ", "$", "{value}", "\n\n{value={nested}}\n"].join("");
     expect(parser.parse(source)).toEqual(defaultParser.parse(source));
+    expect(bindingParser.parse("{.first} {.second}\n")).toEqual(parser.parse("{.first} {.second}\n"));
   });
 
   it("composes native attributes with component syntax", () => {

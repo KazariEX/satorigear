@@ -22,8 +22,8 @@ function isAsciiDigit(character: string): boolean {
   return code >= Character.DigitZero && code <= Character.DigitNine;
 }
 
-function isSpace(character: string): boolean {
-  return character === " " || character === "\t" || character === "\n" || character === "\r";
+function isHorizontalWhitespace(character: string): boolean {
+  return character === " " || character === "\t";
 }
 
 export function componentNameEnd(source: string, start: number, block: boolean): number | undefined {
@@ -130,7 +130,12 @@ function scanAttributes(
 
   const readUntil = (stops: string): string => {
     const valueStart = offset;
-    while (offset < limit && !stops.includes(source[offset])) {
+    while (
+      offset < limit &&
+      source[offset] !== "\n" &&
+      source[offset] !== "\r" &&
+      !stops.includes(source[offset])
+    ) {
       if (source[offset] === "\\" && offset + 1 < limit) {
         offset += 2;
       }
@@ -143,7 +148,12 @@ function scanAttributes(
 
   const readQuoted = (quote: string): string | undefined => {
     const valueStart = ++offset;
-    while (offset < limit && source[offset] !== quote) {
+    while (
+      offset < limit &&
+      source[offset] !== "\n" &&
+      source[offset] !== "\r" &&
+      source[offset] !== quote
+    ) {
       offset += source[offset] === "\\" && offset + 1 < limit ? 2 : 1;
     }
     if (source[offset] !== quote) {
@@ -160,6 +170,9 @@ function scanAttributes(
     offset++;
     while (offset < limit && stack.length > 0) {
       const character = source[offset];
+      if (character === "\n" || character === "\r") {
+        return;
+      }
       if (character === "\\" && offset + 1 < limit) {
         offset += 2;
         continue;
@@ -183,7 +196,7 @@ function scanAttributes(
   };
 
   while (offset < limit) {
-    while (isSpace(source[offset])) {
+    while (isHorizontalWhitespace(source[offset])) {
       offset++;
     }
     if (source[offset] === "}") {
@@ -219,7 +232,7 @@ function scanAttributes(
       offset++;
     }
     const rawName = source.slice(nameStart, offset);
-    while (isSpace(source[offset])) {
+    while (isHorizontalWhitespace(source[offset])) {
       offset++;
     }
     if (source[offset] !== "=") {
@@ -229,7 +242,7 @@ function scanAttributes(
       continue;
     }
     offset++;
-    while (isSpace(source[offset])) {
+    while (isHorizontalWhitespace(source[offset])) {
       offset++;
     }
     const character = source[offset];

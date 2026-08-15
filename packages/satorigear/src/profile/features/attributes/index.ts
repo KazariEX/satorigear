@@ -1,19 +1,15 @@
 import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdast";
 import { Character } from "../../../constants/character.ts";
-import { lineEnd } from "../../../fragment/inline.ts";
 import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
-  copyInlineToken,
-  firstInlineTokenEndingAfter,
   inlineTokenCount,
   inlineTokenEnd,
   InlineTokenFlag,
   inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
-  type InlineTokenStream,
   setInlineTokenFlags,
 } from "../../../inline/tokens.ts";
 import {
@@ -24,13 +20,8 @@ import {
 } from "./carrier.ts";
 import { attributesEnd, parseAttributes } from "./syntax.ts";
 import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
-import type { SourceSpan } from "../../../source-view.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "./types.ts";
-
-interface AttributeSpan extends SourceSpan {
-  detached: boolean;
-}
 
 type AttributableNode = SpannedNode<PhrasingContent> & { attributes?: Attributes };
 
@@ -89,81 +80,85 @@ function hasVisibleText(source: string, start: number, end: number): boolean {
   return false;
 }
 
-function attributeSpansOf(source: string, tokens: InlineTokenStream): AttributeSpan[] {
-  const spans: AttributeSpan[] = [];
-  let consumedEnd = 0;
-  let hasContent = false;
-  let attributeLineEnd = 0;
-  for (let index = 0; index < inlineTokenCount(tokens); index++) {
-    const kind = inlineTokenKind(tokens, index);
-    const start = inlineTokenStart(tokens, index);
-    const end = inlineTokenEnd(tokens, index);
-    if (end <= consumedEnd) {
-      continue;
-    }
-    if (kind !== InlineKind.Text) {
-      hasContent = true;
-      continue;
-    }
-    let cursor = Math.max(start, consumedEnd);
-    for (let offset = source.indexOf("{", cursor); offset >= cursor && offset < end;) {
-      if (hasVisibleText(source, cursor, offset)) {
-        hasContent = true;
-      }
-      const invalidPrefix = source[offset + 1] === "{" || source[offset - 1] === "{" || source[offset - 1] === "$";
-      if (!invalidPrefix && offset >= attributeLineEnd) {
-        attributeLineEnd = lineEnd(source, offset, source.length);
-      }
-      const parsedEnd = invalidPrefix ? void 0 : attributesEnd(source, offset, attributeLineEnd);
-      if (parsedEnd === void 0) {
-        hasContent = true;
-        cursor = offset + 1;
-        offset = source.indexOf("{", cursor);
-        continue;
-      }
-      if (!hasContent) {
-        cursor = parsedEnd;
-        offset = source.indexOf("{", cursor);
-        continue;
-      }
-      spans.push({
-        detached: offset > 0 && isMarkdownWhitespace(source.charCodeAt(offset - 1)),
-        start: offset,
-        end: parsedEnd,
-      });
-      consumedEnd = parsedEnd;
-      cursor = parsedEnd;
-      offset = source.indexOf("{", cursor);
-    }
-    if (hasVisibleText(source, cursor, end)) {
-      hasContent = true;
-    }
-  }
-  return spans;
+function attributeEndAt(source: string, start: number): number | undefined {
+  return source[start + 1] === "{" || source[start - 1] === "{" || source[start - 1] === "$"
+    ? void 0
+    : attributesEnd(source, start);
 }
 
-function copyRange(target: number[], tokens: InlineTokenStream, start: number, end: number): void {
-  for (let index = firstInlineTokenEndingAfter(tokens, start); index < inlineTokenCount(tokens); index++) {
-    const tokenStart = inlineTokenStart(tokens, index);
-    if (tokenStart >= end) {
-      break;
+function scanAttribute(source: string, start: number, tokens: number[]): number {
+  const end = attributeEndAt(source, start);
+  if (end === void 0) {
+    return -1;
+  }
+
+  if (tokens.length === 0) {
+    // Leading attribute bags are literal. Consume the whole leading chain so a later bag
+    // cannot mistake an earlier literal bag for attachable content.
+    let textEnd = end;
+    while (true) {
+      let next = textEnd;
+      while (
+        source.charCodeAt(next) === Character.CharacterTabulation ||
+        source.charCodeAt(next) === Character.Space
+      ) {
+        next++;
+      }
+      const nextEnd = source.charCodeAt(next) === Character.LeftCurlyBracket
+        ? attributeEndAt(source, next)
+        : void 0;
+      if (nextEnd === void 0) {
+        break;
+      }
+      textEnd = nextEnd;
     }
-    const tokenEnd = inlineTokenEnd(tokens, index);
-    const fragmentStart = Math.max(start, tokenStart);
-    const fragmentEnd = Math.min(end, tokenEnd);
-    if (fragmentStart === tokenStart && fragmentEnd === tokenEnd) {
-      copyInlineToken(target, tokens, index);
-    }
-    else {
-      appendInlineToken(
-        target,
-        InlineKind.Text,
-        fragmentStart,
-        fragmentEnd,
-        fragmentStart === tokenStart ? inlineTokenFlags(tokens, index) : 0,
+    appendInlineToken(tokens, InlineKind.Text, start, textEnd);
+    return textEnd;
+  }
+
+  const previous = inlineTokenCount(tokens) - 1;
+  const previousEnd = previous >= 0 ? inlineTokenEnd(tokens, previous) : start;
+  if (
+    previousEnd <= start &&
+    inlineTokenKind(tokens, previous) === InlineKind.AttributesToken
+  ) {
+    appendInlineToken(tokens, InlineKind.Text, previousEnd, start);
+  }
+
+  appendInlineToken(
+    tokens,
+    InlineKind.AttributesToken,
+    start,
+    end,
+    start > 0 && isMarkdownWhitespace(source.charCodeAt(start - 1))
+      ? InlineTokenFlag.AttributeDetached
+      : 0,
+  );
+
+  let next = end;
+  while (isMarkdownWhitespace(source.charCodeAt(next))) {
+    next++;
+  }
+  if (next === source.length) {
+    for (let index = inlineTokenCount(tokens) - 1; index >= 0; index--) {
+      const kind = inlineTokenKind(tokens, index);
+      if (
+        kind === InlineKind.Text &&
+        !hasVisibleText(source, inlineTokenStart(tokens, index), inlineTokenEnd(tokens, index))
+      ) {
+        continue;
+      }
+      if (kind !== InlineKind.AttributesToken) {
+        break;
+      }
+      setInlineTokenFlags(
+        tokens,
+        index,
+        inlineTokenFlags(tokens, index) | InlineTokenFlag.AttributeTerminal,
       );
     }
   }
+  return end;
 }
 
 export const feature: SyntaxFeature = {
@@ -178,7 +173,9 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    resolution: { transform: transformAttributeTokens },
+    lexical: [
+      { marker: "{", scan: scanAttribute },
+    ],
     syntax: [
       {
         kind: "decorate",
@@ -219,51 +216,3 @@ export const feature: SyntaxFeature = {
     ],
   },
 };
-
-function transformAttributeTokens(source: string, tokens: InlineTokenStream): InlineTokenStream {
-  // Avoid scanning token boundaries when no attribute carrier can start.
-  if (!source.includes("{")) {
-    return tokens;
-  }
-  const spans = attributeSpansOf(source, tokens);
-  if (spans.length === 0) {
-    return tokens;
-  }
-  const result: number[] = [];
-  let cursor = 0;
-  for (const span of spans) {
-    copyRange(result, tokens, cursor, span.start);
-    appendInlineToken(
-      result,
-      InlineKind.AttributesToken,
-      span.start,
-      span.end,
-      span.detached ? InlineTokenFlag.AttributeDetached : 0,
-    );
-    cursor = span.end;
-  }
-  copyRange(result, tokens, cursor, source.length);
-  let terminal = true;
-  for (let index = inlineTokenCount(result) - 1; index >= 0; index--) {
-    const kind = inlineTokenKind(result, index);
-    if (kind === InlineKind.AttributesToken) {
-      if (terminal) {
-        setInlineTokenFlags(
-          result,
-          index,
-          inlineTokenFlags(result, index) | InlineTokenFlag.AttributeTerminal,
-        );
-      }
-    }
-    else if (
-      kind !== InlineKind.Text || hasVisibleText(
-        source,
-        inlineTokenStart(result, index),
-        inlineTokenEnd(result, index),
-      )
-    ) {
-      terminal = false;
-    }
-  }
-  return result;
-}

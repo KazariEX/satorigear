@@ -27,14 +27,11 @@ export const feature: SyntaxFeature = {
       {
         marker: "{",
         scan(source, start, tokens) {
-          const matchEnd = bindingEnd(source, start);
-          const end = matchEnd < 0 ? start + 1 : matchEnd;
-          appendInlineToken(
-            tokens,
-            matchEnd < 0 ? InlineKind.Text : InlineKind.Binding,
-            start,
-            end,
-          );
+          const end = bindingEnd(source, start);
+          if (end < 0) {
+            return -1;
+          }
+          appendInlineToken(tokens, InlineKind.Binding, start, end);
           return end;
         },
       },

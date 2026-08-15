@@ -123,9 +123,17 @@ function tokenize(
     }
 
     const scan = lexicalByCode[code];
-    const lexicalEnd = scan ? scan(source, offset, tokens) : -1;
-    if (lexicalEnd > offset) {
-      offset = lexicalEnd;
+    if (scan) {
+      const lexicalEnd = scan(source, offset, tokens);
+      if (lexicalEnd > offset) {
+        offset = lexicalEnd;
+        continue;
+      }
+      // A marker may be shared by multiple features. If none accepts it,
+      // include the marker in ordinary text and continue to the next compiled boundary.
+      const end = inlineTextEnd(source, offset + 1, textBoundary);
+      tokens.push(InlineKind.Text, offset, end, 0);
+      offset = end;
       continue;
     }
     const end = inlineTextEnd(source, offset, textBoundary);
@@ -143,14 +151,19 @@ export function compileInlineTokenizer(rules: readonly InlineLexicalRule[]): Inl
       throw new Error("Inline lexical markers must be one character");
     }
     const code = rule.marker.charCodeAt(0);
-    if (lexicalByCode[code]) {
-      throw new Error(`Duplicate inline lexical rule for ${JSON.stringify(rule.marker)}`);
+    const previous = lexicalByCode[code];
+    lexicalByCode[code] = previous === void 0
+      ? rule.scan
+      : (source, start, tokens) => {
+        const end = previous(source, start, tokens);
+        return end > start ? end : rule.scan(source, start, tokens);
+      };
+    if (previous === void 0) {
+      extraBoundaries += rule.marker
+        .replaceAll("\\", "\\\\")
+        .replaceAll("]", "\\]")
+        .replaceAll("-", "\\-");
     }
-    lexicalByCode[code] = rule.scan;
-    extraBoundaries += rule.marker
-      .replaceAll("\\", "\\\\")
-      .replaceAll("]", "\\]")
-      .replaceAll("-", "\\-");
   }
   const textBoundary = new RegExp(` {2,}(?=[\\n\\r]|$)|[\\n\\r${extraBoundaries}]`, "g");
 

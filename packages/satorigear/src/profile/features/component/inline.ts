@@ -1,4 +1,3 @@
-import { lineEnd } from "../../../fragment/inline.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -156,7 +155,6 @@ function candidates(
   const brackets = bracketIndex(tokens);
   const result: Candidate[] = [];
   const componentLabels = new Set<number>();
-  let attributeLineEnd = 0;
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     if (inlineTokenKind(tokens, index) !== InlineKind.Text) {
       continue;
@@ -210,13 +208,7 @@ function candidates(
       continue;
     }
     const attributesStart = close + 1;
-    let attributed = false;
-    if (source[attributesStart] === "{") {
-      if (attributesStart >= attributeLineEnd) {
-        attributeLineEnd = lineEnd(source, attributesStart);
-      }
-      attributed = attributesEnd(source, attributesStart, attributeLineEnd) !== void 0;
-    }
+    const attributed = source[attributesStart] === "{" && attributesEnd(source, attributesStart) !== void 0;
     const inLinkLabel = insideLinkLabel(start, brackets.linkLabels);
     if (!attributed && inLinkLabel) {
       continue;
