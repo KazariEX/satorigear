@@ -18,30 +18,38 @@ export interface BlockTokenChange {
 }
 
 export class BlockTokenStream {
-  #fields: number[];
+  #fieldLength: number;
+  #fields: Int32Array;
   #metadata: Map<number, BlockTokenMeta> | undefined;
   #relativeStart: number;
   #sourceLength: number;
 
   constructor(sourceLength = 0) {
-    this.#fields = [];
+    this.#fieldLength = 0;
+    this.#fields = new Int32Array();
     this.#relativeStart = Number.POSITIVE_INFINITY;
     this.#sourceLength = sourceLength;
   }
 
   reset(sourceLength: number): void {
-    this.#fields.length = 0;
+    this.#fieldLength = 0;
     this.#metadata = void 0;
     this.#relativeStart = Number.POSITIVE_INFINITY;
     this.#sourceLength = sourceLength;
   }
 
   get length(): number {
-    return this.#fields.length / blockTokenStride;
+    return this.#fieldLength / blockTokenStride;
   }
 
   push(kind: BlockKind, start: number, end: number, meta?: BlockTokenMeta): void {
-    this.#fields.push(kind, start, end, 0);
+    const field = this.#fieldLength;
+    this.#ensureCapacity(field + blockTokenStride);
+    this.#fields[field] = kind;
+    this.#fields[field + 1] = start;
+    this.#fields[field + 2] = end;
+    this.#fields[field + 3] = 0;
+    this.#fieldLength += blockTokenStride;
     if (meta) {
       this.#metadata ??= new Map();
       this.#metadata.set(this.length - 1, meta);
@@ -209,25 +217,28 @@ export class BlockTokenStream {
       }
     }
 
-    // 3. Replace the packed fields in place whenever their count is stable. Only a size-changing
-    // middle edit needs a fresh dense array so a longer replacement cannot make it holey.
+    // 3. Replace packed fields in place. A size-changing middle edit shifts the suffix,
+    // growing the dense backing store only when its retained capacity is insufficient.
     if (end === previousLength) {
-      this.#fields.length = start * blockTokenStride;
-      for (let index = 0; index < replacement.#fields.length; index++) {
-        this.#fields.push(replacement.#fields[index]);
-      }
+      const fieldStart = start * blockTokenStride;
+      const fieldEnd = fieldStart + replacement.#fieldLength;
+      this.#ensureCapacity(fieldEnd);
+      this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
+      this.#fieldLength = fieldEnd;
     }
     else if (replacementLength === replacedLength) {
       const fieldStart = start * blockTokenStride;
-      for (let index = 0; index < replacement.#fields.length; index++) {
-        this.#fields[fieldStart + index] = replacement.#fields[index];
-      }
+      this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
     }
     else {
-      this.#fields = this.#fields.slice(0, start * blockTokenStride).concat(
-        replacement.#fields,
-        this.#fields.slice(end * blockTokenStride),
-      );
+      const fieldStart = start * blockTokenStride;
+      const oldFieldEnd = end * blockTokenStride;
+      const newFieldEnd = fieldStart + replacement.#fieldLength;
+      const nextFieldLength = this.#fieldLength + newFieldEnd - oldFieldEnd;
+      this.#ensureCapacity(nextFieldLength);
+      this.#fields.copyWithin(newFieldEnd, oldFieldEnd, this.#fieldLength);
+      this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
+      this.#fieldLength = nextFieldLength;
     }
 
     // 4. Splice sparse metadata. Stable indexes update in place; a size-changing
@@ -274,7 +285,7 @@ export class BlockTokenStream {
   }
 
   truncate(length: number): void {
-    this.#fields.length = length * blockTokenStride;
+    this.#fieldLength = length * blockTokenStride;
     if (this.#metadata) {
       for (const index of this.#metadata.keys()) {
         if (index >= length) {
@@ -305,6 +316,19 @@ export class BlockTokenStream {
 
   value<T>(index: number): T | undefined {
     return this.#metadata?.get(index)?.value as T | undefined;
+  }
+
+  #ensureCapacity(length: number): void {
+    if (length <= this.#fields.length) {
+      return;
+    }
+    let capacity = Math.max(64, this.#fields.length * 2);
+    while (capacity < length) {
+      capacity *= 2;
+    }
+    const fields = new Int32Array(capacity);
+    fields.set(this.#fields.subarray(0, this.#fieldLength));
+    this.#fields = fields;
   }
 
   #position(position: number): number {
