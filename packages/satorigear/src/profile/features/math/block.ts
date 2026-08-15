@@ -7,10 +7,10 @@ import {
   type FenceRule,
 } from "../../../block/fence.ts";
 import { BlockKind } from "../../../block/kinds.ts";
+import { firstNonspace, lineEnd } from "../../../block/lines.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
 import { Character } from "../../../constants/character.ts";
-import { blockEnd, blockToken, firstNonspace } from "../../../fragment/block.ts";
-import { lineEnd } from "../../../fragment/inline.ts";
+import { blockEnd, blockToken } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 

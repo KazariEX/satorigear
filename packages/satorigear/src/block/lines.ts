@@ -1,3 +1,4 @@
+import { Character } from "../constants/character.ts";
 import type { SourceSpan } from "../source-view.ts";
 
 export interface BlockLine extends SourceSpan {
@@ -24,6 +25,45 @@ export function firstLineIndexAtOrAfter(lines: readonly BlockLine[], offset: num
     }
   }
   return low;
+}
+
+export function firstNonspace(source: string, start: number, end: number): number {
+  while (start < end && (source[start] === " " || source[start] === "\t")) {
+    start++;
+  }
+  return start;
+}
+
+export function lineEnd(source: string, offset: number, limit = source.length): number {
+  for (; offset < limit; offset++) {
+    const character = source.charCodeAt(offset);
+    if (character === Character.LineFeed || character === Character.CarriageReturn) {
+      return offset;
+    }
+  }
+  return limit;
+}
+
+export function lineContentEnd(source: string, start: number, end: number): number {
+  if (end <= start) {
+    return end;
+  }
+  if (source.charCodeAt(end - 1) === Character.LineFeed) {
+    return end - (
+      end > start + 1 && source.charCodeAt(end - 2) === Character.CarriageReturn
+        ? 2
+        : 1
+    );
+  }
+  return source.charCodeAt(end - 1) === Character.CarriageReturn ? end - 1 : end;
+}
+
+export function lineIndent(source: string, line: BlockLine): Indent | undefined {
+  const indent = indentOf(source, line, 3);
+  if (source[indent.offset] === " " || source[indent.offset] === "\t") {
+    return;
+  }
+  return indent;
 }
 
 export function indentOf(source: string, line: BlockLine, limit = Number.POSITIVE_INFINITY): Indent {
@@ -94,14 +134,6 @@ export function logicalLine(source: string, line: BlockLine): string {
   return result + source.slice(offset, line.next);
 }
 
-export function lineIndent(source: string, line: BlockLine): Indent | undefined {
-  const indent = indentOf(source, line, 3);
-  if (source[indent.offset] === " " || source[indent.offset] === "\t") {
-    return;
-  }
-  return indent;
-}
-
 export function contentAfterColumns(
   source: string,
   line: BlockLine,
@@ -126,6 +158,10 @@ export function contentAfterColumns(
     break;
   }
   return { offset, prefixColumns: Math.max(0, consumed - columns) };
+}
+
+export function normalizeLines(value: string): string {
+  return value.replace(/\r\n|\r/g, "\n");
 }
 
 export function removeIndent(value: string, columns: number): string {

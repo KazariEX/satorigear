@@ -1,13 +1,14 @@
 import { BlockKind } from "../../block/kinds.ts";
-import { type BlockLine, isBlank, lineIndent, physicalColumnAt } from "../../block/lines.ts";
-import { Character } from "../../constants/character.ts";
 import {
-  blockEnd,
-  blockToken,
-  buildBlockChildren,
+  type BlockLine,
   firstNonspace,
-} from "../../fragment/block.ts";
-import { lineEnd } from "../../fragment/inline.ts";
+  isBlank,
+  lineEnd,
+  lineIndent,
+  physicalColumnAt,
+} from "../../block/lines.ts";
+import { Character } from "../../constants/character.ts";
+import { blockEnd, blockToken, buildBlockChildren } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface BlockQuoteMarker {

@@ -1,13 +1,7 @@
 import { BlockKind } from "../../block/kinds.ts";
-import {
-  appendLogicalToken,
-} from "../../block/tokens.ts";
-import {
-  blockEnd,
-  blockToken,
-  normalizeLines,
-} from "../../fragment/block.ts";
-import type { BlockLine } from "../../block/lines.ts";
+import { type BlockLine, normalizeLines } from "../../block/lines.ts";
+import { appendLogicalToken } from "../../block/tokens.ts";
+import { blockEnd, blockToken } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export type FrontmatterMarker = "+" | "-";

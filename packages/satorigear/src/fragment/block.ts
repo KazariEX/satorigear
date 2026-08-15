@@ -1,4 +1,5 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
+import { lineContentEnd } from "../block/lines.ts";
 import { type BlockStructure, noBlockEntry } from "../block/structure.ts";
 import type { BlockKind } from "../block/kinds.ts";
 import type { InlineProfile } from "../inline/profile.ts";
@@ -21,21 +22,7 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
   const offset = context.structure.tokens.start(tokenStart);
-  let end = offset + context.structure.lenOf(tokenStart);
-  if (end > offset && context.source[end - 1] === "\n") {
-    end--;
-  }
-  if (end > offset && context.source[end - 1] === "\r") {
-    end--;
-  }
-  return end;
-}
-
-export function firstNonspace(source: string, start: number, end: number): number {
-  while (start < end && (source[start] === " " || source[start] === "\t")) {
-    start++;
-  }
-  return start;
+  return lineContentEnd(context.source, offset, offset + context.structure.lenOf(tokenStart));
 }
 
 export function directBlockToken(
@@ -87,10 +74,6 @@ export function payloadBounds(
     }
   }
   return result;
-}
-
-export function normalizeLines(value: string): string {
-  return value.replace(/\r\n|\r/g, "\n");
 }
 
 export const buildBlockNode = <T extends object = TopLevelContent>(

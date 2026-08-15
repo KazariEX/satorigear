@@ -1,13 +1,8 @@
 import { BlockKind } from "../../block/kinds.ts";
-import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
+import { type BlockLine, isBlank, lineIndent, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { Character } from "../../constants/character.ts";
-import {
-  type BlockBuildContext,
-  blockEnd,
-  blockToken,
-  normalizeLines,
-} from "../../fragment/block.ts";
+import { type BlockBuildContext, blockEnd, blockToken } from "../../fragment/block.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";

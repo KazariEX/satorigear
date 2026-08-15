@@ -1,8 +1,8 @@
 import { BlockKind } from "../../block/kinds.ts";
+import { type BlockLine, firstNonspace } from "../../block/lines.ts";
 import { Character } from "../../constants/character.ts";
-import { blockEnd, firstNonspace } from "../../fragment/block.ts";
+import { blockEnd } from "../../fragment/block.ts";
 import { InlineKind } from "../../inline/kinds.ts";
-import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {

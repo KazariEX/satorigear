@@ -8,17 +8,18 @@ import {
   type FenceRule,
 } from "../../block/fence.ts";
 import { BlockKind } from "../../block/kinds.ts";
-import { type BlockLine, indentOf, isBlank, removeIndent } from "../../block/lines.ts";
+import {
+  type BlockLine,
+  firstNonspace,
+  indentOf,
+  isBlank,
+  lineEnd,
+  normalizeLines,
+  removeIndent,
+} from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { Character } from "../../constants/character.ts";
-import {
-  type BlockBuildContext,
-  blockEnd,
-  blockToken,
-  firstNonspace,
-  normalizeLines,
-} from "../../fragment/block.ts";
-import { lineEnd } from "../../fragment/inline.ts";
+import { type BlockBuildContext, blockEnd, blockToken } from "../../fragment/block.ts";
 import { InlineKind } from "../../inline/kinds.ts";
 import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";

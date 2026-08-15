@@ -1,5 +1,5 @@
 import { Character } from "../constants/character.ts";
-import { type BlockLine, lineIndent, removeIndent } from "./lines.ts";
+import { type BlockLine, lineContentEnd, lineIndent, removeIndent } from "./lines.ts";
 
 export interface Fence {
   indent: number;
@@ -66,20 +66,6 @@ export function closesFence(source: string, line: BlockLine, fence: Fence): bool
     offset++;
   }
   return offset === line.end;
-}
-
-function lineContentEnd(source: string, start: number, end: number): number {
-  if (end <= start) {
-    return end;
-  }
-  if (source.charCodeAt(end - 1) === Character.LineFeed) {
-    return end - (
-      end > start + 1 && source.charCodeAt(end - 2) === Character.CarriageReturn
-        ? 2
-        : 1
-    );
-  }
-  return source.charCodeAt(end - 1) === Character.CarriageReturn ? end - 1 : end;
 }
 
 export function fencedBlock(source: string, line: BlockLine, fence: Fence, closed: boolean): FencedBlock {

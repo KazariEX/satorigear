@@ -68,16 +68,6 @@ function lineStart(source: string, offset: number): number {
   return 0;
 }
 
-export function lineEnd(source: string, offset: number, limit = source.length): number {
-  for (; offset < limit; offset++) {
-    const character = source.charCodeAt(offset);
-    if (character === Character.LineFeed || character === Character.CarriageReturn) {
-      return offset;
-    }
-  }
-  return limit;
-}
-
 function lineEndingStart(source: string, offset: number): number {
   const start = lineStart(source, offset);
   if (start === 0) {
