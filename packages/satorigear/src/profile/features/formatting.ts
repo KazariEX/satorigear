@@ -11,7 +11,7 @@ import type { SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {
   token: InlineKind.AsteriskRun,
-  marker: "*",
+  marker: Character.Asterisk,
   single: { open: InlineKind.EmphasisOpen, close: InlineKind.EmphasisClose },
   double: { open: InlineKind.StrongOpen, close: InlineKind.StrongClose },
   pairing: { kind: "partial", ruleOfThree: true },
@@ -19,7 +19,7 @@ const asteriskDelimiter: DelimiterConfig = {
 
 const underscoreDelimiter: DelimiterConfig = {
   token: InlineKind.UnderscoreRun,
-  marker: "_",
+  marker: Character.LowLine,
   single: { open: InlineKind.EmphasisOpen, close: InlineKind.EmphasisClose },
   double: { open: InlineKind.StrongOpen, close: InlineKind.StrongClose },
   pairing: { kind: "partial", ruleOfThree: true },
@@ -28,7 +28,7 @@ const underscoreDelimiter: DelimiterConfig = {
 
 const strikethroughDelimiter: DelimiterConfig = {
   token: InlineKind.TildeRun,
-  marker: "~",
+  marker: Character.Tilde,
   double: { open: InlineKind.DeleteOpen, close: InlineKind.DeleteClose },
   pairing: { kind: "whole" },
 };
@@ -61,8 +61,8 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
     underscoreDelimiter,
   ];
   const lexical: InlineLexicalRule[] = [
-    { marker: "*", scan: scanFormatting },
-    { marker: "_", scan: scanFormatting },
+    { marker: Character.Asterisk, scan: scanFormatting },
+    { marker: Character.LowLine, scan: scanFormatting },
   ];
   const syntax: InlineSyntaxDefinition[] = [
     { kind: "leaf", token: InlineKind.AsteriskRun, build: buildInlineText },
@@ -82,7 +82,7 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
   ];
 
   if (strikethroughOptions) {
-    lexical.push({ marker: "~", scan: scanFormatting });
+    lexical.push({ marker: Character.Tilde, scan: scanFormatting });
     delimiters.push(
       typeof strikethroughOptions !== "object" || strikethroughOptions.singleTilde !== false
         ? {

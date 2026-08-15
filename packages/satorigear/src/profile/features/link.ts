@@ -349,7 +349,7 @@ export const feature: SyntaxFeature = {
   inline: {
     lexical: [
       {
-        marker: "!",
+        marker: Character.ExclamationMark,
         scan(source, start, tokens) {
           const image = source.charCodeAt(start + 1) === Character.LeftSquareBracket;
           const end = start + (image ? 2 : 1);
@@ -358,7 +358,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        marker: "[",
+        marker: Character.LeftSquareBracket,
         scan(source, start, tokens) {
           const end = start + 1;
           appendInlineToken(tokens, InlineKind.BracketOpen, start, end);
@@ -366,7 +366,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        marker: "]",
+        marker: Character.RightSquareBracket,
         scan(source, start, tokens) {
           let end = linkTailEnd(source, start);
           let kind = InlineKind.LinkTail;

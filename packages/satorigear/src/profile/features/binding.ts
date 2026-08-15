@@ -25,7 +25,7 @@ export const feature: SyntaxFeature = {
   inline: {
     lexical: [
       {
-        marker: "{",
+        marker: Character.LeftCurlyBracket,
         scan(source, start, tokens) {
           const end = bindingEnd(source, start);
           if (end < 0) {

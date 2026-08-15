@@ -10,7 +10,7 @@ type InlineLexicalScanner = (
 
 // Features own marker recognition; the compiled lexer only dispatches scanners.
 export interface InlineLexicalRule {
-  marker: string;
+  marker: number;
   scan: InlineLexicalScanner;
 }
 
@@ -145,12 +145,9 @@ function tokenize(
 
 export function compileInlineTokenizer(rules: readonly InlineLexicalRule[]): InlineTokenizer {
   const lexicalByCode: (InlineLexicalScanner | undefined)[] = [];
-  let extraBoundaries = "";
+  const boundaryCodes: number[] = [];
   for (const rule of rules) {
-    if (rule.marker.length !== 1) {
-      throw new Error("Inline lexical markers must be one character");
-    }
-    const code = rule.marker.charCodeAt(0);
+    const code = rule.marker;
     const previous = lexicalByCode[code];
     lexicalByCode[code] = previous === void 0
       ? rule.scan
@@ -159,13 +156,11 @@ export function compileInlineTokenizer(rules: readonly InlineLexicalRule[]): Inl
         return end > start ? end : rule.scan(source, start, tokens);
       };
     if (previous === void 0) {
-      extraBoundaries += rule.marker
-        .replaceAll("\\", "\\\\")
-        .replaceAll("]", "\\]")
-        .replaceAll("-", "\\-");
+      boundaryCodes.push(code);
     }
   }
-  const textBoundary = new RegExp(` {2,}(?=[\\n\\r]|$)|[\\n\\r${extraBoundaries}]`, "g");
+  const boundaries = String.fromCharCode(...boundaryCodes).replaceAll(/[\\\]-]/g, "\\$&");
+  const textBoundary = new RegExp(` {2,}(?=[\\n\\r]|$)|[\\n\\r${boundaries}]`, "g");
 
   return (source) => tokenize(source, textBoundary, lexicalByCode);
 }

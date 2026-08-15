@@ -216,7 +216,7 @@ export const feature: SyntaxFeature = {
   inline: {
     lexical: [
       {
-        marker: "<",
+        marker: Character.LessThanSign,
         scan(source, start, tokens) {
           let end = matchInlinePatternEnd(htmlComment, source, start);
           let kind = InlineKind.HtmlComment;

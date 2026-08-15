@@ -1,3 +1,4 @@
+import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
 import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../../inline/tokens.ts";
@@ -6,7 +7,7 @@ import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
 export function createMathLexicalRule(singleDollarTextMath: boolean): InlineLexicalRule {
   const minimum = singleDollarTextMath ? 1 : 2;
   return {
-    marker: "$",
+    marker: Character.DollarSign,
     scan(source, start, tokens) {
       // Math must claim its closer before ordinary tokens can span across that boundary.
       const openEnd = inlineMarkerRunEnd(source, start);

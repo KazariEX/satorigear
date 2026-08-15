@@ -174,7 +174,7 @@ export const feature: SyntaxFeature = {
   },
   inline: {
     lexical: [
-      { marker: "{", scan: scanAttribute },
+      { marker: Character.LeftCurlyBracket, scan: scanAttribute },
     ],
     syntax: [
       {

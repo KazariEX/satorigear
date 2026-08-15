@@ -24,7 +24,7 @@ type PairingResolver = (
 
 export interface DelimiterConfig {
   token: InlineKind;
-  marker: string;
+  marker: number;
   single?: { open: InlineKind; close: InlineKind };
   double?: { open: InlineKind; close: InlineKind };
   pairing:
@@ -63,7 +63,7 @@ interface TokenIsolationSpan extends SourceSpan {
 }
 
 interface CompiledDelimiterConfig {
-  marker: string;
+  marker: number;
   single?: { open: number; close: number };
   double?: { open: number; close: number };
   allowIntraword?: boolean;
@@ -435,13 +435,13 @@ function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: R
 
     const opener = runs[openerIndex];
     const use = opener.remaining >= 2 && closer.remaining >= 2 && closer.config.double ? 2 : 1;
-    const openEnd = opener.offset + (opener.start + opener.remaining) * opener.config.marker.length;
-    const openStart = openEnd - use * opener.config.marker.length;
-    const closeStart = closer.offset + closer.start * closer.config.marker.length;
-    const closeEnd = closeStart + use * closer.config.marker.length;
+    const openEnd = opener.offset + opener.start + opener.remaining;
+    const openStart = openEnd - use;
+    const closeStart = closer.offset + closer.start;
+    const closeEnd = closeStart + use;
     const pair = use === 2 ? closer.config.double : closer.config.single;
     if (!pair) {
-      throw new Error(`Delimiter ${closer.config.marker} has no replacement for a run of ${use}`);
+      throw new Error(`Delimiter ${String.fromCharCode(closer.config.marker)} has no replacement for a run of ${use}`);
     }
     addReplacement(replacements, opener.tokenIndex, { offset: openStart, end: openEnd, kind: pair.open });
     addReplacement(replacements, closer.tokenIndex, { offset: closeStart, end: closeEnd, kind: pair.close });
@@ -475,7 +475,7 @@ function resolveDelimiterRuns(
     }
     const offset = inlineTokenStart(tokens, tokenIndex);
     const end = inlineTokenEnd(tokens, tokenIndex);
-    const length = (end - offset) / config.marker.length;
+    const length = end - offset;
     if (
       config.matchWholeRun &&
       (length > 2 || (length === 1 ? !config.single : !config.double))

@@ -45,7 +45,7 @@ export const feature: SyntaxFeature = {
   inline: {
     lexical: [
       {
-        marker: "&",
+        marker: Character.Ampersand,
         scan(source, start, tokens) {
           const matchEnd = matchInlinePatternEnd(entity, source, start);
           const end = matchEnd < 0 ? start + 1 : matchEnd;
@@ -60,7 +60,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        marker: "\\",
+        marker: Character.ReverseSolidus,
         scan(source, start, tokens) {
           const next = source.charCodeAt(start + 1);
           let end = start + 1;

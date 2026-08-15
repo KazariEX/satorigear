@@ -1,3 +1,4 @@
+import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
@@ -56,7 +57,7 @@ function inlineComponentEnd(source: string, start: number): number | undefined {
 
 export const inlineLexical: readonly InlineLexicalRule[] = [
   {
-    marker: ":",
+    marker: Character.Colon,
     scan(source, start, tokens) {
       const end = inlineComponentEnd(source, start);
       if (end === void 0) {

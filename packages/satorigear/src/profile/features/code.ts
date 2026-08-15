@@ -167,7 +167,7 @@ export const feature: SyntaxFeature = {
   inline: {
     lexical: [
       {
-        marker: "`",
+        marker: Character.GraveAccent,
         scan(source, start, tokens) {
           let end = -1;
           if (source.charCodeAt(start - 1) !== Character.GraveAccent) {
