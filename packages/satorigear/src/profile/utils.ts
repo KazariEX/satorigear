@@ -23,6 +23,6 @@ export function splitReferenceTail(tokens: InlineTokenStream, index: number): In
   if (end > start + 3) {
     appendInlineToken(result, InlineKind.Text, start + 2, end - 1, decodeFlags);
   }
-  appendInlineToken(result, InlineKind.ShortcutReferenceTail, end - 1, end);
+  appendInlineToken(result, InlineKind.BracketClose, end - 1, end);
   return result;
 }

@@ -122,7 +122,7 @@ function candidates(
       continue;
     }
     if (
-      kind !== InlineKind.ShortcutReferenceTail &&
+      kind !== InlineKind.BracketClose &&
       kind !== InlineKind.LinkTail &&
       kind !== InlineKind.ReferenceTail
     ) {
@@ -232,7 +232,7 @@ function copyRange(
       normalClosers.has(tokenStart) && (
         kind === InlineKind.LinkTail ||
         kind === InlineKind.ReferenceTail ||
-        kind === InlineKind.ShortcutReferenceTail
+        kind === InlineKind.BracketClose
       )
     );
     appendInlineToken(

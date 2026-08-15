@@ -22,7 +22,7 @@ export const enum InlineKind {
   BracketOpen,
   LinkTail,
   ReferenceTail,
-  ShortcutReferenceTail,
+  BracketClose,
   ReferenceSeparatorClose,
   LinkOpen,
   LinkClose,

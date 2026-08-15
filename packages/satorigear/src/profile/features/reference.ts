@@ -251,7 +251,7 @@ const reassociateReferenceTails: InlineTokenTransform = (source, tokens, context
     }
     let closerIndex = index + 2;
     let nested = false;
-    while (closerIndex < count && inlineTokenKind(tokens, closerIndex) !== InlineKind.ShortcutReferenceTail) {
+    while (closerIndex < count && inlineTokenKind(tokens, closerIndex) !== InlineKind.BracketClose) {
       const closerKind = inlineTokenKind(tokens, closerIndex);
       nested ||= closerKind === InlineKind.BracketOpen || closerKind === InlineKind.ImageOpen;
       closerIndex++;
@@ -329,7 +329,7 @@ const markdownBracketPairs: readonly PairedTokenConfig[] = [
   },
   {
     opener: InlineKind.BracketOpen,
-    closer: InlineKind.ShortcutReferenceTail,
+    closer: InlineKind.BracketClose,
     open: InlineKind.ReferenceOpen,
     close: InlineKind.ReferenceClose,
     deactivateEarlier: [InlineKind.BracketOpen],
@@ -352,7 +352,7 @@ const markdownBracketPairs: readonly PairedTokenConfig[] = [
   },
   {
     opener: InlineKind.ImageOpen,
-    closer: InlineKind.ShortcutReferenceTail,
+    closer: InlineKind.BracketClose,
     open: InlineKind.ImageReferenceOpen,
     close: InlineKind.ImageReferenceClose,
     isolateDelimiters: true,
@@ -436,7 +436,7 @@ export const feature: SyntaxFeature = {
   },
   inline: {
     resolution: {
-      postTransform: reassociateReferenceTails,
+      transform: reassociateReferenceTails,
       pairs: markdownBracketPairs,
     },
   },

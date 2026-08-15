@@ -376,14 +376,14 @@ export const feature: SyntaxFeature = {
           }
           if (end < 0) {
             end = start + 1;
-            kind = InlineKind.ShortcutReferenceTail;
+            kind = InlineKind.BracketClose;
           }
           appendInlineToken(
             tokens,
             kind,
             start,
             end,
-            kind === InlineKind.ShortcutReferenceTail ? 0 : InlineTokenFlag.DecodeText,
+            kind === InlineKind.BracketClose ? 0 : InlineTokenFlag.DecodeText,
           );
           return end;
         },
@@ -439,7 +439,7 @@ export const feature: SyntaxFeature = {
       { kind: "leaf", token: InlineKind.ImageOpen, build: buildInlineText },
       { kind: "leaf", token: InlineKind.LinkTail, build: buildInlineText },
       { kind: "leaf", token: InlineKind.ReferenceTail, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.ShortcutReferenceTail, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.BracketClose, build: buildInlineText },
       { kind: "leaf", token: InlineKind.ReferenceSeparatorClose, build: buildInlineText },
     ],
   },

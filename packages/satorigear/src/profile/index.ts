@@ -47,8 +47,6 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
     features.push(featureFootnote);
   }
 
-  features.push(featureReference);
-
   if (options.frontmatter) {
     features.unshift(
       frontmatterFeature(
@@ -82,6 +80,9 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
   if (options.component) {
     features.push(featureComponent);
   }
+
+  // References resolve after feature-owned brackets, while their block starts still compile normally.
+  features.push(featureReference);
 
   const blockFeatures: BlockFeature[] = [];
   const inlineFeatures: InlineFeature[] = [];

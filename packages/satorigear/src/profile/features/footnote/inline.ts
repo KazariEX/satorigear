@@ -24,7 +24,7 @@ function closerIndex(tokens: InlineTokenStream, start: number, end: number): num
     const kind = inlineTokenKind(tokens, index);
     if (
       inlineTokenEnd(tokens, index) === end && (
-        kind === InlineKind.ShortcutReferenceTail ||
+        kind === InlineKind.BracketClose ||
         kind === InlineKind.ReferenceSeparatorClose
       ) ||
       kind === InlineKind.ReferenceTail && inlineTokenStart(tokens, index) + 1 === end

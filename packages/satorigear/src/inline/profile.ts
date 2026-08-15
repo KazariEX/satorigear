@@ -66,7 +66,6 @@ export interface InlineSyntaxSchema {
 export interface InlineResolutionDefinition {
   delimiters?: readonly DelimiterConfig[];
   pairs?: readonly PairedTokenConfig[];
-  postTransform?: InlineTokenTransform;
   transform?: InlineTokenTransform;
 }
 
@@ -104,7 +103,6 @@ export function compileInlineProfile(
   const lexicalRules: InlineLexicalRule[] = [];
   const syntaxDefinitions: InlineSyntaxDefinition[] = [];
   const pairs: PairedTokenConfig[] = [];
-  const postTransforms: InlineTokenTransform[] = [];
   const transforms: InlineTokenTransform[] = [];
 
   for (const feature of features) {
@@ -124,9 +122,6 @@ export function compileInlineProfile(
       }
       if (resolution.transform) {
         transforms.push(resolution.transform);
-      }
-      if (resolution.postTransform) {
-        postTransforms.push(resolution.postTransform);
       }
     }
   }
@@ -172,7 +167,6 @@ export function compileInlineProfile(
     decodeText,
     resolve: composeTransforms(
       ...transforms,
-      ...postTransforms,
       createPairingResolver(delimiters, pairs),
     ),
     schema: {
