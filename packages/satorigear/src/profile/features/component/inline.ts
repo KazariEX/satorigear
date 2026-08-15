@@ -312,6 +312,7 @@ export function transformComponentTokens(
 export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   {
     kind: "container",
+    isolateDelimiters: true,
     token: InlineKind.InlineComponentOpen,
     contentOpen: InlineKind.InlineComponentLabelOpen,
     close: InlineKind.InlineComponentLabelClose,
@@ -331,6 +332,7 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   },
   {
     kind: "pair",
+    isolateDelimiters: true,
     open: InlineKind.InlineSpanOpen,
     close: InlineKind.InlineSpanClose,
     build(open, close, sourceSpan, children) {

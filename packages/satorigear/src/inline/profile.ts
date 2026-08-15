@@ -33,6 +33,7 @@ export type InlineSyntaxDefinition =
   }
   | {
     kind: "container";
+    isolateDelimiters?: boolean;
     close: InlineKind;
     contentOpen: InlineKind;
     token: InlineKind;
@@ -40,6 +41,7 @@ export type InlineSyntaxDefinition =
   }
   | {
     kind: "pair";
+    isolateDelimiters?: boolean;
     close: InlineKind;
     open: InlineKind;
     build: InlineNodeBuilder;
@@ -149,13 +151,21 @@ export function compileInlineProfile(
         contentOpenKind: definition.contentOpen,
         build: definition.build,
       };
-      continue;
+    }
+    else {
+      pairByOpenKind[definition.open] = {
+        closeKind: definition.close,
+        build: definition.build,
+      };
     }
 
-    pairByOpenKind[definition.open] = {
-      closeKind: definition.close,
-      build: definition.build,
-    };
+    if (definition.isolateDelimiters) {
+      pairs.push({
+        opener: definition.kind === "container" ? definition.contentOpen : definition.open,
+        closer: definition.close,
+        isolateDelimiters: true,
+      });
+    }
   }
 
   return {
