@@ -11,7 +11,6 @@ import type { SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {
   token: InlineKind.AsteriskRun,
-  marker: Character.Asterisk,
   single: { open: InlineKind.EmphasisOpen, close: InlineKind.EmphasisClose },
   double: { open: InlineKind.StrongOpen, close: InlineKind.StrongClose },
   pairing: { kind: "partial", ruleOfThree: true },
@@ -19,7 +18,6 @@ const asteriskDelimiter: DelimiterConfig = {
 
 const underscoreDelimiter: DelimiterConfig = {
   token: InlineKind.UnderscoreRun,
-  marker: Character.LowLine,
   single: { open: InlineKind.EmphasisOpen, close: InlineKind.EmphasisClose },
   double: { open: InlineKind.StrongOpen, close: InlineKind.StrongClose },
   pairing: { kind: "partial", ruleOfThree: true },
@@ -28,7 +26,6 @@ const underscoreDelimiter: DelimiterConfig = {
 
 const strikethroughDelimiter: DelimiterConfig = {
   token: InlineKind.TildeRun,
-  marker: Character.Tilde,
   double: { open: InlineKind.DeleteOpen, close: InlineKind.DeleteClose },
   pairing: { kind: "whole" },
 };

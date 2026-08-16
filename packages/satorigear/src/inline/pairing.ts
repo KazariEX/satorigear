@@ -24,7 +24,6 @@ type PairingResolver = (
 
 export interface DelimiterConfig {
   token: InlineKind;
-  marker: number;
   single?: { open: InlineKind; close: InlineKind };
   double?: { open: InlineKind; close: InlineKind };
   pairing:
@@ -68,7 +67,6 @@ interface TokenIsolationSpan extends SourceSpan {
 }
 
 interface CompiledDelimiterConfig {
-  marker: number;
   single?: { open: number; close: number };
   double?: { open: number; close: number };
   allowIntraword?: boolean;
@@ -444,10 +442,8 @@ function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: R
     const openStart = openEnd - use;
     const closeStart = closer.offset + closer.start;
     const closeEnd = closeStart + use;
-    const pair = use === 2 ? closer.config.double : closer.config.single;
-    if (!pair) {
-      throw new Error(`Delimiter ${String.fromCharCode(closer.config.marker)} has no replacement for a run of ${use}`);
-    }
+    // Partial delimiters always define a single replacement; unsupported whole runs were filtered before matching.
+    const pair = use === 2 ? closer.config.double! : closer.config.single!;
     addReplacement(replacements, opener.tokenIndex, { offset: openStart, end: openEnd, kind: pair.open });
     addReplacement(replacements, closer.tokenIndex, { offset: closeStart, end: closeEnd, kind: pair.close });
     opener.remaining -= use;
@@ -571,7 +567,6 @@ export function createPairingResolver(
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[config.token] = {
-      marker: config.marker,
       single: config.single
         ? { open: config.single.open, close: config.single.close }
         : void 0,
