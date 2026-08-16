@@ -1,10 +1,10 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
-import { noBlockEntry } from "../../block/structure.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.ts";
+import type { SpannedNode } from "../../fragment/node.ts";
 import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -139,25 +139,6 @@ function emitTableRow(line: BlockLine, cells: readonly CellSpan[], out: BlockTok
   out.push(BlockKind.TableRowClose, line.end, line.end);
 }
 
-function childRules(
-  tokenStart: number,
-  rule: BlockRule,
-  context: BlockBuildContext,
-): number[] {
-  const structure = context.structure;
-  const result: number[] = [];
-  for (
-    let child = structure.firstChild(tokenStart);
-    child !== noBlockEntry;
-    child = structure.nextChild(tokenStart, child)
-  ) {
-    if (child >= 0 && structure.isRule(child, rule)) {
-      result.push(child);
-    }
-  }
-  return result;
-}
-
 const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline) => {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
@@ -174,9 +155,10 @@ const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline
 const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-  const children = childRules(tokenStart, BlockRule.TableCell, context).map((cell) => (
-    buildTableCell(cell, context, buildInlineFragment(cell, context))
-  ));
+  const children: SpannedNode<TableCell>[] = [];
+  for (let cell = tokenStart + 1; cell < close; cell += tokens.nodeLength(cell)) {
+    children.push(buildTableCell(cell, context, buildInlineFragment(cell, context)));
+  }
   return {
     type: "tableRow",
     children,
@@ -285,12 +267,16 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-          const rows = childRules(tokenStart, BlockRule.TableRow, context).map((row) => (
-            buildTableRow(row, context)
-          ));
-          const delimiter = childRules(tokenStart, BlockRule.TableDelimiter, context)[0];
-          if (!delimiter) {
-            throw new Error("Table syntax does not contain a delimiter");
+          // Tables are emitted as a header row, delimiter group, then body rows.
+          const header = tokenStart + 1;
+          const delimiter = header + tokens.nodeLength(header);
+          const rows = [buildTableRow(header, context)];
+          for (
+            let row = delimiter + tokens.nodeLength(delimiter);
+            row < close;
+            row += tokens.nodeLength(row)
+          ) {
+            rows.push(buildTableRow(row, context));
           }
           return {
             type: "table",
