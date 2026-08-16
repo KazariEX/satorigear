@@ -30,6 +30,7 @@ export interface FeatureOptions {
   math?: boolean | MathOptions;
   strikethrough?: boolean | StrikethroughOptions;
   table?: boolean;
+  taskList?: boolean;
 }
 
 // Compilation builds the hot dispatch tables once; documents only retain the immutable result.
@@ -38,7 +39,7 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
     featureHeading,
     featureBreak,
     featureBlockQuote,
-    featureList,
+    featureList(options.taskList),
     featureCode,
     featureHtml,
   ];

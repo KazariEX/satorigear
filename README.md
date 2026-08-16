@@ -46,6 +46,7 @@ const parser = createParser({
     math: true,
     strikethrough: true,
     table: true,
+    taskList: true,
   },
 });
 

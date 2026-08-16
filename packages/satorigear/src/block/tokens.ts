@@ -296,8 +296,16 @@ export class BlockTokenStream {
     return this.#fields[index * blockTokenStride] as BlockKind;
   }
 
+  setKind(index: number, kind: BlockKind): void {
+    this.#fields[index * blockTokenStride] = kind;
+  }
+
   start(index: number): number {
     return this.#position(this.#fields[index * blockTokenStride + 1]);
+  }
+
+  setStart(index: number, start: number): void {
+    this.#fields[index * blockTokenStride + 1] = start;
   }
 
   end(index: number): number {

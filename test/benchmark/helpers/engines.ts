@@ -38,6 +38,7 @@ export function createFeatureEngines(): readonly Engine[] {
       math: true,
       strikethrough: true,
       table: true,
+      taskList: true,
     },
   });
   const satteriOptions = {
