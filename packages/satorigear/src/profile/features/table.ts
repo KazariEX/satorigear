@@ -191,17 +191,11 @@ function tableAlignment(
   tokenStart: number,
   context: BlockBuildContext,
 ): AlignType[] {
-  const structure = context.structure;
+  const tokens = context.structure.tokens;
+  const tokenEnd = tokenStart + tokens.nodeLength(tokenStart);
   const result: AlignType[] = [];
-  for (
-    let child = structure.firstChild(tokenStart);
-    child !== noBlockEntry;
-    child = structure.nextChild(tokenStart, child)
-  ) {
-    if (child >= 0) {
-      continue;
-    }
-    const kind = structure.tokens.kind(structure.leafToken(child));
+  for (let token = tokenStart; token < tokenEnd; token++) {
+    const kind = tokens.kind(token);
     result.push(
       kind === BlockKind.TableAlignLeft
         ? "left"
