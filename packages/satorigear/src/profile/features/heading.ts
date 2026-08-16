@@ -7,7 +7,6 @@ import {
   blockToken,
   directBlockToken,
 } from "../../fragment/block.ts";
-import { buildInlineChildren } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -77,12 +76,12 @@ export const feature: SyntaxFeature = {
           close: BlockKind.HeadingClose,
         },
         inlineContent: true,
-        build(tokenStart, context) {
+        build(tokenStart, context, inline) {
           const marker = blockToken(tokenStart, BlockKind.AtxHeadingOpen, context);
           return {
             type: "heading",
             depth: context.structure.tokens.end(marker) - context.structure.tokens.start(marker) as Heading["depth"],
-            children: buildInlineChildren(tokenStart, context, true),
+            children: inline!.children,
             position: {
               start: context.structure.tokens.start(marker),
               end: blockEnd(tokenStart, context),
@@ -101,12 +100,12 @@ export const feature: SyntaxFeature = {
           close: BlockKind.HeadingClose,
         },
         inlineContent: true,
-        build(tokenStart, context) {
+        build(tokenStart, context, inline) {
           const levelOne = directBlockToken(tokenStart, BlockKind.SetextHeading1Open, context);
           if (levelOne === void 0) {
             blockToken(tokenStart, BlockKind.SetextHeading2Open, context);
           }
-          const children = buildInlineChildren(tokenStart, context);
+          const children = inline!.children;
           return {
             type: "heading",
             depth: levelOne === void 0 ? 2 : 1,

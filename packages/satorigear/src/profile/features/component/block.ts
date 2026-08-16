@@ -14,7 +14,7 @@ import {
   buildBlockChildren,
   directBlockToken,
 } from "../../../fragment/block.ts";
-import { buildInlineChildren } from "../../../fragment/inline.ts";
+import { buildInlineFragment } from "../../../fragment/inline.ts";
 import {
   attributesEnd,
   closingBracket,
@@ -387,12 +387,12 @@ function directRule(
   }
 }
 
-const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
+const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context, inline) => {
   const open = blockToken(tokenStart, BlockKind.BlockComponentLabelOpen, context);
   const close = blockToken(tokenStart, BlockKind.BlockComponentLabelClose, context);
   return {
     type: "paragraph",
-    children: buildInlineChildren(tokenStart, context, true),
+    children: inline!.children,
     position: {
       start: context.structure.tokens.start(open),
       end: context.structure.tokens.end(close),
@@ -459,7 +459,7 @@ export const blockRules: BlockFeature["rules"] = [
       const label = directRule(tokenStart, "BlockComponentLabel", context);
       const children: SpannedNode<RootContent>[] = [];
       if (label) {
-        children.push(buildBlockLabel(label, context));
+        children.push(buildBlockLabel(label, context, buildInlineFragment(label, context)));
       }
       children.push(...buildBlockChildren(tokenStart, context));
       const opening = context.structure.tokens.text(context.source, open);

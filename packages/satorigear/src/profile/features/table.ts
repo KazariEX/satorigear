@@ -3,7 +3,7 @@ import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { noBlockEntry } from "../../block/structure.ts";
 import { type BlockBuildContext, type BlockNodeBuilder, blockToken } from "../../fragment/block.ts";
-import { buildInlineChildren } from "../../fragment/inline.ts";
+import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -158,12 +158,12 @@ function childRules(
   return result;
 }
 
-const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context) => {
+const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline) => {
   const open = blockToken(tokenStart, BlockKind.TableCellOpen, context);
   const close = blockToken(tokenStart, BlockKind.TableCellClose, context);
   return {
     type: "tableCell",
-    children: buildInlineChildren(tokenStart, context, true),
+    children: inline!.children,
     position: {
       start: context.structure.tokens.start(open),
       end: context.structure.tokens.start(close),
@@ -175,7 +175,7 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
   const open = blockToken(tokenStart, BlockKind.TableRowOpen, context);
   const close = blockToken(tokenStart, BlockKind.TableRowClose, context);
   const children = childRules(tokenStart, "TableCell", context).map((cell) => (
-    buildTableCell(cell, context)
+    buildTableCell(cell, context, buildInlineFragment(cell, context))
   ));
   return {
     type: "tableRow",

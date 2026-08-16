@@ -12,24 +12,25 @@ import {
   inlineTokenStart,
   setInlineTokenFlags,
 } from "../../../inline/tokens.ts";
-import {
-  carryTerminalAttributes,
-  hasTerminalAttributes,
-  mergeAttributes,
-  takeTerminalAttributes,
-} from "./carrier.ts";
-import { attributesEnd, parseAttributes } from "./syntax.ts";
+import { attributesEnd, mergeAttributes, parseAttributes } from "./syntax.ts";
 import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "./types.ts";
 
 type AttributableNode = SpannedNode<PhrasingContent> & { attributes?: Attributes };
 
-const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (tokenStart, context) => {
-  const result = build(tokenStart, context) as SpannedNode<Paragraph | Heading>;
-  const attributes = takeTerminalAttributes(result.children);
-  if (attributes) {
-    result.attributes = attributes;
+// Terminal attributes belong to the enclosing block, so this feature extends the transient
+// inline result instead of attaching private state to its MDAST children array.
+declare module "../../../fragment/inline.ts" {
+  interface InlineFragment {
+    attributes?: Attributes;
+  }
+}
+
+const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (tokenStart, context, inline) => {
+  const result = build(tokenStart, context, inline) as SpannedNode<Paragraph | Heading>;
+  if (inline?.attributes) {
+    result.attributes = inline.attributes;
   }
   return result;
 };
@@ -182,7 +183,7 @@ export const feature: SyntaxFeature = {
         token: InlineKind.AttributesToken,
         apply(tokenIndex, sourceSpan, context, target) {
           // mdast extensions may declare unrelated `attributes` shapes; this parser only emits ours.
-          const previous = target.at(-1) as AttributableNode | undefined;
+          const previous = target.children.at(-1) as AttributableNode | undefined;
           const parsed = parseAttributes(
             context.view.text,
             inlineTokenStart(context.tokens, tokenIndex),
@@ -197,10 +198,15 @@ export const feature: SyntaxFeature = {
             terminal && (
               detached ||
               previous.type === "text" ||
-              hasTerminalAttributes(target)
+              target.attributes !== void 0
             )
           ) {
-            carryTerminalAttributes(target, parsed.attributes);
+            if (target.attributes) {
+              mergeAttributes(target.attributes, parsed.attributes);
+            }
+            else {
+              target.attributes = parsed.attributes;
+            }
             return true;
           }
           if (previous.attributes) {

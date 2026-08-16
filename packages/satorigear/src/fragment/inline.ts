@@ -22,12 +22,15 @@ export interface InlineBuildContext {
   view: SourceView;
 }
 
-interface InlineOutput {
+export interface InlineFragment {
+  children: SpannedNode<PhrasingContent>[];
+}
+
+interface InlineOutput extends InlineFragment {
   // Nested semantic nodes share the region context but own their output position and gaps.
   cursor: number | undefined;
   gapEnd: number;
   gapStart: number;
-  target: SpannedNode<PhrasingContent>[];
 }
 
 export type InlineLeafBuilder = (
@@ -48,14 +51,14 @@ export type InlineTokenDecorator = (
   tokenIndex: number,
   sourceSpan: SourceSpan,
   context: InlineBuildContext,
-  target: SpannedNode<PhrasingContent>[],
+  target: InlineFragment,
 ) => boolean;
 
 export type InlineTokenHandler = (
   tokenIndex: number,
   sourceSpan: SourceSpan,
   context: InlineBuildContext,
-  target: SpannedNode<PhrasingContent>[],
+  target: InlineFragment,
 ) => SpannedNode<PhrasingContent> | boolean | undefined;
 
 function lineStart(source: string, offset: number): number {
@@ -112,7 +115,7 @@ function appendInlineGap(
   output.gapEnd = -1;
   const gapSpan = context.view.mapSpan(start, end);
   appendText(
-    output.target,
+    output.children,
     context.decodeText(context.view.text.slice(start, end).replace(/[\r\n]/g, "")),
     gapSpan.start,
     gapSpan.end,
@@ -124,7 +127,7 @@ function appendInline(
   context: InlineBuildContext,
   value: SpannedNode<PhrasingContent>,
 ): void {
-  const { target } = output;
+  const target = output.children;
   const nextLineOffset = value.position.start;
   const newline = value.type === "text" && value.value.startsWith("\n");
   if (output.gapStart >= 0) {
@@ -163,7 +166,7 @@ function appendInlineLeaf(
   if (!handle) {
     throw new Error(`Unexpected inline token kind ${kind}`);
   }
-  const value = handle(tokenIndex, sourceSpan, context, output.target);
+  const value = handle(tokenIndex, sourceSpan, context, output);
   if (typeof value === "boolean") {
     return value;
   }
@@ -188,11 +191,9 @@ function appendInlineRange(
   startToken: number,
   endToken: number,
   context: InlineBuildContext,
-  target: SpannedNode<PhrasingContent>[],
-  cursor?: number,
+  output: InlineOutput,
   closeKind?: number,
 ): number {
-  const output: InlineOutput = { cursor, gapEnd: -1, gapStart: -1, target };
   let index = startToken;
   while (index < endToken) {
     const kind = inlineTokenKind(context.tokens, index);
@@ -250,12 +251,17 @@ function buildInlineSemantic(
       inlineTokenKind(context.tokens, next) === container.contentOpenKind
     ) {
       const contentStart = inlineTokenEnd(context.tokens, next++);
+      const childOutput: InlineOutput = {
+        children,
+        cursor: contentStart,
+        gapEnd: -1,
+        gapStart: -1,
+      };
       closeToken = appendInlineRange(
         next,
         endToken,
         context,
-        children,
-        contentStart,
+        childOutput,
         container.closeKind,
       );
       if (
@@ -289,12 +295,17 @@ function buildInlineSemantic(
   }
   const contentStart = inlineTokenEnd(context.tokens, openToken);
   const children: SpannedNode<PhrasingContent>[] = [];
+  const childOutput: InlineOutput = {
+    children,
+    cursor: contentStart,
+    gapEnd: -1,
+    gapStart: -1,
+  };
   const closeToken = appendInlineRange(
     openToken + 1,
     endToken,
     context,
-    children,
-    contentStart,
+    childOutput,
     pair.closeKind,
   );
   if (
@@ -320,18 +331,15 @@ function buildInlineSemantic(
   return closeToken + 1;
 }
 
-export function buildInlineChildren(
+export function buildInlineFragment(
   tokenStart: number,
   context: BlockBuildContext,
-  allowEmpty = false,
-): SpannedNode<PhrasingContent>[] {
-  const region = context.inline.take(tokenStart);
+): InlineFragment {
+  const region = context.cursor.take(tokenStart);
   if (!region) {
-    const rule = context.structure.ruleNameOf(tokenStart);
-    if (allowEmpty) {
-      return [];
-    }
-    throw new Error(`Expected ${rule} syntax to contain inline content`);
+    return {
+      children: [],
+    };
   }
   const inlineContext: InlineBuildContext = {
     blockRule: region.rule,
@@ -342,21 +350,26 @@ export function buildInlineChildren(
     tokens: region.tokens,
     view: region.view,
   };
-  const result: SpannedNode<PhrasingContent>[] = [];
+  const result: InlineOutput = {
+    children: [],
+    cursor: void 0,
+    gapEnd: -1,
+    gapStart: -1,
+  };
   appendInlineRange(
     0,
     inlineTokenCount(region.tokens),
     inlineContext,
     result,
   );
-  const last = result.at(-1);
+  const last = result.children.at(-1);
   if (last?.type === "text") {
     const end = trailingWhitespaceStart(last.value);
     const removed = last.value.length - end;
     last.value = last.value.slice(0, end);
     last.position.end -= removed;
     if (!last.value) {
-      result.pop();
+      result.children.pop();
     }
   }
   return result;

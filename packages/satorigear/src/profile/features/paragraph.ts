@@ -1,7 +1,6 @@
 import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, indentOf, isBlank } from "../../block/lines.ts";
 import { blockEnd } from "../../fragment/block.ts";
-import { buildInlineChildren } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import { setextMarkerAt } from "./heading.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -73,8 +72,8 @@ export const feature: SyntaxFeature = {
           close: BlockKind.ParagraphClose,
         },
         inlineContent: true,
-        build(tokenStart, context) {
-          const children = buildInlineChildren(tokenStart, context);
+        build(tokenStart, context, inline) {
+          const children = inline!.children;
           return {
             type: "paragraph",
             children,

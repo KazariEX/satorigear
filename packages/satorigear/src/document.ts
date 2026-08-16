@@ -124,7 +124,7 @@ export class DocumentImpl implements Document {
     // Changed regions share one build workspace; no syntax reference escapes the resulting fragments.
     const context: BlockBuildContext = {
       structure: this.#blockStructure,
-      inline: new InlineRegionCursor(regions),
+      cursor: new InlineRegionCursor(regions),
       profile: this.#profile.inline,
       source: this.source,
     };
@@ -161,7 +161,7 @@ export class DocumentImpl implements Document {
     const regions = resolveInlineRegions(source, profile.inline, blockStructure);
     const context: BlockBuildContext = {
       structure: blockStructure,
-      inline: new InlineRegionCursor(regions),
+      cursor: new InlineRegionCursor(regions),
       profile: profile.inline,
       source,
     };

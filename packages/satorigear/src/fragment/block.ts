@@ -1,6 +1,7 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
 import { lineContentEnd } from "../block/lines.ts";
 import { type BlockStructure, noBlockEntry } from "../block/structure.ts";
+import { buildInlineFragment, type InlineFragment } from "./inline.ts";
 import type { BlockKind } from "../block/kinds.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
@@ -9,7 +10,7 @@ import type { SpannedNode } from "./node.ts";
 
 export interface BlockBuildContext {
   structure: BlockStructure;
-  inline: InlineRegionCursor;
+  cursor: InlineRegionCursor;
   profile: InlineProfile;
   source: string;
 }
@@ -18,6 +19,7 @@ export interface BlockBuildContext {
 export type BlockNodeBuilder<T extends object = RootContent> = (
   tokenStart: number,
   context: BlockBuildContext,
+  inline?: InlineFragment,
 ) => SpannedNode<T>;
 
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
@@ -86,7 +88,15 @@ export const buildBlockNode = <T extends object = TopLevelContent>(
   if (!build) {
     throw new Error(`Unexpected block syntax rule: ${rule.name}`);
   }
-  return build(tokenStart, context) as SpannedNode<T>;
+  return (
+    rule.inlineContent
+      ? build(
+        tokenStart,
+        context,
+        buildInlineFragment(tokenStart, context),
+      )
+      : build(tokenStart, context)
+  ) as SpannedNode<T>;
 };
 
 export const buildBlockChildren: (

@@ -91,6 +91,12 @@ export function assignAttribute(attributes: Attributes, name: string, value: Att
   }
 }
 
+export function mergeAttributes(target: Attributes, source: Attributes): void {
+  for (const key in source) {
+    assignAttribute(target, key, source[key]);
+  }
+}
+
 export interface ParsedAttributes {
   attributes: Attributes;
   end: number;
