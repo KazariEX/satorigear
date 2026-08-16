@@ -5,12 +5,12 @@ import { InlineKind } from "../../constants/inline.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
 import {
   appendInlineToken,
-  copyInlineToken,
   inlineTokenCount,
   inlineTokenEnd,
   inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
+  type InlineTokenStream,
   inlineTokenStride,
   inlineTokenText,
 } from "../../inline/tokens.ts";
@@ -18,7 +18,7 @@ import { normalizeAssociationLabel, splitReferenceTail } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { PairedTokenConfig } from "../../inline/pairing.ts";
-import type { InlineTokenRewrite } from "../../inline/profile.ts";
+import type { InlineResolutionContext } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface LinkDefinitionFields {
@@ -225,70 +225,60 @@ function linkDefinitionAt(
   return { end: lineIndex + 1, fields };
 }
 
-// Recover the one-token overlap between adjacent full-reference candidates before pairing.
-const reassociateReferenceTails: InlineTokenRewrite = (source, tokens, context) => {
-  const count = inlineTokenCount(tokens);
-  let result: number[] | undefined;
-  for (let index = 0; index < count; index++) {
-    const kind = inlineTokenKind(tokens, index);
-    const label = kind === InlineKind.ReferenceTail ? inlineTokenText(source, tokens, index).slice(2, -1) : "";
-    if (kind !== InlineKind.ReferenceTail || context.hasDefinition(normalizeAssociationLabel(label))) {
-      if (result) {
-        copyInlineToken(result, tokens, index);
-      }
-      continue;
-    }
-    const openerIndex = index + 1;
-    if (
-      openerIndex >= count ||
-      inlineTokenKind(tokens, openerIndex) !== InlineKind.BracketOpen ||
-      inlineTokenStart(tokens, openerIndex) !== inlineTokenEnd(tokens, index)
-    ) {
-      if (result) {
-        copyInlineToken(result, tokens, index);
-      }
-      continue;
-    }
-    let closerIndex = index + 2;
-    let nested = false;
-    while (closerIndex < count && inlineTokenKind(tokens, closerIndex) !== InlineKind.BracketClose) {
-      const closerKind = inlineTokenKind(tokens, closerIndex);
-      nested ||= closerKind === InlineKind.BracketOpen || closerKind === InlineKind.ImageOpen;
-      closerIndex++;
-    }
-    if (closerIndex === count || nested) {
-      if (result) {
-        copyInlineToken(result, tokens, index);
-      }
-      continue;
-    }
-    const nextLabel = source.slice(inlineTokenEnd(tokens, openerIndex), inlineTokenStart(tokens, closerIndex));
-    if (!context.hasDefinition(normalizeAssociationLabel(nextLabel))) {
-      if (result) {
-        copyInlineToken(result, tokens, index);
-      }
-      continue;
-    }
-    if (!result) {
-      result = [];
-      for (let prefix = 0; prefix < index; prefix++) {
-        copyInlineToken(result, tokens, prefix);
-      }
-    }
-    const split = splitReferenceTail(tokens, index);
-    result.push(...split.slice(0, -inlineTokenStride));
-    const offset = inlineTokenEnd(tokens, index) - 1;
-    appendInlineToken(
-      result,
-      InlineKind.ReferenceTail,
-      offset,
-      inlineTokenEnd(tokens, closerIndex),
-      inlineTokenFlags(tokens, index),
-    );
-    index = closerIndex;
+// Recover the one-token overlap between adjacent full-reference candidates during pairing.
+function splitReferenceTailForPairing(
+  source: string,
+  tokens: InlineTokenStream,
+  index: number,
+  context: InlineResolutionContext,
+): InlineTokenStream {
+  const label = inlineTokenText(source, tokens, index).slice(2, -1);
+  if (context.hasDefinition(normalizeAssociationLabel(label))) {
+    return splitReferenceTail(tokens, index);
   }
-  return result ?? tokens;
-};
+
+  const openerIndex = index + 1;
+  if (
+    openerIndex >= inlineTokenCount(tokens) ||
+    inlineTokenKind(tokens, openerIndex) !== InlineKind.BracketOpen ||
+    inlineTokenStart(tokens, openerIndex) !== inlineTokenEnd(tokens, index)
+  ) {
+    return splitReferenceTail(tokens, index);
+  }
+
+  let closerIndex = openerIndex + 1;
+  while (closerIndex < inlineTokenCount(tokens)) {
+    const kind = inlineTokenKind(tokens, closerIndex);
+    if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
+      return splitReferenceTail(tokens, index);
+    }
+    if (kind === InlineKind.BracketClose) {
+      break;
+    }
+    closerIndex++;
+  }
+  if (closerIndex === inlineTokenCount(tokens)) {
+    return splitReferenceTail(tokens, index);
+  }
+
+  const nextLabel = source.slice(
+    inlineTokenEnd(tokens, openerIndex),
+    inlineTokenStart(tokens, closerIndex),
+  );
+  if (!context.hasDefinition(normalizeAssociationLabel(nextLabel))) {
+    return splitReferenceTail(tokens, index);
+  }
+
+  const result = splitReferenceTail(tokens, index).slice(0, -inlineTokenStride);
+  appendInlineToken(
+    result,
+    InlineKind.ReferenceTail,
+    inlineTokenEnd(tokens, index) - 1,
+    inlineTokenEnd(tokens, closerIndex),
+    inlineTokenFlags(tokens, index),
+  );
+  return result;
+}
 
 const activateReference: NonNullable<PairedTokenConfig["activate"]> = ({
   source,
@@ -301,69 +291,6 @@ const activateReference: NonNullable<PairedTokenConfig["activate"]> = ({
   const explicit = closer.startsWith("][") ? closer.slice(2, -1) : "";
   return state.hasDefinition(normalizeAssociationLabel(explicit || content));
 };
-
-const markdownBracketPairs: readonly PairedTokenConfig[] = [
-  {
-    opener: InlineKind.BracketOpen,
-    closer: InlineKind.LinkTail,
-    open: InlineKind.LinkOpen,
-    close: InlineKind.LinkClose,
-    deactivateEarlier: [InlineKind.BracketOpen],
-    isolateDelimiters: true,
-  },
-  {
-    opener: InlineKind.ImageOpen,
-    closer: InlineKind.LinkTail,
-    open: InlineKind.ImageLinkOpen,
-    close: InlineKind.ImageLinkClose,
-  },
-  {
-    opener: InlineKind.BracketOpen,
-    closer: InlineKind.ReferenceTail,
-    open: InlineKind.ReferenceOpen,
-    close: InlineKind.ReferenceClose,
-    deactivateEarlier: [InlineKind.BracketOpen],
-    isolateDelimiters: true,
-    activate: activateReference,
-    splitUnmatchedCloser: splitReferenceTail,
-  },
-  {
-    opener: InlineKind.BracketOpen,
-    closer: InlineKind.BracketClose,
-    open: InlineKind.ReferenceOpen,
-    close: InlineKind.ReferenceClose,
-    deactivateEarlier: [InlineKind.BracketOpen],
-    isolateDelimiters: true,
-    activate: activateReference,
-    content: {
-      requireNonWhitespace: true,
-      maxCharacters: 999,
-      forbidTokens: [InlineKind.BracketOpen, InlineKind.ImageOpen],
-    },
-  },
-  {
-    opener: InlineKind.ImageOpen,
-    closer: InlineKind.ReferenceTail,
-    open: InlineKind.ImageReferenceOpen,
-    close: InlineKind.ImageReferenceClose,
-    isolateDelimiters: true,
-    activate: activateReference,
-    splitUnmatchedCloser: splitReferenceTail,
-  },
-  {
-    opener: InlineKind.ImageOpen,
-    closer: InlineKind.BracketClose,
-    open: InlineKind.ImageReferenceOpen,
-    close: InlineKind.ImageReferenceClose,
-    isolateDelimiters: true,
-    activate: activateReference,
-    content: {
-      requireNonWhitespace: true,
-      maxCharacters: 999,
-      forbidTokens: [InlineKind.BracketOpen, InlineKind.ImageOpen],
-    },
-  },
-];
 
 export const feature: SyntaxFeature = {
   block: {
@@ -435,7 +362,79 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    pairs: markdownBracketPairs,
-    rewrite: reassociateReferenceTails,
+    pairs: [
+      {
+        opener: InlineKind.BracketOpen,
+        closer: InlineKind.LinkTail,
+        open: InlineKind.LinkOpen,
+        close: InlineKind.LinkClose,
+        deactivateEarlier: [
+          InlineKind.BracketOpen,
+        ],
+        isolateDelimiters: true,
+      },
+      {
+        opener: InlineKind.ImageOpen,
+        closer: InlineKind.LinkTail,
+        open: InlineKind.ImageLinkOpen,
+        close: InlineKind.ImageLinkClose,
+      },
+      {
+        opener: InlineKind.BracketOpen,
+        closer: InlineKind.ReferenceTail,
+        open: InlineKind.ReferenceOpen,
+        close: InlineKind.ReferenceClose,
+        deactivateEarlier: [
+          InlineKind.BracketOpen,
+        ],
+        isolateDelimiters: true,
+        activate: activateReference,
+        splitUnmatchedCloser: splitReferenceTailForPairing,
+      },
+      {
+        opener: InlineKind.BracketOpen,
+        closer: InlineKind.BracketClose,
+        open: InlineKind.ReferenceOpen,
+        close: InlineKind.ReferenceClose,
+        deactivateEarlier: [
+          InlineKind.BracketOpen,
+        ],
+        isolateDelimiters: true,
+        activate: activateReference,
+        content: {
+          requireNonWhitespace: true,
+          maxCharacters: 999,
+          forbidTokens: [
+            InlineKind.BracketOpen,
+            InlineKind.ImageOpen,
+          ],
+        },
+      },
+      {
+        opener: InlineKind.ImageOpen,
+        closer: InlineKind.ReferenceTail,
+        open: InlineKind.ImageReferenceOpen,
+        close: InlineKind.ImageReferenceClose,
+        isolateDelimiters: true,
+        activate: activateReference,
+        splitUnmatchedCloser: splitReferenceTailForPairing,
+      },
+      {
+        opener: InlineKind.ImageOpen,
+        closer: InlineKind.BracketClose,
+        open: InlineKind.ImageReferenceOpen,
+        close: InlineKind.ImageReferenceClose,
+        isolateDelimiters: true,
+        activate: activateReference,
+        content: {
+          requireNonWhitespace: true,
+          maxCharacters: 999,
+          forbidTokens: [
+            InlineKind.BracketOpen,
+            InlineKind.ImageOpen,
+          ],
+        },
+      },
+    ],
   },
 };

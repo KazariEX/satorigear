@@ -46,7 +46,12 @@ export interface PairedTokenConfig {
     forbidTokens?: readonly InlineKind[];
   };
   activate?: (context: PairedTokenActivationContext) => boolean;
-  splitUnmatchedCloser?: (tokens: InlineTokenStream, tokenIndex: number) => InlineTokenStream;
+  splitUnmatchedCloser?: (
+    source: string,
+    tokens: InlineTokenStream,
+    tokenIndex: number,
+    state: InlineResolutionContext,
+  ) => InlineTokenStream;
 }
 
 interface PairedTokenActivationContext {
@@ -616,7 +621,9 @@ export function createPairingResolver(
     let expanded: number[] | undefined;
     for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
       const split = pairIndex.splitByCloser[inlineTokenKind(tokens, tokenIndex)];
-      const fragments = split && !paired.matchedClosers[tokenIndex] ? split(tokens, tokenIndex) : void 0;
+      const fragments = split && !paired.matchedClosers[tokenIndex]
+        ? split(source, tokens, tokenIndex, state)
+        : void 0;
       if (fragments) {
         if (!expanded) {
           expanded = [];
@@ -626,6 +633,18 @@ export function createPairingResolver(
         }
         for (const value of fragments) {
           expanded.push(value);
+        }
+        // A structural split may absorb adjacent raw tokens; do not copy their
+        // old representation after the replacement has taken ownership of the range.
+        const fragmentEnd = inlineTokenEnd(
+          fragments,
+          inlineTokenCount(fragments) - 1,
+        );
+        while (
+          tokenIndex + 1 < count &&
+          inlineTokenStart(tokens, tokenIndex + 1) < fragmentEnd
+        ) {
+          tokenIndex++;
         }
       }
       else if (expanded) {
