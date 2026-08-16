@@ -1,13 +1,9 @@
-import {
-  type BlockRecord,
-  type BlockStructure,
-  type BlockStructureChange,
-  noBlockEntry,
-} from "./block/structure.ts";
 import { BlockKind } from "./constants/block.ts";
 import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
+import type { BlockRecord, BlockStructure, BlockStructureChange } from "./block/structure.ts";
+import type { BlockTokenStream } from "./block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
 
 interface SyntaxBlock {
@@ -46,6 +42,7 @@ export class SyntaxState {
   update(source: string, change?: BlockStructureChange, stableBlockCount = 0): void {
     // 1. Keep the scanner-stable prefix and collect definitions and inline bindings through the rebuilt range.
     const structure = this.#structure;
+    const tokens = structure.tokens;
     const previousBlocks = this.#blocks;
     const oldStart = change?.oldStart ?? 0;
     const oldEnd = change?.oldEnd ?? 0;
@@ -67,54 +64,37 @@ export class SyntaxState {
     }
 
     const bindings: InlineRegionBinding[] = [];
-    const collectNode = (
-      tokenStart: number,
-      offset: number,
-      tokenBase: number,
-      blockIndex: number,
-    ): void => {
-      const rule = structure.ruleOf(tokenStart);
-      const definitionKey = rule.definitionKey;
-      if (definitionKey) {
-        const key = definitionKey(structure.tokens, tokenBase);
-        (definitionEntries ??= []).push({ blockIndex, key });
-        definitions.add(key);
-      }
-      if (rule.inlineContent) {
-        const inlineView = inlineViewOf(source, structure, tokenStart);
-        if (inlineView) {
-          bindings.push({
-            offset,
-            rule: rule.rule,
-            tokenStart,
-            view: inlineView,
-          });
-        }
-        return;
-      }
-      for (
-        let child = structure.firstChild(tokenStart);
-        child !== noBlockEntry;
-        child = structure.nextChild(tokenStart, child)
-      ) {
-        if (child >= 0) {
-          collectNode(
-            child,
-            structure.tokens.start(child),
-            child,
-            blockIndex,
-          );
-        }
-      }
-    };
     // One flat list records changed-block boundaries without allocating a binding array per block.
     const bindingOffsets: number[] = [];
     for (let index = stableBlockCount; index < newEnd; index++) {
       const record = structure.records[index];
-      const tokenBase = record.tokenStart;
-      const offset = structure.tokens.start(tokenBase);
       bindingOffsets.push(bindings.length);
-      collectNode(record.tokenStart, offset, tokenBase, index);
+      // Semantic nodes are the non-zero ranges in the flat block token stream.
+      for (let token = record.tokenStart; token < record.tokenEnd; token++) {
+        const nodeLength = tokens.nodeLength(token);
+        if (nodeLength === 0) {
+          continue;
+        }
+        const rule = structure.ruleOf(token);
+        const definitionKey = rule.definitionKey;
+        if (definitionKey) {
+          const key = definitionKey(tokens, token);
+          (definitionEntries ??= []).push({ blockIndex: index, key });
+          definitions.add(key);
+        }
+        if (rule.inlineContent) {
+          const inlineView = inlineViewOf(source, tokens, token, nodeLength);
+          if (inlineView) {
+            bindings.push({
+              offset: tokens.start(token),
+              rule: rule.rule,
+              tokenStart: token,
+              view: inlineView,
+            });
+          }
+          token += nodeLength - 1;
+        }
+      }
       blocks.push({
         record,
         regions: emptyArray,
@@ -243,36 +223,32 @@ export function resolveInlineRegions(
 ): readonly ResolvedInlineRegion[] {
   const definitions = new Set<string>();
   const regions: ResolvedInlineRegion[] = [];
+  const tokens = structure.tokens;
 
-  const collect = (tokenStart: number, tokenBase: number): void => {
-    const rule = structure.ruleOf(tokenStart);
-    if (rule.definitionKey) {
-      definitions.add(rule.definitionKey(structure.tokens, tokenBase));
-    }
-    if (rule.inlineContent) {
-      const inlineView = inlineViewOf(source, structure, tokenStart);
-      if (inlineView) {
-        regions.push({
-          rule: rule.rule,
-          tokenStart,
-          tokens: emptyArray,
-          view: inlineView,
-        });
-      }
-      return;
-    }
-    for (
-      let child = structure.firstChild(tokenStart);
-      child !== noBlockEntry;
-      child = structure.nextChild(tokenStart, child)
-    ) {
-      if (child >= 0) {
-        collect(child, child);
-      }
-    }
-  };
   for (const record of structure.records) {
-    collect(record.tokenStart, record.tokenStart);
+    // Semantic nodes are the non-zero ranges in the flat block token stream.
+    for (let token = record.tokenStart; token < record.tokenEnd; token++) {
+      const nodeLength = tokens.nodeLength(token);
+      if (nodeLength === 0) {
+        continue;
+      }
+      const rule = structure.ruleOf(token);
+      if (rule.definitionKey) {
+        definitions.add(rule.definitionKey(tokens, token));
+      }
+      if (rule.inlineContent) {
+        const inlineView = inlineViewOf(source, tokens, token, nodeLength);
+        if (inlineView) {
+          regions.push({
+            rule: rule.rule,
+            tokenStart: token,
+            tokens: emptyArray,
+            view: inlineView,
+          });
+        }
+        token += nodeLength - 1;
+      }
+    }
   }
 
   // One-shot parsing needs definition visibility, but has no future edit to track dependencies for.
@@ -293,30 +269,25 @@ export function resolveInlineRegions(
 
 function inlineViewOf(
   source: string,
-  structure: BlockStructure,
+  tokens: BlockTokenStream,
   tokenStart: number,
+  nodeLength: number,
 ): SourceView | undefined {
   let firstStart = -1;
   let firstEnd = -1;
   let spans: SourceSpan[] | undefined;
-  for (
-    let entry = structure.firstChild(tokenStart);
-    entry !== noBlockEntry;
-    entry = structure.nextChild(tokenStart, entry)
-  ) {
-    if (entry < 0) {
-      const token = structure.leafToken(entry);
-      if (structure.tokens.kind(token) === BlockKind.InlineChunk) {
-        const start = structure.tokens.start(token);
-        const end = structure.tokens.end(token);
-        if (firstStart < 0) {
-          firstStart = start;
-          firstEnd = end;
-        }
-        else {
-          spans ??= [{ start: firstStart, end: firstEnd }];
-          spans.push({ start, end });
-        }
+  const tokenEnd = tokenStart + nodeLength;
+  for (let token = tokenStart + 1; token < tokenEnd; token++) {
+    if (tokens.kind(token) === BlockKind.InlineChunk) {
+      const start = tokens.start(token);
+      const end = tokens.end(token);
+      if (firstStart < 0) {
+        firstStart = start;
+        firstEnd = end;
+      }
+      else {
+        spans ??= [{ start: firstStart, end: firstEnd }];
+        spans.push({ start, end });
       }
     }
   }
