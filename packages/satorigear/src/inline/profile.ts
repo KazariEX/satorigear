@@ -1,5 +1,5 @@
 import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./lexer.ts";
-import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
+import { createPairingResolver, type DelimiterConfig } from "./pairing.ts";
 import type { InlineKind } from "../constants/inline.ts";
 import type {
   InlineLeafBuilder,
@@ -67,7 +67,6 @@ export interface InlineFeature {
   /** Resolve token relationships before semantic builders consume them. */
   resolve?: {
     delimiters?: readonly DelimiterConfig[];
-    pairs?: readonly PairedTokenConfig[];
     transform?: InlineTokenTransform;
   };
   /** Build semantic nodes from the resolved token stream. */
@@ -99,7 +98,6 @@ export function compileInlineProfile(
   decodeText: (value: string) => string,
 ): InlineProfile {
   const delimiters: DelimiterConfig[] = [];
-  const pairs: PairedTokenConfig[] = [];
   const scanRules: InlineScanRule[] = [];
   const transforms: InlineTokenTransform[] = [];
   const buildRules: InlineBuildRule[] = [];
@@ -112,9 +110,6 @@ export function compileInlineProfile(
     if (resolve?.delimiters) {
       delimiters.push(...resolve.delimiters);
     }
-    if (resolve?.pairs) {
-      pairs.push(...resolve.pairs);
-    }
     if (resolve?.transform) {
       transforms.push(resolve.transform);
     }
@@ -126,6 +121,7 @@ export function compileInlineProfile(
   const tokenHandlers: (InlineTokenHandler | undefined)[] = [];
   const containerByKind: (InlineContainer | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
+  const isolationCloseByOpen: (number | undefined)[] = [];
 
   for (const rule of buildRules) {
     if (rule.kind === "decorate") {
@@ -138,6 +134,8 @@ export function compileInlineProfile(
     }
 
     if (rule.kind === "container") {
+      // Semantic container boundaries also delimit formatting; derive that fact from the builder shape.
+      isolationCloseByOpen[rule.contentOpen] = rule.close;
       containerByKind[rule.token] = {
         closeKind: rule.close,
         contentOpenKind: rule.contentOpen,
@@ -145,6 +143,7 @@ export function compileInlineProfile(
       };
     }
     else {
+      isolationCloseByOpen[rule.open] = rule.close;
       pairByOpenKind[rule.open] = {
         closeKind: rule.close,
         build: rule.build,
@@ -152,7 +151,7 @@ export function compileInlineProfile(
     }
   }
 
-  const pair = createPairingResolver(delimiters, pairs);
+  const pair = createPairingResolver(delimiters, isolationCloseByOpen);
   const transform = transforms.length ? composeTransforms(transforms) : void 0;
 
   return {
@@ -161,8 +160,7 @@ export function compileInlineProfile(
       ? pair
       : (source, tokens, context) => {
         const transformed = transform(source, tokens, context);
-        // A new stream is private to this resolution, so pairing may update kinds in place.
-        return pair(source, transformed, context, transformed !== tokens);
+        return pair(source, transformed);
       },
     schema: {
       containerByKind,

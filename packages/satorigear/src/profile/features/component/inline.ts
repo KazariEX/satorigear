@@ -16,7 +16,6 @@ import {
   normalizeComponentName,
 } from "../attributes/syntax.ts";
 import type { InlineScanRule } from "../../../inline/lexer.ts";
-import type { PairedTokenConfig } from "../../../inline/pairing.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
 import type { SourceSpan } from "../../../source-view.ts";
 
@@ -125,8 +124,7 @@ function candidates(
     }
     if (
       kind !== InlineKind.BracketClose &&
-      kind !== InlineKind.LinkTail &&
-      kind !== InlineKind.ReferenceTail
+      kind !== InlineKind.LinkTail
     ) {
       continue;
     }
@@ -142,7 +140,7 @@ function candidates(
     const close = inlineTokenStart(tokens, index);
     normalClosers.add(close);
     let children = open.children;
-    if (kind === InlineKind.LinkTail || kind === InlineKind.ReferenceTail) {
+    if (kind === InlineKind.LinkTail) {
       children = [];
       appendLinkCandidates(children, open.children);
     }
@@ -162,24 +160,6 @@ function candidates(
         nameEnd: open.start,
         start,
       });
-      if (kind === InlineKind.ReferenceTail) {
-        const suffixStart = close + 1;
-        const suffixEnd = inlineTokenEnd(tokens, index);
-        const suffixClose = suffixEnd - 1;
-        parent.push({
-          children: [],
-          close: suffixClose,
-          contentEnd: suffixClose,
-          contentStart: suffixStart + 1,
-          end: suffixEnd,
-          flags,
-          inLinkLabel: false,
-          kind: "span",
-          literalInLink: false,
-          nameEnd: suffixStart + 1,
-          start: suffixStart,
-        });
-      }
       continue;
     }
     if (source[close + 1] === "(" || source[close + 1] === "[") {
@@ -233,7 +213,6 @@ function copyRange(
       kind === InlineKind.BracketOpen ||
       normalClosers.has(tokenStart) && (
         kind === InlineKind.LinkTail ||
-        kind === InlineKind.ReferenceTail ||
         kind === InlineKind.BracketClose
       )
     );
@@ -292,19 +271,6 @@ function emitRange(
   }
   copyRange(target, tokens, cursor, end, inLinkLabel, normalClosers);
 }
-
-export const inlinePairs: PairedTokenConfig[] = [
-  {
-    opener: InlineKind.InlineComponentLabelOpen,
-    closer: InlineKind.InlineComponentLabelClose,
-    isolateDelimiters: true,
-  },
-  {
-    opener: InlineKind.InlineSpanOpen,
-    closer: InlineKind.InlineSpanClose,
-    isolateDelimiters: true,
-  },
-];
 
 // Reclassify CommonMark bracket/text tokens as explicit semantic carriers.
 export function transformComponentTokens(

@@ -8,10 +8,9 @@ import {
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
-  inlineTokenStride,
   inlineTokenText,
 } from "../../../inline/tokens.ts";
-import { normalizeAssociationLabel, splitReferenceTail } from "../../utils.ts";
+import { normalizeAssociationLabel } from "../../utils.ts";
 import { semanticText } from "../text.ts";
 import { footnoteLabelAt } from "./shared.ts";
 import type { InlineBuildRule, InlineTokenTransform } from "../../../inline/profile.ts";
@@ -22,13 +21,7 @@ function closerIndex(tokens: InlineTokenStream, start: number, end: number): num
       break;
     }
     const kind = inlineTokenKind(tokens, index);
-    if (
-      inlineTokenEnd(tokens, index) === end && (
-        kind === InlineKind.BracketClose ||
-        kind === InlineKind.ReferenceSeparatorClose
-      ) ||
-      kind === InlineKind.ReferenceTail && inlineTokenStart(tokens, index) + 1 === end
-    ) {
+    if (kind === InlineKind.BracketClose && inlineTokenEnd(tokens, index) === end) {
       return index;
     }
   }
@@ -62,32 +55,8 @@ export const transformFootnoteTokens: InlineTokenTransform = (source, tokens, co
         label.end,
         inlineTokenFlags(tokens, index),
       );
-      if (inlineTokenKind(tokens, close) === InlineKind.ReferenceTail) {
-        const embedded = footnoteLabelAt(source, label.end, inlineTokenEnd(tokens, close));
-        if (embedded && context.hasDefinition(embedded.definitionKey)) {
-          appendInlineToken(result, InlineKind.FootnoteReference, label.end, embedded.end);
-        }
-        else {
-          result.push(...splitReferenceTail(tokens, close).slice(inlineTokenStride));
-        }
-      }
       index = close;
       continue;
-    }
-
-    if (kind === InlineKind.ReferenceTail) {
-      const embedded = footnoteLabelAt(source, start + 1, inlineTokenEnd(tokens, index));
-      if (embedded && context.hasDefinition(embedded.definitionKey)) {
-        if (!result) {
-          result = [];
-          for (let prefix = 0; prefix < index; prefix++) {
-            copyInlineToken(result, tokens, prefix);
-          }
-        }
-        result.push(...splitReferenceTail(tokens, index).slice(0, inlineTokenStride));
-        appendInlineToken(result, InlineKind.FootnoteReference, start + 1, embedded.end);
-        continue;
-      }
     }
     if (result) {
       copyInlineToken(result, tokens, index);

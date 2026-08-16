@@ -154,40 +154,6 @@ function linkTailEnd(source: string, start: number): number {
   return source.charCodeAt(offset) === Character.RightParenthesis ? offset + 1 : -1;
 }
 
-function referenceTailEnd(source: string, start: number): number {
-  if (source.charCodeAt(start + 1) !== Character.LeftSquareBracket) {
-    return -1;
-  }
-  let offset = start + 2;
-  if (source.charCodeAt(offset) === Character.RightSquareBracket) {
-    return offset + 1;
-  }
-  let characters = 0;
-  let hasContent = false;
-  while (offset < source.length && characters < 999) {
-    const code = source.charCodeAt(offset);
-    if (code === Character.RightSquareBracket) {
-      return hasContent ? offset + 1 : -1;
-    }
-    if (code === Character.LeftSquareBracket) {
-      return -1;
-    }
-    if (code === Character.ReverseSolidus) {
-      if (offset + 1 >= source.length) {
-        return -1;
-      }
-      hasContent = true;
-      offset += 2;
-    }
-    else {
-      hasContent ||= !isLinkWhitespace(code);
-      offset++;
-    }
-    characters++;
-  }
-  return -1;
-}
-
 function isLinkWhitespace(code: number): boolean {
   return (
     code === Character.CharacterTabulation ||
@@ -371,10 +337,6 @@ export const feature: SyntaxFeature = {
           let end = linkTailEnd(source, start);
           let kind = InlineKind.LinkTail;
           if (end < 0) {
-            end = referenceTailEnd(source, start);
-            kind = InlineKind.ReferenceTail;
-          }
-          if (end < 0) {
             end = start + 1;
             kind = InlineKind.BracketClose;
           }
@@ -438,9 +400,7 @@ export const feature: SyntaxFeature = {
       { kind: "leaf", token: InlineKind.BracketOpen, build: buildInlineText },
       { kind: "leaf", token: InlineKind.ImageOpen, build: buildInlineText },
       { kind: "leaf", token: InlineKind.LinkTail, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.ReferenceTail, build: buildInlineText },
       { kind: "leaf", token: InlineKind.BracketClose, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.ReferenceSeparatorClose, build: buildInlineText },
     ],
   },
 };
