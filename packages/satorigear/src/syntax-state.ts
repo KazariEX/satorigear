@@ -1,7 +1,7 @@
 import { BlockKind } from "./constants/block.ts";
 import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
-import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
+import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "./source-view.ts";
 import type { BlockRecord, BlockStructure, BlockStructureChange } from "./block/structure.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
@@ -275,7 +275,7 @@ function inlineViewOf(
 ): SourceView | undefined {
   let firstStart = -1;
   let firstEnd = -1;
-  let spans: SourceSpan[] | undefined;
+  let ranges: number[] | undefined;
   const tokenEnd = tokenStart + nodeLength;
   for (let token = tokenStart + 1; token < tokenEnd; token++) {
     if (tokens.kind(token) === BlockKind.InlineChunk) {
@@ -286,13 +286,13 @@ function inlineViewOf(
         firstEnd = end;
       }
       else {
-        spans ??= [{ start: firstStart, end: firstEnd }];
-        spans.push({ start, end });
+        ranges ??= [firstStart, firstEnd];
+        ranges.push(start, end);
       }
     }
   }
-  if (spans) {
-    return new SegmentedSourceView(source, spans);
+  if (ranges) {
+    return new SegmentedSourceView(source, ranges);
   }
   if (firstStart >= 0) {
     return new ContiguousSourceView(source, firstStart, firstEnd);
