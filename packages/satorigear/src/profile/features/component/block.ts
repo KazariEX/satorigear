@@ -2,14 +2,12 @@ import { parse as parseYaml } from "yaml";
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
-import { noBlockEntry } from "../../../block/structure.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import {
   type BlockNodeBuilder,
   buildBlockChildren,
-  directBlockToken,
 } from "../../../fragment/block.ts";
 import { buildInlineFragment } from "../../../fragment/inline.ts";
 import {
@@ -354,7 +352,7 @@ function emitOpening(
 }
 
 function parseYamlAttributes(
-  token: NonNullable<ReturnType<typeof directBlockToken>>,
+  token: number,
   context: Parameters<BlockNodeBuilder>[1],
 ): Attributes {
   const value: unknown = parseYaml(context.structure.tokens.text(context.source, token), { schema: "core" });
@@ -365,23 +363,6 @@ function parseYamlAttributes(
     throw new TypeError("Component YAML props must be a mapping");
   }
   return value as Attributes;
-}
-
-function directRule(
-  tokenStart: number,
-  rule: BlockRule,
-  context: Parameters<BlockNodeBuilder>[1],
-): number | undefined {
-  const structure = context.structure;
-  for (
-    let child = structure.firstChild(tokenStart);
-    child !== noBlockEntry;
-    child = structure.nextChild(tokenStart, child)
-  ) {
-    if (child >= 0 && structure.isRule(child, rule)) {
-      return child;
-    }
-  }
 }
 
 const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context, inline) => {
@@ -448,12 +429,23 @@ export const blockRules: BlockFeature["rules"] = [
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
       const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-      const attributesToken = directBlockToken(tokenStart, BlockKind.BlockComponentAttributes, context);
-      const parsed = attributesToken !== void 0
-        ? parseAttributes(context.source, context.structure.tokens.start(attributesToken))
+      // Component header fields are emitted in this fixed order before any body syntax.
+      let openingToken = tokenStart + 1;
+      const label = tokens.kind(openingToken) === BlockKind.BlockComponentLabelOpen
+        ? openingToken
         : void 0;
-      const yamlToken = directBlockToken(tokenStart, BlockKind.BlockComponentYamlProps, context);
-      const label = directRule(tokenStart, BlockRule.BlockComponentLabel, context);
+      if (label !== void 0) {
+        openingToken += tokens.nodeLength(label);
+      }
+      const attributesToken = tokens.kind(openingToken) === BlockKind.BlockComponentAttributes
+        ? openingToken++
+        : void 0;
+      const parsed = attributesToken !== void 0
+        ? parseAttributes(context.source, tokens.start(attributesToken))
+        : void 0;
+      const yamlToken = tokens.kind(openingToken) === BlockKind.BlockComponentYamlProps
+        ? openingToken
+        : void 0;
       const children: SpannedNode<RootContent>[] = [];
       if (label) {
         children.push(buildBlockLabel(label, context, buildInlineFragment(label, context)));
@@ -484,9 +476,11 @@ export const blockRules: BlockFeature["rules"] = [
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
       const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-      const attributesToken = directBlockToken(tokenStart, BlockKind.BlockComponentAttributes, context);
+      const attributesToken = tokens.kind(tokenStart + 1) === BlockKind.BlockComponentAttributes
+        ? tokenStart + 1
+        : void 0;
       const parsed = attributesToken !== void 0
-        ? parseAttributes(context.source, context.structure.tokens.start(attributesToken))
+        ? parseAttributes(context.source, tokens.start(attributesToken))
         : void 0;
       const children = buildBlockChildren(tokenStart, context);
       return {

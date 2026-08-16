@@ -2,7 +2,6 @@ import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } fr
 import { lineContentEnd } from "../block/lines.ts";
 import { type BlockStructure, noBlockEntry } from "../block/structure.ts";
 import { buildInlineFragment, type InlineFragment } from "./inline.ts";
-import type { BlockKind } from "../constants/block.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
 import type { SourceSpan } from "../source-view.ts";
@@ -25,26 +24,6 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
   const offset = context.structure.tokens.start(tokenStart);
   return lineContentEnd(context.source, offset, offset + context.structure.lenOf(tokenStart));
-}
-
-export function directBlockToken(
-  tokenStart: number,
-  kind: BlockKind,
-  context: BlockBuildContext,
-): number | undefined {
-  const structure = context.structure;
-  for (
-    let entry = structure.firstChild(tokenStart);
-    entry !== noBlockEntry;
-    entry = structure.nextChild(tokenStart, entry)
-  ) {
-    if (entry < 0) {
-      const token = structure.leafToken(entry);
-      if (structure.tokens.kind(token) === kind) {
-        return token;
-      }
-    }
-  }
 }
 
 export function payloadBounds(
