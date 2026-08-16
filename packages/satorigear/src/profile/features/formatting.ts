@@ -5,7 +5,7 @@ import { inlineMarkerRunEnd, type InlineScanRule } from "../../inline/lexer.ts";
 import { appendInlineToken } from "../../inline/tokens.ts";
 import { buildInlineText } from "./text.ts";
 import type { InlineNodeBuilder } from "../../fragment/inline.ts";
-import type { DelimiterConfig } from "../../inline/pairing.ts";
+import type { DelimiterConfig } from "../../inline/delimiter.ts";
 import type { InlineBuildRule } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 

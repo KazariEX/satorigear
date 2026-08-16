@@ -11,7 +11,7 @@ import {
 } from "./tokens.ts";
 import type { InlineKind } from "../constants/inline.ts";
 
-type PairingResolver = (
+type DelimiterResolver = (
   source: string,
   tokens: InlineTokenStream,
 ) => InlineTokenStream;
@@ -313,10 +313,10 @@ function resolveDelimiterRuns(
   return result;
 }
 
-export function createPairingResolver(
+export function createDelimiterResolver(
   delimiterConfigs: readonly DelimiterConfig[],
   isolationCloseByOpen: readonly (number | undefined)[],
-): PairingResolver {
+): DelimiterResolver {
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[config.token] = {

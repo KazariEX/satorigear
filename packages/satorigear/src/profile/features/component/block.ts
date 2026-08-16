@@ -3,9 +3,7 @@ import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
 import { noBlockEntry } from "../../../block/structure.ts";
-import {
-  appendLogicalToken,
-} from "../../../block/tokens.ts";
+import { appendLogicalToken } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import {

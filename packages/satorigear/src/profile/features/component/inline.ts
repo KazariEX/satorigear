@@ -122,10 +122,7 @@ function candidates(
       });
       continue;
     }
-    if (
-      kind !== InlineKind.BracketClose &&
-      kind !== InlineKind.LinkTail
-    ) {
+    if (kind !== InlineKind.BracketClose && kind !== InlineKind.LinkTail) {
       continue;
     }
     const open = bracketStack.pop();
@@ -212,8 +209,7 @@ function copyRange(
     const literalLink = inLinkLabel && (
       kind === InlineKind.BracketOpen ||
       normalClosers.has(tokenStart) && (
-        kind === InlineKind.LinkTail ||
-        kind === InlineKind.BracketClose
+        kind === InlineKind.LinkTail || kind === InlineKind.BracketClose
       )
     );
     appendInlineToken(

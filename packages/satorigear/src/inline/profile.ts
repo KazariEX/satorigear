@@ -1,5 +1,5 @@
+import { createDelimiterResolver, type DelimiterConfig } from "./delimiter.ts";
 import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./lexer.ts";
-import { createPairingResolver, type DelimiterConfig } from "./pairing.ts";
 import type { InlineKind } from "../constants/inline.ts";
 import type {
   InlineLeafBuilder,
@@ -151,16 +151,16 @@ export function compileInlineProfile(
     }
   }
 
-  const pair = createPairingResolver(delimiters, isolationCloseByOpen);
+  const resolveDelimiters = createDelimiterResolver(delimiters, isolationCloseByOpen);
   const transform = transforms.length ? composeTransforms(transforms) : void 0;
 
   return {
     decodeText,
     resolve: transform === void 0
-      ? pair
+      ? resolveDelimiters
       : (source, tokens, context) => {
         const transformed = transform(source, tokens, context);
-        return pair(source, transformed);
+        return resolveDelimiters(source, transformed);
       },
     schema: {
       containerByKind,
