@@ -1,5 +1,4 @@
 import type { List, ListItem } from "mdast";
-import { BlockKind } from "../../block/kinds.ts";
 import {
   type BlockLine,
   contentAfterColumns,
@@ -8,6 +7,7 @@ import {
   lineIndent,
 } from "../../block/lines.ts";
 import { noBlockEntry } from "../../block/structure.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import {
   type BlockBuildContext,
@@ -240,7 +240,7 @@ function childrenSpread(
   tokenStart: number,
   stripBlockQuotes: boolean,
   context: BlockBuildContext,
-  nestedRule?: string,
+  nestedRule?: BlockRule,
 ): boolean {
   const structure = context.structure;
   let previous: SourceSpan | undefined;
@@ -253,7 +253,7 @@ function childrenSpread(
       childId >= 0 && (
         nestedRule === void 0
           ? structure.isBlock(childId)
-          : structure.ruleNameOf(childId) === nestedRule
+          : structure.isRule(childId, nestedRule)
       )
     ) {
       const current = payloadBounds(childId, context);
@@ -297,7 +297,7 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
       childId !== noBlockEntry;
       childId = structure.nextChild(tokenStart, childId)
     ) {
-      if (childId >= 0 && structure.ruleNameOf(childId) === "ListItem") {
+      if (childId >= 0 && structure.isRule(childId, BlockRule.ListItem)) {
         items.push(buildListItem(childId, context));
       }
     }
@@ -305,7 +305,7 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
       type: "list",
       ordered,
       start: ordered ? Number.parseInt(context.structure.tokens.text(context.source, listMarker), 10) : null,
-      spread: childrenSpread(tokenStart, false, context, "ListItem"),
+      spread: childrenSpread(tokenStart, false, context, BlockRule.ListItem),
       children: items,
       position: {
         start: context.structure.tokens.start(listMarker),
@@ -427,7 +427,7 @@ export function feature(taskList = false): SyntaxFeature {
     block: {
       rules: [
         {
-          rule: "ListItem",
+          rule: BlockRule.ListItem,
           syntax: {
             kind: "frame",
             open: [
@@ -439,7 +439,7 @@ export function feature(taskList = false): SyntaxFeature {
           },
         },
         {
-          rule: "UnorderedList",
+          rule: BlockRule.UnorderedList,
           syntax: {
             kind: "block",
             open: BlockKind.UnorderedListOpen,
@@ -448,7 +448,7 @@ export function feature(taskList = false): SyntaxFeature {
           build: createBuildList(false),
         },
         {
-          rule: "OrderedList",
+          rule: BlockRule.OrderedList,
           syntax: {
             kind: "block",
             open: BlockKind.OrderedListOpen,

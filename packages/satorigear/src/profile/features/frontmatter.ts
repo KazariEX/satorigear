@@ -1,6 +1,6 @@
-import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -50,7 +50,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
       },
       rules: [
         {
-          rule: "Frontmatter",
+          rule: BlockRule.Frontmatter,
           syntax: {
             kind: "leaf",
             token: BlockKind.FrontmatterToken,

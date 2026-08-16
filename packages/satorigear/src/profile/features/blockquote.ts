@@ -1,4 +1,3 @@
-import { BlockKind } from "../../block/kinds.ts";
 import {
   type BlockLine,
   firstNonspace,
@@ -7,6 +6,7 @@ import {
   lineIndent,
   physicalColumnAt,
 } from "../../block/lines.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd, blockToken, buildBlockChildren } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -42,7 +42,7 @@ export const feature: SyntaxFeature = {
   block: {
     rules: [
       {
-        rule: "BlockQuote",
+        rule: BlockRule.BlockQuote,
         syntax: {
           kind: "block",
           open: BlockKind.BlockQuoteOpen,

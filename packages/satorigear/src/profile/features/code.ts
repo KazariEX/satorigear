@@ -7,7 +7,6 @@ import {
   fencedBlockContent,
   type FenceRule,
 } from "../../block/fence.ts";
-import { BlockKind } from "../../block/kinds.ts";
 import {
   type BlockLine,
   firstNonspace,
@@ -18,9 +17,10 @@ import {
   removeIndent,
 } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
+import { InlineKind } from "../../constants/inline.ts";
 import { type BlockBuildContext, blockEnd, blockToken } from "../../fragment/block.ts";
-import { InlineKind } from "../../inline/kinds.ts";
 import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
@@ -70,7 +70,7 @@ export const feature: SyntaxFeature = {
     ],
     rules: [
       {
-        rule: "FencedCode",
+        rule: BlockRule.FencedCode,
         syntax: {
           kind: "leaf",
           token: BlockKind.FencedCodeBlock,
@@ -105,7 +105,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        rule: "IndentedCodeBlock",
+        rule: BlockRule.IndentedCodeBlock,
         syntax: {
           kind: "leaf",
           token: BlockKind.IndentedCodeBlockToken,
@@ -217,7 +217,7 @@ export const feature: SyntaxFeature = {
           }
           return {
             type: "inlineCode",
-            value: context.blockRule === "TableCell"
+            value: context.blockRule === BlockRule.TableCell
               ? value.replace(/\\\|/g, "|")
               : value,
             position: sourceSpan,

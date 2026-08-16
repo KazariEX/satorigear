@@ -1,3 +1,4 @@
+import type { BlockRule } from "../constants/block.ts";
 import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
 import type { BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 
@@ -114,8 +115,8 @@ export class BlockStructure {
     return this.ruleOf(tokenStart).block;
   }
 
-  ruleNameOf(tokenStart: number): string {
-    return this.ruleOf(tokenStart).name;
+  isRule(tokenStart: number, rule: BlockRule): boolean {
+    return this.ruleOf(tokenStart).rule === rule;
   }
 
   ruleOf(tokenStart: number): CompiledBlockRule {

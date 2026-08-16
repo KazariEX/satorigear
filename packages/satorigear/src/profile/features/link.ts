@@ -1,6 +1,6 @@
 import type { PhrasingContent } from "mdast";
 import { Character } from "../../constants/character.ts";
-import { InlineKind } from "../../inline/kinds.ts";
+import { InlineKind } from "../../constants/inline.ts";
 import {
   appendInlineToken,
   inlineTokenEnd,

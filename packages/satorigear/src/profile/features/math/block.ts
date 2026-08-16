@@ -6,9 +6,9 @@ import {
   fencedBlockContent,
   type FenceRule,
 } from "../../../block/fence.ts";
-import { BlockKind } from "../../../block/kinds.ts";
 import { firstNonspace, lineEnd } from "../../../block/lines.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
+import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, blockToken } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
@@ -22,7 +22,7 @@ const mathFenceRule: FenceRule = {
 
 export const blockRules: BlockFeature["rules"] = [
   {
-    rule: "MathBlock",
+    rule: BlockRule.MathBlock,
     syntax: {
       kind: "leaf",
       token: BlockKind.MathBlockToken,

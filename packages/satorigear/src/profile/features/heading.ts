@@ -1,6 +1,6 @@
 import type { Heading } from "mdast";
-import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, lineIndent } from "../../block/lines.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import {
   blockEnd,
@@ -69,7 +69,7 @@ export const feature: SyntaxFeature = {
   block: {
     rules: [
       {
-        rule: "AtxHeading",
+        rule: BlockRule.AtxHeading,
         syntax: {
           kind: "block",
           open: BlockKind.AtxHeadingOpen,
@@ -90,7 +90,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        rule: "SetextHeading",
+        rule: BlockRule.SetextHeading,
         syntax: {
           kind: "block",
           open: [

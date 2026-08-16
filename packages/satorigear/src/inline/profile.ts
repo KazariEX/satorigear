@@ -1,12 +1,12 @@
 import { compileInlineTokenizer, type InlineLexicalRule, type InlineTokenizer } from "./lexer.ts";
 import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
+import type { InlineKind } from "../constants/inline.ts";
 import type {
   InlineLeafBuilder,
   InlineNodeBuilder,
   InlineTokenDecorator,
   InlineTokenHandler,
 } from "../fragment/inline.ts";
-import type { InlineKind } from "./kinds.ts";
 // Inline features compile into one token pipeline and the projection tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
 

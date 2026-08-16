@@ -8,12 +8,13 @@ import {
   type InlineTokenStream,
 } from "../inline/tokens.ts";
 import { extendSpan, type SpannedNode } from "./node.ts";
+import type { BlockRule } from "../constants/block.ts";
 import type { InlineSyntaxSchema } from "../inline/profile.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
 
 export interface InlineBuildContext {
-  blockRule: string;
+  blockRule: BlockRule;
   decodeText: (value: string) => string;
   schema: InlineSyntaxSchema;
   source: string;

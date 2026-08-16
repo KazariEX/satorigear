@@ -2,7 +2,7 @@ import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } fr
 import { lineContentEnd } from "../block/lines.ts";
 import { type BlockStructure, noBlockEntry } from "../block/structure.ts";
 import { buildInlineFragment, type InlineFragment } from "./inline.ts";
-import type { BlockKind } from "../block/kinds.ts";
+import type { BlockKind } from "../constants/block.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
 import type { SourceSpan } from "../source-view.ts";
@@ -54,7 +54,7 @@ export function blockToken(
 ): number {
   const token = directBlockToken(tokenStart, kind, context);
   if (token === void 0) {
-    throw new Error(`Expected ${context.structure.ruleNameOf(tokenStart)} syntax to contain block token ${kind}`);
+    throw new Error(`Expected block syntax at token ${tokenStart} to contain token kind ${kind}`);
   }
   return token;
 }
@@ -86,7 +86,7 @@ export const buildBlockNode = <T extends object = TopLevelContent>(
   const rule = structure.ruleOf(tokenStart);
   const build = rule.build;
   if (!build) {
-    throw new Error(`Unexpected block syntax rule: ${rule.name}`);
+    throw new Error(`Unexpected block syntax at token ${tokenStart}`);
   }
   return (
     rule.inlineContent

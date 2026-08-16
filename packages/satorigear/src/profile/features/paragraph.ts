@@ -1,5 +1,5 @@
-import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, indentOf, isBlank } from "../../block/lines.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import { setextMarkerAt } from "./heading.ts";
@@ -65,7 +65,7 @@ export const feature: SyntaxFeature = {
     ],
     rules: [
       {
-        rule: "Paragraph",
+        rule: BlockRule.Paragraph,
         syntax: {
           kind: "block",
           open: BlockKind.ParagraphOpen,

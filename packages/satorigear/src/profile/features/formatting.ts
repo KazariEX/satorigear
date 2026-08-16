@@ -1,6 +1,6 @@
 import type { Delete, Emphasis, Strong } from "mdast";
 import { Character } from "../../constants/character.ts";
-import { InlineKind } from "../../inline/kinds.ts";
+import { InlineKind } from "../../constants/inline.ts";
 import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken } from "../../inline/tokens.ts";
 import { buildInlineText } from "./text.ts";

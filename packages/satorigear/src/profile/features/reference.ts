@@ -1,8 +1,8 @@
-import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank } from "../../block/lines.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
+import { InlineKind } from "../../constants/inline.ts";
 import { blockEnd, blockToken } from "../../fragment/block.ts";
-import { InlineKind } from "../../inline/kinds.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -384,7 +384,7 @@ export const feature: SyntaxFeature = {
     },
     rules: [
       {
-        rule: "LinkDefinition",
+        rule: BlockRule.LinkDefinition,
         syntax: {
           kind: "block",
           open: BlockKind.LinkDefinitionOpen,

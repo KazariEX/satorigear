@@ -1,4 +1,3 @@
-import { BlockKind } from "../../../block/kinds.ts";
 import {
   type BlockLine,
   contentAfterColumns,
@@ -6,6 +5,7 @@ import {
   isBlank,
   lineIndent,
 } from "../../../block/lines.ts";
+import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, blockToken, buildBlockChildren } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
@@ -61,7 +61,7 @@ function firstContentLine(line: BlockLine, match: FootnoteDefinitionMatch): Bloc
 
 export const blockRules: BlockFeature["rules"] = [
   {
-    rule: "FootnoteDefinition",
+    rule: BlockRule.FootnoteDefinition,
     syntax: {
       kind: "block",
       open: BlockKind.FootnoteDefinitionOpen,

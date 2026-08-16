@@ -1,6 +1,6 @@
 import { emptyArray, isArrayEqual } from "../primitives.ts";
 import { type BlockLine, logicalLine } from "./lines.ts";
-import type { BlockKind } from "./kinds.ts";
+import type { BlockKind } from "../constants/block.ts";
 import type { BlockSyntaxSchema } from "./profile.ts";
 
 // The fourth slot stores the token length of a semantic node beginning here. Raw tokens use zero.

@@ -1,6 +1,6 @@
 import { decodeHTMLStrict } from "entities";
 import { Character } from "../../constants/character.ts";
-import { InlineKind } from "../../inline/kinds.ts";
+import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import {
   appendInlineToken,

@@ -1,12 +1,12 @@
 import { parse as parseYaml } from "yaml";
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
-import { BlockKind } from "../../../block/kinds.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
 import { noBlockEntry } from "../../../block/structure.ts";
 import {
   appendLogicalToken,
 } from "../../../block/tokens.ts";
+import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import {
   type BlockNodeBuilder,
@@ -372,7 +372,7 @@ function parseYamlAttributes(
 
 function directRule(
   tokenStart: number,
-  rule: string,
+  rule: BlockRule,
   context: Parameters<BlockNodeBuilder>[1],
 ): number | undefined {
   const structure = context.structure;
@@ -381,7 +381,7 @@ function directRule(
     child !== noBlockEntry;
     child = structure.nextChild(tokenStart, child)
   ) {
-    if (child >= 0 && structure.ruleNameOf(child) === rule) {
+    if (child >= 0 && structure.isRule(child, rule)) {
       return child;
     }
   }
@@ -432,7 +432,7 @@ function createBlockStart(shorthand: boolean): BlockStart {
 
 export const blockRules: BlockFeature["rules"] = [
   {
-    rule: "BlockComponentLabel",
+    rule: BlockRule.BlockComponentLabel,
     syntax: {
       kind: "frame",
       open: BlockKind.BlockComponentLabelOpen,
@@ -442,7 +442,7 @@ export const blockRules: BlockFeature["rules"] = [
     build: buildBlockLabel,
   },
   {
-    rule: "BlockComponent",
+    rule: BlockRule.BlockComponent,
     syntax: {
       kind: "block",
       open: BlockKind.BlockComponentOpen,
@@ -456,7 +456,7 @@ export const blockRules: BlockFeature["rules"] = [
         ? parseAttributes(context.source, context.structure.tokens.start(attributesToken))
         : void 0;
       const yamlToken = directBlockToken(tokenStart, BlockKind.BlockComponentYamlProps, context);
-      const label = directRule(tokenStart, "BlockComponentLabel", context);
+      const label = directRule(tokenStart, BlockRule.BlockComponentLabel, context);
       const children: SpannedNode<RootContent>[] = [];
       if (label) {
         children.push(buildBlockLabel(label, context, buildInlineFragment(label, context)));
@@ -478,7 +478,7 @@ export const blockRules: BlockFeature["rules"] = [
     },
   },
   {
-    rule: "BlockComponentSlot",
+    rule: BlockRule.BlockComponentSlot,
     syntax: {
       kind: "block",
       open: BlockKind.BlockComponentSlotOpen,

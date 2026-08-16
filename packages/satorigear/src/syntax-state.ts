@@ -1,10 +1,10 @@
-import { BlockKind } from "./block/kinds.ts";
 import {
   type BlockRecord,
   type BlockStructure,
   type BlockStructureChange,
   noBlockEntry,
 } from "./block/structure.ts";
+import { BlockKind } from "./constants/block.ts";
 import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceSpan, type SourceView } from "./source-view.ts";
@@ -85,7 +85,7 @@ export class SyntaxState {
         if (inlineView) {
           bindings.push({
             offset,
-            rule: rule.name,
+            rule: rule.rule,
             tokenStart,
             view: inlineView,
           });
@@ -253,7 +253,7 @@ export function resolveInlineRegions(
       const inlineView = inlineViewOf(source, structure, tokenStart);
       if (inlineView) {
         regions.push({
-          rule: rule.name,
+          rule: rule.rule,
           tokenStart,
           tokens: emptyArray,
           view: inlineView,

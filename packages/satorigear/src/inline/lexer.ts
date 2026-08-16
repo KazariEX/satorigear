@@ -1,5 +1,5 @@
 import { Character } from "../constants/character.ts";
-import { InlineKind } from "./kinds.ts";
+import { InlineKind } from "../constants/inline.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
 type InlineLexicalScanner = (

@@ -1,6 +1,6 @@
-import type { BlockNodeBuilder } from "../fragment/block.ts";
 // Block features compile into the immutable scanner, structure, and node builders shared by a parser.
-import type { BlockKind } from "./kinds.ts";
+import type { BlockKind, BlockRule } from "../constants/block.ts";
+import type { BlockNodeBuilder } from "../fragment/block.ts";
 import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
 import type { BlockTokenStream } from "./tokens.ts";
@@ -9,7 +9,7 @@ export interface CompiledBlockRule {
   block: boolean;
   definitionKey?: (tokens: BlockTokenStream, index: number) => string;
   inlineContent: boolean;
-  name: string;
+  rule: BlockRule;
   build?: BlockNodeBuilder;
 }
 
@@ -73,7 +73,7 @@ export type BlockSyntaxRegistration =
   };
 
 export interface BlockRuleRegistration {
-  rule: string;
+  rule: BlockRule;
   syntax: BlockSyntaxRegistration;
   build?: BlockNodeBuilder;
   inlineContent?: true;
@@ -83,7 +83,7 @@ export interface BlockRuleRegistration {
 export type BlockNodeBuilderDecorator = (build: BlockNodeBuilder) => BlockNodeBuilder;
 
 export interface BlockDecoratorRegistration {
-  rule: string;
+  rule: BlockRule;
   decorate: BlockNodeBuilderDecorator;
 }
 
@@ -118,7 +118,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
   const groupedRuleByToken: (CompiledBlockRule | undefined)[] = [];
   const interrupts: BlockInterrupt[][] = [];
   const ruleByLeaf: (CompiledBlockRule | undefined)[] = [];
-  const rules: Record<string, CompiledBlockRule> = Object.create(null);
+  const rules: (CompiledBlockRule | undefined)[] = [];
   const restarts: BlockRestart[] = [];
   const starts: BlockStart[][] = [];
   const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
@@ -153,7 +153,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
           block: syntax.kind === "block" || syntax.kind === "leaf",
           definitionKey: registration.definitionKey,
           inlineContent: registration.inlineContent === true,
-          name: registration.rule,
+          rule: registration.rule,
           build: registration.build,
         };
         rules[registration.rule] = rule;

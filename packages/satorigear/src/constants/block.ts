@@ -47,3 +47,28 @@ export const enum BlockKind {
   BlockComponentSlotOpen,
   BlockComponentSlotClose,
 }
+
+export const enum BlockRule {
+  AtxHeading,
+  SetextHeading,
+  LinkDefinition,
+  TableCell,
+  TableRow,
+  TableDelimiter,
+  Table,
+  ThematicBreak,
+  BlockQuote,
+  Paragraph,
+  BlockComponentLabel,
+  BlockComponent,
+  BlockComponentSlot,
+  HtmlBlock,
+  FencedCode,
+  IndentedCodeBlock,
+  ListItem,
+  UnorderedList,
+  OrderedList,
+  Frontmatter,
+  FootnoteDefinition,
+  MathBlock,
+}

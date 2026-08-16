@@ -11,8 +11,8 @@ import {
   type InlineTokenStream,
   inlineTokenStride,
 } from "./tokens.ts";
+import type { InlineKind } from "../constants/inline.ts";
 import type { SourceSpan } from "../source-view.ts";
-import type { InlineKind } from "./kinds.ts";
 import type { InlineResolutionContext } from "./profile.ts";
 
 type PairingResolver = (

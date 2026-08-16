@@ -1,7 +1,8 @@
 import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdast";
+import { BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
+import { InlineKind } from "../../../constants/inline.ts";
 import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
-import { InlineKind } from "../../../inline/kinds.ts";
 import {
   appendInlineToken,
   inlineTokenCount,
@@ -165,12 +166,12 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
 export const feature: SyntaxFeature = {
   block: {
     decorators: [
-      { rule: "Paragraph", decorate: decorateInlineContainer },
-      { rule: "AtxHeading", decorate: decorateInlineContainer },
-      { rule: "SetextHeading", decorate: decorateInlineContainer },
-      { rule: "UnorderedList", decorate: decorateList },
-      { rule: "OrderedList", decorate: decorateList },
-      { rule: "BlockQuote", decorate: decorateBlockquote },
+      { rule: BlockRule.Paragraph, decorate: decorateInlineContainer },
+      { rule: BlockRule.AtxHeading, decorate: decorateInlineContainer },
+      { rule: BlockRule.SetextHeading, decorate: decorateInlineContainer },
+      { rule: BlockRule.UnorderedList, decorate: decorateList },
+      { rule: BlockRule.OrderedList, decorate: decorateList },
+      { rule: BlockRule.BlockQuote, decorate: decorateBlockquote },
     ],
   },
   inline: {

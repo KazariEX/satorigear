@@ -1,7 +1,7 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
-import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { noBlockEntry } from "../../block/structure.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { type BlockBuildContext, type BlockNodeBuilder, blockToken } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -141,7 +141,7 @@ function emitTableRow(line: BlockLine, cells: readonly CellSpan[], out: BlockTok
 
 function childRules(
   tokenStart: number,
-  rule: string,
+  rule: BlockRule,
   context: BlockBuildContext,
 ): number[] {
   const structure = context.structure;
@@ -151,7 +151,7 @@ function childRules(
     child !== noBlockEntry;
     child = structure.nextChild(tokenStart, child)
   ) {
-    if (child >= 0 && structure.ruleNameOf(child) === rule) {
+    if (child >= 0 && structure.isRule(child, rule)) {
       result.push(child);
     }
   }
@@ -174,7 +174,7 @@ const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline
 const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
   const open = blockToken(tokenStart, BlockKind.TableRowOpen, context);
   const close = blockToken(tokenStart, BlockKind.TableRowClose, context);
-  const children = childRules(tokenStart, "TableCell", context).map((cell) => (
+  const children = childRules(tokenStart, BlockRule.TableCell, context).map((cell) => (
     buildTableCell(cell, context, buildInlineFragment(cell, context))
   ));
   return {
@@ -253,7 +253,7 @@ export const feature: SyntaxFeature = {
     ],
     rules: [
       {
-        rule: "TableCell",
+        rule: BlockRule.TableCell,
         syntax: {
           kind: "frame",
           open: BlockKind.TableCellOpen,
@@ -262,7 +262,7 @@ export const feature: SyntaxFeature = {
         inlineContent: true,
       },
       {
-        rule: "TableRow",
+        rule: BlockRule.TableRow,
         syntax: {
           kind: "frame",
           open: BlockKind.TableRowOpen,
@@ -270,7 +270,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        rule: "TableDelimiter",
+        rule: BlockRule.TableDelimiter,
         syntax: {
           kind: "group",
           tokens: [
@@ -282,7 +282,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        rule: "Table",
+        rule: BlockRule.Table,
         syntax: {
           kind: "block",
           open: BlockKind.TableOpen,
@@ -291,10 +291,10 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const open = blockToken(tokenStart, BlockKind.TableOpen, context);
           const close = blockToken(tokenStart, BlockKind.TableClose, context);
-          const rows = childRules(tokenStart, "TableRow", context).map((row) => (
+          const rows = childRules(tokenStart, BlockRule.TableRow, context).map((row) => (
             buildTableRow(row, context)
           ));
-          const delimiter = childRules(tokenStart, "TableDelimiter", context)[0];
+          const delimiter = childRules(tokenStart, BlockRule.TableDelimiter, context)[0];
           if (!delimiter) {
             throw new Error("Table syntax does not contain a delimiter");
           }

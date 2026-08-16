@@ -1,4 +1,4 @@
-import { InlineKind } from "../inline/kinds.ts";
+import { InlineKind } from "../constants/inline.ts";
 import {
   appendInlineToken,
   inlineTokenEnd,

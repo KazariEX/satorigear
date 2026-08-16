@@ -1,8 +1,8 @@
-import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, firstNonspace } from "../../block/lines.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
+import { InlineKind } from "../../constants/inline.ts";
 import { blockEnd } from "../../fragment/block.ts";
-import { InlineKind } from "../../inline/kinds.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {
@@ -27,7 +27,7 @@ export const feature: SyntaxFeature = {
   block: {
     rules: [
       {
-        rule: "ThematicBreak",
+        rule: BlockRule.ThematicBreak,
         syntax: {
           kind: "leaf",
           token: BlockKind.ThematicBreakToken,

@@ -1,9 +1,9 @@
-import { BlockKind } from "../../block/kinds.ts";
 import { type BlockLine, isBlank, lineIndent, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
+import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
+import { InlineKind } from "../../constants/inline.ts";
 import { type BlockBuildContext, blockEnd, blockToken } from "../../fragment/block.ts";
-import { InlineKind } from "../../inline/kinds.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import type { InlineLeafBuilder } from "../../fragment/inline.ts";
@@ -142,7 +142,7 @@ export const feature: SyntaxFeature = {
   block: {
     rules: [
       {
-        rule: "HtmlBlock",
+        rule: BlockRule.HtmlBlock,
         syntax: {
           kind: "leaf",
           token: BlockKind.HtmlBlockToken,
