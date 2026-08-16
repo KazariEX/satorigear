@@ -133,17 +133,21 @@ function linkDefinitionAt(
   else {
     let depth = 0;
     const destinationStart = offset;
-    while (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
-      if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
+    while (offset < lines[lineIndex].end) {
+      const code = source.charCodeAt(offset);
+      if (code === Character.Space || code === Character.CharacterTabulation) {
+        break;
+      }
+      if (code === Character.ReverseSolidus && offset + 1 < lines[lineIndex].end) {
         offset += 2;
         continue;
       }
-      if (source[offset] === "(") {
+      if (code === Character.LeftParenthesis) {
         if (++depth > 32) {
           return;
         }
       }
-      else if (source[offset] === ")" && --depth < 0) {
+      else if (code === Character.RightParenthesis && --depth < 0) {
         return;
       }
       offset++;
