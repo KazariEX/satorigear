@@ -13,7 +13,6 @@ import {
   type BlockBuildContext,
   blockEnd,
   type BlockNodeBuilder,
-  blockToken,
   buildBlockChildren,
   payloadBounds,
 } from "../../fragment/block.ts";
@@ -286,11 +285,6 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context) => {
     const structure = context.structure;
-    const listMarker = blockToken(
-      tokenStart,
-      ordered ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen,
-      context,
-    );
     const items: SpannedNode<ListItem>[] = [];
     for (
       let childId = structure.firstChild(tokenStart);
@@ -304,12 +298,12 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     return {
       type: "list",
       ordered,
-      start: ordered ? Number.parseInt(context.structure.tokens.text(context.source, listMarker), 10) : null,
+      start: ordered ? Number.parseInt(context.structure.tokens.text(context.source, tokenStart), 10) : null,
       spread: childrenSpread(tokenStart, false, context, BlockRule.ListItem),
       children: items,
       position: {
-        start: context.structure.tokens.start(listMarker),
-        end: lastChildEnd(items, context.structure.tokens.end(listMarker)),
+        start: context.structure.tokens.start(tokenStart),
+        end: lastChildEnd(items, context.structure.tokens.end(tokenStart)),
       },
     };
   };

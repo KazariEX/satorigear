@@ -2,7 +2,7 @@ import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank } from "../.
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { blockEnd, blockToken } from "../../fragment/block.ts";
+import { blockEnd } from "../../fragment/block.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -455,8 +455,7 @@ export const feature: SyntaxFeature = {
           close: BlockKind.LinkDefinitionClose,
         },
         build(tokenStart, context) {
-          const token = blockToken(tokenStart, BlockKind.LinkDefinitionOpen, context);
-          const fields = linkDefinitionFields(context.structure.tokens, token);
+          const fields = linkDefinitionFields(context.structure.tokens, tokenStart);
           return {
             type: "definition",
             identifier: fields.definitionKey.toLowerCase(),
@@ -464,7 +463,7 @@ export const feature: SyntaxFeature = {
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),
             position: {
-              start: context.structure.tokens.start(token) + fields.markerOffset,
+              start: context.structure.tokens.start(tokenStart) + fields.markerOffset,
               end: blockEnd(tokenStart, context),
             },
           };

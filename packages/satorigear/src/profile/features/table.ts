@@ -2,9 +2,9 @@ import type { AlignType, TableCell, TableRow } from "mdast";
 import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
 import { noBlockEntry } from "../../block/structure.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
-import { type BlockBuildContext, type BlockNodeBuilder, blockToken } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
+import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.ts";
 import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -159,21 +159,21 @@ function childRules(
 }
 
 const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline) => {
-  const open = blockToken(tokenStart, BlockKind.TableCellOpen, context);
-  const close = blockToken(tokenStart, BlockKind.TableCellClose, context);
+  const tokens = context.structure.tokens;
+  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return {
     type: "tableCell",
     children: inline!.children,
     position: {
-      start: context.structure.tokens.start(open),
-      end: context.structure.tokens.start(close),
+      start: tokens.start(tokenStart),
+      end: tokens.start(close),
     },
   };
 };
 
 const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
-  const open = blockToken(tokenStart, BlockKind.TableRowOpen, context);
-  const close = blockToken(tokenStart, BlockKind.TableRowClose, context);
+  const tokens = context.structure.tokens;
+  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   const children = childRules(tokenStart, BlockRule.TableCell, context).map((cell) => (
     buildTableCell(cell, context, buildInlineFragment(cell, context))
   ));
@@ -181,8 +181,8 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
     type: "tableRow",
     children,
     position: {
-      start: context.structure.tokens.start(open),
-      end: context.structure.tokens.start(close),
+      start: tokens.start(tokenStart),
+      end: tokens.start(close),
     },
   };
 };
@@ -283,8 +283,8 @@ export const feature: SyntaxFeature = {
           close: BlockKind.TableClose,
         },
         build(tokenStart, context) {
-          const open = blockToken(tokenStart, BlockKind.TableOpen, context);
-          const close = blockToken(tokenStart, BlockKind.TableClose, context);
+          const tokens = context.structure.tokens;
+          const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
           const rows = childRules(tokenStart, BlockRule.TableRow, context).map((row) => (
             buildTableRow(row, context)
           ));
@@ -297,8 +297,8 @@ export const feature: SyntaxFeature = {
             align: tableAlignment(delimiter, context),
             children: rows,
             position: {
-              start: context.structure.tokens.start(open),
-              end: context.structure.tokens.start(close),
+              start: tokens.start(tokenStart),
+              end: tokens.start(close),
             },
           };
         },

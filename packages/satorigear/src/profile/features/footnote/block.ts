@@ -7,7 +7,7 @@ import {
 } from "../../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
-import { blockEnd, blockToken, buildBlockChildren } from "../../../fragment/block.ts";
+import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
@@ -68,15 +68,14 @@ export const blockRules: BlockFeature["rules"] = [
       close: BlockKind.FootnoteDefinitionClose,
     },
     build(tokenStart, context) {
-      const token = blockToken(tokenStart, BlockKind.FootnoteDefinitionOpen, context);
-      const fields = definitionFields(context.structure.tokens, token);
+      const fields = definitionFields(context.structure.tokens, tokenStart);
       return {
         type: "footnoteDefinition",
         identifier: fields.normalizedLabel.toLowerCase(),
         label: semanticText(fields.label),
         children: buildBlockChildren(tokenStart, context),
         position: {
-          start: context.structure.tokens.start(token),
+          start: context.structure.tokens.start(tokenStart),
           end: blockEnd(tokenStart, context),
         },
       };

@@ -1,7 +1,7 @@
 import { type BlockLine, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
-import { blockEnd, blockToken } from "../../fragment/block.ts";
+import { blockEnd } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export type FrontmatterMarker = "+" | "-";
@@ -56,14 +56,13 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
             token: BlockKind.FrontmatterToken,
           },
           build(tokenStart, context) {
-            const token = blockToken(tokenStart, BlockKind.FrontmatterToken, context);
-            const rangeCount = context.structure.tokens.rangeCount(token);
+            const rangeCount = context.structure.tokens.rangeCount(tokenStart);
             if (rangeCount < 2) {
               throw new Error("FrontmatterToken does not contain two fences");
             }
             let value = normalizeLines(context.source.slice(
-              context.structure.tokens.rangeEnd(token, 0),
-              context.structure.tokens.rangeStart(token, rangeCount - 1),
+              context.structure.tokens.rangeEnd(tokenStart, 0),
+              context.structure.tokens.rangeStart(tokenStart, rangeCount - 1),
             ));
             if (value.endsWith("\n")) {
               value = value.slice(0, -1);
@@ -72,7 +71,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
               type: "yaml",
               value,
               position: {
-                start: context.structure.tokens.start(token),
+                start: context.structure.tokens.start(tokenStart),
                 end: blockEnd(tokenStart, context),
               },
             };

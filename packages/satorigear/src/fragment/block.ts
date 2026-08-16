@@ -47,18 +47,6 @@ export function directBlockToken(
   }
 }
 
-export function blockToken(
-  tokenStart: number,
-  kind: BlockKind,
-  context: BlockBuildContext,
-): number {
-  const token = directBlockToken(tokenStart, kind, context);
-  if (token === void 0) {
-    throw new Error(`Expected block syntax at token ${tokenStart} to contain token kind ${kind}`);
-  }
-  return token;
-}
-
 export function payloadBounds(
   tokenStart: number,
   context: BlockBuildContext,

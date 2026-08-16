@@ -8,7 +8,6 @@ import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import {
   type BlockNodeBuilder,
-  blockToken,
   buildBlockChildren,
   directBlockToken,
 } from "../../../fragment/block.ts";
@@ -386,14 +385,14 @@ function directRule(
 }
 
 const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context, inline) => {
-  const open = blockToken(tokenStart, BlockKind.BlockComponentLabelOpen, context);
-  const close = blockToken(tokenStart, BlockKind.BlockComponentLabelClose, context);
+  const tokens = context.structure.tokens;
+  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return {
     type: "paragraph",
     children: inline!.children,
     position: {
-      start: context.structure.tokens.start(open),
-      end: context.structure.tokens.end(close),
+      start: tokens.start(tokenStart),
+      end: tokens.end(close),
     },
   };
 };
@@ -447,8 +446,8 @@ export const blockRules: BlockFeature["rules"] = [
       close: BlockKind.BlockComponentClose,
     },
     build(tokenStart, context) {
-      const open = blockToken(tokenStart, BlockKind.BlockComponentOpen, context);
-      const close = blockToken(tokenStart, BlockKind.BlockComponentClose, context);
+      const tokens = context.structure.tokens;
+      const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
       const attributesToken = directBlockToken(tokenStart, BlockKind.BlockComponentAttributes, context);
       const parsed = attributesToken !== void 0
         ? parseAttributes(context.source, context.structure.tokens.start(attributesToken))
@@ -460,7 +459,7 @@ export const blockRules: BlockFeature["rules"] = [
         children.push(buildBlockLabel(label, context, buildInlineFragment(label, context)));
       }
       children.push(...buildBlockChildren(tokenStart, context));
-      const opening = context.structure.tokens.text(context.source, open);
+      const opening = tokens.text(context.source, tokenStart);
       return {
         type: "blockComponent",
         name: normalizeComponentName(opening.slice(opening.lastIndexOf(":") + 1).trim()),
@@ -468,8 +467,8 @@ export const blockRules: BlockFeature["rules"] = [
           ? { ...parseYamlAttributes(yamlToken, context), ...parsed?.attributes }
           : (parsed?.attributes ?? {}),
         position: {
-          start: context.structure.tokens.start(open),
-          end: context.structure.tokens.end(close),
+          start: tokens.start(tokenStart),
+          end: tokens.end(close),
         },
         children,
       };
@@ -483,8 +482,8 @@ export const blockRules: BlockFeature["rules"] = [
       close: BlockKind.BlockComponentSlotClose,
     },
     build(tokenStart, context) {
-      const open = blockToken(tokenStart, BlockKind.BlockComponentSlotOpen, context);
-      const close = blockToken(tokenStart, BlockKind.BlockComponentSlotClose, context);
+      const tokens = context.structure.tokens;
+      const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
       const attributesToken = directBlockToken(tokenStart, BlockKind.BlockComponentAttributes, context);
       const parsed = attributesToken !== void 0
         ? parseAttributes(context.source, context.structure.tokens.start(attributesToken))
@@ -495,12 +494,12 @@ export const blockRules: BlockFeature["rules"] = [
         name: "template",
         attributes: {
           ...parsed?.attributes,
-          name: normalizeComponentName(context.structure.tokens.text(context.source, open).slice(1).trim()),
+          name: normalizeComponentName(tokens.text(context.source, tokenStart).slice(1).trim()),
         },
         children,
         position: {
-          start: context.structure.tokens.start(open),
-          end: context.structure.tokens.end(close),
+          start: tokens.start(tokenStart),
+          end: tokens.end(close),
         },
       };
     },

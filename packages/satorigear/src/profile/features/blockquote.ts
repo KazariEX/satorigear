@@ -8,7 +8,7 @@ import {
 } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import { blockEnd, blockToken, buildBlockChildren } from "../../fragment/block.ts";
+import { blockEnd, buildBlockChildren } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface BlockQuoteMarker {
@@ -50,14 +50,13 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const offset = context.structure.tokens.start(tokenStart);
-          const marker = blockToken(tokenStart, BlockKind.BlockQuoteOpen, context);
           return {
             type: "blockquote",
             children: buildBlockChildren(tokenStart, context),
             position: {
               start: firstNonspace(
                 context.source,
-                context.structure.tokens.start(marker),
+                offset,
                 lineEnd(context.source, offset),
               ),
               end: blockEnd(tokenStart, context),

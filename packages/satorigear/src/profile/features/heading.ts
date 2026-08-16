@@ -2,11 +2,7 @@ import type { Heading } from "mdast";
 import { type BlockLine, lineIndent } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import {
-  blockEnd,
-  blockToken,
-  directBlockToken,
-} from "../../fragment/block.ts";
+import { blockEnd } from "../../fragment/block.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -77,13 +73,13 @@ export const feature: SyntaxFeature = {
         },
         inlineContent: true,
         build(tokenStart, context, inline) {
-          const marker = blockToken(tokenStart, BlockKind.AtxHeadingOpen, context);
+          const tokens = context.structure.tokens;
           return {
             type: "heading",
-            depth: context.structure.tokens.end(marker) - context.structure.tokens.start(marker) as Heading["depth"],
+            depth: tokens.end(tokenStart) - tokens.start(tokenStart) as Heading["depth"],
             children: inline!.children,
             position: {
-              start: context.structure.tokens.start(marker),
+              start: tokens.start(tokenStart),
               end: blockEnd(tokenStart, context),
             },
           };
@@ -101,20 +97,15 @@ export const feature: SyntaxFeature = {
         },
         inlineContent: true,
         build(tokenStart, context, inline) {
-          const levelOne = directBlockToken(tokenStart, BlockKind.SetextHeading1Open, context);
-          if (levelOne === void 0) {
-            blockToken(tokenStart, BlockKind.SetextHeading2Open, context);
-          }
+          const tokens = context.structure.tokens;
           const children = inline!.children;
           return {
             type: "heading",
-            depth: levelOne === void 0 ? 2 : 1,
+            depth: tokens.kind(tokenStart) === BlockKind.SetextHeading1Open ? 1 : 2,
             children,
             position: {
               start: firstChildStart(children),
-              end: context.structure.tokens.start(
-                blockToken(tokenStart, BlockKind.HeadingClose, context),
-              ),
+              end: tokens.start(tokenStart + tokens.nodeLength(tokenStart) - 1),
             },
           };
         },

@@ -20,7 +20,7 @@ import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { type BlockBuildContext, blockEnd, blockToken } from "../../fragment/block.ts";
+import { type BlockBuildContext, blockEnd } from "../../fragment/block.ts";
 import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
@@ -37,11 +37,10 @@ export function codeFenceAt(source: string, line: BlockLine): Fence | undefined 
 }
 
 function indentedCodeEnd(tokenStart: number, context: BlockBuildContext): number {
-  const token = blockToken(tokenStart, BlockKind.IndentedCodeBlockToken, context);
-  const count = context.structure.tokens.rangeCount(token);
+  const count = context.structure.tokens.rangeCount(tokenStart);
   for (let index = count - 1; index >= 0; index--) {
-    const start = context.structure.tokens.rangeStart(token, index);
-    const rangeEnd = context.structure.tokens.rangeEnd(token, index);
+    const start = context.structure.tokens.rangeStart(tokenStart, index);
+    const rangeEnd = context.structure.tokens.rangeEnd(tokenStart, index);
     if (/[^\r\n]/.test(context.source.slice(start, rangeEnd))) {
       let end = rangeEnd;
       while (end > start && /[\r\n]/.test(context.source[end - 1])) {
@@ -78,11 +77,10 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const offset = context.structure.tokens.start(tokenStart);
           const end = offset + context.structure.lenOf(tokenStart);
-          const token = blockToken(tokenStart, BlockKind.FencedCodeBlock, context);
           const source = normalizeLines(
-            context.structure.tokens.text(context.source, token),
+            context.structure.tokens.text(context.source, tokenStart),
           );
-          const block = context.structure.tokens.value<FencedBlock>(token);
+          const block = context.structure.tokens.value<FencedBlock>(tokenStart);
           if (!block) {
             throw new Error("FencedCodeBlock token has no fence metadata");
           }
@@ -112,8 +110,7 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const offset = context.structure.tokens.start(tokenStart);
-          const token = blockToken(tokenStart, BlockKind.IndentedCodeBlockToken, context);
-          const lines = normalizeLines(context.structure.tokens.text(context.source, token))
+          const lines = normalizeLines(context.structure.tokens.text(context.source, tokenStart))
             .split("\n")
             .map((line) => removeIndent(line, 4));
           while (lines.length && /^[ \t]*$/.test(lines[lines.length - 1])) {

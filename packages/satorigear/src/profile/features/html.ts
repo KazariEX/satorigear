@@ -3,7 +3,7 @@ import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { type BlockBuildContext, blockEnd, blockToken } from "../../fragment/block.ts";
+import { type BlockBuildContext, blockEnd } from "../../fragment/block.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import type { InlineLeafBuilder } from "../../fragment/inline.ts";
@@ -150,9 +150,8 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const offset = context.structure.tokens.start(tokenStart);
           const end = offset + context.structure.lenOf(tokenStart);
-          const token = blockToken(tokenStart, BlockKind.HtmlBlockToken, context);
-          const unterminated = htmlBlockUnterminated(token, context);
-          let html = normalizeLines(context.structure.tokens.text(context.source, token));
+          const unterminated = htmlBlockUnterminated(tokenStart, context);
+          let html = normalizeLines(context.structure.tokens.text(context.source, tokenStart));
           if (!unterminated && html.endsWith("\n")) {
             html = html.slice(0, -1);
           }

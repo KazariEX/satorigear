@@ -10,7 +10,7 @@ import { firstNonspace, lineEnd } from "../../../block/lines.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
-import { blockEnd, blockToken } from "../../../fragment/block.ts";
+import { blockEnd } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 
@@ -30,9 +30,8 @@ export const blockRules: BlockFeature["rules"] = [
     build(tokenStart, context) {
       const offset = context.structure.tokens.start(tokenStart);
       const end = offset + context.structure.lenOf(tokenStart);
-      const token = blockToken(tokenStart, BlockKind.MathBlockToken, context);
-      const value = context.structure.tokens.text(context.source, token);
-      const block = context.structure.tokens.value<FencedBlock>(token);
+      const value = context.structure.tokens.text(context.source, tokenStart);
+      const block = context.structure.tokens.value<FencedBlock>(tokenStart);
       if (!block) {
         throw new Error("MathBlockToken has no fence metadata");
       }
