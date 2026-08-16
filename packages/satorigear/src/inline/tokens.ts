@@ -4,7 +4,7 @@ export type InlineTokenStream = readonly number[];
 // Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = 4;
 
-// Token flags survive lexer and feature rewrites, so their bits are allocated here
+// Token flags survive lexer and feature transforms, so their bits are allocated here
 // even when a particular feature owns their interpretation.
 export const enum InlineTokenFlag {
   AttributeDetached = 4,

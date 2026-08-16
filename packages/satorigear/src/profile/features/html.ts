@@ -209,7 +209,7 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    lexical: [
+    scan: [
       {
         marker: Character.LessThanSign,
         scan(source, start, tokens) {
@@ -232,7 +232,7 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    syntax: [
+    build: [
       { kind: "leaf", token: InlineKind.InlineHtml, build: buildInlineHtml },
       { kind: "leaf", token: InlineKind.HtmlComment, build: buildInlineHtml },
     ],

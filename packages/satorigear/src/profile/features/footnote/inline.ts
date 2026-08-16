@@ -14,7 +14,7 @@ import {
 import { normalizeAssociationLabel, splitReferenceTail } from "../../utils.ts";
 import { semanticText } from "../text.ts";
 import { footnoteLabelAt } from "./shared.ts";
-import type { InlineSyntaxDefinition, InlineTokenRewrite } from "../../../inline/profile.ts";
+import type { InlineBuildRule, InlineTokenTransform } from "../../../inline/profile.ts";
 
 function closerIndex(tokens: InlineTokenStream, start: number, end: number): number {
   for (let index = start + 1; index < inlineTokenCount(tokens); index++) {
@@ -35,7 +35,7 @@ function closerIndex(tokens: InlineTokenStream, start: number, end: number): num
   return -1;
 }
 
-export const rewriteFootnoteTokens: InlineTokenRewrite = (source, tokens, context) => {
+export const transformFootnoteTokens: InlineTokenTransform = (source, tokens, context) => {
   let result: number[] | undefined;
   for (let index = 0; index < inlineTokenCount(tokens); index++) {
     const start = inlineTokenStart(tokens, index);
@@ -96,7 +96,7 @@ export const rewriteFootnoteTokens: InlineTokenRewrite = (source, tokens, contex
   return result ?? tokens;
 };
 
-export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
+export const inlineBuilds: readonly InlineBuildRule[] = [
   {
     kind: "leaf",
     token: InlineKind.FootnoteReference,

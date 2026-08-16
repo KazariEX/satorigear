@@ -1,4 +1,4 @@
-import { compileInlineTokenizer, type InlineLexicalRule, type InlineTokenizer } from "./lexer.ts";
+import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./lexer.ts";
 import { createPairingResolver, type DelimiterConfig, type PairedTokenConfig } from "./pairing.ts";
 import type { InlineKind } from "../constants/inline.ts";
 import type {
@@ -14,13 +14,13 @@ export interface InlineResolutionContext {
   hasDefinition: (key: string) => boolean;
 }
 
-export type InlineTokenRewrite = (
+export type InlineTokenTransform = (
   source: string,
   tokens: InlineTokenStream,
   context: InlineResolutionContext,
 ) => InlineTokenStream;
 
-export type InlineSyntaxDefinition =
+export type InlineBuildRule =
   | {
     kind: "decorate";
     token: InlineKind;
@@ -33,7 +33,6 @@ export type InlineSyntaxDefinition =
   }
   | {
     kind: "container";
-    isolateDelimiters?: boolean;
     close: InlineKind;
     contentOpen: InlineKind;
     token: InlineKind;
@@ -41,7 +40,6 @@ export type InlineSyntaxDefinition =
   }
   | {
     kind: "pair";
-    isolateDelimiters?: boolean;
     close: InlineKind;
     open: InlineKind;
     build: InlineNodeBuilder;
@@ -64,28 +62,33 @@ export interface InlineSyntaxSchema {
 }
 
 export interface InlineFeature {
-  delimiters?: readonly DelimiterConfig[];
-  lexical?: readonly InlineLexicalRule[];
-  pairs?: readonly PairedTokenConfig[];
-  rewrite?: InlineTokenRewrite;
-  syntax?: readonly InlineSyntaxDefinition[];
+  /** Recognize source ranges and append raw inline tokens. */
+  scan?: readonly InlineScanRule[];
+  /** Resolve token relationships before semantic builders consume them. */
+  resolve?: {
+    delimiters?: readonly DelimiterConfig[];
+    pairs?: readonly PairedTokenConfig[];
+    transform?: InlineTokenTransform;
+  };
+  /** Build semantic nodes from the resolved token stream. */
+  build?: readonly InlineBuildRule[];
 }
 
 export interface InlineProfile {
   decodeText: (value: string) => string;
-  resolve: InlineTokenRewrite;
+  resolve: InlineTokenTransform;
   schema: InlineSyntaxSchema;
   tokenHandlers: readonly (InlineTokenHandler | undefined)[];
   tokenize: InlineTokenizer;
 }
 
-function composeRewrites(rewrites: readonly InlineTokenRewrite[]): InlineTokenRewrite {
-  if (rewrites.length === 1) {
-    return rewrites[0];
+function composeTransforms(transforms: readonly InlineTokenTransform[]): InlineTokenTransform {
+  if (transforms.length === 1) {
+    return transforms[0];
   }
   return (source, tokens, context) => {
-    for (const rewrite of rewrites) {
-      tokens = rewrite(source, tokens, context);
+    for (const transform of transforms) {
+      tokens = transform(source, tokens, context);
     }
     return tokens;
   };
@@ -96,26 +99,27 @@ export function compileInlineProfile(
   decodeText: (value: string) => string,
 ): InlineProfile {
   const delimiters: DelimiterConfig[] = [];
-  const lexicalRules: InlineLexicalRule[] = [];
-  const syntaxDefinitions: InlineSyntaxDefinition[] = [];
   const pairs: PairedTokenConfig[] = [];
-  const rewrites: InlineTokenRewrite[] = [];
+  const scanRules: InlineScanRule[] = [];
+  const transforms: InlineTokenTransform[] = [];
+  const buildRules: InlineBuildRule[] = [];
 
   for (const feature of features) {
-    if (feature.delimiters) {
-      delimiters.push(...feature.delimiters);
+    const resolve = feature.resolve;
+    if (feature.scan) {
+      scanRules.push(...feature.scan);
     }
-    if (feature.lexical) {
-      lexicalRules.push(...feature.lexical);
+    if (resolve?.delimiters) {
+      delimiters.push(...resolve.delimiters);
     }
-    if (feature.pairs) {
-      pairs.push(...feature.pairs);
+    if (resolve?.pairs) {
+      pairs.push(...resolve.pairs);
     }
-    if (feature.rewrite) {
-      rewrites.push(feature.rewrite);
+    if (resolve?.transform) {
+      transforms.push(resolve.transform);
     }
-    if (feature.syntax) {
-      syntaxDefinitions.push(...feature.syntax);
+    if (feature.build) {
+      buildRules.push(...feature.build);
     }
   }
 
@@ -123,56 +127,48 @@ export function compileInlineProfile(
   const containerByKind: (InlineContainer | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
 
-  for (const definition of syntaxDefinitions) {
-    if (definition.kind === "decorate") {
-      tokenHandlers[definition.token] = definition.apply;
+  for (const rule of buildRules) {
+    if (rule.kind === "decorate") {
+      tokenHandlers[rule.token] = rule.apply;
       continue;
     }
-    if (definition.kind === "leaf") {
-      tokenHandlers[definition.token] = definition.build;
+    if (rule.kind === "leaf") {
+      tokenHandlers[rule.token] = rule.build;
       continue;
     }
 
-    if (definition.kind === "container") {
-      containerByKind[definition.token] = {
-        closeKind: definition.close,
-        contentOpenKind: definition.contentOpen,
-        build: definition.build,
+    if (rule.kind === "container") {
+      containerByKind[rule.token] = {
+        closeKind: rule.close,
+        contentOpenKind: rule.contentOpen,
+        build: rule.build,
       };
     }
     else {
-      pairByOpenKind[definition.open] = {
-        closeKind: definition.close,
-        build: definition.build,
+      pairByOpenKind[rule.open] = {
+        closeKind: rule.close,
+        build: rule.build,
       };
-    }
-
-    if (definition.isolateDelimiters) {
-      pairs.push({
-        opener: definition.kind === "container" ? definition.contentOpen : definition.open,
-        closer: definition.close,
-        isolateDelimiters: true,
-      });
     }
   }
 
   const pair = createPairingResolver(delimiters, pairs);
-  const rewrite = rewrites.length === 0 ? void 0 : composeRewrites(rewrites);
+  const transform = transforms.length ? composeTransforms(transforms) : void 0;
 
   return {
     decodeText,
-    resolve: rewrite === void 0
+    resolve: transform === void 0
       ? pair
       : (source, tokens, context) => {
-        const rewritten = rewrite(source, tokens, context);
+        const transformed = transform(source, tokens, context);
         // A new stream is private to this resolution, so pairing may update kinds in place.
-        return pair(source, rewritten, context, rewritten !== tokens);
+        return pair(source, transformed, context, transformed !== tokens);
       },
     schema: {
       containerByKind,
       pairByOpenKind,
     },
     tokenHandlers,
-    tokenize: compileInlineTokenizer(lexicalRules),
+    tokenize: compileInlineTokenizer(scanRules),
   };
 }

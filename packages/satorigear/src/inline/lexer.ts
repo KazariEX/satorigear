@@ -2,16 +2,16 @@ import { Character } from "../constants/character.ts";
 import { InlineKind } from "../constants/inline.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
-type InlineLexicalScanner = (
+type InlineScanner = (
   source: string,
   start: number,
   tokens: number[],
 ) => number;
 
 // Features own marker recognition; the compiled lexer only dispatches scanners.
-export interface InlineLexicalRule {
+export interface InlineScanRule {
   marker: number;
-  scan: InlineLexicalScanner;
+  scan: InlineScanner;
 }
 
 export type InlineTokenizer = (source: string) => InlineTokenStream;
@@ -48,7 +48,7 @@ function inlineTextEnd(source: string, start: number, boundary: RegExp): number 
 function tokenize(
   source: string,
   textBoundary: RegExp,
-  lexicalByCode: readonly (InlineLexicalScanner | undefined)[],
+  scannerByCode: readonly (InlineScanner | undefined)[],
 ): InlineTokenStream {
   const tokens: number[] = [];
   let offset = 0;
@@ -122,11 +122,11 @@ function tokenize(
       continue;
     }
 
-    const scan = lexicalByCode[code];
+    const scan = scannerByCode[code];
     if (scan) {
-      const lexicalEnd = scan(source, offset, tokens);
-      if (lexicalEnd > offset) {
-        offset = lexicalEnd;
+      const scannedEnd = scan(source, offset, tokens);
+      if (scannedEnd > offset) {
+        offset = scannedEnd;
         continue;
       }
       // A marker may be shared by multiple features. If none accepts it,
@@ -143,13 +143,13 @@ function tokenize(
   return tokens;
 }
 
-export function compileInlineTokenizer(rules: readonly InlineLexicalRule[]): InlineTokenizer {
-  const lexicalByCode: (InlineLexicalScanner | undefined)[] = [];
+export function compileInlineTokenizer(rules: readonly InlineScanRule[]): InlineTokenizer {
+  const scannerByCode: (InlineScanner | undefined)[] = [];
   const boundaryCodes: number[] = [];
   for (const rule of rules) {
     const code = rule.marker;
-    const previous = lexicalByCode[code];
-    lexicalByCode[code] = previous === void 0
+    const previous = scannerByCode[code];
+    scannerByCode[code] = previous === void 0
       ? rule.scan
       : (source, start, tokens) => {
         const end = previous(source, start, tokens);
@@ -162,5 +162,5 @@ export function compileInlineTokenizer(rules: readonly InlineLexicalRule[]): Inl
   const boundaries = String.fromCharCode(...boundaryCodes).replaceAll(/[\\\]-]/g, "\\$&");
   const textBoundary = new RegExp(` {2,}(?=[\\n\\r]|$)|[\\n\\r${boundaries}]`, "g");
 
-  return (source) => tokenize(source, textBoundary, lexicalByCode);
+  return (source) => tokenize(source, textBoundary, scannerByCode);
 }

@@ -23,7 +23,7 @@ function bindingEnd(source: string, start: number): number {
 
 export const feature: SyntaxFeature = {
   inline: {
-    lexical: [
+    scan: [
       {
         marker: Character.LeftCurlyBracket,
         scan(source, start, tokens) {
@@ -36,7 +36,7 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    syntax: [
+    build: [
       {
         kind: "leaf",
         token: InlineKind.Binding,

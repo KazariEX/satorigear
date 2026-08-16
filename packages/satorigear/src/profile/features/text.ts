@@ -43,7 +43,7 @@ export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, conte
 
 export const feature: SyntaxFeature = {
   inline: {
-    lexical: [
+    scan: [
       {
         marker: Character.Ampersand,
         scan(source, start, tokens) {
@@ -83,7 +83,7 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    syntax: [
+    build: [
       { kind: "leaf", token: InlineKind.Text, build: buildInlineText },
       { kind: "leaf", token: InlineKind.Delimiter, build: buildInlineText },
       { kind: "leaf", token: InlineKind.Escape, build: buildInlineText },

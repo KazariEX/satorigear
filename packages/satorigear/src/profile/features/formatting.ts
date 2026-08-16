@@ -1,12 +1,12 @@
 import type { Delete, Emphasis, Strong } from "mdast";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../inline/lexer.ts";
+import { inlineMarkerRunEnd, type InlineScanRule } from "../../inline/lexer.ts";
 import { appendInlineToken } from "../../inline/tokens.ts";
 import { buildInlineText } from "./text.ts";
 import type { InlineNodeBuilder } from "../../fragment/inline.ts";
 import type { DelimiterConfig } from "../../inline/pairing.ts";
-import type { InlineSyntaxDefinition } from "../../inline/profile.ts";
+import type { InlineBuildRule } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const asteriskDelimiter: DelimiterConfig = {
@@ -33,7 +33,7 @@ const strikethroughDelimiter: DelimiterConfig = {
   pairing: { kind: "whole" },
 };
 
-const scanFormatting: InlineLexicalRule["scan"] = (source, start, tokens) => {
+const scanFormatting: InlineScanRule["scan"] = (source, start, tokens) => {
   const code = source.charCodeAt(start);
   const end = inlineMarkerRunEnd(source, start);
   const kind = code === Character.Asterisk
@@ -60,11 +60,11 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
     asteriskDelimiter,
     underscoreDelimiter,
   ];
-  const lexical: InlineLexicalRule[] = [
+  const scans: InlineScanRule[] = [
     { marker: Character.Asterisk, scan: scanFormatting },
     { marker: Character.LowLine, scan: scanFormatting },
   ];
-  const syntax: InlineSyntaxDefinition[] = [
+  const builds: InlineBuildRule[] = [
     { kind: "leaf", token: InlineKind.AsteriskRun, build: buildInlineText },
     { kind: "leaf", token: InlineKind.UnderscoreRun, build: buildInlineText },
     {
@@ -82,7 +82,7 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
   ];
 
   if (strikethroughOptions) {
-    lexical.push({ marker: Character.Tilde, scan: scanFormatting });
+    scans.push({ marker: Character.Tilde, scan: scanFormatting });
     delimiters.push(
       typeof strikethroughOptions !== "object" || strikethroughOptions.singleTilde !== false
         ? {
@@ -91,7 +91,7 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
         }
         : strikethroughDelimiter,
     );
-    syntax.push(
+    builds.push(
       { kind: "leaf", token: InlineKind.TildeRun, build: buildInlineText },
       {
         kind: "pair",
@@ -104,9 +104,11 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
 
   return {
     inline: {
-      lexical,
-      delimiters,
-      syntax,
+      scan: scans,
+      resolve: {
+        delimiters,
+      },
+      build: builds,
     },
   };
 }

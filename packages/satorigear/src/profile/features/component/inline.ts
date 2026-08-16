@@ -15,8 +15,9 @@ import {
   componentNameEnd,
   normalizeComponentName,
 } from "../attributes/syntax.ts";
-import type { InlineLexicalRule } from "../../../inline/lexer.ts";
-import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
+import type { InlineScanRule } from "../../../inline/lexer.ts";
+import type { PairedTokenConfig } from "../../../inline/pairing.ts";
+import type { InlineBuildRule } from "../../../inline/profile.ts";
 import type { SourceSpan } from "../../../source-view.ts";
 
 interface Candidate extends SourceSpan {
@@ -55,7 +56,7 @@ function inlineComponentEnd(source: string, start: number): number | undefined {
   return componentNameEnd(source, start + 1, false);
 }
 
-export const inlineLexical: readonly InlineLexicalRule[] = [
+export const inlineScans: readonly InlineScanRule[] = [
   {
     marker: Character.Colon,
     scan(source, start, tokens) {
@@ -292,12 +293,25 @@ function emitRange(
   copyRange(target, tokens, cursor, end, inLinkLabel, normalClosers);
 }
 
+export const inlinePairs: PairedTokenConfig[] = [
+  {
+    opener: InlineKind.InlineComponentLabelOpen,
+    closer: InlineKind.InlineComponentLabelClose,
+    isolateDelimiters: true,
+  },
+  {
+    opener: InlineKind.InlineSpanOpen,
+    closer: InlineKind.InlineSpanClose,
+    isolateDelimiters: true,
+  },
+];
+
 // Reclassify CommonMark bracket/text tokens as explicit semantic carriers.
-export function rewriteComponentTokens(
+export function transformComponentTokens(
   source: string,
   tokens: InlineTokenStream,
 ): InlineTokenStream {
-  // Bare components are already final lexical tokens; only labels and spans need bracket structure.
+  // Bare components are already final scanned tokens; only labels and spans need bracket structure.
   if (!source.includes("[")) {
     return tokens;
   }
@@ -310,10 +324,9 @@ export function rewriteComponentTokens(
   return result;
 }
 
-export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
+export const inlineBuilds: readonly InlineBuildRule[] = [
   {
     kind: "container",
-    isolateDelimiters: true,
     token: InlineKind.InlineComponentOpen,
     contentOpen: InlineKind.InlineComponentLabelOpen,
     close: InlineKind.InlineComponentLabelClose,
@@ -333,7 +346,6 @@ export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
   },
   {
     kind: "pair",
-    isolateDelimiters: true,
     open: InlineKind.InlineSpanOpen,
     close: InlineKind.InlineSpanClose,
     build(open, close, sourceSpan, children) {

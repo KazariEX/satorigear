@@ -175,10 +175,10 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    lexical: [
+    scan: [
       { marker: Character.LeftCurlyBracket, scan: scanAttribute },
     ],
-    syntax: [
+    build: [
       {
         kind: "decorate",
         token: InlineKind.AttributesToken,

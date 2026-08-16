@@ -362,79 +362,81 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    pairs: [
-      {
-        opener: InlineKind.BracketOpen,
-        closer: InlineKind.LinkTail,
-        open: InlineKind.LinkOpen,
-        close: InlineKind.LinkClose,
-        deactivateEarlier: [
-          InlineKind.BracketOpen,
-        ],
-        isolateDelimiters: true,
-      },
-      {
-        opener: InlineKind.ImageOpen,
-        closer: InlineKind.LinkTail,
-        open: InlineKind.ImageLinkOpen,
-        close: InlineKind.ImageLinkClose,
-      },
-      {
-        opener: InlineKind.BracketOpen,
-        closer: InlineKind.ReferenceTail,
-        open: InlineKind.ReferenceOpen,
-        close: InlineKind.ReferenceClose,
-        deactivateEarlier: [
-          InlineKind.BracketOpen,
-        ],
-        isolateDelimiters: true,
-        activate: activateReference,
-        splitUnmatchedCloser: splitReferenceTailForPairing,
-      },
-      {
-        opener: InlineKind.BracketOpen,
-        closer: InlineKind.BracketClose,
-        open: InlineKind.ReferenceOpen,
-        close: InlineKind.ReferenceClose,
-        deactivateEarlier: [
-          InlineKind.BracketOpen,
-        ],
-        isolateDelimiters: true,
-        activate: activateReference,
-        content: {
-          requireNonWhitespace: true,
-          maxCharacters: 999,
-          forbidTokens: [
+    resolve: {
+      pairs: [
+        {
+          opener: InlineKind.BracketOpen,
+          closer: InlineKind.LinkTail,
+          open: InlineKind.LinkOpen,
+          close: InlineKind.LinkClose,
+          deactivateEarlier: [
             InlineKind.BracketOpen,
-            InlineKind.ImageOpen,
           ],
+          isolateDelimiters: true,
         },
-      },
-      {
-        opener: InlineKind.ImageOpen,
-        closer: InlineKind.ReferenceTail,
-        open: InlineKind.ImageReferenceOpen,
-        close: InlineKind.ImageReferenceClose,
-        isolateDelimiters: true,
-        activate: activateReference,
-        splitUnmatchedCloser: splitReferenceTailForPairing,
-      },
-      {
-        opener: InlineKind.ImageOpen,
-        closer: InlineKind.BracketClose,
-        open: InlineKind.ImageReferenceOpen,
-        close: InlineKind.ImageReferenceClose,
-        isolateDelimiters: true,
-        activate: activateReference,
-        content: {
-          requireNonWhitespace: true,
-          maxCharacters: 999,
-          forbidTokens: [
+        {
+          opener: InlineKind.ImageOpen,
+          closer: InlineKind.LinkTail,
+          open: InlineKind.ImageLinkOpen,
+          close: InlineKind.ImageLinkClose,
+        },
+        {
+          opener: InlineKind.BracketOpen,
+          closer: InlineKind.ReferenceTail,
+          open: InlineKind.ReferenceOpen,
+          close: InlineKind.ReferenceClose,
+          deactivateEarlier: [
             InlineKind.BracketOpen,
-            InlineKind.ImageOpen,
           ],
+          isolateDelimiters: true,
+          activate: activateReference,
+          splitUnmatchedCloser: splitReferenceTailForPairing,
         },
-      },
-    ],
+        {
+          opener: InlineKind.BracketOpen,
+          closer: InlineKind.BracketClose,
+          open: InlineKind.ReferenceOpen,
+          close: InlineKind.ReferenceClose,
+          deactivateEarlier: [
+            InlineKind.BracketOpen,
+          ],
+          isolateDelimiters: true,
+          activate: activateReference,
+          content: {
+            requireNonWhitespace: true,
+            maxCharacters: 999,
+            forbidTokens: [
+              InlineKind.BracketOpen,
+              InlineKind.ImageOpen,
+            ],
+          },
+        },
+        {
+          opener: InlineKind.ImageOpen,
+          closer: InlineKind.ReferenceTail,
+          open: InlineKind.ImageReferenceOpen,
+          close: InlineKind.ImageReferenceClose,
+          isolateDelimiters: true,
+          activate: activateReference,
+          splitUnmatchedCloser: splitReferenceTailForPairing,
+        },
+        {
+          opener: InlineKind.ImageOpen,
+          closer: InlineKind.BracketClose,
+          open: InlineKind.ImageReferenceOpen,
+          close: InlineKind.ImageReferenceClose,
+          isolateDelimiters: true,
+          activate: activateReference,
+          content: {
+            requireNonWhitespace: true,
+            maxCharacters: 999,
+            forbidTokens: [
+              InlineKind.BracketOpen,
+              InlineKind.ImageOpen,
+            ],
+          },
+        },
+      ],
+    },
   },
 };

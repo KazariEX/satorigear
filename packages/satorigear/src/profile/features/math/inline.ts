@@ -1,10 +1,10 @@
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
-import { type InlineLexicalRule, inlineMarkerRunEnd } from "../../../inline/lexer.ts";
+import { inlineMarkerRunEnd, type InlineScanRule } from "../../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../../inline/tokens.ts";
-import type { InlineSyntaxDefinition } from "../../../inline/profile.ts";
+import type { InlineBuildRule } from "../../../inline/profile.ts";
 
-export function createMathLexicalRule(singleDollarTextMath: boolean): InlineLexicalRule {
+export function createMathScanRule(singleDollarTextMath: boolean): InlineScanRule {
   const minimum = singleDollarTextMath ? 1 : 2;
   return {
     marker: Character.DollarSign,
@@ -59,7 +59,7 @@ function mathTextValue(value: string): string {
   return result;
 }
 
-export const inlineSyntax: readonly InlineSyntaxDefinition[] = [
+export const inlineBuilds: readonly InlineBuildRule[] = [
   {
     kind: "leaf",
     token: InlineKind.MathText,

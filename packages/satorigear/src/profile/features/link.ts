@@ -347,7 +347,7 @@ const buildInlineReferenceLink = createBuildMedia("link", "reference");
 
 export const feature: SyntaxFeature = {
   inline: {
-    lexical: [
+    scan: [
       {
         marker: Character.ExclamationMark,
         scan(source, start, tokens) {
@@ -389,7 +389,7 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    syntax: [
+    build: [
       {
         kind: "pair",
         open: InlineKind.LinkOpen,
