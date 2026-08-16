@@ -223,11 +223,6 @@ function linkDefinitionAt(
   return { end: lineIndex + 1, fields };
 }
 
-interface ReferenceCloser {
-  end: number;
-  kind: InlineKind;
-}
-
 function referenceLabelEnd(source: string, start: number): number {
   if (source.charCodeAt(start) !== Character.LeftSquareBracket) {
     return -1;
@@ -300,24 +295,23 @@ function resolveReferenceTokens(
   tokens: InlineTokenStream,
   context: InlineResolutionContext,
 ): InlineTokenStream {
-  const bracketOpeners: number[] = [];
-  const imageOpeners: number[] = [];
-  const openKinds: number[] = [];
-  const closers: (ReferenceCloser | undefined)[] = [];
+  let closerEnds: number[] | undefined;
   let inactiveBefore = 0;
   let lastNestedOpener = 0;
-  let changed = false;
+  // One source-order stack is sufficient; complemented indexes distinguish image openers without records.
+  let openers: number[] | undefined;
+  let replacementKinds: number[] | undefined;
 
   const count = inlineTokenCount(tokens);
   for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
     const kind = inlineTokenKind(tokens, tokenIndex);
     if (kind === InlineKind.BracketOpen) {
-      bracketOpeners.push(tokenIndex);
+      (openers ??= []).push(tokenIndex);
       lastNestedOpener = tokenIndex + 1;
       continue;
     }
     if (kind === InlineKind.ImageOpen) {
-      imageOpeners.push(tokenIndex);
+      (openers ??= []).push(~tokenIndex);
       lastNestedOpener = tokenIndex + 1;
       continue;
     }
@@ -325,21 +319,14 @@ function resolveReferenceTokens(
       continue;
     }
 
-    const bracketOpener = bracketOpeners[bracketOpeners.length - 1] ?? -1;
-    const imageOpener = imageOpeners[imageOpeners.length - 1] ?? -1;
-    if (bracketOpener < 0 && imageOpener < 0) {
+    const encodedOpener = openers?.pop();
+    if (encodedOpener === void 0) {
       continue;
     }
-    const image = imageOpener > bracketOpener;
-    const openerIndex = image ? imageOpener : bracketOpener;
-    if (image) {
-      imageOpeners.pop();
-    }
-    else {
-      bracketOpeners.pop();
-      if (openerIndex + 1 < inactiveBefore) {
-        continue;
-      }
+    const image = encodedOpener < 0;
+    const openerIndex = image ? ~encodedOpener : encodedOpener;
+    if (!image && openerIndex + 1 < inactiveBefore) {
+      continue;
     }
 
     const contentStart = inlineTokenEnd(tokens, openerIndex);
@@ -370,16 +357,16 @@ function resolveReferenceTokens(
       }
     }
 
-    openKinds[openerIndex] = image
+    replacementKinds ??= [];
+    replacementKinds[openerIndex] = image
       ? reference ? InlineKind.ImageReferenceOpen : InlineKind.ImageLinkOpen
       : reference ? InlineKind.ReferenceOpen : InlineKind.LinkOpen;
-    closers[tokenIndex] = {
-      end: closeEnd,
-      kind: image
-        ? reference ? InlineKind.ImageReferenceClose : InlineKind.ImageLinkClose
-        : reference ? InlineKind.ReferenceClose : InlineKind.LinkClose,
-    };
-    changed = true;
+    replacementKinds[tokenIndex] = image
+      ? reference ? InlineKind.ImageReferenceClose : InlineKind.ImageLinkClose
+      : reference ? InlineKind.ReferenceClose : InlineKind.LinkClose;
+    closerEnds ??= [];
+    closerEnds[tokenIndex] = closeEnd;
+
     if (!image) {
       inactiveBefore = Math.max(inactiveBefore, openerIndex + 1);
     }
@@ -391,24 +378,24 @@ function resolveReferenceTokens(
     }
   }
 
-  if (!changed) {
+  if (!replacementKinds) {
     return tokens;
   }
   const result: number[] = [];
   for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-    const closer = closers[tokenIndex];
-    const kind = openKinds[tokenIndex];
-    if (closer) {
+    const closerEnd = closerEnds?.[tokenIndex];
+    const kind = replacementKinds[tokenIndex];
+    if (closerEnd !== void 0) {
       appendInlineToken(
         result,
-        closer.kind,
+        kind,
         inlineTokenStart(tokens, tokenIndex),
-        closer.end,
+        closerEnd,
         inlineTokenFlags(tokens, tokenIndex),
       );
       while (
         tokenIndex + 1 < count &&
-        inlineTokenStart(tokens, tokenIndex + 1) < closer.end
+        inlineTokenStart(tokens, tokenIndex + 1) < closerEnd
       ) {
         tokenIndex++;
       }
