@@ -44,7 +44,7 @@ describe("component", () => {
     });
     expect(componentParser.parse("::Card\n---\ncount: 42\n---\n::\n").children[0]).toMatchObject({
       type: "blockComponent",
-      attributes: { count: 42 },
+      children: [{ type: "yaml", value: "count: 42" }],
     });
   });
 
@@ -110,7 +110,7 @@ describe("component", () => {
     });
   });
 
-  it("parses typed YAML props before component content", () => {
+  it("captures YAML props as an uninterpreted node before component content", () => {
     const source = `::DataCard{count="inline"}
 ---
 count: 42
@@ -127,31 +127,23 @@ Body
 ::
 `;
     const value = component(source) as BlockComponent;
-    expect(value).toMatchObject({
-      type: "blockComponent",
-      name: "data-card",
-      attributes: {
-        count: "inline",
-        enabled: true,
-        empty: null,
-        items: ["one", "two"],
-        config: { mode: "dark" },
-        published: "2025-08-10",
-      },
-      children: [{ type: "paragraph", children: [{ type: "text", value: "Body" }] }],
-    });
+    expect(value.attributes).toEqual({ count: "inline" });
+    expect(value.children[0]).toMatchObject({ type: "yaml" });
+    expect(value.children.at(-1)).toMatchObject({ type: "paragraph", children: [{ type: "text", value: "Body" }] });
+    const yaml = value.children[0] as { type: string; value: string };
+    expect(yaml.value).toContain("enabled: true");
+    expect(yaml.value).toContain("config:");
+    expect(yaml.value).toContain("  mode: dark");
   });
 
-  it("accepts YAML props code fences without emitting code nodes", () => {
+  it("recognizes YAML props code fences without emitting code nodes", () => {
     for (const [open, close] of [
       ["```yaml [props]", "```"],
       ["~~~yml [props]", "~~~"],
     ]) {
       const value = component(`::card\n${open}\ncount: 42\n${close}\nBody\n::\n`) as BlockComponent;
-      expect(value).toMatchObject({
-        attributes: { count: 42 },
-        children: [{ type: "paragraph" }],
-      });
+      expect(value.children[0]).toMatchObject({ type: "yaml", value: "count: 42" });
+      expect(value.children.at(-1)).toMatchObject({ type: "paragraph" });
       expect(value.children.some((node) => node.type === "code")).toBe(false);
     }
   });
@@ -240,11 +232,14 @@ End
 
   it("only consumes YAML props at the beginning of component content", () => {
     const value = component("::card\nBody\n---\ncount: 42\n---\n::\n") as BlockComponent;
-    expect(value.attributes).toEqual({});
+    expect(value.children.some((node) => node.type === "yaml")).toBe(false);
   });
 
-  it("throws for invalid closed component YAML", () => {
-    expect(() => component("::card\n---\nitems: [\n---\n::\n")).toThrow();
+  it("keeps invalid closed component YAML as an uninterpreted node", () => {
+    expect(component("::card\n---\nitems: [\n---\n::\n")).toMatchObject({
+      type: "blockComponent",
+      children: [{ type: "yaml", value: "items: [" }],
+    });
   });
 
   it("supports nested components with independent fence sizes", () => {
@@ -533,27 +528,26 @@ End
     document.edit([{ start, end: start + 1, text: "2" }]);
     expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
-      attributes: { count: 2 },
-      children: [{ attributes: { name: "header" } }],
+      children: [{ type: "yaml", value: "count: 2" }, { attributes: { name: "header" } }],
     });
 
     start = document.source.indexOf("header");
     document.edit([{ start, end: start + 6, text: "footer" }]);
     expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
-      children: [{ attributes: { name: "footer" } }],
+      children: [{ type: "yaml" }, { attributes: { name: "footer" } }],
     });
 
     start = document.source.indexOf("#footer");
     document.edit([{ start, end: start + 1, text: "" }]);
     expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
-      children: [{ type: "paragraph", children: [{ type: "text", value: "footer\nTitle" }] }],
+      children: [{ type: "yaml" }, { type: "paragraph", children: [{ type: "text", value: "footer\nTitle" }] }],
     });
     document.edit([{ start, end: start, text: "#" }]);
     expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children[0]).toMatchObject({
-      children: [{ type: "blockComponent", attributes: { name: "footer" } }],
+      children: [{ type: "yaml" }, { type: "blockComponent", attributes: { name: "footer" } }],
     });
   });
 

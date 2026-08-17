@@ -22,7 +22,6 @@
   },
   "dependencies": {
     "@types/mdast": "catalog:",
-    "entities": "catalog:",
-    "yaml": "catalog:"
+    "entities": "catalog:"
   }
 }

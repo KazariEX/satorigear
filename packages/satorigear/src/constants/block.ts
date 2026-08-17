@@ -59,6 +59,7 @@ export const enum BlockRule {
   BlockQuote,
   Paragraph,
   BlockComponentLabel,
+  BlockComponentYamlProps,
   BlockComponent,
   BlockComponentSlot,
   HtmlBlock,

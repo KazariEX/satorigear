@@ -1,4 +1,3 @@
-import { parse as parseYaml } from "yaml";
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
@@ -18,9 +17,9 @@ import {
   parseAttributes,
 } from "../attributes/syntax.ts";
 import { codeFenceAt } from "../code.ts";
+import { buildFrontmatter } from "../frontmatter.ts";
 import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
 import type { SpannedNode } from "../../../fragment/node.ts";
-import type { Attributes } from "../attributes/types.ts";
 
 interface BlockOpening {
   attributesEnd?: number;
@@ -305,12 +304,7 @@ function emitComponentBody(
   let cursor = start;
   const yaml = cursor < end ? yamlPropsAt(source, lines, cursor, end) : void 0;
   if (yaml) {
-    if (yaml.close > yaml.open + 1) {
-      appendLogicalToken(out, BlockKind.BlockComponentYamlProps, source, lines, yaml.open + 1, yaml.close);
-    }
-    else {
-      out.push(BlockKind.BlockComponentYamlProps, lines[yaml.open].end, lines[yaml.open].end);
-    }
+    appendLogicalToken(out, BlockKind.BlockComponentYamlProps, source, lines, yaml.open, yaml.close + 1);
     cursor = yaml.close + 1;
   }
   let slot = nextSlot(source, lines, cursor, end);
@@ -349,20 +343,6 @@ function emitOpening(
   if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
     out.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
   }
-}
-
-function parseYamlAttributes(
-  token: number,
-  context: Parameters<BlockNodeBuilder>[1],
-): Attributes {
-  const value: unknown = parseYaml(context.structure.tokens.text(context.source, token), { schema: "core" });
-  if (value === null || value === void 0) {
-    return {};
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError("Component YAML props must be a mapping");
-  }
-  return value as Attributes;
 }
 
 const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context, inline) => {
@@ -410,6 +390,16 @@ function createBlockStart(shorthand: boolean): BlockStart {
 
 export const blockRules: BlockFeature["rules"] = [
   {
+    // The YAML props fence becomes a child yaml node, matching frontmatter's shape;
+    // interpreting the mapping itself is the consumer's job.
+    rule: BlockRule.BlockComponentYamlProps,
+    syntax: {
+      kind: "leaf",
+      token: BlockKind.BlockComponentYamlProps,
+    },
+    build: buildFrontmatter,
+  },
+  {
     rule: BlockRule.BlockComponentLabel,
     syntax: {
       kind: "frame",
@@ -443,9 +433,6 @@ export const blockRules: BlockFeature["rules"] = [
       const parsed = attributesToken !== void 0
         ? parseAttributes(context.source, tokens.start(attributesToken))
         : void 0;
-      const yamlToken = tokens.kind(openingToken) === BlockKind.BlockComponentYamlProps
-        ? openingToken
-        : void 0;
       const children: SpannedNode<RootContent>[] = [];
       if (label) {
         children.push(buildBlockLabel(label, context, buildInlineFragment(label, context)));
@@ -455,9 +442,7 @@ export const blockRules: BlockFeature["rules"] = [
       return {
         type: "blockComponent",
         name: normalizeComponentName(opening.slice(opening.lastIndexOf(":") + 1).trim()),
-        attributes: yamlToken !== void 0
-          ? { ...parseYamlAttributes(yamlToken, context), ...parsed?.attributes }
-          : (parsed?.attributes ?? {}),
+        attributes: parsed?.attributes ?? {},
         position: {
           start: tokens.start(tokenStart),
           end: tokens.end(close),

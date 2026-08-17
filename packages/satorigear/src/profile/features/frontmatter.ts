@@ -1,7 +1,8 @@
+import type { Yaml } from "mdast";
 import { type BlockLine, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
-import { blockEnd } from "../../fragment/block.ts";
+import { blockEnd, type BlockNodeBuilder } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export type FrontmatterMarker = "+" | "-";
@@ -30,6 +31,29 @@ function frontmatterFenceAt(
   return true;
 }
 
+export const buildFrontmatter: BlockNodeBuilder<Yaml> = (tokenStart, context) => {
+  const tokens = context.structure.tokens;
+  const rangeCount = tokens.rangeCount(tokenStart);
+  if (rangeCount < 2) {
+    throw new Error("YAML token does not contain two fences");
+  }
+  let value = normalizeLines(context.source.slice(
+    tokens.rangeEnd(tokenStart, 0),
+    tokens.rangeStart(tokenStart, rangeCount - 1),
+  ));
+  if (value.endsWith("\n")) {
+    value = value.slice(0, -1);
+  }
+  return {
+    type: "yaml",
+    value,
+    position: {
+      start: tokens.start(tokenStart),
+      end: blockEnd(tokenStart, context),
+    },
+  };
+};
+
 export function feature(marker: FrontmatterMarker): SyntaxFeature {
   return {
     block: {
@@ -55,27 +79,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
             kind: "leaf",
             token: BlockKind.FrontmatterToken,
           },
-          build(tokenStart, context) {
-            const rangeCount = context.structure.tokens.rangeCount(tokenStart);
-            if (rangeCount < 2) {
-              throw new Error("FrontmatterToken does not contain two fences");
-            }
-            let value = normalizeLines(context.source.slice(
-              context.structure.tokens.rangeEnd(tokenStart, 0),
-              context.structure.tokens.rangeStart(tokenStart, rangeCount - 1),
-            ));
-            if (value.endsWith("\n")) {
-              value = value.slice(0, -1);
-            }
-            return {
-              type: "yaml",
-              value,
-              position: {
-                start: context.structure.tokens.start(tokenStart),
-                end: blockEnd(tokenStart, context),
-              },
-            };
-          },
+          build: buildFrontmatter,
         },
       ],
       starts: [
