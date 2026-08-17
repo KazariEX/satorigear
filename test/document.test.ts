@@ -110,11 +110,13 @@ describe("markdown document", () => {
   });
 
   it("restarts an earlier multiline definition candidate", () => {
-    const document = parser.createDocument("[foo]\n>\nxxxbar\n");
-    document.edit([{ start: 11, end: 14, text: "foo&]:&rl" }]);
+    // A link label ends at the first unescaped "]",
+    // so the candidate must avoid interior brackets until the edit closes it.
+    const document = parser.createDocument("[alpha\nxxxdelta\n");
+    document.edit([{ start: 10, end: 15, text: "delta]: /u" }]);
 
     expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({ type: "definition", identifier: "foo] > xxxfoo&" });
+    expect(document.snapshot().children[0]).toMatchObject({ type: "definition", identifier: "alpha xxxdelta" });
   });
 
   it("isolates independently edited inline regions", () => {

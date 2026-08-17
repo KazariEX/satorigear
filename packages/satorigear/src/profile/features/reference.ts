@@ -66,8 +66,13 @@ function linkDefinitionAt(
       if (code === Character.LeftSquareBracket) {
         return;
       }
-      if (code === Character.RightSquareBracket && source.charCodeAt(offset + 1) === Character.Colon) {
-        break scanLabel;
+      if (code === Character.RightSquareBracket) {
+        if (source.charCodeAt(offset + 1) === Character.Colon) {
+          break scanLabel;
+        }
+        // Link labels cannot contain an unescaped "]",
+        // so a "]" that does not introduce the colon never yields a definition.
+        return;
       }
       if (code !== Character.Space && code !== Character.CharacterTabulation) {
         labelHasContent = true;
