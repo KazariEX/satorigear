@@ -130,24 +130,22 @@ function delimiterAt(source: string, line: BlockLine): { cells: CellSpan[]; toke
 function emitTableRow(line: BlockLine, cells: readonly CellSpan[], out: BlockTokenStream): void {
   out.push(BlockKind.TableRowOpen, cells[0].start, cells[0].start);
   for (const cell of cells) {
-    out.push(BlockKind.TableCellOpen, cell.start, cell.start);
-    if (cell.contentEnd > cell.contentStart) {
-      out.push(BlockKind.InlineChunk, cell.contentStart, cell.contentEnd);
-    }
-    out.push(BlockKind.TableCellClose, cell.end, cell.end);
+    // The possibly empty inline chunk closes the cell frame. The next cell or
+    // row-close token marks its outer end, so no separate close token is needed.
+    out.push(BlockKind.TableCellStart, cell.start, cell.start);
+    out.push(BlockKind.InlineChunk, cell.contentStart, cell.contentEnd);
   }
   out.push(BlockKind.TableRowClose, line.end, line.end);
 }
 
 const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline) => {
   const tokens = context.structure.tokens;
-  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return {
     type: "tableCell",
     children: inline!.children,
     position: {
       start: tokens.start(tokenStart),
-      end: tokens.start(close),
+      end: tokens.start(tokenStart + tokens.nodeLength(tokenStart)),
     },
   };
 };
@@ -232,8 +230,8 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.TableCell,
         syntax: {
           kind: "frame",
-          open: BlockKind.TableCellOpen,
-          close: BlockKind.TableCellClose,
+          open: BlockKind.TableCellStart,
+          close: BlockKind.InlineChunk,
         },
         inlineContent: true,
       },

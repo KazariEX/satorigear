@@ -105,4 +105,26 @@ describe("table", () => {
     expect(document.snapshot()).toEqual(parser.parse(document.source));
     expect(document.snapshot().children.map((node) => node.type)).toEqual(["table", "heading"]);
   });
+
+  it("invalidates an unchanged-size cell edit", () => {
+    const source = "| a | b |\n| --- | --- |\n| c | d |\n";
+    const document = parser.createDocument(source);
+    const cell = source.indexOf("c");
+    document.edit([{ start: cell, end: cell + 1, text: "x" }]);
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
+  });
+
+  it("keeps empty cells empty", () => {
+    expect(parser.parse("|  | value |\n| --- | --- |\n").children[0]).toMatchObject({
+      type: "table",
+      children: [
+        {
+          children: [
+            { type: "tableCell", children: [] },
+            { type: "tableCell", children: [{ type: "text", value: "value" }] },
+          ],
+        },
+      ],
+    });
+  });
 });
