@@ -26,5 +26,6 @@ declare module "mdast" {
 
   interface RootContentMap {
     blockComponent: BlockComponent;
+    inlineComponent: InlineComponent;
   }
 }
