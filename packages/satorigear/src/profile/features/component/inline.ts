@@ -44,30 +44,14 @@ interface BracketOpening {
   tokenIndex: number;
 }
 
-function inlineComponentEnd(source: string, start: number): number | undefined {
-  const previous = source[start - 1];
-  if (
-    start > 0 && previous !== " " && previous !== "\t" && previous !== "\n" &&
-    previous !== "\r" && previous !== "*" && previous !== "_" && previous !== "["
-  ) {
-    return;
-  }
-  return componentNameEnd(source, start + 1, false);
-}
+const allowedPrevious = /[ \t\n\r\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}\p{P}]/u;
 
-export const inlineScans: readonly InlineScanRule[] = [
-  {
-    marker: Character.Colon,
-    scan(source, start, tokens) {
-      const end = inlineComponentEnd(source, start);
-      if (end === void 0) {
-        return -1;
-      }
-      appendInlineToken(tokens, InlineKind.InlineComponentOpen, start, end);
-      return end;
-    },
-  },
-];
+function inlineComponentEnd(source: string, start: number): number | undefined {
+  const prev = source[start - 1];
+  if (start <= 0 || prev !== ":" && allowedPrevious.test(prev)) {
+    return componentNameEnd(source, start + 1, false);
+  }
+}
 
 function appendLinkCandidates(target: Candidate[], candidates: readonly Candidate[]): void {
   for (const candidate of candidates) {
@@ -285,6 +269,20 @@ export function transformComponentTokens(
   emitRange(result, tokens, 0, source.length, syntax.roots, false, syntax.normalClosers);
   return result;
 }
+
+export const inlineScans: readonly InlineScanRule[] = [
+  {
+    marker: Character.Colon,
+    scan(source, start, tokens) {
+      const end = inlineComponentEnd(source, start);
+      if (end === void 0) {
+        return -1;
+      }
+      appendInlineToken(tokens, InlineKind.InlineComponentOpen, start, end);
+      return end;
+    },
+  },
+];
 
 export const inlineBuilds: readonly InlineBuildRule[] = [
   {
