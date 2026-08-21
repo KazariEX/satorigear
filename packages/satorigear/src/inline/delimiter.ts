@@ -320,26 +320,18 @@ export function createDelimiterResolver(
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[config.token] = {
-      single: config.single
-        ? { open: config.single.open, close: config.single.close }
-        : void 0,
-      double: config.double
-        ? { open: config.double.open, close: config.double.close }
-        : void 0,
+      single: config.single,
+      double: config.double,
       allowIntraword: config.allowIntraword,
       matchWholeRun: config.pairing.kind === "whole" ? true : void 0,
       ruleOfThree: config.pairing.kind === "partial" ? config.pairing.ruleOfThree : void 0,
       index,
     };
   });
-  const delimiterKinds: boolean[] = [];
-  for (const config of delimiterConfigs) {
-    delimiterKinds[config.token] = true;
-  }
   return (source, tokens) => {
     const count = inlineTokenCount(tokens);
     for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-      if (delimiterKinds[inlineTokenKind(tokens, tokenIndex)]) {
+      if (delimiterByKind[inlineTokenKind(tokens, tokenIndex)]) {
         return resolveDelimiterRuns(source, tokens, delimiterByKind, isolationCloseByOpen);
       }
     }
