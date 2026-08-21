@@ -68,7 +68,7 @@ Benchmarked against Sätteri and Remark, which also produce MDAST, with feature 
 
 <!-- benchmark:start environment -->
 
-> Median of 5 isolated mean-time runs at commit [`deacb94`](https://github.com/KazariEX/satorigear/commit/deacb94abb22839aa84f32374cf348cfa27332e1) on Apple M3, node 26.5.0, arm64-darwin. SatoriGear and Sätteri run in paired AB/BA order; comparisons are normalized to SatoriGear (↑ faster, ↓ slower). Lower time and higher throughput are better.
+> Median of 5 isolated mean-time runs at commit [`cc6e5c9`](https://github.com/KazariEX/satorigear/commit/cc6e5c9ffc8545c591e4f51cbd904e144d36c20f) on Apple M3, node 26.5.0, arm64-darwin. SatoriGear and Sätteri run in paired AB/BA order; comparisons are normalized to SatoriGear (↑ faster, ↓ slower). Lower time and higher throughput are better.
 
 <!-- benchmark:end -->
 
@@ -83,17 +83,17 @@ Benchmarked against Sätteri and Remark, which also produce MDAST, with feature 
 
 | Engine | Mean time | vs. SatoriGear | Throughput |
 | --- | ---: | ---: | ---: |
-| **SatoriGear** | 2.32 ms | baseline | 84.2 MiB/s |
-| Sätteri | 1.12 ms | ↑ 2.07× | 174 MiB/s |
-| Remark | 62.8 ms | ↓ 26.86× | 3.11 MiB/s |
+| **SatoriGear** | 2.16 ms | baseline | 90.7 MiB/s |
+| Sätteri | 1.12 ms | ↑ 1.91× | 174 MiB/s |
+| Remark | 61.8 ms | ↓ 28.91× | 3.16 MiB/s |
 
 ##### CommonMark 0.31.2 examples, 14919 bytes, 652 documents
 
 | Engine | Mean time | vs. SatoriGear | Throughput |
 | --- | ---: | ---: | ---: |
-| **SatoriGear** | 1.03 ms | baseline | 13.9 MiB/s |
-| Sätteri | 2.71 ms | ↓ 2.64× | 5.25 MiB/s |
-| Remark | 26.6 ms | ↓ 25.96× | 0.53 MiB/s |
+| **SatoriGear** | 971 µs | baseline | 14.7 MiB/s |
+| Sätteri | 2.66 ms | ↓ 2.74× | 5.34 MiB/s |
+| Remark | 26.5 ms | ↓ 27.16× | 0.54 MiB/s |
 
 #### Built-in features
 
@@ -101,15 +101,15 @@ Benchmarked against Sätteri and Remark, which also produce MDAST, with feature 
 
 | Engine | Mean time | vs. SatoriGear | Throughput |
 | --- | ---: | ---: | ---: |
-| **SatoriGear** | 21.9 ms | baseline | 39.6 MiB/s |
-| Sätteri | 26.7 ms | ↓ 1.22× | 32.5 MiB/s |
+| **SatoriGear** | 20.3 ms | baseline | 42.8 MiB/s |
+| Sätteri | 26.6 ms | ↓ 1.31× | 32.6 MiB/s |
 
 ##### Public APIs README, 232580 bytes, 1 document
 
 | Engine | Mean time | vs. SatoriGear | Throughput |
 | --- | ---: | ---: | ---: |
-| **SatoriGear** | 5.49 ms | baseline | 40.4 MiB/s |
-| Sätteri | 2.40 ms | ↑ 2.28× | 92.4 MiB/s |
+| **SatoriGear** | 4.65 ms | baseline | 47.7 MiB/s |
+| Sätteri | 2.41 ms | ↑ 1.93× | 92.0 MiB/s |
 
 </details>
 
@@ -126,17 +126,17 @@ Benchmarked against Sätteri and Remark, which also produce MDAST, with feature 
 
 | Engine | Mean time | vs. SatoriGear | Throughput |
 | --- | ---: | ---: | ---: |
-| **SatoriGear** | 2.34 ms | baseline | 83.4 MiB/s |
-| Sätteri | 5.47 ms | ↓ 2.33× | 35.7 MiB/s |
-| Remark | 59.9 ms | ↓ 25.53× | 3.27 MiB/s |
+| **SatoriGear** | 2.15 ms | baseline | 91.0 MiB/s |
+| Sätteri | 5.52 ms | ↓ 2.57× | 35.4 MiB/s |
+| Remark | 60.5 ms | ↓ 28.08× | 3.23 MiB/s |
 
 ##### CommonMark 0.31.2 examples, 14919 bytes, 652 documents
 
 | Engine | Mean time | vs. SatoriGear | Throughput |
 | --- | ---: | ---: | ---: |
-| **SatoriGear** | 1.05 ms | baseline | 13.6 MiB/s |
-| Sätteri | 5.92 ms | ↓ 5.57× | 2.41 MiB/s |
-| Remark | 26.3 ms | ↓ 25.07× | 0.54 MiB/s |
+| **SatoriGear** | 989 µs | baseline | 14.4 MiB/s |
+| Sätteri | 5.95 ms | ↓ 5.98× | 2.39 MiB/s |
+| Remark | 26.5 ms | ↓ 26.84× | 0.54 MiB/s |
 
 #### Built-in features
 
@@ -144,15 +144,15 @@ Benchmarked against Sätteri and Remark, which also produce MDAST, with feature 
 
 | Engine | Mean time | vs. SatoriGear | Throughput |
 | --- | ---: | ---: | ---: |
-| **SatoriGear** | 22.1 ms | baseline | 39.2 MiB/s |
-| Sätteri | 79.5 ms | ↓ 3.59× | 10.9 MiB/s |
+| **SatoriGear** | 21.0 ms | baseline | 41.2 MiB/s |
+| Sätteri | 79.3 ms | ↓ 3.78× | 10.9 MiB/s |
 
 ##### Public APIs README, 232580 bytes, 1 document
 
 | Engine | Mean time | vs. SatoriGear | Throughput |
 | --- | ---: | ---: | ---: |
-| **SatoriGear** | 5.76 ms | baseline | 38.5 MiB/s |
-| Sätteri | 21.0 ms | ↓ 3.63× | 10.6 MiB/s |
+| **SatoriGear** | 5.02 ms | baseline | 44.2 MiB/s |
+| Sätteri | 20.9 ms | ↓ 4.14× | 10.6 MiB/s |
 
 </details>
 
