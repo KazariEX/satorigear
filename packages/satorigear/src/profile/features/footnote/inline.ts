@@ -45,9 +45,6 @@ export const transformFootnoteTokens: InlineTokenTransform = (source, tokens, co
           copyInlineToken(result, tokens, prefix);
         }
       }
-      if (kind === InlineKind.ImageOpen) {
-        appendInlineToken(result, InlineKind.Text, start, labelStart, inlineTokenFlags(tokens, index));
-      }
       appendInlineToken(
         result,
         InlineKind.FootnoteReference,

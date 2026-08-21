@@ -94,7 +94,7 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
     return -1;
   }
 
-  if (tokens.length === 0) {
+  if (tokens.length === 0 && !hasVisibleText(source, 0, start)) {
     // Leading attribute bags are literal. Consume the whole leading chain so a later bag
     // cannot mistake an earlier literal bag for attachable content.
     let textEnd = end;
@@ -114,17 +114,19 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
       }
       textEnd = nextEnd;
     }
-    appendInlineToken(tokens, InlineKind.Text, start, textEnd);
     return textEnd;
   }
 
   const previous = inlineTokenCount(tokens) - 1;
-  const previousEnd = previous >= 0 ? inlineTokenEnd(tokens, previous) : start;
+  const previousEnd = previous >= 0 ? inlineTokenEnd(tokens, previous) : 0;
   if (
-    previousEnd <= start &&
-    inlineTokenKind(tokens, previous) === InlineKind.AttributesToken
+    previousEnd < start && (
+      previous >= 0 && inlineTokenKind(tokens, previous) === InlineKind.AttributesToken ||
+      hasVisibleText(source, previousEnd, start)
+    )
   ) {
-    appendInlineToken(tokens, InlineKind.Text, previousEnd, start);
+    // The decorator needs the preceding source gap to exist as a node before it runs.
+    appendInlineToken(tokens, InlineKind.LiteralText, previousEnd, start);
   }
 
   appendInlineToken(
@@ -145,7 +147,7 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
     for (let index = inlineTokenCount(tokens) - 1; index >= 0; index--) {
       const kind = inlineTokenKind(tokens, index);
       if (
-        kind === InlineKind.Text &&
+        kind === InlineKind.LiteralText &&
         !hasVisibleText(source, inlineTokenStart(tokens, index), inlineTokenEnd(tokens, index))
       ) {
         continue;

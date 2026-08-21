@@ -223,8 +223,7 @@ export const feature: SyntaxFeature = {
             kind = InlineKind.InlineHtml;
           }
           if (end < 0) {
-            end = start + 1;
-            kind = InlineKind.Delimiter;
+            return start + 1;
           }
           appendInlineToken(tokens, kind, start, end);
           return end;

@@ -8,7 +8,7 @@ export const enum InlineKind {
   Entity,
   HardBreak,
   Escape,
-  Text,
+  LiteralText,
   AsteriskRun,
   UnderscoreRun,
   TildeRun,
@@ -38,6 +38,5 @@ export const enum InlineKind {
   AttributesToken,
   InlineSpanOpen,
   InlineSpanClose,
-  Delimiter,
   Newline,
 }

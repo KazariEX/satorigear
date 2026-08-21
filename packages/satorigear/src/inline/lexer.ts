@@ -50,7 +50,9 @@ function tokenize(
   textBoundary: RegExp,
   scannerByCode: readonly (InlineScanner | undefined)[],
 ): InlineTokenStream {
+  // Ordinary source text stays implicit between semantic tokens; the builder reads those gaps.
   const tokens: number[] = [];
+  let hasContentLine = false;
   let offset = 0;
   let lineStart = true;
   while (offset < source.length) {
@@ -88,9 +90,10 @@ function tokenize(
         }
       }
       offset = content;
-      if (tokens.length > 0) {
+      if (hasContentLine) {
         tokens.push(InlineKind.Newline, offset, offset, 0);
       }
+      hasContentLine = true;
       lineStart = false;
       continue;
     }
@@ -130,15 +133,12 @@ function tokenize(
         continue;
       }
       // A marker may be shared by multiple features. If none accepts it,
-      // include the marker in ordinary text and continue to the next compiled boundary.
+      // leave the marker in the source gap and continue to the next compiled boundary.
       const end = inlineTextEnd(source, offset + 1, textBoundary);
-      tokens.push(InlineKind.Text, offset, end, 0);
       offset = end;
       continue;
     }
-    const end = inlineTextEnd(source, offset, textBoundary);
-    tokens.push(InlineKind.Text, offset, end, 0);
-    offset = end;
+    offset = inlineTextEnd(source, offset, textBoundary);
   }
   return tokens;
 }

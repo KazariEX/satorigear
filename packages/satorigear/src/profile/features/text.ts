@@ -48,44 +48,36 @@ export const feature: SyntaxFeature = {
         marker: Character.Ampersand,
         scan(source, start, tokens) {
           const matchEnd = matchInlinePatternEnd(entity, source, start);
-          const end = matchEnd < 0 ? start + 1 : matchEnd;
-          appendInlineToken(
-            tokens,
-            matchEnd < 0 ? InlineKind.Delimiter : InlineKind.Entity,
-            start,
-            end,
-            matchEnd < 0 ? 0 : InlineTokenFlag.DecodeText,
-          );
-          return end;
+          if (matchEnd < 0) {
+            return start + 1;
+          }
+          appendInlineToken(tokens, InlineKind.Entity, start, matchEnd, InlineTokenFlag.DecodeText);
+          return matchEnd;
         },
       },
       {
         marker: Character.ReverseSolidus,
         scan(source, start, tokens) {
           const next = source.charCodeAt(start + 1);
-          let end = start + 1;
-          let flags = 0;
-          let kind = InlineKind.Delimiter;
           if (next === Character.LineFeed || next === Character.CarriageReturn) {
-            kind = InlineKind.HardBreak;
+            appendInlineToken(tokens, InlineKind.HardBreak, start, start + 1);
+            return start + 1;
           }
-          else if (isAsciiPunctuation(next)) {
-            end++;
-            flags = InlineTokenFlag.DecodeText;
-            kind = InlineKind.Escape;
+          if (isAsciiPunctuation(next)) {
+            const end = start + 2;
+            appendInlineToken(tokens, InlineKind.Escape, start, end, InlineTokenFlag.DecodeText);
+            return end;
           }
-          else if (next === Character.Space || next === Character.CharacterTabulation) {
-            end++;
-            kind = InlineKind.Text;
-          }
-          appendInlineToken(tokens, kind, start, end, flags);
-          return end;
+          return start + (
+            next === Character.Space || next === Character.CharacterTabulation
+              ? 2
+              : 1
+          );
         },
       },
     ],
     build: [
-      { kind: "leaf", token: InlineKind.Text, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.Delimiter, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.LiteralText, build: buildInlineText },
       { kind: "leaf", token: InlineKind.Escape, build: buildInlineText },
       { kind: "leaf", token: InlineKind.Entity, build: buildInlineText },
     ],

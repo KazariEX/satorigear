@@ -29,14 +29,9 @@ export function createMathScanRule(singleDollarTextMath: boolean): InlineScanRul
         }
       }
       if (end < 0) {
-        end = openEnd;
+        return openEnd;
       }
-      appendInlineToken(
-        tokens,
-        end === openEnd ? InlineKind.Text : InlineKind.MathText,
-        start,
-        end,
-      );
+      appendInlineToken(tokens, InlineKind.MathText, start, end);
       return end;
     },
   };

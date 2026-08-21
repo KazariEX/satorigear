@@ -186,14 +186,9 @@ export const feature: SyntaxFeature = {
             }
           }
           if (end < 0) {
-            end = start + 1;
+            return start + 1;
           }
-          appendInlineToken(
-            tokens,
-            end === start + 1 ? InlineKind.Delimiter : InlineKind.CodeSpan,
-            start,
-            end,
-          );
+          appendInlineToken(tokens, InlineKind.CodeSpan, start, end);
           return end;
         },
       },

@@ -317,9 +317,11 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.ExclamationMark,
         scan(source, start, tokens) {
-          const image = source.charCodeAt(start + 1) === Character.LeftSquareBracket;
-          const end = start + (image ? 2 : 1);
-          appendInlineToken(tokens, image ? InlineKind.ImageOpen : InlineKind.Delimiter, start, end);
+          if (source.charCodeAt(start + 1) !== Character.LeftSquareBracket) {
+            return start + 1;
+          }
+          const end = start + 2;
+          appendInlineToken(tokens, InlineKind.ImageOpen, start, end);
           return end;
         },
       },

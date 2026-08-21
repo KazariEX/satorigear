@@ -28,8 +28,8 @@ export interface InlineFragment {
 }
 
 interface InlineOutput extends InlineFragment {
-  // Nested semantic nodes share the region context but own their output position and gaps.
-  cursor: number | undefined;
+  // The cursor bounds source text that remains implicit between semantic tokens.
+  cursor: number;
   gapEnd: number;
   gapStart: number;
 }
@@ -117,7 +117,7 @@ function appendInlineGap(
   const gapSpan = context.view.mapSpan(start, end);
   appendText(
     output.children,
-    context.decodeText(context.view.text.slice(start, end).replace(/[\r\n]/g, "")),
+    context.view.text.slice(start, end),
     gapSpan.start,
     gapSpan.end,
   );
@@ -132,8 +132,12 @@ function appendInline(
   const nextLineOffset = value.position.start;
   const newline = value.type === "text" && value.value.startsWith("\n");
   if (output.gapStart >= 0) {
-    if (!newline) {
-      appendInlineGap(output, context, output.gapStart, output.gapEnd);
+    const gapStart = output.gapStart;
+    const gapEnd = newline
+      ? lineEndingStart(context.view.text, output.gapEnd)
+      : output.gapEnd;
+    if (gapEnd > gapStart) {
+      appendInlineGap(output, context, gapStart, gapEnd);
     }
     else {
       output.gapStart = -1;
@@ -202,7 +206,7 @@ function appendInlineRange(
       break;
     }
     const childOffset = inlineTokenStart(context.tokens, index);
-    if (output.cursor !== void 0 && childOffset > output.cursor) {
+    if (childOffset > output.cursor) {
       output.gapStart = output.cursor;
       output.gapEnd = childOffset;
     }
@@ -224,13 +228,18 @@ function appendInlineRange(
   }
   if (
     closeKind !== void 0 &&
-    index < endToken &&
-    output.cursor !== void 0
+    index < endToken
   ) {
     const contentEnd = inlineTokenStart(context.tokens, index);
     if (contentEnd > output.cursor) {
       appendInlineGap(output, context, output.cursor, contentEnd);
     }
+  }
+  else if (
+    closeKind === void 0 &&
+    context.view.text.length > output.cursor
+  ) {
+    appendInlineGap(output, context, output.cursor, context.view.text.length);
   }
   return index;
 }
@@ -353,7 +362,7 @@ export function buildInlineFragment(
   };
   const result: InlineOutput = {
     children: [],
-    cursor: void 0,
+    cursor: 0,
     gapEnd: -1,
     gapStart: -1,
   };

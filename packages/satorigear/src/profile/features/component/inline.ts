@@ -196,13 +196,10 @@ function copyRange(
         kind === InlineKind.LinkTail || kind === InlineKind.BracketClose
       )
     );
-    appendInlineToken(
-      target,
-      literalLink || fragmentStart !== tokenStart || fragmentEnd !== tokenEnd ? InlineKind.Text : kind,
-      fragmentStart,
-      fragmentEnd,
-      fragmentStart === tokenStart ? inlineTokenFlags(tokens, index) : 0,
-    );
+    if (literalLink || fragmentStart !== tokenStart || fragmentEnd !== tokenEnd) {
+      continue;
+    }
+    appendInlineToken(target, kind, tokenStart, tokenEnd, inlineTokenFlags(tokens, index));
   }
 }
 
@@ -252,7 +249,7 @@ function emitRange(
   copyRange(target, tokens, cursor, end, inLinkLabel, normalClosers);
 }
 
-// Reclassify CommonMark bracket/text tokens as explicit semantic carriers.
+// Replace CommonMark bracket structure with component carriers; omitted tokens remain literal gaps.
 export function transformComponentTokens(
   source: string,
   tokens: InlineTokenStream,
