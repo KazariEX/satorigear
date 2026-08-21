@@ -2,8 +2,6 @@ import type { BlockRule } from "../constants/block.ts";
 import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
 import type { BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 
-export const noBlockEntry = Number.MIN_SAFE_INTEGER;
-
 // Object identity remains stable for unchanged top-level blocks.
 export interface BlockRecord {
   tokenEnd: number;
@@ -88,22 +86,6 @@ export class BlockStructure {
       start += length;
     }
     return records;
-  }
-
-  firstChild(tokenStart: number): number {
-    return ~tokenStart;
-  }
-
-  nextChild(tokenStart: number, entry: number): number {
-    const next = entry < 0 ? ~entry + 1 : entry + this.#tokens.nodeLength(entry);
-    if (next >= tokenStart + this.#tokens.nodeLength(tokenStart)) {
-      return noBlockEntry;
-    }
-    return this.#tokens.nodeLength(next) > 0 ? next : ~next;
-  }
-
-  leafToken(entry: number): number {
-    return ~entry;
   }
 
   lenOf(tokenStart: number): number {

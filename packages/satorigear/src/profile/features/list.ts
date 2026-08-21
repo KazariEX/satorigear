@@ -6,7 +6,6 @@ import {
   isBlank,
   lineIndent,
 } from "../../block/lines.ts";
-import { noBlockEntry } from "../../block/structure.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import {
@@ -242,25 +241,25 @@ function childrenSpread(
   nestedRule?: BlockRule,
 ): boolean {
   const structure = context.structure;
+  const tokens = structure.tokens;
   let previous: SourceSpan | undefined;
-  for (
-    let childId = structure.firstChild(tokenStart);
-    childId !== noBlockEntry;
-    childId = structure.nextChild(tokenStart, childId)
-  ) {
+  const tokenEnd = tokenStart + tokens.nodeLength(tokenStart) - 1;
+  for (let child = tokenStart + 1; child < tokenEnd;) {
+    const length = tokens.nodeLength(child);
     if (
-      childId >= 0 && (
+      length > 0 && (
         nestedRule === void 0
-          ? structure.isBlock(childId)
-          : structure.isRule(childId, nestedRule)
+          ? structure.isBlock(child)
+          : structure.isRule(child, nestedRule)
       )
     ) {
-      const current = payloadBounds(childId, context);
+      const current = payloadBounds(child, context);
       if (previous && hasBlankLineBetween(context.source, previous.end, current.start, stripBlockQuotes)) {
         return true;
       }
       previous = current;
     }
+    child += length || 1;
   }
   return false;
 }
@@ -285,15 +284,15 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context) => {
     const structure = context.structure;
+    const tokens = structure.tokens;
     const items: SpannedNode<ListItem>[] = [];
-    for (
-      let childId = structure.firstChild(tokenStart);
-      childId !== noBlockEntry;
-      childId = structure.nextChild(tokenStart, childId)
-    ) {
-      if (childId >= 0 && structure.isRule(childId, BlockRule.ListItem)) {
-        items.push(buildListItem(childId, context));
+    const tokenEnd = tokenStart + tokens.nodeLength(tokenStart) - 1;
+    for (let child = tokenStart + 1; child < tokenEnd;) {
+      const length = tokens.nodeLength(child);
+      if (length > 0 && structure.isRule(child, BlockRule.ListItem)) {
+        items.push(buildListItem(child, context));
       }
+      child += length || 1;
     }
     return {
       type: "list",

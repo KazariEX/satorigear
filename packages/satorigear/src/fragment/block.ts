@@ -1,7 +1,7 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
 import { lineContentEnd } from "../block/lines.ts";
-import { type BlockStructure, noBlockEntry } from "../block/structure.ts";
 import { buildInlineFragment, type InlineFragment } from "./inline.ts";
+import type { BlockStructure } from "../block/structure.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
 import type { SourceSpan } from "../source-view.ts";
@@ -71,20 +71,20 @@ export const buildBlockChildren: (
   context: BlockBuildContext,
 ) => SpannedNode<BlockContent | DefinitionContent>[] = (tokenStart, context) => {
   const structure = context.structure;
+  const tokens = structure.tokens;
   const children: SpannedNode<BlockContent | DefinitionContent>[] = [];
-  for (
-    let childId = structure.firstChild(tokenStart);
-    childId !== noBlockEntry;
-    childId = structure.nextChild(tokenStart, childId)
-  ) {
-    if (childId >= 0 && structure.isBlock(childId)) {
+  const tokenEnd = tokenStart + tokens.nodeLength(tokenStart) - 1;
+  for (let child = tokenStart + 1; child < tokenEnd;) {
+    const length = tokens.nodeLength(child);
+    if (length > 0 && structure.isBlock(child)) {
       children.push(
         buildBlockNode<typeof children[number]>(
-          childId,
+          child,
           context,
         ),
       );
     }
+    child += length || 1;
   }
   return children;
 };
