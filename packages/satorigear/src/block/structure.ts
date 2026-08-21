@@ -103,9 +103,7 @@ export class BlockStructure {
 
   ruleOf(tokenStart: number): CompiledBlockRule {
     const kind = this.#tokens.kind(tokenStart);
-    const rule = this.#schema.frameByOpen[kind]?.rule ??
-      this.#schema.groupedRuleByToken[kind] ??
-      this.#schema.ruleByLeaf[kind];
+    const rule = this.#schema.ruleByKind[kind];
     if (!rule) {
       throw new Error(`Block token ${tokenStart} does not begin a semantic node`);
     }

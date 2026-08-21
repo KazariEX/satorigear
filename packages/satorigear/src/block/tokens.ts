@@ -1,5 +1,6 @@
 import { emptyArray, isArrayEqual } from "../primitives.ts";
 import { type BlockLine, logicalLine } from "./lines.ts";
+import { BlockSyntaxKind } from "./profile.ts";
 import type { BlockKind } from "../constants/block.ts";
 import type { BlockSyntaxSchema } from "./profile.ts";
 
@@ -64,20 +65,19 @@ export class BlockTokenStream {
     // Scanning writes each token once with an empty node length, so indexing needs no clearing pass.
     for (let index = 0; index < this.length; index++) {
       const kind = this.kind(index);
-      const frame = schema.frameByOpen[kind];
-      if (frame) {
+      const rule = schema.ruleByKind[kind];
+      if (rule?.syntaxKind === BlockSyntaxKind.Frame) {
         opens.push(index);
-        closes.push(frame.close);
+        closes.push(rule.close);
         continue;
       }
-      const groupedRule = schema.groupedRuleByToken[kind];
-      if (groupedRule) {
+      if (rule?.syntaxKind === BlockSyntaxKind.Group) {
         const start = index;
         do {
           index++;
         } while (
           index < this.length &&
-          schema.groupedRuleByToken[this.kind(index)] === groupedRule
+          schema.ruleByKind[this.kind(index)] === rule
         );
         fields[start * blockTokenStride + 3] = index - start;
         index--;
@@ -89,7 +89,7 @@ export class BlockTokenStream {
         fields[open * blockTokenStride + 3] = index - open + 1;
         continue;
       }
-      if (schema.ruleByLeaf[kind]) {
+      if (rule?.syntaxKind === BlockSyntaxKind.Leaf) {
         fields[index * blockTokenStride + 3] = 1;
       }
     }

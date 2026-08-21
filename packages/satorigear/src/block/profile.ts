@@ -1,5 +1,5 @@
 // Block features compile into the immutable scanner, structure, and node builders shared by a parser.
-import type { BlockKind, BlockRule } from "../constants/block.ts";
+import { BlockKind, type BlockRule } from "../constants/block.ts";
 import type { BlockNodeBuilder } from "../fragment/block.ts";
 import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
@@ -7,21 +7,22 @@ import type { BlockTokenStream } from "./tokens.ts";
 
 export interface CompiledBlockRule {
   block: boolean;
+  close: BlockKind;
   definitionKey?: (tokens: BlockTokenStream, index: number) => string;
   inlineContent: boolean;
   rule: BlockRule;
   build?: BlockNodeBuilder;
+  syntaxKind: BlockSyntaxKind;
 }
 
-export interface BlockSyntaxFrame {
-  close: BlockKind;
-  rule: CompiledBlockRule;
+export const enum BlockSyntaxKind {
+  Frame,
+  Group,
+  Leaf,
 }
 
 export interface BlockSyntaxSchema {
-  frameByOpen: readonly (BlockSyntaxFrame | undefined)[];
-  groupedRuleByToken: readonly (CompiledBlockRule | undefined)[];
-  ruleByLeaf: readonly (CompiledBlockRule | undefined)[];
+  ruleByKind: readonly (CompiledBlockRule | undefined)[];
 }
 
 export type BlockStart = (
@@ -114,10 +115,8 @@ export interface BlockProfile {
 export function compileBlockProfile(features: readonly BlockFeature[]): BlockProfile {
   const decorators: BlockDecoratorRegistration[] = [];
   const fallbacks: BlockFallback[] = [];
-  const frameByOpen: (BlockSyntaxFrame | undefined)[] = [];
-  const groupedRuleByToken: (CompiledBlockRule | undefined)[] = [];
   const interrupts: BlockInterrupt[][] = [];
-  const ruleByLeaf: (CompiledBlockRule | undefined)[] = [];
+  const ruleByKind: (CompiledBlockRule | undefined)[] = [];
   const rules: (CompiledBlockRule | undefined)[] = [];
   const restarts: BlockRestart[] = [];
   const starts: BlockStart[][] = [];
@@ -151,28 +150,29 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
         const syntax = registration.syntax;
         const rule: CompiledBlockRule = {
           block: syntax.kind === "block" || syntax.kind === "leaf",
+          close: syntax.kind === "block" || syntax.kind === "frame" ? syntax.close : BlockKind.None,
           definitionKey: registration.definitionKey,
           inlineContent: registration.inlineContent === true,
           rule: registration.rule,
           build: registration.build,
+          syntaxKind: syntax.kind === "block" || syntax.kind === "frame"
+            ? BlockSyntaxKind.Frame
+            : syntax.kind === "group" ? BlockSyntaxKind.Group : BlockSyntaxKind.Leaf,
         };
         rules[registration.rule] = rule;
         if (syntax.kind === "block" || syntax.kind === "frame") {
           const opens = typeof syntax.open === "number" ? [syntax.open] : syntax.open;
           for (const open of opens) {
-            frameByOpen[open] = {
-              close: syntax.close,
-              rule,
-            };
+            ruleByKind[open] = rule;
           }
         }
         else if (syntax.kind === "group") {
           for (const token of syntax.tokens) {
-            groupedRuleByToken[token] = rule;
+            ruleByKind[token] = rule;
           }
         }
         else if (syntax.kind === "leaf") {
-          ruleByLeaf[syntax.token] = rule;
+          ruleByKind[syntax.token] = rule;
         }
       }
     }
@@ -202,9 +202,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
       return result;
     },
     schema: {
-      frameByOpen,
-      groupedRuleByToken,
-      ruleByLeaf,
+      ruleByKind,
     },
     starts,
   };
