@@ -100,7 +100,10 @@ export function compileInlineProfile(
   const delimiters: DelimiterConfig[] = [];
   const scanRules: InlineScanRule[] = [];
   const transforms: InlineTokenTransform[] = [];
-  const buildRules: InlineBuildRule[] = [];
+  const tokenHandlers: (InlineTokenHandler | undefined)[] = [];
+  const containerByKind: (InlineContainer | undefined)[] = [];
+  const pairByOpenKind: (InlinePair | undefined)[] = [];
+  const isolationCloseByOpen: (number | undefined)[] = [];
 
   for (const feature of features) {
     const resolve = feature.resolve;
@@ -113,41 +116,36 @@ export function compileInlineProfile(
     if (resolve?.transform) {
       transforms.push(resolve.transform);
     }
-    if (feature.build) {
-      buildRules.push(...feature.build);
-    }
-  }
-
-  const tokenHandlers: (InlineTokenHandler | undefined)[] = [];
-  const containerByKind: (InlineContainer | undefined)[] = [];
-  const pairByOpenKind: (InlinePair | undefined)[] = [];
-  const isolationCloseByOpen: (number | undefined)[] = [];
-
-  for (const rule of buildRules) {
-    if (rule.kind === "decorate") {
-      tokenHandlers[rule.token] = rule.apply;
+    const build = feature.build;
+    if (!build) {
       continue;
     }
-    if (rule.kind === "leaf") {
-      tokenHandlers[rule.token] = rule.build;
-      continue;
-    }
+    for (const rule of build) {
+      if (rule.kind === "decorate") {
+        tokenHandlers[rule.token] = rule.apply;
+        continue;
+      }
+      if (rule.kind === "leaf") {
+        tokenHandlers[rule.token] = rule.build;
+        continue;
+      }
 
-    if (rule.kind === "container") {
-      // Semantic container boundaries also delimit formatting; derive that fact from the builder shape.
-      isolationCloseByOpen[rule.contentOpen] = rule.close;
-      containerByKind[rule.token] = {
-        closeKind: rule.close,
-        contentOpenKind: rule.contentOpen,
-        build: rule.build,
-      };
-    }
-    else {
-      isolationCloseByOpen[rule.open] = rule.close;
-      pairByOpenKind[rule.open] = {
-        closeKind: rule.close,
-        build: rule.build,
-      };
+      if (rule.kind === "container") {
+        // Semantic container boundaries also delimit formatting; derive that fact from the builder shape.
+        isolationCloseByOpen[rule.contentOpen] = rule.close;
+        containerByKind[rule.token] = {
+          closeKind: rule.close,
+          contentOpenKind: rule.contentOpen,
+          build: rule.build,
+        };
+      }
+      else {
+        isolationCloseByOpen[rule.open] = rule.close;
+        pairByOpenKind[rule.open] = {
+          closeKind: rule.close,
+          build: rule.build,
+        };
+      }
     }
   }
 
