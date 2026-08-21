@@ -114,12 +114,11 @@ function appendInlineGap(
 ): void {
   output.gapStart = -1;
   output.gapEnd = -1;
-  const gapSpan = context.view.mapSpan(start, end);
   appendText(
     output.children,
     context.view.text.slice(start, end),
-    gapSpan.start,
-    gapSpan.end,
+    context.view.mapPoint(start),
+    context.view.mapPoint(end),
   );
 }
 
@@ -226,10 +225,7 @@ function appendInlineRange(
     }
     output.cursor = childEnd;
   }
-  if (
-    closeKind !== void 0 &&
-    index < endToken
-  ) {
+  if (closeKind !== void 0 && index < endToken) {
     const contentEnd = inlineTokenStart(context.tokens, index);
     if (contentEnd > output.cursor) {
       appendInlineGap(output, context, output.cursor, contentEnd);
