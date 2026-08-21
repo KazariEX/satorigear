@@ -29,21 +29,17 @@ export interface DelimiterConfig {
 interface CompiledDelimiterConfig {
   single?: { open: number; close: number };
   double?: { open: number; close: number };
-  allowIntraword?: boolean;
-  matchWholeRun?: boolean;
-  ruleOfThree?: boolean;
+  flags: number;
   index: number;
 }
 
 interface DelimiterRun {
   tokenIndex: number;
-  offset: number;
   config: CompiledDelimiterConfig;
   length: number;
   start: number;
   remaining: number;
-  canOpen: boolean;
-  canClose: boolean;
+  flanking: number;
   scope: number;
   previous: number;
   next: number;
@@ -58,6 +54,12 @@ interface Replacement {
 const enum Flanking {
   Open = 1,
   Close = 2,
+}
+
+const enum DelimiterFlag {
+  Intraword = 1,
+  MatchWholeRun = 2,
+  RuleOfThree = 4,
 }
 
 const whitespace = /\s/u;
@@ -91,7 +93,7 @@ function flanking(source: string, start: number, end: number, config: CompiledDe
   const afterPunctuation = punctuation.test(after);
   const left = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
   const right = !beforeWhitespace && (!beforePunctuation || afterWhitespace || afterPunctuation);
-  if (config.allowIntraword !== false) {
+  if (config.flags & DelimiterFlag.Intraword) {
     return (left ? Flanking.Open : 0) | (right ? Flanking.Close : 0);
   }
   const canOpen = left && (!right || beforePunctuation);
@@ -100,13 +102,16 @@ function flanking(source: string, start: number, end: number, config: CompiledDe
 }
 
 function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
-  if (!opener.canOpen || !closer.canClose) {
+  if (!(opener.flanking & Flanking.Open) || !(closer.flanking & Flanking.Close)) {
     return false;
   }
-  if (closer.config.matchWholeRun && opener.length !== closer.length) {
+  if (closer.config.flags & DelimiterFlag.MatchWholeRun && opener.length !== closer.length) {
     return false;
   }
-  if (!closer.config.ruleOfThree || (!opener.canClose && !closer.canOpen)) {
+  if (
+    !(closer.config.flags & DelimiterFlag.RuleOfThree) ||
+    (!(opener.flanking & Flanking.Close) && !(closer.flanking & Flanking.Open))
+  ) {
     return true;
   }
   const sum = opener.length + closer.length;
@@ -151,11 +156,11 @@ function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: R
   while (current >= 0) {
     const closer = runs[current];
     const next = closer.next;
-    if (!closer.canClose || closer.remaining === 0) {
+    if (!(closer.flanking & Flanking.Close) || closer.remaining === 0) {
       current = next;
       continue;
     }
-    const bottomSlot = closer.config.index * 6 + (closer.canOpen ? 3 : 0) + closer.length % 3;
+    const bottomSlot = closer.config.index * 6 + (closer.flanking & Flanking.Open ? 3 : 0) + closer.length % 3;
     const bottom = openersBottom[bottomSlot] ?? -1;
     let openerIndex = closer.previous;
     while (openerIndex >= 0 && openerIndex !== bottom) {
@@ -167,7 +172,7 @@ function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: R
     }
     if (openerIndex < 0 || openerIndex === bottom) {
       openersBottom[bottomSlot] = closer.previous;
-      if (!closer.canOpen) {
+      if (!(closer.flanking & Flanking.Open)) {
         unlinkRun(runs, current);
       }
       current = next;
@@ -176,9 +181,9 @@ function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: R
 
     const opener = runs[openerIndex];
     const use = opener.remaining >= 2 && closer.remaining >= 2 && closer.config.double ? 2 : 1;
-    const openEnd = opener.offset + opener.start + opener.remaining;
+    const openEnd = opener.start + opener.remaining;
     const openStart = openEnd - use;
-    const closeStart = closer.offset + closer.start;
+    const closeStart = closer.start;
     const closeEnd = closeStart + use;
     // Partial delimiters always define a single replacement; unsupported whole runs were filtered before matching.
     const pair = use === 2 ? closer.config.double! : closer.config.single!;
@@ -232,7 +237,7 @@ function resolveDelimiterRuns(
     const end = inlineTokenEnd(tokens, tokenIndex);
     const length = end - offset;
     if (
-      config.matchWholeRun &&
+      config.flags & DelimiterFlag.MatchWholeRun &&
       (length > 2 || (length === 1 ? !config.single : !config.double))
     ) {
       continue;
@@ -240,16 +245,14 @@ function resolveDelimiterRuns(
     const flags = flanking(source, offset, end, config);
     runs.push({
       tokenIndex,
-      offset,
       config,
       length,
-      start: 0,
+      start: offset,
       remaining: length,
       scope: isolationScopes[isolationScopes.length - 1] ?? -1,
       previous: -1,
       next: -1,
-      canOpen: Boolean(flags & Flanking.Open),
-      canClose: Boolean(flags & Flanking.Close),
+      flanking: flags,
     });
   }
   if (runs.length === 0) {
@@ -322,9 +325,10 @@ export function createDelimiterResolver(
     delimiterByKind[config.token] = {
       single: config.single,
       double: config.double,
-      allowIntraword: config.allowIntraword,
-      matchWholeRun: config.pairing.kind === "whole" ? true : void 0,
-      ruleOfThree: config.pairing.kind === "partial" ? config.pairing.ruleOfThree : void 0,
+      flags:
+        (config.allowIntraword !== false ? DelimiterFlag.Intraword : 0) |
+        (config.pairing.kind === "whole" ? DelimiterFlag.MatchWholeRun : 0) |
+        (config.pairing.kind === "partial" && config.pairing.ruleOfThree ? DelimiterFlag.RuleOfThree : 0),
       index,
     };
   });
