@@ -74,7 +74,6 @@ export interface InlineFeature {
 }
 
 export interface InlineProfile {
-  decodeText: (value: string) => string;
   resolve: InlineTokenTransform;
   schema: InlineSyntaxSchema;
   tokenHandlers: readonly (InlineTokenHandler | undefined)[];
@@ -93,10 +92,7 @@ function composeTransforms(transforms: readonly InlineTokenTransform[]): InlineT
   };
 }
 
-export function compileInlineProfile(
-  features: readonly InlineFeature[],
-  decodeText: (value: string) => string,
-): InlineProfile {
+export function compileInlineProfile(features: readonly InlineFeature[]): InlineProfile {
   const delimiters: DelimiterConfig[] = [];
   const scanRules: InlineScanRule[] = [];
   const transforms: InlineTokenTransform[] = [];
@@ -153,7 +149,6 @@ export function compileInlineProfile(
   const transform = transforms.length ? composeTransforms(transforms) : void 0;
 
   return {
-    decodeText,
     resolve: transform === void 0
       ? resolveDelimiters
       : (source, tokens, context) => {

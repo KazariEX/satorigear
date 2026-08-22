@@ -17,7 +17,7 @@ import { feature as featureMath } from "./features/math/index.ts";
 import { feature as featureParagraph } from "./features/paragraph.ts";
 import { feature as featureReference } from "./features/reference.ts";
 import { feature as featureTable } from "./features/table.ts";
-import { feature as featureText, semanticText } from "./features/text.ts";
+import { feature as featureText } from "./features/text.ts";
 import type { MathOptions } from "./features/math/types.ts";
 import type { SyntaxProfile } from "./types.ts";
 
@@ -98,6 +98,6 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
 
   return {
     block: compileBlockProfile(blockFeatures),
-    inline: compileInlineProfile(inlineFeatures, semanticText),
+    inline: compileInlineProfile(inlineFeatures),
   };
 }

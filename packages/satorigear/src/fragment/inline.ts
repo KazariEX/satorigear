@@ -15,7 +15,6 @@ import type { BlockBuildContext } from "./block.ts";
 
 export interface InlineBuildContext {
   blockRule: BlockRule;
-  decodeText: (value: string) => string;
   schema: InlineSyntaxSchema;
   source: string;
   tokenHandlers: readonly (InlineTokenHandler | undefined)[];
@@ -349,7 +348,6 @@ export function buildInlineFragment(
   }
   const inlineContext: InlineBuildContext = {
     blockRule: region.rule,
-    decodeText: context.profile.decodeText,
     schema: context.profile.schema,
     source: context.source,
     tokenHandlers: context.profile.tokenHandlers,
