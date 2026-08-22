@@ -111,7 +111,6 @@ function scanBlock(
 interface BlockCheckpoint {
   lineEnd: number;
   lineStart: number;
-  tokenEnd: number;
   tokenStart: number;
 }
 
@@ -238,7 +237,7 @@ function sameShiftedBlock(
   tokenEnd: number,
   delta: number,
 ): boolean {
-  const length = checkpoint.tokenEnd - checkpoint.tokenStart;
+  const length = previous.nodeLength(checkpoint.tokenStart);
   if (length !== tokenEnd - tokenStart) {
     return false;
   }
@@ -306,21 +305,19 @@ export class BlockScanner {
     tokens.reset(source.length);
     const checkpoints = this.#checkpoints;
     let checkpointIndex = 0;
-    scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+    scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
       const checkpoint = checkpoints[checkpointIndex++];
       // Reuse checkpoint records across one-shot parses instead of allocating one per block.
       if (checkpoint) {
         checkpoint.lineStart = lines[lineStart].start;
         checkpoint.lineEnd = lines[lineEnd - 1].next;
         checkpoint.tokenStart = tokenStart;
-        checkpoint.tokenEnd = tokenEnd;
       }
       else {
         checkpoints.push({
           lineStart: lines[lineStart].start,
           lineEnd: lines[lineEnd - 1].next,
           tokenStart,
-          tokenEnd,
         });
       }
       return false;
@@ -418,7 +415,6 @@ export class BlockScanner {
         lineStart: blockStart,
         lineEnd: blockEnd,
         tokenStart: oldTokenStart + tokenStart,
-        tokenEnd: oldTokenStart + tokenEnd,
       });
       return false;
     });
@@ -443,7 +439,6 @@ export class BlockScanner {
         checkpoint.lineStart += delta;
         checkpoint.lineEnd += delta;
         checkpoint.tokenStart += tokenDelta;
-        checkpoint.tokenEnd += tokenDelta;
       }
     }
 
