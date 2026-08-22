@@ -22,7 +22,6 @@ export class SyntaxState {
   #definitionEntries?: BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
   #profile: InlineProfile;
-  #sourceLength = 0;
   #structure: BlockStructure;
 
   constructor(
@@ -39,7 +38,12 @@ export class SyntaxState {
     return this.#blocks;
   }
 
-  update(source: string, change?: BlockStructureChange, stableBlockCount = 0): void {
+  update(
+    source: string,
+    change?: BlockStructureChange,
+    stableBlockCount = 0,
+    offsetDelta = 0,
+  ): void {
     // 1. Keep the scanner-stable prefix and collect definitions and inline bindings through the rebuilt range.
     const structure = this.#structure;
     const tokens = structure.tokens;
@@ -122,13 +126,12 @@ export class SyntaxState {
     }
 
     // Scanner convergence makes every record in the retained suffix share the document-length shift.
-    const suffixOffsetDelta = source.length - this.#sourceLength;
     const suffixTokenDelta = change?.tokenDelta ?? 0;
     for (let index = oldEnd; index < previousBlocks.length; index++) {
       const block = previousBlocks[index];
-      if (suffixOffsetDelta !== 0 || suffixTokenDelta !== 0) {
+      if (offsetDelta !== 0 || suffixTokenDelta !== 0) {
         for (const region of block.regions) {
-          region.shift(suffixOffsetDelta, suffixTokenDelta);
+          region.shift(offsetDelta, suffixTokenDelta);
         }
       }
       blocks.push(block);
@@ -212,7 +215,6 @@ export class SyntaxState {
     this.#blocks = blocks;
     this.#definitionEntries = definitionEntries;
     this.#definitions = definitions;
-    this.#sourceLength = source.length;
   }
 }
 

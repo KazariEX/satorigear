@@ -22,6 +22,7 @@ export interface Document {
 
 interface AppliedEdits {
   changedSpan: SourceSpan;
+  offsetDelta: number;
   oldChangedEnd: number;
   source: string;
 }
@@ -47,6 +48,7 @@ function applyEdits(source: string, edits: readonly TextEdit[]): AppliedEdits {
   parts.push(source.slice(cursor));
   return {
     changedSpan: { start: edits[0].start, end: changedEnd },
+    offsetDelta: delta,
     oldChangedEnd: cursor,
     source: parts.join(""),
   };
@@ -93,9 +95,10 @@ export class DocumentImpl implements Document {
       applied.source,
       applied.changedSpan,
       applied.oldChangedEnd,
+      applied.offsetDelta,
     );
     const structureChange = this.#blockStructure.update(tokenChange);
-    this.#syntaxState.update(this.source, structureChange, stableBlockCount);
+    this.#syntaxState.update(this.source, structureChange, stableBlockCount, applied.offsetDelta);
 
     return { changedSpan: applied.changedSpan };
   }

@@ -344,9 +344,13 @@ export class BlockScanner {
     return createForwardLocator(lines, sourceLength, trailingLineEnding);
   }
 
-  edit(nextSource: string, changedSpan: SourceSpan, oldChangedEnd: number): BlockScanChange {
+  edit(
+    nextSource: string,
+    changedSpan: SourceSpan,
+    oldChangedEnd: number,
+    offsetDelta: number,
+  ): BlockScanChange {
     const previousSource = this.#source;
-    const delta = nextSource.length - previousSource.length;
 
     // 1. Find the earliest affected checkpoint and rebuild its physical line window.
     let affected = this.#checkpoints.findIndex((checkpoint) => checkpoint.lineEnd >= changedSpan.start);
@@ -357,7 +361,7 @@ export class BlockScanner {
       ? -1
       : Math.max(0, affected - 1);
     const initialRestartOffset = this.#checkpoints[restart]?.lineStart ?? 0;
-    const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, oldChangedEnd, delta);
+    const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, oldChangedEnd, offsetDelta);
     const profileRestart = this.#profile.restart(nextSource, nextLines, changedSpan.start, changedSpan.end);
     if (profileRestart !== void 0 && profileRestart < changedSpan.start) {
       const candidate = this.#checkpoints.findIndex((checkpoint) => (
@@ -384,7 +388,7 @@ export class BlockScanner {
       const blockStart = scanLines[lineStart].start;
       const blockEnd = scanLines[lineEnd - 1].next;
       if (blockEnd >= changedSpan.end) {
-        const candidateStart = Math.max(oldChangedEnd, blockStart - delta);
+        const candidateStart = Math.max(oldChangedEnd, blockStart - offsetDelta);
         while (
           convergenceCandidate < this.#checkpoints.length &&
           this.#checkpoints[convergenceCandidate].lineStart < candidateStart
@@ -393,8 +397,8 @@ export class BlockScanner {
         }
         const candidateCheckpoint = this.#checkpoints[convergenceCandidate];
         if (
-          candidateCheckpoint?.lineStart + delta === blockStart &&
-          candidateCheckpoint.lineEnd + delta === blockEnd &&
+          candidateCheckpoint?.lineStart + offsetDelta === blockStart &&
+          candidateCheckpoint.lineEnd + offsetDelta === blockEnd &&
           sameShiftedBlock(
             this.#tokens,
             previousSource,
@@ -403,7 +407,7 @@ export class BlockScanner {
             nextSource,
             tokenStart,
             tokenEnd,
-            delta,
+            offsetDelta,
           )
         ) {
           replacement.truncate(tokenStart);
@@ -434,10 +438,10 @@ export class BlockScanner {
     );
     const prefixCheckpoints = this.#checkpoints.slice(0, stableBlockCount);
     const suffixCheckpoints = converged < 0 ? [] : this.#checkpoints.slice(converged);
-    if (delta !== 0 || tokenDelta !== 0) {
+    if (offsetDelta !== 0 || tokenDelta !== 0) {
       for (const checkpoint of suffixCheckpoints) {
-        checkpoint.lineStart += delta;
-        checkpoint.lineEnd += delta;
+        checkpoint.lineStart += offsetDelta;
+        checkpoint.lineEnd += offsetDelta;
         checkpoint.tokenStart += tokenDelta;
       }
     }
