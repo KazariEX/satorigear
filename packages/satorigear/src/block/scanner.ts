@@ -1,7 +1,7 @@
 import { Character } from "../constants/character.ts";
 import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
-import type { SourceLocation, SourceSpan } from "../source-view.ts";
+import type { AppliedSourceChange, SourceLocation } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanContext {
@@ -344,12 +344,10 @@ export class BlockScanner {
     return createForwardLocator(lines, sourceLength, trailingLineEnding);
   }
 
-  edit(
-    nextSource: string,
-    changedSpan: SourceSpan,
-    oldChangedEnd: number,
-    offsetDelta: number,
-  ): BlockScanChange {
+  edit(change: AppliedSourceChange): BlockScanChange {
+    const { changedSpan, offsetDelta, source: nextSource } = change;
+    // Map the new damage end back to the old source with the total edit delta.
+    const oldChangedEnd = changedSpan.end - offsetDelta;
     const previousSource = this.#source;
 
     // 1. Find the earliest affected checkpoint and rebuild its physical line window.

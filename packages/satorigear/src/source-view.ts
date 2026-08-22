@@ -13,6 +13,12 @@ export interface TextEdit extends SourceSpan {
   text: string;
 }
 
+export interface AppliedSourceChange {
+  changedSpan: SourceSpan;
+  offsetDelta: number;
+  source: string;
+}
+
 export interface SourceView {
   readonly text: string;
   mapPoint: (offset: number) => number;
