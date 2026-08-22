@@ -35,7 +35,6 @@ export class InlineRegion implements ResolvedInlineRegion {
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
   #profile: InlineProfile;
-  #tokenSource?: string;
   #tokens?: InlineTokenStream;
   offset: number;
   revision = 0;
@@ -105,7 +104,9 @@ export class InlineRegion implements ResolvedInlineRegion {
     source: string,
     definitions: ReadonlySet<string>,
   ): boolean {
-    if (source === this.#tokenSource && !this.#dependenciesChanged(definitions)) {
+    const previousTokens = this.#rawTokens;
+    const sourceUnchanged = previousTokens !== void 0 && source === this.view.text;
+    if (sourceUnchanged && !this.#dependenciesChanged(definitions)) {
       this.#definitions = definitions;
       return false;
     }
@@ -115,12 +116,11 @@ export class InlineRegion implements ResolvedInlineRegion {
       definitions,
       hasDefinition,
     };
-    const rawTokens = source === this.#tokenSource && this.#rawTokens
-      ? this.#rawTokens
+    const rawTokens = sourceUnchanged
+      ? previousTokens
       : this.#profile.tokenize(source);
     const tokens = this.#profile.resolve(source, rawTokens, context);
 
-    this.#tokenSource = source;
     this.#definitionDependencies = context.dependencies ?? emptySet;
     this.#definitions = definitions;
     this.#rawTokens = rawTokens;
