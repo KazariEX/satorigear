@@ -1,6 +1,6 @@
 import type { Root } from "mdast";
-import { BlockScanner } from "./block/scanner.ts";
-import { type BlockRecord, BlockStructure } from "./block/structure.ts";
+import { type BlockRecord, BlockScanner } from "./block/scanner.ts";
+import { BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, snapshot } from "./fragment/output/materialize.ts";
 import { type InlineRegion, InlineRegionCursor } from "./inline/region.ts";
@@ -55,9 +55,8 @@ export class DocumentImpl implements Document {
   constructor(source: string, profile: SyntaxProfile) {
     this.#profile = profile;
     this.#blockScanner = new BlockScanner(profile.block);
-    this.#blockStructure = new BlockStructure(profile.block.schema, this.#blockScanner.tokens);
+    this.#blockStructure = new BlockStructure(profile.block.schema, this.#blockScanner);
     this.#blockScanner.scan(source);
-    this.#blockStructure.build();
     this.#syntaxState = new SyntaxState(source, profile.inline, this.#blockStructure);
   }
 
@@ -81,9 +80,8 @@ export class DocumentImpl implements Document {
       this.#previousFragments = fragments;
     }
 
-    const { stableBlockCount, tokenChange } = this.#blockScanner.edit(change);
-    const structureChange = this.#blockStructure.update(tokenChange);
-    this.#syntaxState.update(this.source, structureChange, stableBlockCount, change.offsetDelta);
+    const blockChange = this.#blockScanner.edit(change);
+    this.#syntaxState.update(this.source, blockChange, change.offsetDelta);
 
     return { changedSpan: change.changedSpan };
   }
@@ -144,7 +142,6 @@ export class DocumentImpl implements Document {
     blockStructure: BlockStructure,
   ): Root {
     blockScanner.scan(source);
-    blockStructure.build();
 
     const regions = resolveInlineRegions(source, profile.inline, blockStructure);
     const context: BlockBuildContext = {

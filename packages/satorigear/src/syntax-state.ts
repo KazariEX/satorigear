@@ -2,7 +2,8 @@ import { BlockKind } from "./constants/block.ts";
 import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "./source-view.ts";
-import type { BlockRecord, BlockStructure, BlockStructureChange } from "./block/structure.ts";
+import type { BlockRecord, BlockScanChange } from "./block/scanner.ts";
+import type { BlockStructure } from "./block/structure.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
 
@@ -40,17 +41,17 @@ export class SyntaxState {
 
   update(
     source: string,
-    change?: BlockStructureChange,
-    stableBlockCount = 0,
+    change?: BlockScanChange,
     offsetDelta = 0,
   ): void {
     // 1. Keep the scanner-stable prefix and collect definitions and inline bindings through the rebuilt range.
     const structure = this.#structure;
     const tokens = structure.tokens;
     const previousBlocks = this.#blocks;
-    const oldStart = change?.oldStart ?? 0;
-    const oldEnd = change?.oldEnd ?? 0;
-    const newEnd = change?.newEnd ?? structure.records.length;
+    const stableBlockCount = change?.stableBlockCount ?? 0;
+    const oldRecordStart = change?.oldRecordStart ?? 0;
+    const oldRecordEnd = change?.oldRecordEnd ?? 0;
+    const newRecordEnd = change?.newRecordEnd ?? structure.records.length;
     const blocks: SyntaxBlock[] = stableBlockCount === 0 ? [] : previousBlocks.slice(0, stableBlockCount);
     const previousDefinitionEntries = this.#definitionEntries;
     const definitions = new Set<string>();
@@ -70,7 +71,7 @@ export class SyntaxState {
     const bindings: InlineRegionBinding[] = [];
     // One flat list records changed-block boundaries without allocating a binding array per block.
     const bindingOffsets: number[] = [];
-    for (let index = stableBlockCount; index < newEnd; index++) {
+    for (let index = stableBlockCount; index < newRecordEnd; index++) {
       const record = structure.records[index];
       bindingOffsets.push(bindings.length);
       // Semantic nodes are the non-zero ranges in the flat block token stream.
@@ -107,16 +108,16 @@ export class SyntaxState {
     }
     bindingOffsets.push(bindings.length);
 
-    // 2. Restore the scanner-converged suffix. Its definitions, regions and tokens remain valid;
+    // 2. Restore the retained suffix. Its definitions, regions and tokens remain valid;
     // only block indexes and absolute source geometry may move after an insertion or deletion.
     if (previousDefinitionEntries) {
       while (
         definitionIndex < previousDefinitionEntries.length &&
-        previousDefinitionEntries[definitionIndex].blockIndex < oldEnd
+        previousDefinitionEntries[definitionIndex].blockIndex < oldRecordEnd
       ) {
         definitionIndex++;
       }
-      const blockDelta = newEnd - oldEnd;
+      const blockDelta = newRecordEnd - oldRecordEnd;
       while (definitionIndex < previousDefinitionEntries.length) {
         const previousEntry = previousDefinitionEntries[definitionIndex++];
         const entry = { blockIndex: previousEntry.blockIndex + blockDelta, key: previousEntry.key };
@@ -125,9 +126,9 @@ export class SyntaxState {
       }
     }
 
-    // Scanner convergence makes every record in the retained suffix share the document-length shift.
+    // Every record in the retained suffix shares the document-length and token-index shifts.
     const suffixTokenDelta = change?.tokenDelta ?? 0;
-    for (let index = oldEnd; index < previousBlocks.length; index++) {
+    for (let index = oldRecordEnd; index < previousBlocks.length; index++) {
       const block = previousBlocks[index];
       if (offsetDelta !== 0 || suffixTokenDelta !== 0) {
         for (const region of block.regions) {
@@ -138,17 +139,17 @@ export class SyntaxState {
     }
 
     const displacedRegions: InlineRegion[] = [];
-    for (let index = oldStart; index < oldEnd; index++) {
+    for (let index = oldRecordStart; index < oldRecordEnd; index++) {
       for (const region of previousBlocks[index].regions) {
         displacedRegions.push(region);
       }
     }
 
     // 3. Reconcile only rebuilt blocks. Compatible displaced regions retain their lexer state;
-    // converged suffix regions never enter this path.
-    for (let blockIndex = stableBlockCount; blockIndex < newEnd; blockIndex++) {
+    // retained suffix regions never enter this path.
+    for (let blockIndex = stableBlockCount; blockIndex < newRecordEnd; blockIndex++) {
       const block = blocks[blockIndex];
-      const previousBlock = blockIndex < oldStart ? previousBlocks[blockIndex] : void 0;
+      const previousBlock = blockIndex < oldRecordStart ? previousBlocks[blockIndex] : void 0;
       const bindingOffset = blockIndex - stableBlockCount;
       const bindingStart = bindingOffsets[bindingOffset];
       const bindingEnd = bindingOffsets[bindingOffset + 1];
@@ -184,7 +185,7 @@ export class SyntaxState {
       }
 
       // Scanner-stable prefix records may survive token-equivalent edits with different source geometry.
-      // Only the converged suffix can reuse fragments without comparing duplicate block text.
+      // Only the retained suffix can reuse fragments without comparing duplicate block text.
       block.regions = regions;
       if (previousBlock) {
         block.version = previousBlock.version + 1;
@@ -209,7 +210,7 @@ export class SyntaxState {
         }
       };
       refreshDefinitions(0, stableBlockCount);
-      refreshDefinitions(newEnd, blocks.length);
+      refreshDefinitions(newRecordEnd, blocks.length);
     }
 
     this.#blocks = blocks;
