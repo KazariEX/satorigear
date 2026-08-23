@@ -161,7 +161,7 @@ export function contentAfterColumns(
 }
 
 export function normalizeLines(value: string): string {
-  return value.replace(/\r\n|\r/g, "\n");
+  return value.includes("\r") ? value.replace(/\r\n|\r/g, "\n") : value;
 }
 
 export function removeIndent(value: string, columns: number): string {
