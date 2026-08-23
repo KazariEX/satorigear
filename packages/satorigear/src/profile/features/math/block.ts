@@ -6,7 +6,6 @@ import {
   fencedBlockContent,
   type FenceRule,
 } from "../../../block/fence.ts";
-import { firstNonspace, lineEnd } from "../../../block/lines.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
@@ -41,8 +40,10 @@ export const blockRules: BlockFeature["rules"] = [
         meta: meta || null,
         value: fencedBlockContent(value, block, "columns"),
         position: {
-          start: firstNonspace(context.source, offset, lineEnd(context.source, offset)),
-          end: block.closed || end < context.source.length ? blockEnd(tokenStart, context) : end,
+          start: offset + block.markerOffset,
+          end: block.closed || end < context.structure.tokens.sourceLength
+            ? blockEnd(tokenStart, context)
+            : end,
         },
       };
     },

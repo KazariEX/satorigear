@@ -27,23 +27,6 @@ export function firstLineIndexAtOrAfter(lines: readonly BlockLine[], offset: num
   return low;
 }
 
-export function firstNonspace(source: string, start: number, end: number): number {
-  while (start < end && (source[start] === " " || source[start] === "\t")) {
-    start++;
-  }
-  return start;
-}
-
-export function lineEnd(source: string, offset: number, limit = source.length): number {
-  for (; offset < limit; offset++) {
-    const character = source.charCodeAt(offset);
-    if (character === Character.LineFeed || character === Character.CarriageReturn) {
-      return offset;
-    }
-  }
-  return limit;
-}
-
 export function lineContentEnd(source: string, start: number, end: number): number {
   if (end <= start) {
     return end;

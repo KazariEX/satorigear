@@ -44,6 +44,10 @@ export class BlockTokenStream {
     return this.#fieldLength / blockTokenStride;
   }
 
+  get sourceLength(): number {
+    return this.#sourceLength;
+  }
+
   push(kind: BlockKind, start: number, end: number, meta?: BlockTokenMeta): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + blockTokenStride);

@@ -21,6 +21,7 @@ export interface FencedBlock {
   closed: boolean;
   indent: number;
   info: string;
+  markerOffset: number;
 }
 
 export function fenceAt(source: string, line: BlockLine, rule: FenceRule): Fence | undefined {
@@ -81,6 +82,7 @@ export function fencedBlock(source: string, line: BlockLine, fence: Fence, close
     closed,
     indent: fence.indent,
     info: source.slice(infoStart, line.end),
+    markerOffset: fence.offset - line.start,
   };
 }
 

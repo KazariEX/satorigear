@@ -9,10 +9,8 @@ import {
 } from "../../block/fence.ts";
 import {
   type BlockLine,
-  firstNonspace,
   indentOf,
   isBlank,
-  lineEnd,
   normalizeLines,
   removeIndent,
 } from "../../block/lines.ts";
@@ -94,8 +92,8 @@ export const feature: SyntaxFeature = {
             meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
             value: fencedBlockContent(source, block),
             position: {
-              start: firstNonspace(context.source, offset, lineEnd(context.source, offset)),
-              end: block.closed || end < context.source.length
+              start: offset + block.markerOffset,
+              end: block.closed || end < context.structure.tokens.sourceLength
                 ? blockEnd(tokenStart, context)
                 : end,
             },
