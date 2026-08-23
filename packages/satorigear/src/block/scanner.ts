@@ -470,7 +470,7 @@ export class BlockScanner {
       replacement,
     );
     const tokenDelta = tokenChange.newEnd - tokenChange.oldEnd;
-    let oldRecordStart = 0;
+    let oldRecordStart = stableBlockCount;
     while (
       oldRecordStart < previousRecords.length &&
       previousRecords[oldRecordStart].tokenEnd <= tokenChange.oldStart
