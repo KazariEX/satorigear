@@ -3,12 +3,13 @@ import { type BlockScanChange, BlockScanner } from "./block/scanner.ts";
 import { BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { InlineRegionCursor } from "./inline/region.ts";
+import { emptyArray } from "./primitives.ts";
 import {
   resolveInlineRegions,
   type SyntaxBlock,
   SyntaxState,
 } from "./syntax-state.ts";
-import type { SpannedNode, SpannedValue } from "./fragment/node.ts";
+import type { SpannedValue } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceChange, SourceLocation, SourceSpan, TextEdit } from "./source-view.ts";
 
@@ -22,6 +23,10 @@ export interface Document {
   readonly tree: Root;
 
   edit: (edits: readonly TextEdit[]) => EditResult;
+}
+
+interface PositionShift extends SourceLocation {
+  columnLine: number;
 }
 
 // Edit coordinates refer to the old source, so application and damage calculation share one forward pass.
@@ -53,15 +58,13 @@ function materializeNode(
   value: SpannedValue,
   locate: (offset: number) => SourceLocation,
 ): void {
-  const position = value.position;
-  const start = locate(position.start);
-  const end = position.end;
-  for (const child of value.children ?? []) {
+  const { position, children = emptyArray } = value;
+  const result = position as unknown as NonNullable<Node["position"]>;
+  result.start = locate(position.start);
+  for (const child of children) {
     materializeNode(child, locate);
   }
-  const result = position as unknown as NonNullable<Node["position"]>;
-  result.start = start;
-  result.end = locate(end);
+  result.end = locate(position.end);
 }
 
 function buildTreeBlock(
@@ -70,37 +73,29 @@ function buildTreeBlock(
   locate: (offset: number) => SourceLocation,
 ): TopLevelContent {
   context.cursor.reset(block.regions);
-  const node: SpannedNode<TopLevelContent> = buildBlockNode(block.record.tokenStart, context);
+  const node = buildBlockNode<TopLevelContent>(block.record.tokenStart, context);
   materializeNode(node, locate);
   return node as unknown as TopLevelContent;
 }
 
-function relocateNode(
-  value: object,
-  shift: number,
-  locate: (offset: number) => SourceLocation,
-): boolean {
-  const node = value as {
+function shiftLocation(location: SourceLocation, shift: PositionShift): void {
+  if (location.line === shift.columnLine) {
+    location.column += shift.column;
+  }
+  location.offset += shift.offset;
+  location.line += shift.line;
+}
+
+function shiftPositions(value: object, shift: PositionShift): void {
+  const { position, children = emptyArray } = value as {
     children?: object[];
     position: { start: SourceLocation; end: SourceLocation };
   };
-  const position = node.position;
-  const start = locate(position.start.offset + shift);
-  // Equal-length edits may move line breaks. Once the complete root location is unchanged,
-  // the untouched suffix shares its old source mapping and every descendant remains current.
-  if (
-    start.offset === position.start.offset &&
-    start.line === position.start.line &&
-    start.column === position.start.column
-  ) {
-    return false;
+  shiftLocation(position.start, shift);
+  shiftLocation(position.end, shift);
+  for (const child of children) {
+    shiftPositions(child, shift);
   }
-  for (const child of node.children ?? []) {
-    relocateNode(child, shift, locate);
-  }
-  position.start = start;
-  position.end = locate(position.end.offset + shift);
-  return true;
 }
 
 export class DocumentImpl implements Document {
@@ -200,16 +195,33 @@ export class DocumentImpl implements Document {
       children[index] = buildTreeBlock(blocks[index], context, locate);
     }
 
-    // 3. Reconcile the retained suffix. Definition-invalidated blocks rebuild; other roots
-    // remap positions until the first unchanged location proves the remaining mapping current.
+    // 3. Reconcile the retained suffix. Stable roots share one position shift;
+    // once positions converge, skip directly to any remaining definition-invalidated blocks.
+    let positionShift: PositionShift | undefined;
     for (let index = newRebuildEnd; index < blocks.length; index++) {
       if (invalidatedBlocks[invalidatedIndex] === index) {
         children[index] = buildTreeBlock(blocks[index], context, locate);
         invalidatedIndex++;
+        continue;
       }
-      else if (!relocateNode(children[index], suffixOffsetDelta, locate)) {
-        break;
+      if (!positionShift) {
+        const previousStart = children[index].position!.start as SourceLocation;
+        const nextStart = locate(previousStart.offset + suffixOffsetDelta);
+        if (
+          nextStart.offset === previousStart.offset &&
+          nextStart.line === previousStart.line &&
+          nextStart.column === previousStart.column
+        ) {
+          break;
+        }
+        positionShift = {
+          offset: nextStart.offset - previousStart.offset,
+          line: nextStart.line - previousStart.line,
+          columnLine: previousStart.line,
+          column: nextStart.column - previousStart.column,
+        };
       }
+      shiftPositions(children[index], positionShift);
     }
     while (invalidatedIndex < invalidatedBlocks.length) {
       const index = invalidatedBlocks[invalidatedIndex++];
@@ -240,7 +252,7 @@ export class DocumentImpl implements Document {
     const locate = blockScanner.locator(source);
     const start = locate(0);
     const children = blockScanner.records.map((block) => {
-      const node: SpannedNode<TopLevelContent> = buildBlockNode(block.tokenStart, context);
+      const node = buildBlockNode<TopLevelContent>(block.tokenStart, context);
       materializeNode(node, locate);
       return node as unknown as TopLevelContent;
     });
