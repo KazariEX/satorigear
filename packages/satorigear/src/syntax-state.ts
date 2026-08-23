@@ -18,9 +18,27 @@ interface BlockDefinition {
   key: string;
 }
 
+function firstDefinitionAtOrAfter(
+  entries: readonly BlockDefinition[],
+  blockIndex: number,
+): number {
+  let low = 0;
+  let high = entries.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (entries[middle].blockIndex < blockIndex) {
+      low = middle + 1;
+    }
+    else {
+      high = middle;
+    }
+  }
+  return low;
+}
+
 export class SyntaxState {
   #blocks: SyntaxBlock[] = [];
-  #definitionEntries?: BlockDefinition[];
+  #definitionEntries?: readonly BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
   #profile: InlineProfile;
   #structure: BlockStructure;
@@ -44,8 +62,8 @@ export class SyntaxState {
     change?: BlockScanChange,
     offsetDelta = 0,
   ): void {
-    // 1. Retain the scanner-stable prefix, then collect definitions and inline bindings
-    // from every record whose semantic state must be rebuilt.
+    // 1. Retain the scanner-stable prefix, then collect inline bindings from rebuilt records
+    // and definitions only from the narrower token-damage window.
     const structure = this.#structure;
     const tokens = structure.tokens;
     const previousBlocks = this.#blocks;
@@ -54,20 +72,10 @@ export class SyntaxState {
     const oldRecordEnd = change?.oldRecordEnd ?? 0;
     const newRecordEnd = change?.newRecordEnd ?? structure.records.length;
     const blocks: SyntaxBlock[] = stableBlockCount === 0 ? [] : previousBlocks.slice(0, stableBlockCount);
-    const previousDefinitionEntries = this.#definitionEntries;
-    const definitions = new Set<string>();
-    let definitionEntries: BlockDefinition[] | undefined;
-    let definitionIndex = 0;
-    if (previousDefinitionEntries) {
-      while (
-        definitionIndex < previousDefinitionEntries.length &&
-        previousDefinitionEntries[definitionIndex].blockIndex < stableBlockCount
-      ) {
-        const entry = previousDefinitionEntries[definitionIndex++];
-        (definitionEntries ??= []).push(entry);
-        definitions.add(entry.key);
-      }
-    }
+    const previousDefinitionEntries = this.#definitionEntries ?? emptyArray;
+    const oldDefinitionStart = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordStart);
+    const oldDefinitionEnd = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordEnd);
+    let replacementDefinitions: BlockDefinition[] | undefined;
 
     const bindings: InlineRegionBinding[] = [];
     // One flat binding list plus per-block offsets avoids allocating one list per block.
@@ -82,11 +90,9 @@ export class SyntaxState {
           continue;
         }
         const rule = structure.ruleOf(token);
-        const definitionKey = rule.definitionKey;
-        if (definitionKey) {
-          const key = definitionKey(tokens, token);
-          (definitionEntries ??= []).push({ blockIndex: index, key });
-          definitions.add(key);
+        if (rule.definitionKey && index >= oldRecordStart) {
+          const key = rule.definitionKey(tokens, token);
+          (replacementDefinitions ??= []).push({ blockIndex: index, key });
         }
         if (rule.inlineContent) {
           const inlineView = inlineViewOf(source, tokens, token, nodeLength);
@@ -107,22 +113,38 @@ export class SyntaxState {
     }
     bindingOffsets.push(bindings.length);
 
-    // 2. Restore suffix definitions and blocks, then collect regions displaced from replaced records.
-    // Retained blocks keep their identity; only indexes and absolute source geometry may shift.
-    if (previousDefinitionEntries) {
-      while (
-        definitionIndex < previousDefinitionEntries.length &&
-        previousDefinitionEntries[definitionIndex].blockIndex < oldRecordEnd
-      ) {
-        definitionIndex++;
+    // 2. Splice definition ownership at the token-stable record boundary, then restore suffix blocks.
+    const blockDelta = newRecordEnd - oldRecordEnd;
+    const definitionsChanged = oldDefinitionStart !== oldDefinitionEnd || replacementDefinitions !== void 0;
+    const shiftedDefinitionSuffix = blockDelta !== 0 && oldDefinitionEnd < previousDefinitionEntries.length;
+    let definitionEntries = this.#definitionEntries;
+    if (previousBlocks.length === 0) {
+      definitionEntries = replacementDefinitions;
+    }
+    else if (definitionsChanged || shiftedDefinitionSuffix) {
+      const nextEntries = previousDefinitionEntries.slice(0, oldDefinitionStart);
+      if (replacementDefinitions) {
+        nextEntries.push(...replacementDefinitions);
       }
-      const blockDelta = newRecordEnd - oldRecordEnd;
-      while (definitionIndex < previousDefinitionEntries.length) {
-        const previousEntry = previousDefinitionEntries[definitionIndex++];
-        const entry = { blockIndex: previousEntry.blockIndex + blockDelta, key: previousEntry.key };
-        (definitionEntries ??= []).push(entry);
-        definitions.add(entry.key);
+      for (let index = oldDefinitionEnd; index < previousDefinitionEntries.length; index++) {
+        const previousEntry = previousDefinitionEntries[index];
+        nextEntries.push(
+          blockDelta === 0
+            ? previousEntry
+            : { blockIndex: previousEntry.blockIndex + blockDelta, key: previousEntry.key },
+        );
       }
+      definitionEntries = nextEntries.length > 0 ? nextEntries : void 0;
+    }
+
+    // Reuse the lookup set when neither side of the rebuilt record range contains a definition.
+    let definitions = this.#definitions;
+    if (previousBlocks.length === 0 || definitionsChanged) {
+      const nextDefinitions = new Set<string>();
+      for (const entry of definitionEntries ?? []) {
+        nextDefinitions.add(entry.key);
+      }
+      definitions = nextDefinitions;
     }
 
     // Every region in the retained suffix shares the same source-offset and token-index shifts.
@@ -197,7 +219,11 @@ export class SyntaxState {
 
     // 4. Propagate changed definition visibility to retained blocks outside the rebuilt range.
     // Regions track consulted labels, so unrelated definitions do not advance block versions.
-    if (previousBlocks.length > 0 && !isSetEqual(this.#definitions, definitions)) {
+    if (
+      previousBlocks.length > 0 &&
+      this.#definitions !== definitions &&
+      !isSetEqual(this.#definitions, definitions)
+    ) {
       const refreshDefinitions = (start: number, end: number): void => {
         for (let index = start; index < end; index++) {
           const block = blocks[index];
