@@ -7,10 +7,9 @@ import type { BlockStructure } from "./block/structure.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
 
-interface SyntaxBlock {
+export interface SyntaxBlock {
   record: BlockRecord;
   regions: readonly InlineRegion[];
-  version: number;
 }
 
 interface BlockDefinition {
@@ -108,7 +107,6 @@ export class SyntaxState {
       blocks.push({
         record,
         regions: emptyArray,
-        version: 0,
       });
     }
     bindingOffsets.push(bindings.length);
@@ -177,7 +175,6 @@ export class SyntaxState {
     // 3. Rebuild region lists in source order. Prefix blocks reuse by block position;
     // displaced regions reuse only when their opening token survived token replacement.
     for (let blockIndex = stableBlockCount; blockIndex < newRecordEnd; blockIndex++) {
-      const block = blocks[blockIndex];
       const previousBlock = blockIndex < oldRecordStart ? previousBlocks[blockIndex] : void 0;
       const bindingOffset = blockIndex - stableBlockCount;
       const bindingStart = bindingOffsets[bindingOffset];
@@ -210,15 +207,12 @@ export class SyntaxState {
       }
 
       // Scanner-stable prefix records may survive token-equivalent edits with different source geometry.
-      // Only the retained suffix can reuse fragments without comparing duplicate block text.
-      block.regions = regions;
-      if (previousBlock) {
-        block.version = previousBlock.version + 1;
-      }
+      // Only the retained suffix can reuse projected nodes without comparing duplicate block text.
+      blocks[blockIndex].regions = regions;
     }
 
     // 4. Propagate changed definition visibility to retained blocks outside the rebuilt range.
-    // Regions track consulted labels, so unrelated definitions do not advance block versions.
+    // Regions track consulted labels, so unrelated definitions preserve block identity.
     if (
       previousBlocks.length > 0 &&
       this.#definitions !== definitions &&
@@ -234,7 +228,7 @@ export class SyntaxState {
             changed ||= revision !== region.revision;
           }
           if (changed) {
-            block.version++;
+            blocks[index] = { record: block.record, regions: block.regions };
           }
         }
       };

@@ -1,10 +1,10 @@
 import type { Root, TopLevelContent } from "mdast";
-import { type BlockRecord, BlockScanner } from "./block/scanner.ts";
+import { BlockScanner } from "./block/scanner.ts";
 import { BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, materializeNode, relocateStableNode } from "./fragment/output/materialize.ts";
 import { type InlineRegion, InlineRegionCursor } from "./inline/region.ts";
-import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
+import { resolveInlineRegions, type SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 import type { SpannedNode } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceChange, SourceSpan, TextEdit } from "./source-view.ts";
@@ -24,7 +24,6 @@ export interface Document {
 interface MaterializedBlock {
   node: TopLevelContent;
   offset: number;
-  version: number;
 }
 
 // Edit coordinates refer to the old source, so application and damage calculation share one forward pass.
@@ -55,7 +54,7 @@ function applyEdits(source: string, edits: readonly TextEdit[]): SourceChange {
 export class DocumentImpl implements Document {
   #blockStructure: BlockStructure;
   #blockScanner: BlockScanner;
-  #blocks = new WeakMap<BlockRecord, MaterializedBlock>();
+  #blocks = new WeakMap<SyntaxBlock, MaterializedBlock>();
   #profile: SyntaxProfile;
   #source: string;
   #syntaxState: SyntaxState;
@@ -98,7 +97,7 @@ export class DocumentImpl implements Document {
     const previousBlocks = this.#blocks;
     const regions: InlineRegion[] = [];
     for (const block of blocks) {
-      if (previousBlocks.get(block.record)?.version === block.version) {
+      if (previousBlocks.has(block)) {
         continue;
       }
       for (const region of block.regions) {
@@ -121,8 +120,7 @@ export class DocumentImpl implements Document {
     for (let index = 0; index < blocks.length; index++) {
       const block = blocks[index];
       const offset = this.#blockStructure.tokens.start(block.record.tokenStart);
-      const previous = previousBlocks.get(block.record);
-      let materialized = previous?.version === block.version ? previous : void 0;
+      let materialized = previousBlocks.get(block);
       if (materialized) {
         // The scanner-stable prefix retained both source geometry and block identity.
         if (index >= stableBlockCount) {
@@ -136,9 +134,8 @@ export class DocumentImpl implements Document {
         materialized = {
           node: node as unknown as TopLevelContent,
           offset,
-          version: block.version,
         };
-        previousBlocks.set(block.record, materialized);
+        previousBlocks.set(block, materialized);
       }
       children[index] = materialized.node;
     }
