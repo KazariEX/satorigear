@@ -23,7 +23,6 @@ interface LinkDefinitionFields {
   definitionKey: string;
   destination: string;
   label: string;
-  markerOffset: number;
   title: string | undefined;
 }
 
@@ -185,7 +184,6 @@ function linkDefinitionAt(
     definitionKey: normalizeAssociationLabel(label),
     destination,
     label,
-    markerOffset: contentOffset - lines[startIndex].start,
     title: void 0,
   };
   if (!closer) {
@@ -459,7 +457,7 @@ export const feature: SyntaxFeature = {
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),
             position: {
-              start: context.structure.tokens.start(tokenStart) + fields.markerOffset,
+              start: context.structure.tokens.start(tokenStart),
               end: blockEnd(tokenStart, context),
             },
           };
@@ -479,8 +477,7 @@ export const feature: SyntaxFeature = {
           if (!definition) {
             return;
           }
-          const line = lines[start];
-          out.push(BlockKind.LinkDefinitionOpen, line.start, line.start, { value: definition.fields });
+          out.push(BlockKind.LinkDefinitionOpen, contentOffset, contentOffset, { value: definition.fields });
           for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
             const current = lines[definitionLine];
             const end = definitionLine + 1 < definition.end ? current.next : current.end;

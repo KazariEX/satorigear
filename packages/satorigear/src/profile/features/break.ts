@@ -1,8 +1,8 @@
-import { type BlockLine, firstNonspace } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { blockEnd } from "../../fragment/block.ts";
+import type { BlockLine } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {
@@ -33,12 +33,11 @@ export const feature: SyntaxFeature = {
           token: BlockKind.ThematicBreakToken,
         },
         build(tokenStart, context) {
-          const offset = context.structure.tokens.start(tokenStart);
-          const end = offset + context.structure.lenOf(tokenStart);
+          const tokens = context.structure.tokens;
           return {
             type: "thematicBreak",
             position: {
-              start: firstNonspace(context.source, offset, end),
+              start: tokens.start(tokenStart),
               end: blockEnd(tokenStart, context),
             },
           };
@@ -60,7 +59,7 @@ export const feature: SyntaxFeature = {
           if (!isThematicBreak(source, line, contentOffset)) {
             return;
           }
-          out.push(BlockKind.ThematicBreakToken, line.start, line.end);
+          out.push(BlockKind.ThematicBreakToken, contentOffset, line.end);
           return start + 1;
         },
       },

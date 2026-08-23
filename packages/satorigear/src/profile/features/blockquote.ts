@@ -1,8 +1,6 @@
 import {
   type BlockLine,
-  firstNonspace,
   isBlank,
-  lineEnd,
   lineIndent,
   physicalColumnAt,
 } from "../../block/lines.ts";
@@ -49,16 +47,12 @@ export const feature: SyntaxFeature = {
           close: BlockKind.BlockQuoteClose,
         },
         build(tokenStart, context) {
-          const offset = context.structure.tokens.start(tokenStart);
+          const tokens = context.structure.tokens;
           return {
             type: "blockquote",
             children: buildBlockChildren(tokenStart, context),
             position: {
-              start: firstNonspace(
-                context.source,
-                offset,
-                lineEnd(context.source, offset),
-              ),
+              start: tokens.start(tokenStart),
               end: blockEnd(tokenStart, context),
             },
           };
@@ -100,7 +94,7 @@ export const feature: SyntaxFeature = {
             quoteLines.push({ ...lines[index], lazy: true });
             index++;
           }
-          out.push(BlockKind.BlockQuoteOpen, line.start, line.start + 1);
+          out.push(BlockKind.BlockQuoteOpen, contentOffset, contentOffset + 1);
           context.scanLines(source, quoteLines, out);
           const end = quoteLines.at(-1)?.next ?? line.start;
           out.push(BlockKind.BlockQuoteClose, end, end);
