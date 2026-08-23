@@ -384,53 +384,78 @@ export class BlockScanner {
     const restartRecord = previousRecords[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
     const oldTokenStart = restartRecord?.tokenStart ?? 0;
-    const restartLine = firstLineIndexAtOrAfter(nextLines, restartOffset);
-    const scanLines = nextLines.slice(restartLine);
 
     // 2. Rescan from that boundary until block geometry and shifted tokens match an old record.
     const replacement = new BlockTokenStream(nextSource.length);
     const rescannedRecords: BlockRecord[] = [];
     let convergedIndex = -1;
-    let convergenceIndex = affectedIndex;
-    scanBlockLines(this.#profile, this.#context, nextSource, scanLines, replacement, (lineStart, lineEnd, tokenStart, tokenEnd) => {
-      const blockStart = scanLines[lineStart].start;
-      const blockEnd = scanLines[lineEnd - 1].next;
-      if (blockEnd >= changedSpan.end) {
-        const candidateStart = Math.max(oldChangedEnd, blockStart - offsetDelta);
-        while (
-          convergenceIndex < previousRecords.length &&
-          previousRecords[convergenceIndex].start < candidateStart
-        ) {
-          convergenceIndex++;
+    const initialEndRecord = previousRecords[Math.min(previousRecords.length - 1, affectedIndex + 2)];
+    let scanEnd = Math.min(
+      nextSource.length,
+      Math.max(changedSpan.end, (initialEndRecord?.end ?? nextSource.length) + offsetDelta),
+    );
+    scanEnd = nextLines[firstLineIndexAtOrAfter(nextLines, scanEnd)]?.start ?? nextSource.length;
+    while (true) {
+      const scanSource = nextSource.slice(restartOffset, scanEnd);
+      const scanLines = linesOf(scanSource);
+      let convergenceIndex = affectedIndex;
+      // The visitor is consumed synchronously before this window can be expanded.
+      // eslint-disable-next-line no-loop-func
+      scanBlockLines(this.#profile, this.#context, scanSource, scanLines, replacement, (
+        lineStart,
+        lineEnd,
+        tokenStart,
+        tokenEnd,
+      ) => {
+        const blockStart = restartOffset + scanLines[lineStart].start;
+        const blockEnd = restartOffset + scanLines[lineEnd - 1].next;
+        // A block ending at the temporary window boundary may continue in the next window.
+        if (blockEnd >= changedSpan.end && (blockEnd < scanEnd || scanEnd === nextSource.length)) {
+          const candidateStart = Math.max(oldChangedEnd, blockStart - offsetDelta);
+          while (
+            convergenceIndex < previousRecords.length &&
+            previousRecords[convergenceIndex].start < candidateStart
+          ) {
+            convergenceIndex++;
+          }
+          const candidateRecord = previousRecords[convergenceIndex];
+          if (
+            candidateRecord?.start + offsetDelta === blockStart &&
+            candidateRecord.end + offsetDelta === blockEnd &&
+            sameShiftedBlock(
+              this.#tokens,
+              previousSource,
+              candidateRecord,
+              replacement,
+              scanSource,
+              tokenStart,
+              tokenEnd,
+              offsetDelta - restartOffset,
+            )
+          ) {
+            replacement.truncate(tokenStart);
+            convergedIndex = convergenceIndex;
+            return true;
+          }
         }
-        const candidateRecord = previousRecords[convergenceIndex];
-        if (
-          candidateRecord?.start + offsetDelta === blockStart &&
-          candidateRecord.end + offsetDelta === blockEnd &&
-          sameShiftedBlock(
-            this.#tokens,
-            previousSource,
-            candidateRecord,
-            replacement,
-            nextSource,
-            tokenStart,
-            tokenEnd,
-            offsetDelta,
-          )
-        ) {
-          replacement.truncate(tokenStart);
-          convergedIndex = convergenceIndex;
-          return true;
-        }
-      }
-      rescannedRecords.push({
-        start: blockStart,
-        end: blockEnd,
-        tokenStart: oldTokenStart + tokenStart,
-        tokenEnd: oldTokenStart + tokenEnd,
+        rescannedRecords.push({
+          start: blockStart,
+          end: blockEnd,
+          tokenStart: oldTokenStart + tokenStart,
+          tokenEnd: oldTokenStart + tokenEnd,
+        });
+        return false;
       });
-      return false;
-    });
+      if (convergedIndex >= 0 || scanEnd === nextSource.length) {
+        break;
+      }
+      replacement.reset(nextSource.length);
+      rescannedRecords.length = 0;
+      const expandedEnd = Math.min(nextSource.length, restartOffset + (scanEnd - restartOffset) * 2);
+      const nextLine = firstLineIndexAtOrAfter(nextLines, expandedEnd);
+      scanEnd = nextLines[nextLine]?.start ?? nextSource.length;
+    }
+    replacement.shift(restartOffset);
     replacement.indexStructure(this.#profile.schema);
 
     // 3. Replace the rescanned token window, then reconcile record identity around the narrowed token damage.

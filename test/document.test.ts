@@ -119,6 +119,16 @@ describe("markdown document", () => {
     expect(document.snapshot().children[0]).toMatchObject({ type: "definition", identifier: "alpha xxxdelta" });
   });
 
+  it("expands a rescan when edited syntax crosses old block boundaries", () => {
+    const source = "before\n\n```\ncode\n```\n\none\n\ntwo\n\nthree\n";
+    const document = parser.createDocument(source);
+    const closer = source.indexOf("```", source.indexOf("```") + 3);
+
+    document.edit([{ start: closer, end: closer + 3, text: "not" }]);
+
+    expect(document.snapshot()).toEqual(parser.parse(document.source));
+  });
+
   it("isolates independently edited inline regions", () => {
     const document = parser.createDocument("one *a*\n\ntwo **b**\n");
     document.snapshot();

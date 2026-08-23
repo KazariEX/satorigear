@@ -292,6 +292,13 @@ export class BlockTokenStream {
     }
   }
 
+  shift(offset: number): void {
+    for (let index = 0; index < this.#fieldLength; index += blockTokenStride) {
+      this.#fields[index + 1] += offset;
+      this.#fields[index + 2] += offset;
+    }
+  }
+
   kind(index: number): BlockKind {
     return this.#fields[index * blockTokenStride] as BlockKind;
   }
