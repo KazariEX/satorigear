@@ -1,5 +1,4 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
-import { lineContentEnd } from "../block/lines.ts";
 import { buildInlineFragment, type InlineFragment } from "./inline.ts";
 import type { BlockStructure } from "../block/structure.ts";
 import type { InlineProfile } from "../inline/profile.ts";
@@ -22,8 +21,8 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 ) => SpannedNode<T>;
 
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
-  const offset = context.structure.tokens.start(tokenStart);
-  return lineContentEnd(context.source, offset, offset + context.structure.lenOf(tokenStart));
+  const tokens = context.structure.tokens;
+  return tokens.contentEnd(tokenStart + tokens.nodeLength(tokenStart) - 1);
 }
 
 export function payloadBounds(

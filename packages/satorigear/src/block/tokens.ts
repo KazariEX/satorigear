@@ -319,6 +319,11 @@ export class BlockTokenStream {
     return this.#position(this.#fields[index * blockTokenStride + 2]);
   }
 
+  contentEnd(index: number): number {
+    const ranges = this.#metadata?.get(index)?.rangeOffsets;
+    return ranges ? this.start(index) + ranges[ranges.length - 1] : this.end(index);
+  }
+
   text(source: string, index: number): string {
     return this.#metadata?.get(index)?.text ?? source.slice(this.start(index), this.end(index));
   }
@@ -363,7 +368,7 @@ export function appendLogicalToken(
     const line = lines[start + index];
     // Ranges retain the physical source spans even when the token text needs logical indentation repair.
     rangeOffsets[index * 2] = line.start - tokenStart;
-    rangeOffsets[index * 2 + 1] = line.next - tokenStart;
+    rangeOffsets[index * 2 + 1] = (index + 1 === count ? line.end : line.next) - tokenStart;
 
     canSliceSource &&= (
       // Tab overshoot is represented as virtual leading columns that do not exist in the source slice.
