@@ -1,7 +1,7 @@
 import { Character } from "../constants/character.ts";
 import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
-import type { AppliedSourceChange, SourceLocation, SourceSpan } from "../source-view.ts";
+import type { SourceChange, SourceLocation, SourceSpan } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanContext {
@@ -290,13 +290,11 @@ export class BlockScanner {
   #lines: BlockLine[];
   #profile: BlockProfile;
   #records: BlockRecord[];
-  #source: string;
   #tokens: BlockTokenStream;
 
   constructor(profile: BlockProfile) {
     this.#context = createBlockScanContext(profile);
     this.#profile = profile;
-    this.#source = "";
     this.#lines = [];
     this.#tokens = new BlockTokenStream();
     this.#records = [];
@@ -330,12 +328,7 @@ export class BlockScanner {
     tokens.indexStructure(this.#profile.schema);
     records.length = recordIndex;
 
-    this.#source = source;
     this.#lines = lines;
-  }
-
-  get source(): string {
-    return this.#source;
   }
 
   get tokens(): BlockTokenStream {
@@ -346,18 +339,15 @@ export class BlockScanner {
     return this.#records;
   }
 
-  locator(): (offset: number) => SourceLocation {
+  locator(source: string): (offset: number) => SourceLocation {
     const lines = this.#lines;
-    const sourceLength = this.#source.length;
-    const trailingLineEnding = endsInLineEnding(this.#source);
-    return createForwardLocator(lines, sourceLength, trailingLineEnding);
+    return createForwardLocator(lines, source.length, endsInLineEnding(source));
   }
 
-  edit(change: AppliedSourceChange): BlockScanChange {
-    const { changedSpan, offsetDelta, source: nextSource } = change;
+  edit(change: SourceChange): BlockScanChange {
+    const { changedSpan, nextSource, offsetDelta, previousSource } = change;
     // Map the new damage end back to the old source with the total edit delta.
     const oldChangedEnd = changedSpan.end - offsetDelta;
-    const previousSource = this.#source;
 
     // 1. Locate a conservative block restart and update the physical lines around the edit.
     const previousRecords = this.#records;
@@ -526,8 +516,7 @@ export class BlockScanner {
       nextRecords[nextIndex] = record;
     }
 
-    // 4. Commit the matching source, physical lines and reconciled records as scanner state.
-    this.#source = nextSource;
+    // 4. Commit the matching physical lines and reconciled records as scanner state.
     this.#lines = nextLines;
     this.#records = nextRecords;
 

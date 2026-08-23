@@ -7,7 +7,7 @@ import { type InlineRegion, InlineRegionCursor } from "./inline/region.ts";
 import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
 import type { BlockFragment } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
-import type { AppliedSourceChange, SourceSpan, TextEdit } from "./source-view.ts";
+import type { SourceChange, SourceSpan, TextEdit } from "./source-view.ts";
 
 export interface EditResult {
   changedSpan: SourceSpan;
@@ -21,7 +21,7 @@ export interface Document {
 }
 
 // Edit coordinates refer to the old source, so application and damage calculation share one forward pass.
-function applyEdits(source: string, edits: readonly TextEdit[]): AppliedSourceChange {
+function applyEdits(source: string, edits: readonly TextEdit[]): SourceChange {
   const parts: string[] = [];
   let cursor = 0;
   let delta = 0;
@@ -39,8 +39,9 @@ function applyEdits(source: string, edits: readonly TextEdit[]): AppliedSourceCh
   parts.push(source.slice(cursor));
   return {
     changedSpan: { start: edits[0].start, end: cursor + delta },
+    nextSource: parts.join(""),
     offsetDelta: delta,
-    source: parts.join(""),
+    previousSource: source,
   };
 }
 
@@ -50,10 +51,12 @@ export class DocumentImpl implements Document {
   #fragments: BlockFragment[] = [];
   #previousFragments?: Map<BlockRecord, BlockFragment>;
   #profile: SyntaxProfile;
+  #source: string;
   #syntaxState: SyntaxState;
 
   constructor(source: string, profile: SyntaxProfile) {
     this.#profile = profile;
+    this.#source = source;
     this.#blockScanner = new BlockScanner(profile.block);
     this.#blockStructure = new BlockStructure(profile.block.schema, this.#blockScanner);
     this.#blockScanner.scan(source);
@@ -61,7 +64,7 @@ export class DocumentImpl implements Document {
   }
 
   get source(): string {
-    return this.#blockScanner.source;
+    return this.#source;
   }
 
   edit(edits: readonly TextEdit[]): EditResult {
@@ -81,13 +84,14 @@ export class DocumentImpl implements Document {
     }
 
     const blockChange = this.#blockScanner.edit(change);
-    this.#syntaxState.update(this.source, blockChange, change.offsetDelta);
+    this.#source = change.nextSource;
+    this.#syntaxState.update(this.#source, blockChange, change.offsetDelta);
 
     return { changedSpan: change.changedSpan };
   }
 
   snapshot(): Root {
-    return snapshot(this.#buildBlockFragments(), this.source.length, this.#blockScanner.locator());
+    return snapshot(this.#buildBlockFragments(), this.#source.length, this.#blockScanner.locator(this.#source));
   }
 
   #buildBlockFragments(): BlockFragment[] {
@@ -112,7 +116,7 @@ export class DocumentImpl implements Document {
       structure: this.#blockStructure,
       cursor: new InlineRegionCursor(regions),
       profile: this.#profile.inline,
-      source: this.source,
+      source: this.#source,
     };
 
     const nextFragments = blocks.map((block) => {
@@ -154,7 +158,7 @@ export class DocumentImpl implements Document {
     return materialize(
       blockStructure.records.map((block) => buildBlockNode(block.tokenStart, context)),
       source.length,
-      blockScanner.locator(),
+      blockScanner.locator(source),
     );
   }
 }

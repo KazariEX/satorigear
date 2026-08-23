@@ -13,10 +13,11 @@ export interface TextEdit extends SourceSpan {
   text: string;
 }
 
-export interface AppliedSourceChange {
+export interface SourceChange {
   changedSpan: SourceSpan;
+  nextSource: string;
   offsetDelta: number;
-  source: string;
+  previousSource: string;
 }
 
 export interface SourceView {
