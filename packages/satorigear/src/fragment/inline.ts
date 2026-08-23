@@ -16,7 +16,6 @@ import type { BlockBuildContext } from "./block.ts";
 export interface InlineBuildContext {
   blockRule: BlockRule;
   schema: InlineSyntaxSchema;
-  source: string;
   tokenHandlers: readonly (InlineTokenHandler | undefined)[];
   tokens: InlineTokenStream;
   view: SourceView;
@@ -124,10 +123,10 @@ function appendInlineGap(
 function appendInline(
   output: InlineOutput,
   context: InlineBuildContext,
+  tokenIndex: number,
   value: SpannedNode<PhrasingContent>,
 ): void {
   const target = output.children;
-  const nextLineOffset = value.position.start;
   const newline = value.type === "text" && value.value.startsWith("\n");
   if (output.gapStart >= 0) {
     const gapStart = output.gapStart;
@@ -143,14 +142,23 @@ function appendInline(
     }
   }
   if (newline) {
+    const viewStart = inlineTokenStart(context.tokens, tokenIndex);
     // Markdown syntax newlines point past stripped container prefixes,
     // while mdast spans include the physical line ending.
     const previous = target.at(-1);
     if (previous?.type === "break") {
-      extendSpan(previous, lineStart(context.source, nextLineOffset));
+      const viewLineStart = lineStart(context.view.text, viewStart);
+      // At a stripped container boundary, the left side maps before the prefix while
+      // the right side maps after it. A hard break must span to the former.
+      extendSpan(
+        previous,
+        viewLineStart === 0
+          ? context.view.mapPoint(0)
+          : context.view.mapPoint(viewLineStart - 1) + 1,
+      );
       return;
     }
-    value.position.start = lineEndingStart(context.source, nextLineOffset);
+    value.position.start = context.view.mapPoint(lineEndingStart(context.view.text, viewStart));
     if (previous?.type === "text") {
       previous.value = previous.value.slice(0, trailingWhitespaceStart(previous.value));
     }
@@ -176,7 +184,7 @@ function appendInlineLeaf(
   if (!value) {
     return false;
   }
-  appendInline(output, context, value);
+  appendInline(output, context, tokenIndex, value);
   return true;
 }
 
@@ -277,20 +285,17 @@ function buildInlineSemantic(
       }
       next = closeToken + 1;
     }
-    appendInline(
-      output,
-      context,
-      container.build(
-        openToken,
-        closeToken,
-        context.view.mapSpan(
-          inlineTokenStart(context.tokens, openToken),
-          inlineTokenEnd(context.tokens, closeToken),
-        ),
-        children,
-        context,
+    const value = container.build(
+      openToken,
+      closeToken,
+      context.view.mapSpan(
+        inlineTokenStart(context.tokens, openToken),
+        inlineTokenEnd(context.tokens, closeToken),
       ),
+      children,
+      context,
     );
+    appendInline(output, context, openToken, value);
     return next;
   }
 
@@ -319,20 +324,17 @@ function buildInlineSemantic(
   ) {
     throw new Error(`Resolved inline stream did not close token kind ${kind}`);
   }
-  appendInline(
-    output,
-    context,
-    pair.build(
-      openToken,
-      closeToken,
-      context.view.mapSpan(
-        inlineTokenStart(context.tokens, openToken),
-        inlineTokenEnd(context.tokens, closeToken),
-      ),
-      children,
-      context,
+  const value = pair.build(
+    openToken,
+    closeToken,
+    context.view.mapSpan(
+      inlineTokenStart(context.tokens, openToken),
+      inlineTokenEnd(context.tokens, closeToken),
     ),
+    children,
+    context,
   );
+  appendInline(output, context, openToken, value);
   return closeToken + 1;
 }
 
@@ -350,7 +352,6 @@ export function buildInlineFragment(
   const inlineContext: InlineBuildContext = {
     blockRule,
     schema: context.profile.schema,
-    source: context.source,
     tokenHandlers: context.profile.tokenHandlers,
     tokens: region.tokens,
     view: region.view,
