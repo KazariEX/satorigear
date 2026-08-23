@@ -71,8 +71,8 @@ describe("frontmatter", () => {
       text: "---\n",
     }]);
 
-    expect(document.snapshot()).toEqual(hyphenParser.parse(document.source));
-    expect(document.snapshot().children).toMatchObject([{
+    expect(document.tree).toEqual(hyphenParser.parse(document.source));
+    expect(document.tree.children).toMatchObject([{
       type: "yaml",
       value: "title: test\n\n# heading",
     }]);
@@ -80,13 +80,12 @@ describe("frontmatter", () => {
 
   it("keeps the selected fence fixed across edits", () => {
     const document = hyphenParser.createDocument("---\ntitle: test\n---\nbody\n");
-    document.snapshot();
     document.edit([
       { start: 0, end: 3, text: "+++" },
       { start: 16, end: 19, text: "+++" },
     ]);
 
-    expect(document.snapshot()).toEqual(hyphenParser.parse(document.source));
-    expect(document.snapshot().children.some((node) => node.type === "yaml")).toBe(false);
+    expect(document.tree).toEqual(hyphenParser.parse(document.source));
+    expect(document.tree.children.some((node) => node.type === "yaml")).toBe(false);
   });
 });

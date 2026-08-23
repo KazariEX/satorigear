@@ -170,8 +170,8 @@ describe("attributes", () => {
     const document = parser.createDocument("**text**{.old}\n");
     const start = document.source.indexOf("old");
     document.edit([{ start, end: start + 3, text: "new bright" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [{ type: "strong", attributes: { class: "new", ":bright": "true" } }],
     });
   });

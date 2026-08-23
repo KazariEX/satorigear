@@ -201,38 +201,37 @@ describe("footnote", () => {
 
   it("keeps full and incremental parsing equivalent as definitions change", () => {
     const document = parser.createDocument("call[^a]\n");
-    document.snapshot();
 
     document.edit([{
       start: document.source.length,
       end: document.source.length,
       text: "\n[^a]: old\n",
     }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [{ type: "text", value: "call" }, { type: "footnoteReference" }],
     });
 
     const label = document.source.lastIndexOf("a");
     document.edit([{ start: label, end: label + 1, text: "b" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(JSON.stringify(document.snapshot().children[0])).not.toContain("footnoteReference");
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(JSON.stringify(document.tree.children[0])).not.toContain("footnoteReference");
 
     const call = document.source.indexOf("[^a]") + 2;
     document.edit([{ start: call, end: call + 1, text: "b" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [{ type: "text", value: "call" }, { type: "footnoteReference" }],
     });
 
     const colon = document.source.lastIndexOf(":");
     document.edit([{ start: colon, end: colon + 1, text: "" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(JSON.stringify(document.snapshot())).not.toContain("footnoteReference");
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(JSON.stringify(document.tree)).not.toContain("footnoteReference");
 
     const markerEnd = document.source.lastIndexOf("]") + 1;
     document.edit([{ start: markerEnd, end: markerEnd, text: ":" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(JSON.stringify(document.snapshot())).toContain("footnoteReference");
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(JSON.stringify(document.tree)).toContain("footnoteReference");
   });
 });

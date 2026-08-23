@@ -149,15 +149,14 @@ describe("math", () => {
 
   it("keeps full and incremental math parsing equivalent", () => {
     const document = parser.createDocument("value $x$\n\n$$\ny\n$$\n");
-    document.snapshot();
 
     const x = document.source.indexOf("x");
     document.edit([{ start: x, end: x + 1, text: "x + 1" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
 
     const closing = document.source.lastIndexOf("$$");
     document.edit([{ start: closing, end: closing + 2, text: "$" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children.at(-1)).toMatchObject({ type: "math", value: "y\n$" });
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children.at(-1)).toMatchObject({ type: "math", value: "y\n$" });
   });
 });

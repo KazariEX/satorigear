@@ -1,8 +1,8 @@
-import type { Node, TopLevelContent } from "mdast";
+import type { Node } from "mdast";
 import type { SourceSpan } from "../source-view.ts";
 
-// Builders store source offsets in the final position slot. One-shot output resolves it in place;
-// incremental documents retain it as the immutable span of a cached block fragment.
+// Builders store source offsets in the final position slot. Materialization resolves them in place
+// before one-shot or changed document nodes enter their output tree.
 export interface SpannedValue {
   [key: string]: unknown;
   children?: SpannedValue[];
@@ -16,14 +16,6 @@ export type SpannedNode<T extends object = Node> = T extends unknown
       : unknown
   )
   : never;
-
-export interface BlockFragment {
-  node: SpannedNode<TopLevelContent>;
-  // Origin belongs to the cached fragment; offset moves so positions can shift without rebuilding nodes.
-  offset: number;
-  origin: number;
-  version: number;
-}
 
 export function extendSpan(value: object, end: number): void {
   const node = value as SpannedValue;

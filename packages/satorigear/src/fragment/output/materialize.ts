@@ -1,8 +1,11 @@
 import type { Node, Root, TopLevelContent } from "mdast";
 import type { SourceLocation } from "../../source-view.ts";
-import type { BlockFragment, SpannedNode, SpannedValue } from "../node.ts";
+import type { SpannedNode, SpannedValue } from "../node.ts";
 
-function materializeNode(value: SpannedValue, locate: (offset: number) => SourceLocation): void {
+export function materializeNode(
+  value: SpannedValue,
+  locate: (offset: number) => SourceLocation,
+): void {
   const position = value.position;
   const start = locate(position.start);
   const end = position.end;
@@ -30,48 +33,20 @@ export function materialize(
   };
 }
 
-function snapshotNode(
-  value: SpannedValue,
+export function relocateNode(
+  value: object,
   shift: number,
-  point: (offset: number) => SourceLocation,
-): Node {
-  const result = {} as Node & Record<string, unknown>;
-  // Preserve start → children → end order for the tokenizer's forward source locator.
-  const start = point(shift + value.position.start);
-  for (const key in value) {
-    if (key !== "children" && key !== "position") {
-      result[key] = value[key];
-    }
-  }
-  const childrenTarget = value.children;
-  if (childrenTarget) {
-    const children = new Array<Node>(childrenTarget.length);
-    for (let i = 0; i < childrenTarget.length; i++) {
-      children[i] = snapshotNode(childrenTarget[i], shift, point);
-    }
-    result.children = children;
-  }
-  result.position = {
-    start,
-    end: point(shift + value.position.end),
-  };
-  return result;
-}
-
-export function snapshot(
-  fragments: readonly BlockFragment[],
-  sourceLength: number,
   locate: (offset: number) => SourceLocation,
-): Root {
-  const start = locate(0);
-  const children = fragments.map((fragment) => snapshotNode(
-    fragment.node,
-    fragment.offset - fragment.origin,
-    locate,
-  ) as TopLevelContent);
-  return {
-    type: "root",
-    children,
-    position: { start, end: locate(sourceLength) },
+): void {
+  const node = value as {
+    children?: object[];
+    position: { end: SourceLocation; start: SourceLocation };
   };
+  const position = node.position;
+  const start = locate(position.start.offset + shift);
+  for (const child of node.children ?? []) {
+    relocateNode(child, shift, locate);
+  }
+  position.start = start;
+  position.end = locate(position.end.offset + shift);
 }

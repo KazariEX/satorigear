@@ -75,18 +75,6 @@ const scenarios: readonly EditScenario[] = [
   },
 ];
 
-summary(() => {
-  const document = parser.createDocument(base);
-  document.snapshot();
-
-  bench(`cached snapshot (${Buffer.byteLength(base)} bytes)`, () => {
-    do_not_optimize(document.snapshot());
-  });
-  bench(`fresh snapshot (${Buffer.byteLength(base)} bytes)`, () => {
-    do_not_optimize(parser.createDocument(base).snapshot());
-  });
-});
-
 for (const scenario of scenarios) {
   summary(() => {
     const bytes = Math.max(Buffer.byteLength(scenario.first), Buffer.byteLength(scenario.second));
@@ -96,22 +84,15 @@ for (const scenario of scenarios) {
     ] as const;
     let editIndex = 0;
     const editDocument = parser.createDocument(scenario.first);
-    let snapshotEditIndex = 0;
-    const snapshotDocument = parser.createDocument(scenario.first);
     let freshSource = scenario.first;
 
     bench(`edit only (${scenario.name}, ${bytes} bytes)`, () => {
       do_not_optimize(editDocument.edit([edits[editIndex]]));
       editIndex ^= 1;
     });
-    bench(`edit and snapshot (${scenario.name}, ${bytes} bytes)`, () => {
-      snapshotDocument.edit([edits[snapshotEditIndex]]);
-      snapshotEditIndex ^= 1;
-      do_not_optimize(snapshotDocument.snapshot());
-    });
-    bench(`fresh snapshot (${scenario.name}, ${bytes} bytes)`, () => {
+    bench(`fresh tree (${scenario.name}, ${bytes} bytes)`, () => {
       freshSource = freshSource === scenario.first ? scenario.second : scenario.first;
-      do_not_optimize(parser.createDocument(freshSource).snapshot());
+      do_not_optimize(parser.createDocument(freshSource).tree);
     });
   });
 }

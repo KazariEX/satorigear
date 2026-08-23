@@ -134,17 +134,17 @@ describe("task list", () => {
     const document = parser.createDocument("- [ ] todo\n- plain\n");
     const edit = (start: number, end: number, text: string): void => {
       document.edit([{ start, end, text }]);
-      expect(document.snapshot()).toEqual(parser.parse(document.source));
+      expect(document.tree).toEqual(parser.parse(document.source));
     };
 
     edit(3, 4, "x");
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree.children[0]).toMatchObject({
       type: "list",
       children: [{ checked: true }, { checked: null }],
     });
 
     edit(5, 6, "");
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree.children[0]).toMatchObject({
       type: "list",
       children: [
         { checked: null, children: [{ children: [{ value: "[x]todo" }] }] },
@@ -156,7 +156,7 @@ describe("task list", () => {
     edit(marker, marker + 3, "");
     const plain = document.source.indexOf("plain");
     edit(plain, plain, "[ ] ");
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree.children[0]).toMatchObject({
       type: "list",
       children: [{ checked: null }, { checked: false }],
     });

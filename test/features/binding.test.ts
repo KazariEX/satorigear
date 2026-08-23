@@ -98,16 +98,15 @@ describe("binding", () => {
 
   it("keeps full and incremental parsing equivalent", () => {
     const document = parser.createDocument("Hello {{ user.name || Guest }}!\n");
-    document.snapshot();
 
     let start = document.source.indexOf("user.name");
     document.edit([{ start, end: start + 9, text: "account.name" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
 
     start = document.source.indexOf(" || Guest");
     document.edit([{ start, end: start + 9, text: "" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [
         { type: "text", value: "Hello " },
         { type: "inlineComponent", attributes: { ":value": "account.name" } },
@@ -117,7 +116,7 @@ describe("binding", () => {
 
     const close = document.source.indexOf("}}");
     document.edit([{ start: close, end: close + 2, text: "" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(JSON.stringify(document.snapshot())).not.toContain("inlineComponent");
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(JSON.stringify(document.tree)).not.toContain("inlineComponent");
   });
 });

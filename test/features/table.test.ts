@@ -97,13 +97,13 @@ describe("table", () => {
   it("keeps full and incremental table parsing equivalent", () => {
     const document = parser.createDocument("| a | b |\n| === | --- |\n| c | d |\n");
     document.edit([{ start: 12, end: 15, text: "---" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({ type: "table" });
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({ type: "table" });
 
     const body = document.source.indexOf("| c | d |");
     document.edit([{ start: body, end: body + 9, text: "# heading" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children.map((node) => node.type)).toEqual(["table", "heading"]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children.map((node) => node.type)).toEqual(["table", "heading"]);
   });
 
   it("invalidates an unchanged-size cell edit", () => {
@@ -111,7 +111,7 @@ describe("table", () => {
     const document = parser.createDocument(source);
     const cell = source.indexOf("c");
     document.edit([{ start: cell, end: cell + 1, text: "x" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
   });
 
   it("keeps empty cells empty", () => {

@@ -9,13 +9,13 @@ describe("markdown document", () => {
     const source = "a | b\n--- | ---\nc | d\n";
 
     expect(tableParser.parse(source).children[0]).toMatchObject({ type: "table" });
-    expect(tableParser.createDocument(source).snapshot()).toEqual(tableParser.parse(source));
+    expect(tableParser.createDocument(source).tree).toEqual(tableParser.parse(source));
     expect(parser.parse(source).children[0]).toMatchObject({ type: "paragraph" });
   });
 
   it("uses the document path for complete parsing", () => {
     const source = "# heading\n\nbody *text*\n";
-    expect(parser.createDocument(source).snapshot()).toEqual(parser.parse(source));
+    expect(parser.createDocument(source).tree).toEqual(parser.parse(source));
   });
 
   it("applies a batch in old-document coordinates", () => {
@@ -27,7 +27,7 @@ describe("markdown document", () => {
 
     expect(document.source).toBe("1 two 3\n");
     expect(update.changedSpan).toEqual({ start: 0, end: 7 });
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
   });
 
   it("rejects invalid edit batches without changing the document", () => {
@@ -53,13 +53,13 @@ describe("markdown document", () => {
 
   it("recomputes reference availability across the document", () => {
     const document = parser.createDocument("[label]\n");
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", value: "[label]" }],
     });
 
     document.edit([{ start: document.source.length, end: document.source.length, text: "\n[label]: /url\n" }]);
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "linkReference", identifier: "label" }],
     });
@@ -93,20 +93,19 @@ describe("markdown document", () => {
     for (const text of chunks) {
       const start = document.source.length;
       document.edit([{ start, end: start, text }]);
-      expect(document.snapshot()).toEqual(streamParser.parse(document.source));
+      expect(document.tree).toEqual(streamParser.parse(document.source));
     }
   });
 
   it("reassociates adjacent references when a definition becomes available", () => {
     const document = parser.createDocument("[foo][bar][baz]\n\n[baz]: /baz\n");
-    document.snapshot();
     document.edit([{
       start: document.source.length,
       end: document.source.length,
       text: "\n[bar]: /bar\n",
     }]);
 
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
   });
 
   it("restarts an earlier multiline definition candidate", () => {
@@ -115,8 +114,8 @@ describe("markdown document", () => {
     const document = parser.createDocument("[alpha\nxxxdelta\n");
     document.edit([{ start: 10, end: 15, text: "delta]: /u" }]);
 
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({ type: "definition", identifier: "alpha xxxdelta" });
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({ type: "definition", identifier: "alpha xxxdelta" });
   });
 
   it("expands a rescan when edited syntax crosses old block boundaries", () => {
@@ -126,106 +125,82 @@ describe("markdown document", () => {
 
     document.edit([{ start: closer, end: closer + 3, text: "not" }]);
 
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
   });
 
   it("isolates independently edited inline regions", () => {
     const document = parser.createDocument("one *a*\n\ntwo **b**\n");
-    document.snapshot();
     document.edit([
       { start: 5, end: 6, text: "A" },
       { start: document.source.length, end: document.source.length, text: "\nthree [c](/c)\n\nfour `d`\n" },
     ]);
 
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
     const start = document.source.indexOf("three");
     document.edit([{ start, end: start + 5, text: "THREE" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
   });
 
-  it("does not mutate an earlier mdast snapshot after edits", () => {
+  it("mutates the document-owned tree after edits", () => {
     const document = parser.createDocument("first\n\nsecond\n");
-    const before = document.snapshot();
-    const snapshot = structuredClone(before);
+    const tree = document.tree;
+    const children = tree.children;
+    const second = tree.children[1];
 
     document.edit([{ start: 0, end: 0, text: "heading\n\n" }]);
-    const after = document.snapshot();
 
-    expect(before).toEqual(snapshot);
-    expect(after.children[2].position?.start.offset).toBeGreaterThan(before.children[1].position?.start.offset ?? 0);
+    expect(tree).toEqual(parser.parse(document.source));
+    expect(tree.children).toBe(children);
+    expect(tree.children[2]).toBe(second);
+    expect(document.tree).toBe(tree);
   });
 
-  it("applies consecutive edits before the next snapshot", () => {
+  it("applies consecutive edits to the owned tree", () => {
     const document = parser.createDocument("one\n\ntwo\n\nthree\n");
-    document.snapshot();
 
     document.edit([{ start: 0, end: 0, text: "# heading\n\n" }]);
     const start = document.source.indexOf("three");
     document.edit([{ start, end: start + 5, text: "THREE" }]);
 
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
   });
 
-  it("isolates snapshots from user mutations", () => {
-    const source = "# heading *text*\n\nbody\n";
-    const document = parser.createDocument(source);
-    const first = document.snapshot();
-    const heading = first.children[0];
-    if (heading?.type !== "heading") {
-      throw new Error("Expected a heading");
-    }
-    const emphasis = heading.children[1];
-    if (emphasis?.type !== "emphasis") {
-      throw new Error("Expected emphasis in the heading");
-    }
-    const text = emphasis.children[0];
-    if (text?.type !== "text") {
-      throw new Error("Expected text in the emphasis");
-    }
-    if (!heading.position) {
-      throw new Error("Expected the heading position");
-    }
+  it("returns one stable document-owned tree", () => {
+    const document = parser.createDocument("# heading *text*\n\nbody\n");
+    const first = document.tree;
+    expect(document.tree).toBe(first);
 
-    heading.depth = 6;
-    text.value = "changed";
-    heading.children.splice(0, 1);
-    heading.position.start.offset = 99;
+    document.edit([{ start: 2, end: 9, text: "title" }]);
 
-    expect(heading.depth).toBe(6);
-    expect(text.value).toBe("changed");
-    expect(heading.children).toEqual([emphasis]);
-    expect(heading.position.start.offset).toBe(99);
-
-    const second = document.snapshot();
-    expect(second).toEqual(parser.parse(source));
+    expect(document.tree).toBe(first);
+    expect(first).toEqual(parser.parse(document.source));
   });
 
   it("updates positions when edits join and split CRLF", () => {
     const joined = parser.createDocument("one\rrest\n\nlast\n");
     joined.edit([{ start: 4, end: 4, text: "\n" }]);
-    expect(joined.snapshot()).toEqual(parser.parse(joined.source));
+    expect(joined.tree).toEqual(parser.parse(joined.source));
 
     const split = parser.createDocument("one\r\n\r\ntwo\rthree\n\nfour\n");
     split.edit([{ start: 3, end: 5, text: "\r" }]);
-    expect(split.snapshot()).toEqual(parser.parse(split.source));
+    expect(split.tree).toEqual(parser.parse(split.source));
     split.edit([{ start: 0, end: 0, text: "\n" }]);
-    expect(split.snapshot()).toEqual(parser.parse(split.source));
+    expect(split.tree).toEqual(parser.parse(split.source));
   });
 
   it("rebuilds the block touching a stable-prefix boundary", () => {
     const document = parser.createDocument("-1<.  \r\n>> ");
-    document.snapshot();
     document.edit([
       { start: 10, end: 10, text: "\n" },
       { start: 10, end: 10, text: "`" },
     ]);
 
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
+    expect(document.tree).toEqual(parser.parse(document.source));
   });
 
   it("updates HTML block termination", () => {
     const document = parser.createDocument("<script>\nvalue\n");
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree.children[0]).toMatchObject({
       type: "html",
       value: "<script>\nvalue\n",
     });
@@ -235,8 +210,8 @@ describe("markdown document", () => {
       end: document.source.length,
       text: "</script>\n",
     }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       type: "html",
       value: "<script>\nvalue\n</script>",
     });
@@ -251,7 +226,7 @@ describe("markdown document", () => {
     const document = parser.createDocument("paragraph\n");
     document.edit([{ start: 0, end: document.source.length, text: source }]);
 
-    const tree = document.snapshot();
+    const tree = document.tree;
     expect(tree).toEqual(parser.parse(source));
     expect(tree.children[0]).toMatchObject(shape);
   });
@@ -265,7 +240,7 @@ describe("markdown document", () => {
     const start = document.source.indexOf(before);
     document.edit([{ start, end: start + before.length, text: after }]);
 
-    const tree = document.snapshot();
+    const tree = document.tree;
     const omegaOffset = document.source.indexOf("omega");
     const omega = tree.children.find((child) => child.position?.start.offset === omegaOffset);
     expect(tree).toEqual(parser.parse(document.source));

@@ -50,7 +50,7 @@ describe("incremental differential fuzz", () => {
         const edits = nextEdits(source, choose, step);
         source = applyEdits(source, edits);
         document.edit(edits);
-        const incremental = document.snapshot();
+        const incremental = document.tree;
         const fresh = parser.parse(source);
         if (!isDeepStrictEqual(incremental, fresh)) {
           throw new Error(`Incremental mismatch after CommonMark example ${caseIndex + 1}, step ${step + 1}`);

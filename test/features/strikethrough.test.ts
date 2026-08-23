@@ -105,18 +105,17 @@ describe("strikethrough", () => {
 
   it("keeps full and incremental parsing equivalent", () => {
     const document = parser.createDocument("before ~~old~~ after\n");
-    document.snapshot();
 
     const value = document.source.indexOf("old");
     document.edit([{ start: value, end: value + 3, text: "**new**" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [{ type: "text" }, { type: "delete", children: [{ type: "strong" }] }, { type: "text" }],
     });
 
     const close = document.source.lastIndexOf("~~");
     document.edit([{ start: close, end: close + 2, text: "~" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(JSON.stringify(document.snapshot())).not.toContain("\"delete\"");
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(JSON.stringify(document.tree)).not.toContain("\"delete\"");
   });
 });

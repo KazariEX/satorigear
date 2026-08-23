@@ -494,7 +494,7 @@ End
     const document = parser.createDocument("::Card{tone=old}\nHello :Badge[old]\n::\n");
     const edit = (batch: TextEdit[]): void => {
       document.edit(batch);
-      expect(document.snapshot()).toEqual(parser.parse(document.source));
+      expect(document.tree).toEqual(parser.parse(document.source));
     };
 
     let start = document.source.indexOf("old");
@@ -508,7 +508,7 @@ End
     ]);
     start = document.source.indexOf("Hello");
     edit([{ start, end: start, text: "[intro] " }]);
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree.children[0]).toMatchObject({
       type: "blockComponent",
       attributes: { tone: "new" },
       children: [{
@@ -526,27 +526,27 @@ End
     const document = parser.createDocument("::card\n---\ncount: 1\n---\n#header\nTitle\n::\n");
     let start = document.source.indexOf("1");
     document.edit([{ start, end: start + 1, text: "2" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [{ type: "yaml", value: "count: 2" }, { attributes: { name: "header" } }],
     });
 
     start = document.source.indexOf("header");
     document.edit([{ start, end: start + 6, text: "footer" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [{ type: "yaml" }, { attributes: { name: "footer" } }],
     });
 
     start = document.source.indexOf("#footer");
     document.edit([{ start, end: start + 1, text: "" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [{ type: "yaml" }, { type: "paragraph", children: [{ type: "text", value: "footer\nTitle" }] }],
     });
     document.edit([{ start, end: start, text: "#" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children[0]).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
       children: [{ type: "yaml" }, { type: "blockComponent", attributes: { name: "footer" } }],
     });
   });
@@ -558,16 +558,16 @@ End
       end: document.source.length,
       text: "::\n",
     }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children.at(-1)).toMatchObject({
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children.at(-1)).toMatchObject({
       type: "blockComponent",
       name: "card",
     });
 
     const close = document.source.lastIndexOf("::\n");
     document.edit([{ start: close, end: close + 3, text: "" }]);
-    expect(document.snapshot()).toEqual(parser.parse(document.source));
-    expect(document.snapshot().children.some(
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children.some(
       (node) => node.type === "blockComponent",
     )).toBe(false);
   });
