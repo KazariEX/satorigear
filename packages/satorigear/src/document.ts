@@ -88,12 +88,12 @@ export class DocumentImpl implements Document {
     const blockChange = this.#blockScanner.edit(change);
     this.#source = change.nextSource;
     this.#syntaxState.update(this.#source, blockChange, change.offsetDelta);
-    this.#updateTree();
+    this.#updateTree(blockChange.stableBlockCount);
 
     return { changedSpan: change.changedSpan };
   }
 
-  #updateTree(): void {
+  #updateTree(stableBlockCount = 0): void {
     const blocks = this.#syntaxState.blocks();
     const previousBlocks = this.#blocks;
     const regions: InlineRegion[] = [];
@@ -125,7 +125,10 @@ export class DocumentImpl implements Document {
       const previous = previousBlocks.get(block.record);
       let materialized = previous?.version === block.version ? previous : void 0;
       if (materialized) {
-        relocateNode(materialized.node, offset - materialized.offset, locate);
+        // The scanner-stable prefix retained both source geometry and block identity.
+        if (index >= stableBlockCount) {
+          relocateNode(materialized.node, offset - materialized.offset, locate);
+        }
         materialized.offset = offset;
       }
       else {
