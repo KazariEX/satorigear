@@ -18,7 +18,7 @@ import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { type BlockBuildContext, blockEnd } from "../../fragment/block.ts";
+import { blockEnd } from "../../fragment/block.ts";
 import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
@@ -34,22 +34,6 @@ export function codeFenceAt(source: string, line: BlockLine): Fence | undefined 
   return fenceAt(source, line, codeFenceRule);
 }
 
-function indentedCodeEnd(tokenStart: number, context: BlockBuildContext): number {
-  const count = context.structure.tokens.rangeCount(tokenStart);
-  for (let index = count - 1; index >= 0; index--) {
-    const start = context.structure.tokens.rangeStart(tokenStart, index);
-    const rangeEnd = context.structure.tokens.rangeEnd(tokenStart, index);
-    if (/[^\r\n]/.test(context.source.slice(start, rangeEnd))) {
-      let end = rangeEnd;
-      while (end > start && /[\r\n]/.test(context.source[end - 1])) {
-        end--;
-      }
-      return end;
-    }
-  }
-  throw new Error("IndentedCodeBlockToken has no source content");
-}
-
 export const feature: SyntaxFeature = {
   block: {
     fallbacks: [
@@ -61,7 +45,21 @@ export const feature: SyntaxFeature = {
         while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
           end++;
         }
-        appendLogicalToken(out, BlockKind.IndentedCodeBlockToken, source, lines, start, end);
+        // The block consumes trailing blank lines, but its code value and position do not include them.
+        let contentEnd = end;
+        while (contentEnd > start && isBlank(source, lines[contentEnd - 1])) {
+          contentEnd--;
+        }
+        const contentLength = lines[contentEnd - 1].end - lines[start].start;
+        appendLogicalToken(
+          out,
+          BlockKind.IndentedCodeBlockToken,
+          source,
+          lines,
+          start,
+          end,
+          contentLength,
+        );
         return end;
       },
     ],
@@ -107,8 +105,10 @@ export const feature: SyntaxFeature = {
           token: BlockKind.IndentedCodeBlockToken,
         },
         build(tokenStart, context) {
-          const offset = context.structure.tokens.start(tokenStart);
-          const lines = normalizeLines(context.structure.tokens.text(context.source, tokenStart))
+          const tokens = context.structure.tokens;
+          const offset = tokens.start(tokenStart);
+          const contentLength = tokens.value<number>(tokenStart)!;
+          const lines = normalizeLines(tokens.text(context.source, tokenStart))
             .split("\n")
             .map((line) => removeIndent(line, 4));
           while (lines.length && /^[ \t]*$/.test(lines[lines.length - 1])) {
@@ -119,7 +119,7 @@ export const feature: SyntaxFeature = {
             lang: null,
             meta: null,
             value: lines.join("\n"),
-            position: { start: offset, end: indentedCodeEnd(tokenStart, context) },
+            position: { start: offset, end: offset + contentLength },
           };
         },
       },
