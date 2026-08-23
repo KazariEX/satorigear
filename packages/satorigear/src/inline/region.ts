@@ -14,7 +14,6 @@ function hasDefinition(this: TrackedResolutionContext, key: string): boolean {
 }
 
 export interface InlineRegionBinding {
-  offset: number;
   tokenStart: number;
   view: SourceView;
 }
@@ -33,7 +32,6 @@ export class InlineRegion implements ResolvedInlineRegion {
   #rawTokens?: InlineTokenStream;
   #profile: InlineProfile;
   #tokens?: InlineTokenStream;
-  offset: number;
   revision = 0;
   tokenStart: number;
   view: SourceView;
@@ -44,7 +42,6 @@ export class InlineRegion implements ResolvedInlineRegion {
     definitions: ReadonlySet<string>,
   ) {
     this.#profile = profile;
-    this.offset = binding.offset;
     this.tokenStart = binding.tokenStart;
     this.view = binding.view;
     this.#updateTokens(binding.view.text, definitions);
@@ -75,7 +72,6 @@ export class InlineRegion implements ResolvedInlineRegion {
 
   shift(delta: number, tokenDelta: number): void {
     this.tokenStart += tokenDelta;
-    this.offset += delta;
     this.view.shift(delta);
   }
 
@@ -89,7 +85,6 @@ export class InlineRegion implements ResolvedInlineRegion {
   }
 
   #rebind(binding: InlineRegionBinding): void {
-    this.offset = binding.offset;
     this.tokenStart = binding.tokenStart;
     this.view = binding.view;
   }

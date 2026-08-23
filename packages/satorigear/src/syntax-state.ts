@@ -92,7 +92,6 @@ export class SyntaxState {
           const inlineView = inlineViewOf(source, tokens, token, nodeLength);
           if (inlineView) {
             bindings.push({
-              offset: tokens.start(token),
               tokenStart: token,
               view: inlineView,
             });
