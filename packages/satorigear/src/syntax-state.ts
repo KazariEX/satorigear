@@ -291,9 +291,17 @@ function inlineViewOf(
         firstStart = start;
         firstEnd = end;
       }
+      // Physically adjacent chunks still form one source slice; only stripped container gaps need segments.
+      else if (start === firstEnd) {
+        firstEnd = end;
+        if (ranges) {
+          ranges[ranges.length - 1] = end;
+        }
+      }
       else {
         ranges ??= [firstStart, firstEnd];
         ranges.push(start, end);
+        firstEnd = end;
       }
     }
   }
