@@ -55,7 +55,7 @@ function applyEdits(source: string, edits: readonly TextEdit[]): SourceChange {
 export class DocumentImpl implements Document {
   #blockStructure: BlockStructure;
   #blockScanner: BlockScanner;
-  #blocks = new Map<BlockRecord, MaterializedBlock>();
+  #blocks = new WeakMap<BlockRecord, MaterializedBlock>();
   #profile: SyntaxProfile;
   #source: string;
   #syntaxState: SyntaxState;
@@ -118,7 +118,6 @@ export class DocumentImpl implements Document {
     const root = this.#tree;
     const start = locate(0);
     const children = root.children;
-    const nextBlocks = new Map<BlockRecord, MaterializedBlock>();
     for (let index = 0; index < blocks.length; index++) {
       const block = blocks[index];
       const offset = this.#blockStructure.tokens.start(block.record.tokenStart);
@@ -139,8 +138,8 @@ export class DocumentImpl implements Document {
           offset,
           version: block.version,
         };
+        previousBlocks.set(block.record, materialized);
       }
-      nextBlocks.set(block.record, materialized);
       children[index] = materialized.node;
     }
     children.length = blocks.length;
@@ -148,8 +147,6 @@ export class DocumentImpl implements Document {
       start,
       end: locate(this.#source.length),
     };
-
-    this.#blocks = nextBlocks;
   }
 
   static parse(
