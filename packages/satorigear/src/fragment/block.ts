@@ -14,7 +14,7 @@ export interface BlockBuildContext {
   source: string;
 }
 
-// Core owns fragment state and traversal; profiles supply every syntax-specific node builder.
+// Core owns build traversal; profiles supply every syntax-specific node builder.
 export type BlockNodeBuilder<T extends object = RootContent> = (
   tokenStart: number,
   context: BlockBuildContext,

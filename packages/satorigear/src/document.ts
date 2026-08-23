@@ -23,6 +23,7 @@ export interface Document {
 
 interface MaterializedBlock {
   node: TopLevelContent;
+  // Public node positions may begin after indentation or markers, so retain the structural origin.
   offset: number;
 }
 

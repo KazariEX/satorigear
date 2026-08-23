@@ -15,7 +15,7 @@ export interface ParserOptions {
 
 export function createParser(options?: ParserOptions): Parser {
   const profile = compileProfile(options?.features);
-  // Snapshots own no syntax references, so one-shot parses can reuse the block workspace.
+  // One-shot trees retain no syntax references, so parses can reuse the block workspace.
   // Incremental documents receive an independent workspace below.
   let blockScanner: BlockScanner | undefined;
   let blockStructure: BlockStructure | undefined;
