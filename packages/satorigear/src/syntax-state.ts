@@ -42,25 +42,16 @@ export class SyntaxState {
   #profile: InlineProfile;
   #structure: BlockStructure;
 
-  constructor(
-    source: string,
-    profile: InlineProfile,
-    structure: BlockStructure,
-  ) {
+  constructor(profile: InlineProfile, structure: BlockStructure) {
     this.#profile = profile;
     this.#structure = structure;
-    this.update(source);
   }
 
   blocks(): readonly SyntaxBlock[] {
     return this.#blocks;
   }
 
-  update(
-    source: string,
-    change?: BlockScanChange,
-    offsetDelta = 0,
-  ): void {
+  update(source: string, change?: BlockScanChange, offsetDelta = 0): readonly number[] {
     // 1. Retain the scanner-stable prefix, then collect inline bindings from rebuilt records
     // and definitions only from the narrower token-damage window.
     const structure = this.#structure;
@@ -75,6 +66,7 @@ export class SyntaxState {
     const oldDefinitionStart = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordStart);
     const oldDefinitionEnd = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordEnd);
     let replacementDefinitions: BlockDefinition[] | undefined;
+    let invalidatedBlocks: number[] | undefined;
 
     const bindings: InlineRegionBinding[] = [];
     // One flat binding list plus per-block offsets avoids allocating one list per block.
@@ -207,7 +199,7 @@ export class SyntaxState {
       }
 
       // Scanner-stable prefix records may survive token-equivalent edits with different source geometry.
-      // Only the retained suffix can reuse projected nodes without comparing duplicate block text.
+      // Only the retained suffix can preserve existing output nodes without rebuilding this interval.
       blocks[blockIndex].regions = regions;
     }
 
@@ -228,7 +220,7 @@ export class SyntaxState {
             changed ||= revision !== region.revision;
           }
           if (changed) {
-            blocks[index] = { record: block.record, regions: block.regions };
+            (invalidatedBlocks ??= []).push(index);
           }
         }
       };
@@ -239,6 +231,8 @@ export class SyntaxState {
     this.#blocks = blocks;
     this.#definitionEntries = definitionEntries;
     this.#definitions = definitions;
+
+    return invalidatedBlocks ?? emptyArray;
   }
 }
 
