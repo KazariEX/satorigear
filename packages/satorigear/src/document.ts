@@ -2,7 +2,7 @@ import type { Root, TopLevelContent } from "mdast";
 import { type BlockRecord, BlockScanner } from "./block/scanner.ts";
 import { BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
-import { materialize, materializeNode, relocateNode } from "./fragment/output/materialize.ts";
+import { materialize, materializeNode, relocateStableNode } from "./fragment/output/materialize.ts";
 import { type InlineRegion, InlineRegionCursor } from "./inline/region.ts";
 import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
 import type { SpannedNode } from "./fragment/node.ts";
@@ -127,7 +127,7 @@ export class DocumentImpl implements Document {
       if (materialized) {
         // The scanner-stable prefix retained both source geometry and block identity.
         if (index >= stableBlockCount) {
-          relocateNode(materialized.node, offset - materialized.offset, locate);
+          relocateStableNode(materialized.node, offset - materialized.offset, locate);
         }
         materialized.offset = offset;
       }

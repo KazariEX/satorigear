@@ -33,7 +33,7 @@ export function materialize(
   };
 }
 
-export function relocateNode(
+export function relocateStableNode(
   value: object,
   shift: number,
   locate: (offset: number) => SourceLocation,
@@ -44,8 +44,17 @@ export function relocateNode(
   };
   const position = node.position;
   const start = locate(position.start.offset + shift);
+  // Stable nodes retain their relative geometry, so an unchanged root start proves that
+  // every descendant position is already current.
+  if (
+    start.offset === position.start.offset &&
+    start.line === position.start.line &&
+    start.column === position.start.column
+  ) {
+    return;
+  }
   for (const child of node.children ?? []) {
-    relocateNode(child, shift, locate);
+    relocateStableNode(child, shift, locate);
   }
   position.start = start;
   position.end = locate(position.end.offset + shift);
