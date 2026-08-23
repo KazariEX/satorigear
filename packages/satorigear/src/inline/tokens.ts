@@ -4,13 +4,8 @@ export type InlineTokenStream = readonly number[];
 // Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = 4;
 
-// Token flags survive lexer and feature transforms, so their bits are allocated here
-// even when a particular feature owns their interpretation.
-export const enum InlineTokenFlag {
-  AttributeDetached = 4,
-  AttributeTerminal = 8,
-  DecodeText = 16,
-}
+// The token kind owns the fourth slot's meaning; core transforms preserve it as opaque data.
+// Zero means that the token carries no additional fact.
 
 export function inlineTokenCount(tokens: InlineTokenStream): number {
   return tokens.length / inlineTokenStride;
@@ -28,12 +23,12 @@ export function inlineTokenEnd(tokens: InlineTokenStream, index: number): number
   return tokens[index * inlineTokenStride + 2];
 }
 
-export function inlineTokenFlags(tokens: InlineTokenStream, index: number): number {
+export function inlineTokenData(tokens: InlineTokenStream, index: number): number {
   return tokens[index * inlineTokenStride + 3];
 }
 
-export function setInlineTokenFlags(tokens: number[], index: number, flags: number): void {
-  tokens[index * inlineTokenStride + 3] = flags;
+export function setInlineTokenData(tokens: number[], index: number, data: number): void {
+  tokens[index * inlineTokenStride + 3] = data;
 }
 
 export function inlineTokenText(source: string, tokens: InlineTokenStream, index: number): string {
@@ -48,16 +43,19 @@ export function appendInlineToken(
   kind: number,
   start: number,
   end: number,
-  flags = 0,
+  data = 0,
 ): void {
-  target.push(kind, start, end, flags);
+  target.push(kind, start, end, data);
 }
 
 export function copyInlineToken(target: number[], tokens: InlineTokenStream, index: number): void {
   const offset = index * inlineTokenStride;
-  for (let field = 0; field < inlineTokenStride; field++) {
-    target.push(tokens[offset + field]);
-  }
+  target.push(
+    tokens[offset],
+    tokens[offset + 1],
+    tokens[offset + 2],
+    tokens[offset + 3],
+  );
 }
 
 export function firstInlineTokenEndingAfter(tokens: InlineTokenStream, offset: number): number {

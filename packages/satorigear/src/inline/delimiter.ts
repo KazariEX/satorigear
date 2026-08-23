@@ -4,7 +4,6 @@ import {
   copyInlineToken,
   inlineTokenCount,
   inlineTokenEnd,
-  inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
@@ -116,18 +115,6 @@ function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
   }
   const sum = opener.length + closer.length;
   return sum % 3 !== 0 || (opener.length % 3 === 0 && closer.length % 3 === 0);
-}
-
-function appendFragment(
-  result: number[],
-  tokens: InlineTokenStream,
-  tokenIndex: number,
-  start: number,
-  end: number,
-  kind: number,
-): void {
-  const flags = start === inlineTokenStart(tokens, tokenIndex) ? inlineTokenFlags(tokens, tokenIndex) : 0;
-  appendInlineToken(result, kind, start, end, flags);
 }
 
 function unlinkRun(runs: DelimiterRun[], runIndex: number): void {
@@ -302,15 +289,15 @@ function resolveDelimiterRuns(
     if (matched) {
       for (const replacement of matched) {
         if (replacement.offset > offset) {
-          appendFragment(result, tokens, tokenIndex, offset, replacement.offset, kind);
+          appendInlineToken(result, kind, offset, replacement.offset);
         }
-        appendFragment(result, tokens, tokenIndex, replacement.offset, replacement.end, replacement.kind);
+        appendInlineToken(result, replacement.kind, replacement.offset, replacement.end);
         offset = replacement.end;
       }
     }
     const end = inlineTokenEnd(tokens, tokenIndex);
     if (offset < end) {
-      appendFragment(result, tokens, tokenIndex, offset, end, kind);
+      appendInlineToken(result, kind, offset, end);
     }
   }
   return result;

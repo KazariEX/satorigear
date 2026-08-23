@@ -3,13 +3,14 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import {
   appendInlineToken,
+  inlineTokenData,
   inlineTokenEnd,
-  InlineTokenFlag,
   inlineTokenStart,
+  type InlineTokenStream,
   inlineTokenText,
 } from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
-import { buildInlineText, semanticText } from "./text.ts";
+import { buildDecodedInlineText, buildInlineText, semanticText } from "./text.ts";
 import type { InlineBuildContext, InlineNodeBuilder } from "../../fragment/inline.ts";
 import type { SpannedNode } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -126,32 +127,43 @@ function linkTitleEnd(source: string, start: number): number {
   return -1;
 }
 
-function linkTailEnd(source: string, start: number): number {
+function scanLinkTail(source: string, start: number, tokens: number[]): number {
   if (source.charCodeAt(start + 1) !== Character.LeftParenthesis) {
     return -1;
   }
   let offset = skipWhitespace(source, start + 2);
-  if (source.charCodeAt(offset) === Character.RightParenthesis) {
-    return offset + 1;
-  }
-  const destinationEnd = linkDestinationEnd(source, offset);
-  if (destinationEnd < 0) {
-    return -1;
-  }
-  offset = destinationEnd;
-  const whitespaceEnd = skipWhitespace(source, offset);
-  if (whitespaceEnd > offset && source.charCodeAt(whitespaceEnd) !== Character.RightParenthesis) {
-    const titleEnd = linkTitleEnd(source, whitespaceEnd);
-    if (titleEnd < 0) {
+  let destinationEnd = offset;
+  if (source.charCodeAt(offset) !== Character.RightParenthesis) {
+    destinationEnd = linkDestinationEnd(source, offset);
+    if (destinationEnd < 0) {
       return -1;
     }
-    offset = titleEnd;
+    offset = destinationEnd;
+    const whitespaceEnd = skipWhitespace(source, offset);
+    if (whitespaceEnd > offset && source.charCodeAt(whitespaceEnd) !== Character.RightParenthesis) {
+      const titleEnd = linkTitleEnd(source, whitespaceEnd);
+      if (titleEnd < 0) {
+        return -1;
+      }
+      offset = titleEnd;
+    }
+    else {
+      offset = whitespaceEnd;
+    }
+    offset = skipWhitespace(source, offset);
+    if (source.charCodeAt(offset) !== Character.RightParenthesis) {
+      return -1;
+    }
   }
-  else {
-    offset = whitespaceEnd;
-  }
-  offset = skipWhitespace(source, offset);
-  return source.charCodeAt(offset) === Character.RightParenthesis ? offset + 1 : -1;
+  const end = offset + 1;
+  appendInlineToken(
+    tokens,
+    InlineKind.LinkTail,
+    start,
+    end,
+    destinationEnd - start,
+  );
+  return end;
 }
 
 function isLinkWhitespace(code: number): boolean {
@@ -164,7 +176,9 @@ function isLinkWhitespace(code: number): boolean {
 }
 
 // LinkTail is already validated by the lexer; projection only separates its output fields.
-function resourceAt(source: string, tokenStart: number, tokenEnd: number): Resource {
+function resourceAt(source: string, tokens: InlineTokenStream, tokenIndex: number): Resource {
+  const tokenStart = inlineTokenStart(tokens, tokenIndex);
+  const tokenEnd = inlineTokenEnd(tokens, tokenIndex);
   let start = tokenStart + 2;
   let end = tokenEnd - 1;
   while (start < end && isLinkWhitespace(source.charCodeAt(start))) {
@@ -177,39 +191,14 @@ function resourceAt(source: string, tokenStart: number, tokenEnd: number): Resou
     return { url: "", title: null };
   }
 
+  const resourceEnd = tokenStart + inlineTokenData(tokens, tokenIndex);
   let destinationStart = start;
-  let destinationEnd = start;
+  let destinationEnd = resourceEnd;
   if (source[start] === "<") {
     destinationStart++;
-    destinationEnd = destinationStart;
-    while (destinationEnd < end) {
-      if (source[destinationEnd] === "\\") {
-        destinationEnd += 2;
-      }
-      else if (source[destinationEnd] === ">") {
-        break;
-      }
-      else {
-        destinationEnd++;
-      }
-    }
-    start = destinationEnd + 1;
+    destinationEnd--;
   }
-  else {
-    destinationEnd = start;
-    while (destinationEnd < end) {
-      if (source[destinationEnd] === "\\") {
-        destinationEnd += 2;
-      }
-      else if (isLinkWhitespace(source.charCodeAt(destinationEnd))) {
-        break;
-      }
-      else {
-        destinationEnd++;
-      }
-    }
-    start = destinationEnd;
-  }
+  start = resourceEnd;
 
   while (start < end && isLinkWhitespace(source.charCodeAt(start))) {
     start++;
@@ -285,11 +274,7 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
           position: sourceSpan,
         };
     }
-    const resource = resourceAt(
-      context.view.text,
-      inlineTokenStart(context.tokens, closeToken),
-      inlineTokenEnd(context.tokens, closeToken),
-    );
+    const resource = resourceAt(context.view.text, context.tokens, closeToken);
     return image
       ? {
         type: "image",
@@ -336,20 +321,12 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.RightSquareBracket,
         scan(source, start, tokens) {
-          let end = linkTailEnd(source, start);
-          let kind = InlineKind.LinkTail;
-          if (end < 0) {
-            end = start + 1;
-            kind = InlineKind.BracketClose;
+          const end = scanLinkTail(source, start, tokens);
+          if (end >= 0) {
+            return end;
           }
-          appendInlineToken(
-            tokens,
-            kind,
-            start,
-            end,
-            kind === InlineKind.BracketClose ? 0 : InlineTokenFlag.DecodeText,
-          );
-          return end;
+          appendInlineToken(tokens, InlineKind.BracketClose, start, start + 1);
+          return start + 1;
         },
       },
     ],
@@ -401,7 +378,7 @@ export const feature: SyntaxFeature = {
       },
       { kind: "leaf", token: InlineKind.BracketOpen, build: buildInlineText },
       { kind: "leaf", token: InlineKind.ImageOpen, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.LinkTail, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.LinkTail, build: buildDecodedInlineText },
       { kind: "leaf", token: InlineKind.BracketClose, build: buildInlineText },
     ],
   },

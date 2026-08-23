@@ -6,12 +6,11 @@ import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
 import {
   appendInlineToken,
   inlineTokenCount,
+  inlineTokenData,
   inlineTokenEnd,
-  InlineTokenFlag,
-  inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
-  setInlineTokenFlags,
+  setInlineTokenData,
 } from "../../../inline/tokens.ts";
 import { attributesEnd, mergeAttributes, parseAttributes } from "./syntax.ts";
 import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
@@ -19,6 +18,11 @@ import type { SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "./types.ts";
 
 type AttributableNode = SpannedNode<PhrasingContent> & { attributes?: Attributes };
+
+const enum AttributeTokenFlag {
+  Detached = 1,
+  Terminal = 2,
+}
 
 // Terminal attributes belong to the enclosing block, so this feature extends the transient
 // inline result instead of attaching private state to its MDAST children array.
@@ -135,7 +139,7 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
     start,
     end,
     start > 0 && isMarkdownWhitespace(source.charCodeAt(start - 1))
-      ? InlineTokenFlag.AttributeDetached
+      ? AttributeTokenFlag.Detached
       : 0,
   );
 
@@ -155,10 +159,10 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
       if (kind !== InlineKind.AttributesToken) {
         break;
       }
-      setInlineTokenFlags(
+      setInlineTokenData(
         tokens,
         index,
-        inlineTokenFlags(tokens, index) | InlineTokenFlag.AttributeTerminal,
+        inlineTokenData(tokens, index) | AttributeTokenFlag.Terminal,
       );
     }
   }
@@ -194,9 +198,9 @@ export const feature: SyntaxFeature = {
           if (!previous || !parsed) {
             return false;
           }
-          const flags = inlineTokenFlags(context.tokens, tokenIndex);
-          const terminal = Boolean(flags & InlineTokenFlag.AttributeTerminal);
-          const detached = Boolean(flags & InlineTokenFlag.AttributeDetached);
+          const flags = inlineTokenData(context.tokens, tokenIndex);
+          const terminal = Boolean(flags & AttributeTokenFlag.Terminal);
+          const detached = Boolean(flags & AttributeTokenFlag.Detached);
           if (
             terminal && (
               detached ||

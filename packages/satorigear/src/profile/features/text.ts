@@ -4,8 +4,6 @@ import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import {
   appendInlineToken,
-  InlineTokenFlag,
-  inlineTokenFlags,
   inlineTokenText,
 } from "../../inline/tokens.ts";
 import type { InlineLeafBuilder } from "../../fragment/inline.ts";
@@ -34,9 +32,16 @@ export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, conte
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   return {
     type: "text",
-    value: inlineTokenFlags(context.tokens, tokenIndex) & InlineTokenFlag.DecodeText
-      ? semanticText(text)
-      : text,
+    value: text,
+    position: sourceSpan,
+  };
+};
+
+export const buildDecodedInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, context) => {
+  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
+  return {
+    type: "text",
+    value: semanticText(text),
     position: sourceSpan,
   };
 };
@@ -51,7 +56,7 @@ export const feature: SyntaxFeature = {
           if (matchEnd < 0) {
             return start + 1;
           }
-          appendInlineToken(tokens, InlineKind.Entity, start, matchEnd, InlineTokenFlag.DecodeText);
+          appendInlineToken(tokens, InlineKind.Entity, start, matchEnd);
           return matchEnd;
         },
       },
@@ -65,7 +70,7 @@ export const feature: SyntaxFeature = {
           }
           if (isAsciiPunctuation(next)) {
             const end = start + 2;
-            appendInlineToken(tokens, InlineKind.Escape, start, end, InlineTokenFlag.DecodeText);
+            appendInlineToken(tokens, InlineKind.Escape, start, end);
             return end;
           }
           return start + (
@@ -78,8 +83,8 @@ export const feature: SyntaxFeature = {
     ],
     build: [
       { kind: "leaf", token: InlineKind.LiteralText, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.Escape, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.Entity, build: buildInlineText },
+      { kind: "leaf", token: InlineKind.Escape, build: buildDecodedInlineText },
+      { kind: "leaf", token: InlineKind.Entity, build: buildDecodedInlineText },
     ],
   },
 };

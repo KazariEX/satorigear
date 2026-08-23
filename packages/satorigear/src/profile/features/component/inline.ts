@@ -2,10 +2,10 @@ import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
 import {
   appendInlineToken,
+  copyInlineToken,
   firstInlineTokenEndingAfter,
   inlineTokenCount,
   inlineTokenEnd,
-  inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
@@ -24,7 +24,6 @@ interface Candidate extends SourceSpan {
   close: number;
   contentEnd: number;
   contentStart: number;
-  flags: number;
   inLinkLabel: boolean;
   kind: "component" | "span";
   literalInLink: boolean;
@@ -127,14 +126,12 @@ function candidates(
     }
     if (open.componentIndex >= 0) {
       const start = inlineTokenStart(tokens, open.componentIndex);
-      const flags = inlineTokenFlags(tokens, open.componentIndex);
       parent.push({
         children,
         close,
         contentEnd: close,
         contentStart: open.start + 1,
         end: close + 1,
-        flags,
         inLinkLabel: false,
         kind: "component",
         literalInLink: false,
@@ -155,7 +152,6 @@ function candidates(
       contentEnd: close,
       contentStart: open.start + 1,
       end: close + 1,
-      flags: inlineTokenFlags(tokens, open.tokenIndex),
       inLinkLabel: false,
       kind: "span",
       literalInLink: !attributed,
@@ -199,7 +195,7 @@ function copyRange(
     if (literalLink || fragmentStart !== tokenStart || fragmentEnd !== tokenEnd) {
       continue;
     }
-    appendInlineToken(target, kind, tokenStart, tokenEnd, inlineTokenFlags(tokens, index));
+    copyInlineToken(target, tokens, index);
   }
 }
 
@@ -216,7 +212,7 @@ function emitRange(
   for (const candidate of nested) {
     copyRange(target, tokens, cursor, candidate.start, inLinkLabel, normalClosers);
     if (candidate.kind === "component") {
-      appendInlineToken(target, InlineKind.InlineComponentOpen, candidate.start, candidate.nameEnd, candidate.flags);
+      appendInlineToken(target, InlineKind.InlineComponentOpen, candidate.start, candidate.nameEnd);
       if (candidate.contentStart < candidate.contentEnd) {
         appendInlineToken(target, InlineKind.InlineComponentLabelOpen, candidate.nameEnd, candidate.contentStart);
         emitRange(
@@ -232,7 +228,7 @@ function emitRange(
       }
     }
     else {
-      appendInlineToken(target, InlineKind.InlineSpanOpen, candidate.start, candidate.contentStart, candidate.flags);
+      appendInlineToken(target, InlineKind.InlineSpanOpen, candidate.start, candidate.contentStart);
       emitRange(
         target,
         tokens,

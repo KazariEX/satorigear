@@ -4,7 +4,6 @@ import {
   copyInlineToken,
   inlineTokenCount,
   inlineTokenEnd,
-  inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
@@ -50,7 +49,6 @@ export const transformFootnoteTokens: InlineTokenTransform = (source, tokens, co
         InlineKind.FootnoteReference,
         labelStart,
         label.end,
-        inlineTokenFlags(tokens, index),
       );
       index = close;
       continue;

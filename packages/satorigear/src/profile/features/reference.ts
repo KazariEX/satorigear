@@ -7,8 +7,8 @@ import {
   appendInlineToken,
   copyInlineToken,
   inlineTokenCount,
+  inlineTokenData,
   inlineTokenEnd,
-  inlineTokenFlags,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
@@ -299,7 +299,7 @@ function acceptsShortcutLabel(source: string, start: number, end: number): boole
   return hasContent;
 }
 
-function resolveReferenceTokens(
+function transformReferenceTokens(
   source: string,
   tokens: InlineTokenStream,
   context: InlineResolutionContext,
@@ -400,7 +400,7 @@ function resolveReferenceTokens(
         kind,
         inlineTokenStart(tokens, tokenIndex),
         closerEnd,
-        inlineTokenFlags(tokens, tokenIndex),
+        inlineTokenData(tokens, tokenIndex),
       );
       while (
         tokenIndex + 1 < count &&
@@ -415,7 +415,7 @@ function resolveReferenceTokens(
         kind,
         inlineTokenStart(tokens, tokenIndex),
         inlineTokenEnd(tokens, tokenIndex),
-        inlineTokenFlags(tokens, tokenIndex),
+        inlineTokenData(tokens, tokenIndex),
       );
     }
     else {
@@ -495,7 +495,7 @@ export const feature: SyntaxFeature = {
   },
   inline: {
     resolve: {
-      transform: resolveReferenceTokens,
+      transform: transformReferenceTokens,
     },
   },
 };

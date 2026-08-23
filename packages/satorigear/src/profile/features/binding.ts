@@ -2,24 +2,12 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import {
   appendInlineToken,
+  inlineTokenData,
   inlineTokenEnd,
   inlineTokenStart,
 } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 import type { Attributes } from "./attributes/types.ts";
-
-function bindingEnd(source: string, start: number): number {
-  if (source.charCodeAt(start + 1) !== Character.LeftCurlyBracket) {
-    return -1;
-  }
-  const close = source.indexOf("}}", start + 2);
-  if (close < 0) {
-    return -1;
-  }
-  const separator = source.indexOf("||", start + 2);
-  const valueEnd = separator < 0 || separator > close ? close : separator;
-  return source.slice(start + 2, valueEnd).trim() ? close + 2 : -1;
-}
 
 export const feature: SyntaxFeature = {
   inline: {
@@ -27,11 +15,26 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.LeftCurlyBracket,
         scan(source, start, tokens) {
-          const end = bindingEnd(source, start);
-          if (end < 0) {
+          if (source.charCodeAt(start + 1) !== Character.LeftCurlyBracket) {
             return -1;
           }
-          appendInlineToken(tokens, InlineKind.Binding, start, end);
+          const close = source.indexOf("}}", start + 2);
+          if (close < 0) {
+            return -1;
+          }
+          const separator = source.indexOf("||", start + 2);
+          const valueEnd = separator < 0 || separator > close ? close : separator;
+          if (!source.slice(start + 2, valueEnd).trim()) {
+            return -1;
+          }
+          const end = close + 2;
+          appendInlineToken(
+            tokens,
+            InlineKind.Binding,
+            start,
+            end,
+            valueEnd - start,
+          );
           return end;
         },
       },
@@ -42,10 +45,10 @@ export const feature: SyntaxFeature = {
         token: InlineKind.Binding,
         build(tokenIndex, sourceSpan, context) {
           const source = context.view.text;
-          const start = inlineTokenStart(context.tokens, tokenIndex) + 2;
+          const tokenStart = inlineTokenStart(context.tokens, tokenIndex);
+          const start = tokenStart + 2;
           const end = inlineTokenEnd(context.tokens, tokenIndex) - 2;
-          const match = source.indexOf("||", start);
-          const separator = match < 0 || match > end ? end : match;
+          const separator = tokenStart + inlineTokenData(context.tokens, tokenIndex);
           const value = source.slice(start, separator).trim();
           const defaultValue = separator === end ? "" : source.slice(separator + 2, end).trim();
           const attributes: Attributes = { ":value": value };

@@ -22,7 +22,7 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { type BlockBuildContext, blockEnd } from "../../fragment/block.ts";
 import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
-import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
+import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -167,28 +167,29 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.GraveAccent,
         scan(source, start, tokens) {
+          if (source.charCodeAt(start - 1) === Character.GraveAccent) {
+            return start + 1;
+          }
+          const openEnd = inlineMarkerRunEnd(source, start);
+          const markerLength = openEnd - start;
           let end = -1;
-          if (source.charCodeAt(start - 1) !== Character.GraveAccent) {
-            const openEnd = inlineMarkerRunEnd(source, start);
-            const markerLength = openEnd - start;
-            let offset = openEnd;
-            while (offset < source.length) {
-              if (source.charCodeAt(offset) !== Character.GraveAccent) {
-                offset++;
-                continue;
-              }
-              const closeEnd = inlineMarkerRunEnd(source, offset);
-              if (closeEnd - offset === markerLength) {
-                end = closeEnd;
-                break;
-              }
-              offset = closeEnd;
+          let offset = openEnd;
+          while (offset < source.length) {
+            if (source.charCodeAt(offset) !== Character.GraveAccent) {
+              offset++;
+              continue;
             }
+            const closeEnd = inlineMarkerRunEnd(source, offset);
+            if (closeEnd - offset === markerLength) {
+              end = closeEnd;
+              break;
+            }
+            offset = closeEnd;
           }
           if (end < 0) {
             return start + 1;
           }
-          appendInlineToken(tokens, InlineKind.CodeSpan, start, end);
+          appendInlineToken(tokens, InlineKind.CodeSpan, start, end, markerLength);
           return end;
         },
       },
@@ -199,10 +200,7 @@ export const feature: SyntaxFeature = {
         token: InlineKind.CodeSpan,
         build: (tokenIndex, sourceSpan, context) => {
           const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-          const markerLength = /^`+/.exec(text)?.[0].length;
-          if (!markerLength) {
-            throw new Error("CodeSpan token does not start with a backtick run");
-          }
+          const markerLength = inlineTokenData(context.tokens, tokenIndex);
           let value = normalizeLines(text.slice(markerLength, -markerLength));
           if (/^[ \n]/.test(value) && /[ \n]$/.test(value) && /[^ \n]/.test(value)) {
             value = value.slice(1, -1);

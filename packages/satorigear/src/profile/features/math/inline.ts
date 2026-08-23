@@ -1,7 +1,11 @@
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
 import { inlineMarkerRunEnd, type InlineScanRule } from "../../../inline/lexer.ts";
-import { appendInlineToken, inlineTokenText } from "../../../inline/tokens.ts";
+import {
+  appendInlineToken,
+  inlineTokenData,
+  inlineTokenText,
+} from "../../../inline/tokens.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
 
 export function createMathScanRule(singleDollarTextMath: boolean): InlineScanRule {
@@ -31,27 +35,10 @@ export function createMathScanRule(singleDollarTextMath: boolean): InlineScanRul
       if (end < 0) {
         return openEnd;
       }
-      appendInlineToken(tokens, InlineKind.MathText, start, end);
+      appendInlineToken(tokens, InlineKind.MathText, start, end, markerLength);
       return end;
     },
   };
-}
-
-function mathTextValue(value: string): string {
-  let markerLength = 0;
-  while (value[markerLength] === "$") {
-    markerLength++;
-  }
-  if (markerLength === 0) {
-    throw new Error("MathText token does not start with a dollar run");
-  }
-  let result = value.slice(markerLength, -markerLength);
-  const startPadding = result.startsWith("\r\n") ? 2 : /^[ \r\n]/.test(result) ? 1 : 0;
-  const endPadding = result.endsWith("\r\n") ? 2 : /[ \r\n]$/.test(result) ? 1 : 0;
-  if (startPadding > 0 && endPadding > 0 && /[^ \r\n]/.test(result)) {
-    result = result.slice(startPadding, -endPadding);
-  }
-  return result;
 }
 
 export const inlineBuilds: readonly InlineBuildRule[] = [
@@ -59,9 +46,16 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
     kind: "leaf",
     token: InlineKind.MathText,
     build(tokenIndex, sourceSpan, context) {
+      const markerLength = inlineTokenData(context.tokens, tokenIndex);
+      let value = inlineTokenText(context.view.text, context.tokens, tokenIndex).slice(markerLength, -markerLength);
+      const startPadding = value.startsWith("\r\n") ? 2 : /^[ \r\n]/.test(value) ? 1 : 0;
+      const endPadding = value.endsWith("\r\n") ? 2 : /[ \r\n]$/.test(value) ? 1 : 0;
+      if (startPadding > 0 && endPadding > 0 && /[^ \r\n]/.test(value)) {
+        value = value.slice(startPadding, -endPadding);
+      }
       return {
         type: "inlineMath",
-        value: mathTextValue(inlineTokenText(context.view.text, context.tokens, tokenIndex)),
+        value,
         position: sourceSpan,
       };
     },
