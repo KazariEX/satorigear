@@ -55,7 +55,7 @@ function applyEdits(source: string, edits: readonly TextEdit[]): SourceChange {
 export class DocumentImpl implements Document {
   #blockStructure: BlockStructure;
   #blockScanner: BlockScanner;
-  #blocks: MaterializedBlock[] = [];
+  #blocks = new Map<BlockRecord, MaterializedBlock>();
   #profile: SyntaxProfile;
   #source: string;
   #syntaxState: SyntaxState;
@@ -85,33 +85,27 @@ export class DocumentImpl implements Document {
     }
     const change = applyEdits(this.source, edits);
 
-    // Preserve materialized block identity before the syntax update changes block order.
-    const blocks = this.#syntaxState.blocks();
-    const previousBlocks = new Map<BlockRecord, MaterializedBlock>();
-    for (let index = 0; index < blocks.length; index++) {
-      previousBlocks.set(blocks[index].record, this.#blocks[index]);
-    }
-
     const blockChange = this.#blockScanner.edit(change);
     this.#source = change.nextSource;
     this.#syntaxState.update(this.#source, blockChange, change.offsetDelta);
-    this.#updateTree(previousBlocks);
+    this.#updateTree();
 
     return { changedSpan: change.changedSpan };
   }
 
-  #updateTree(previousBlocks?: ReadonlyMap<BlockRecord, MaterializedBlock>): void {
+  #updateTree(): void {
     const blocks = this.#syntaxState.blocks();
-    const changedBlocks = previousBlocks === void 0
-      ? blocks
-      : blocks.filter((block) => previousBlocks.get(block.record)?.version !== block.version);
-
+    const previousBlocks = this.#blocks;
     const regions: InlineRegion[] = [];
-    for (const block of changedBlocks) {
+    for (const block of blocks) {
+      if (previousBlocks.get(block.record)?.version === block.version) {
+        continue;
+      }
       for (const region of block.regions) {
         regions.push(region);
       }
     }
+
     // Changed regions share one build workspace; no syntax reference escapes the resulting nodes.
     const context: BlockBuildContext = {
       structure: this.#blockStructure,
@@ -124,11 +118,11 @@ export class DocumentImpl implements Document {
     const root = this.#tree;
     const start = locate(0);
     const children = root.children;
-    const nextBlocks = new Array<MaterializedBlock>(blocks.length);
+    const nextBlocks = new Map<BlockRecord, MaterializedBlock>();
     for (let index = 0; index < blocks.length; index++) {
       const block = blocks[index];
       const offset = this.#blockStructure.tokens.start(block.record.tokenStart);
-      const previous = previousBlocks?.get(block.record);
+      const previous = previousBlocks.get(block.record);
       let materialized = previous?.version === block.version ? previous : void 0;
       if (materialized) {
         relocateNode(materialized.node, offset - materialized.offset, locate);
@@ -143,7 +137,7 @@ export class DocumentImpl implements Document {
           version: block.version,
         };
       }
-      nextBlocks[index] = materialized;
+      nextBlocks.set(block.record, materialized);
       children[index] = materialized.node;
     }
     children.length = blocks.length;
