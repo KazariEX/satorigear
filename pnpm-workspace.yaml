@@ -22,4 +22,3 @@ catalog:
   satteri: ^0.9.5
   tsdown: ^0.22.14
   vitest: ^4.1.10
-  yaml: ^2.9.0
