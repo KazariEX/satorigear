@@ -435,7 +435,11 @@ export const blockRules: BlockFeature["rules"] = [
         : void 0;
       const children: SpannedNode<RootContent>[] = [];
       if (label) {
-        children.push(buildBlockLabel(label, context, buildInlineFragment(label, context)));
+        children.push(buildBlockLabel(
+          label,
+          context,
+          buildInlineFragment(label, BlockRule.BlockComponentLabel, context),
+        ));
       }
       children.push(...buildBlockChildren(tokenStart, context));
       const opening = tokens.text(context.source, tokenStart);

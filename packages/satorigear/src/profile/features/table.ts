@@ -155,7 +155,11 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   const children: SpannedNode<TableCell>[] = [];
   for (let cell = tokenStart + 1; cell < close; cell += tokens.nodeLength(cell)) {
-    children.push(buildTableCell(cell, context, buildInlineFragment(cell, context)));
+    children.push(buildTableCell(
+      cell,
+      context,
+      buildInlineFragment(cell, BlockRule.TableCell, context),
+    ));
   }
   return {
     type: "tableRow",

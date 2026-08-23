@@ -1,5 +1,4 @@
 import { emptyArray, emptySet } from "../primitives.ts";
-import type { BlockRule } from "../constants/block.ts";
 import type { SourceView } from "../source-view.ts";
 import type { InlineProfile, InlineResolutionContext } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
@@ -16,13 +15,11 @@ function hasDefinition(this: TrackedResolutionContext, key: string): boolean {
 
 export interface InlineRegionBinding {
   offset: number;
-  rule: BlockRule;
   tokenStart: number;
   view: SourceView;
 }
 
 export interface ResolvedInlineRegion {
-  readonly rule: BlockRule;
   readonly tokenStart: number;
   readonly tokens: InlineTokenStream;
   readonly view: SourceView;
@@ -38,7 +35,6 @@ export class InlineRegion implements ResolvedInlineRegion {
   #tokens?: InlineTokenStream;
   offset: number;
   revision = 0;
-  rule: BlockRule;
   tokenStart: number;
   view: SourceView;
 
@@ -49,7 +45,6 @@ export class InlineRegion implements ResolvedInlineRegion {
   ) {
     this.#profile = profile;
     this.offset = binding.offset;
-    this.rule = binding.rule;
     this.tokenStart = binding.tokenStart;
     this.view = binding.view;
     this.#updateTokens(binding.view.text, definitions);
@@ -95,7 +90,6 @@ export class InlineRegion implements ResolvedInlineRegion {
 
   #rebind(binding: InlineRegionBinding): void {
     this.offset = binding.offset;
-    this.rule = binding.rule;
     this.tokenStart = binding.tokenStart;
     this.view = binding.view;
   }

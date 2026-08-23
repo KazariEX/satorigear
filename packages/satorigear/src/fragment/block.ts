@@ -60,7 +60,7 @@ export const buildBlockNode = <T extends object = TopLevelContent>(
       ? build(
         tokenStart,
         context,
-        buildInlineFragment(tokenStart, context),
+        buildInlineFragment(tokenStart, rule.rule, context),
       )
       : build(tokenStart, context)
   ) as SpannedNode<T>;

@@ -338,6 +338,7 @@ function buildInlineSemantic(
 
 export function buildInlineFragment(
   tokenStart: number,
+  blockRule: BlockRule,
   context: BlockBuildContext,
 ): InlineFragment {
   const region = context.cursor.take(tokenStart);
@@ -347,7 +348,7 @@ export function buildInlineFragment(
     };
   }
   const inlineContext: InlineBuildContext = {
-    blockRule: region.rule,
+    blockRule,
     schema: context.profile.schema,
     source: context.source,
     tokenHandlers: context.profile.tokenHandlers,

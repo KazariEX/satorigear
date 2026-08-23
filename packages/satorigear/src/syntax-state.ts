@@ -44,7 +44,8 @@ export class SyntaxState {
     change?: BlockScanChange,
     offsetDelta = 0,
   ): void {
-    // 1. Keep the scanner-stable prefix and collect definitions and inline bindings through the rebuilt range.
+    // 1. Retain the scanner-stable prefix, then collect definitions and inline bindings
+    // from every record whose semantic state must be rebuilt.
     const structure = this.#structure;
     const tokens = structure.tokens;
     const previousBlocks = this.#blocks;
@@ -69,7 +70,7 @@ export class SyntaxState {
     }
 
     const bindings: InlineRegionBinding[] = [];
-    // One flat list records changed-block boundaries without allocating a binding array per block.
+    // One flat binding list plus per-block offsets avoids allocating one list per block.
     const bindingOffsets: number[] = [];
     for (let index = stableBlockCount; index < newRecordEnd; index++) {
       const record = structure.records[index];
@@ -92,7 +93,6 @@ export class SyntaxState {
           if (inlineView) {
             bindings.push({
               offset: tokens.start(token),
-              rule: rule.rule,
               tokenStart: token,
               view: inlineView,
             });
@@ -108,8 +108,8 @@ export class SyntaxState {
     }
     bindingOffsets.push(bindings.length);
 
-    // 2. Restore the retained suffix. Its definitions, regions and tokens remain valid;
-    // only block indexes and absolute source geometry may move after an insertion or deletion.
+    // 2. Restore suffix definitions and blocks, then collect regions displaced from replaced records.
+    // Retained blocks keep their identity; only indexes and absolute source geometry may shift.
     if (previousDefinitionEntries) {
       while (
         definitionIndex < previousDefinitionEntries.length &&
@@ -126,8 +126,9 @@ export class SyntaxState {
       }
     }
 
-    // Every record in the retained suffix shares the document-length and token-index shifts.
-    const suffixTokenDelta = change?.tokenDelta ?? 0;
+    // Every region in the retained suffix shares the same source-offset and token-index shifts.
+    const tokenChange = change?.tokenChange;
+    const suffixTokenDelta = tokenChange ? tokenChange.newEnd - tokenChange.oldEnd : 0;
     for (let index = oldRecordEnd; index < previousBlocks.length; index++) {
       const block = previousBlocks[index];
       if (offsetDelta !== 0 || suffixTokenDelta !== 0) {
@@ -145,8 +146,15 @@ export class SyntaxState {
       }
     }
 
-    // 3. Reconcile only rebuilt blocks. Compatible displaced regions retain their lexer state;
-    // retained suffix regions never enter this path.
+    const displacedBindingStart = bindingOffsets[
+      Math.min(oldRecordStart, newRecordEnd) - stableBlockCount
+    ];
+    // Token replacement already proves source-order correspondence outside its damage window,
+    // so one forward cursor can reuse regions whose opening token survived the edit.
+    let displacedIndex = 0;
+
+    // 3. Rebuild region lists in source order. Prefix blocks reuse by block position;
+    // displaced regions reuse only when their opening token survived token replacement.
     for (let blockIndex = stableBlockCount; blockIndex < newRecordEnd; blockIndex++) {
       const block = blocks[blockIndex];
       const previousBlock = blockIndex < oldRecordStart ? previousBlocks[blockIndex] : void 0;
@@ -158,25 +166,21 @@ export class SyntaxState {
         const binding = bindings[bindingIndex];
         const regionIndex = bindingIndex - bindingStart;
         let candidate = previousBlock?.regions[regionIndex];
-        if (!candidate && displacedRegions.length > 0) {
-          let candidateIndex = -1;
-          let nearestDistance = Number.POSITIVE_INFINITY;
-          // Prefer the same token slot; otherwise retain the nearest compatible lexer state.
-          for (let index = 0; index < displacedRegions.length; index++) {
-            const value = displacedRegions[index];
-            if (value.tokenStart === binding.tokenStart) {
-              candidateIndex = index;
-              break;
-            }
-            if (value.rule === binding.rule) {
-              const distance = Math.abs(value.offset - binding.offset);
-              if (distance < nearestDistance) {
-                nearestDistance = distance;
-                candidateIndex = index;
-              }
-            }
+        if (!candidate && tokenChange && bindingIndex >= displacedBindingStart) {
+          const previousTokenStart = binding.tokenStart < tokenChange.oldStart
+            ? binding.tokenStart
+            : binding.tokenStart >= tokenChange.newEnd
+              ? binding.tokenStart - suffixTokenDelta
+              : -1;
+          while (
+            displacedIndex < displacedRegions.length &&
+            displacedRegions[displacedIndex].tokenStart < previousTokenStart
+          ) {
+            displacedIndex++;
           }
-          candidate = candidateIndex < 0 ? void 0 : displacedRegions.splice(candidateIndex, 1)[0];
+          if (displacedRegions[displacedIndex]?.tokenStart === previousTokenStart) {
+            candidate = displacedRegions[displacedIndex++];
+          }
         }
         const region = candidate
           ? candidate.update(binding, definitions)
@@ -192,8 +196,8 @@ export class SyntaxState {
       }
     }
 
-    // 4. A definition change only revisits regions that survived outside the rebuilt range. Each region
-    // tracks the labels it consulted, so unrelated definitions leave its fragment version untouched.
+    // 4. Propagate changed definition visibility to retained blocks outside the rebuilt range.
+    // Regions track consulted labels, so unrelated definitions do not advance block versions.
     if (previousBlocks.length > 0 && !isSetEqual(this.#definitions, definitions)) {
       const refreshDefinitions = (start: number, end: number): void => {
         for (let index = start; index < end; index++) {
@@ -243,7 +247,6 @@ export function resolveInlineRegions(
         const inlineView = inlineViewOf(source, tokens, token, nodeLength);
         if (inlineView) {
           regions.push({
-            rule: rule.rule,
             tokenStart: token,
             tokens: emptyArray,
             view: inlineView,

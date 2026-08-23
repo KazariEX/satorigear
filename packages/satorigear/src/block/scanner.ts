@@ -15,7 +15,7 @@ export interface BlockScanChange {
   oldRecordEnd: number;
   oldRecordStart: number;
   stableBlockCount: number;
-  tokenDelta: number;
+  tokenChange: BlockTokenChange;
 }
 
 // Scanner-owned top-level identity combines physical-line and token geometry.
@@ -511,7 +511,7 @@ export class BlockScanner {
       oldRecordEnd,
       oldRecordStart,
       stableBlockCount,
-      tokenDelta,
+      tokenChange,
     };
   }
 }
