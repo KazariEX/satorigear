@@ -3,7 +3,7 @@ import { BlockScanner } from "./block/scanner.ts";
 import { BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { materialize, materializeNode, relocateStableNode } from "./fragment/output/materialize.ts";
-import { type InlineRegion, InlineRegionCursor } from "./inline/region.ts";
+import { InlineRegionCursor } from "./inline/region.ts";
 import { resolveInlineRegions, type SyntaxBlock, SyntaxState } from "./syntax-state.ts";
 import type { SpannedNode } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
@@ -95,20 +95,12 @@ export class DocumentImpl implements Document {
   #updateTree(stableBlockCount = 0): void {
     const blocks = this.#syntaxState.blocks();
     const previousBlocks = this.#blocks;
-    const regions: InlineRegion[] = [];
-    for (const block of blocks) {
-      if (previousBlocks.has(block)) {
-        continue;
-      }
-      for (const region of block.regions) {
-        regions.push(region);
-      }
-    }
+    const cursor = new InlineRegionCursor();
 
-    // Changed regions share one build workspace; no syntax reference escapes the resulting nodes.
+    // Changed blocks share one build workspace; no syntax reference escapes the resulting nodes.
     const context: BlockBuildContext = {
       structure: this.#blockStructure,
-      cursor: new InlineRegionCursor(regions),
+      cursor,
       profile: this.#profile.inline,
       source: this.#source,
     };
@@ -129,6 +121,7 @@ export class DocumentImpl implements Document {
         materialized.offset = offset;
       }
       else {
+        cursor.reset(block.regions);
         const node: SpannedNode<TopLevelContent> = buildBlockNode(block.record.tokenStart, context);
         materializeNode(node, locate);
         materialized = {

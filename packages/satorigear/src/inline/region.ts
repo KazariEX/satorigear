@@ -123,7 +123,12 @@ export class InlineRegionCursor {
   #index = 0;
   #regions: readonly ResolvedInlineRegion[];
 
-  constructor(regions: readonly ResolvedInlineRegion[]) {
+  constructor(regions: readonly ResolvedInlineRegion[] = emptyArray) {
+    this.#regions = regions;
+  }
+
+  reset(regions: readonly ResolvedInlineRegion[]): void {
+    this.#index = 0;
     this.#regions = regions;
   }
 
