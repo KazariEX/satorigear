@@ -393,21 +393,25 @@ export class BlockScanner {
     const restartRecord = previousRecords[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
     const nextLines = updatePhysicalLines(this.#lines, nextSource, restartOffset, oldChangedEnd, offsetDelta);
+    const scanLineStart = firstLineIndexAtOrAfter(nextLines, restartOffset);
     const stableBlockCount = Math.max(0, restartIndex);
     const oldTokenStart = restartRecord?.tokenStart ?? 0;
 
     // 2. Rescan from that boundary until block geometry and shifted tokens match an old record.
     const replacement = new BlockTokenStream(nextSource.length);
     const rescannedRecords: BlockRecord[] = [];
-    let convergedIndex = -1;
     const initialEndRecord = previousRecords[Math.min(previousRecords.length - 1, affectedIndex + 2)];
-    let scanEnd = Math.min(
-      nextSource.length,
-      Math.max(changedSpan.end, (initialEndRecord?.end ?? nextSource.length) + offsetDelta),
+    let convergedIndex = -1;
+    let scanLineEnd = firstLineIndexAtOrAfter(
+      nextLines,
+      Math.min(
+        nextSource.length,
+        Math.max(changedSpan.end, (initialEndRecord?.end ?? nextSource.length) + offsetDelta),
+      ),
     );
-    scanEnd = nextLines[firstLineIndexAtOrAfter(nextLines, scanEnd)]?.start ?? nextSource.length;
     while (true) {
-      const scanLines = linesOf(nextSource, restartOffset, scanEnd);
+      const scanEnd = nextLines[scanLineEnd]?.start ?? nextSource.length;
+      const scanLines = nextLines.slice(scanLineStart, scanLineEnd);
       let convergenceIndex = affectedIndex;
       this.#lookaheadEnd = 0;
       // The visitor is consumed synchronously before this window can be expanded.
@@ -474,8 +478,7 @@ export class BlockScanner {
       replacement.reset(nextSource.length);
       rescannedRecords.length = 0;
       const expandedEnd = Math.min(nextSource.length, restartOffset + (scanEnd - restartOffset) * 2);
-      const nextLine = firstLineIndexAtOrAfter(nextLines, expandedEnd);
-      scanEnd = nextLines[nextLine]?.start ?? nextSource.length;
+      scanLineEnd = firstLineIndexAtOrAfter(nextLines, expandedEnd);
     }
     replacement.indexStructure(this.#profile.schema);
 
