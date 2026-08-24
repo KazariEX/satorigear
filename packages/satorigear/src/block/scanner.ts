@@ -508,7 +508,6 @@ export class BlockScanner {
 
     const nextRecords = previousRecords.slice(0, stableBlockCount);
     nextRecords.push(...rescannedRecords);
-    const rescannedEnd = nextRecords.length;
     const shiftSuffix = offsetDelta !== 0 || tokenDelta !== 0;
     if (convergedIndex >= 0) {
       for (let index = convergedIndex; index < previousRecords.length; index++) {
@@ -524,24 +523,9 @@ export class BlockScanner {
       }
     }
 
-    const newRecordEnd = nextRecords.length - (previousRecords.length - oldRecordEnd);
-
-    // Token equality can retain records inside the rescanned window even though line scanning restarted earlier.
-    for (let index = stableBlockCount; index < oldRecordStart; index++) {
-      const record = previousRecords[index];
-      const nextRecord = nextRecords[index];
-      record.start = nextRecord.start;
-      record.end = nextRecord.end;
-      record.dependencyEnd = nextRecord.dependencyEnd;
-      record.tokenStart = nextRecord.tokenStart;
-      record.tokenEnd = nextRecord.tokenEnd;
-      nextRecords[index] = record;
-    }
-    const stableRescannedEnd = Math.min(
-      previousRecords.length,
-      oldRecordEnd + rescannedEnd - newRecordEnd,
-    );
-    // The retained suffix may begin inside the rescanned window; rebind that portion to its old identities.
+    const newRecordEnd = oldRecordEnd + nextRecords.length - previousRecords.length;
+    const stableRescannedEnd = convergedIndex < 0 ? previousRecords.length : convergedIndex;
+    // Retained syntax blocks before scanner convergence still reference their old records.
     for (let index = oldRecordEnd; index < stableRescannedEnd; index++) {
       const record = previousRecords[index];
       const nextIndex = newRecordEnd + index - oldRecordEnd;
