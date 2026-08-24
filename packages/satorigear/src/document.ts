@@ -1,14 +1,15 @@
 import type { Node, Root, TopLevelContent } from "mdast";
-import { type BlockScanChange, BlockScanner, type SourceChange } from "./block/scanner.ts";
+import {
+  type BlockRecord,
+  type BlockScanChange,
+  BlockScanner,
+  type SourceChange,
+} from "./block/scanner.ts";
 import { BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
-import { InlineRegionCursor } from "./inline/region.ts";
+import { InlineRegionCursor, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray } from "./primitives.ts";
-import {
-  resolveInlineRegions,
-  type SyntaxBlock,
-  SyntaxState,
-} from "./syntax-state.ts";
+import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
 import type { SpannedValue } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan } from "./source-view.ts";
@@ -71,12 +72,13 @@ function materializeNode(
 }
 
 function buildTreeBlock(
-  block: SyntaxBlock,
+  record: BlockRecord,
+  regions: readonly ResolvedInlineRegion[],
   context: BlockBuildContext,
   locate: (offset: number) => SourceLocation,
 ): TopLevelContent {
-  context.cursor.reset(block.regions);
-  const node = buildBlockNode<TopLevelContent>(block.record.tokenStart, context);
+  context.cursor.reset(regions);
+  const node = buildBlockNode<TopLevelContent>(record.tokenStart, context);
   materializeNode(node, locate);
   return node as unknown as TopLevelContent;
 }
@@ -142,7 +144,8 @@ export class DocumentImpl implements Document {
   }
 
   #updateTree(invalidatedBlocks: readonly number[], change?: BlockScanChange): void {
-    const blocks = this.#syntaxState.blocks();
+    const records = this.#blockStructure.records;
+    const regionsByBlock = this.#syntaxState.regionsByBlock();
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.
     const context: BlockBuildContext = {
@@ -158,7 +161,7 @@ export class DocumentImpl implements Document {
     const children = root.children;
     const rebuildStart = change?.stableBlockCount ?? 0;
     const oldRebuildEnd = change?.oldRecordEnd ?? 0;
-    const newRebuildEnd = change?.newRecordEnd ?? blocks.length;
+    const newRebuildEnd = change?.newRecordEnd ?? records.length;
     const blockDelta = newRebuildEnd - oldRebuildEnd;
     const suffixOffsetDelta = change?.offsetDelta ?? 0;
 
@@ -185,18 +188,18 @@ export class DocumentImpl implements Document {
       invalidatedBlocks[invalidatedIndex] < rebuildStart
     ) {
       const index = invalidatedBlocks[invalidatedIndex++];
-      children[index] = buildTreeBlock(blocks[index], context, locate);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locate);
     }
     for (let index = rebuildStart; index < newRebuildEnd; index++) {
-      children[index] = buildTreeBlock(blocks[index], context, locate);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locate);
     }
 
     // 3. Reconcile the retained suffix. Stable roots share one position shift;
     // once positions converge, skip directly to any remaining definition-invalidated blocks.
     let positionShift: PositionShift | undefined;
-    for (let index = newRebuildEnd; index < blocks.length; index++) {
+    for (let index = newRebuildEnd; index < records.length; index++) {
       if (invalidatedBlocks[invalidatedIndex] === index) {
-        children[index] = buildTreeBlock(blocks[index], context, locate);
+        children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locate);
         invalidatedIndex++;
         continue;
       }
@@ -221,7 +224,7 @@ export class DocumentImpl implements Document {
     }
     while (invalidatedIndex < invalidatedBlocks.length) {
       const index = invalidatedBlocks[invalidatedIndex++];
-      children[index] = buildTreeBlock(blocks[index], context, locate);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locate);
     }
     root.position = {
       start,

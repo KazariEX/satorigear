@@ -4,7 +4,7 @@ import type { BlockRecord, BlockScanner } from "./scanner.ts";
 import type { BlockTokenStream } from "./tokens.ts";
 
 // This live semantic view interprets scanner-owned tokens and records under the compiled schema.
-// Semantic nodes are token ranges; only top-level records carry identity.
+// Semantic nodes are token ranges; top-level records index those ranges in source order.
 export class BlockStructure {
   #scanner: BlockScanner;
   #schema: BlockSyntaxSchema;

@@ -27,7 +27,7 @@ export interface SourceChange {
   offsetDelta: number;
 }
 
-// Scanner-owned top-level identity combines physical-line and token geometry.
+// Scanner-owned top-level records combine source and token geometry.
 export interface BlockRecord extends SourceSpan {
   // Furthest source boundary whose contents can affect this record.
   dependencyEnd: number;
@@ -489,7 +489,7 @@ export class BlockScanner {
     }
     replacement.indexStructure(this.#profile.schema);
 
-    // 3. Replace the rescanned token window, then reconcile record identity around the narrowed token damage.
+    // 3. Replace the rescanned token window, then map the narrowed token damage to record ranges.
     const oldTokenEnd = convergedIndex < 0
       ? this.#tokens.length
       : previousRecords[convergedIndex].tokenStart;
@@ -532,21 +532,7 @@ export class BlockScanner {
         nextRecords.push(record);
       }
     }
-
     const newRecordEnd = oldRecordEnd + nextRecords.length - previousRecords.length;
-    const stableRescannedEnd = convergedIndex < 0 ? previousRecords.length : convergedIndex;
-    // Retained syntax blocks before scanner convergence still reference their old records.
-    for (let index = oldRecordEnd; index < stableRescannedEnd; index++) {
-      const record = previousRecords[index];
-      const nextIndex = newRecordEnd + index - oldRecordEnd;
-      const nextRecord = nextRecords[nextIndex];
-      record.start = nextRecord.start;
-      record.end = nextRecord.end;
-      record.dependencyEnd = nextRecord.dependencyEnd;
-      record.tokenStart = nextRecord.tokenStart;
-      record.tokenEnd = nextRecord.tokenEnd;
-      nextRecords[nextIndex] = record;
-    }
 
     // 4. Commit the matching physical lines and reconciled records as scanner state.
     this.#lines = nextLines;

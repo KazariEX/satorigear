@@ -2,15 +2,10 @@ import { BlockKind } from "./constants/block.ts";
 import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "./source-view.ts";
-import type { BlockRecord, BlockScanChange } from "./block/scanner.ts";
+import type { BlockScanChange } from "./block/scanner.ts";
 import type { BlockStructure } from "./block/structure.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
-
-export interface SyntaxBlock {
-  record: BlockRecord;
-  regions: readonly InlineRegion[];
-}
 
 interface BlockDefinition {
   blockIndex: number;
@@ -36,10 +31,10 @@ function firstDefinitionAtOrAfter(
 }
 
 export class SyntaxState {
-  #blocks: SyntaxBlock[] = [];
   #definitionEntries?: readonly BlockDefinition[];
   #definitions: ReadonlySet<string> = emptySet;
   #profile: InlineProfile;
+  #regionsByBlock: (readonly InlineRegion[])[] = [];
   #structure: BlockStructure;
 
   constructor(profile: InlineProfile, structure: BlockStructure) {
@@ -47,8 +42,8 @@ export class SyntaxState {
     this.#structure = structure;
   }
 
-  blocks(): readonly SyntaxBlock[] {
-    return this.#blocks;
+  regionsByBlock(): readonly (readonly InlineRegion[])[] {
+    return this.#regionsByBlock;
   }
 
   update(source: string, change?: BlockScanChange): readonly number[] {
@@ -56,13 +51,15 @@ export class SyntaxState {
     // and definitions only from the narrower token-damage window.
     const structure = this.#structure;
     const tokens = structure.tokens;
-    const previousBlocks = this.#blocks;
+    const previousRegionsByBlock = this.#regionsByBlock;
     const stableBlockCount = change?.stableBlockCount ?? 0;
     const oldRecordStart = change?.oldRecordStart ?? 0;
     const oldRecordEnd = change?.oldRecordEnd ?? 0;
     const newRecordEnd = change?.newRecordEnd ?? structure.records.length;
     const offsetDelta = change?.offsetDelta ?? 0;
-    const blocks: SyntaxBlock[] = stableBlockCount === 0 ? [] : previousBlocks.slice(0, stableBlockCount);
+    const regionsByBlock = stableBlockCount === 0
+      ? []
+      : previousRegionsByBlock.slice(0, stableBlockCount);
     const previousDefinitionEntries = this.#definitionEntries ?? emptyArray;
     const oldDefinitionStart = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordStart);
     const oldDefinitionEnd = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordEnd);
@@ -97,19 +94,16 @@ export class SyntaxState {
           token += nodeLength - 1;
         }
       }
-      blocks.push({
-        record,
-        regions: emptyArray,
-      });
+      regionsByBlock.push(emptyArray);
     }
     bindingOffsets.push(bindings.length);
 
-    // 2. Splice definition ownership at the token-stable record boundary, then restore suffix blocks.
+    // 2. Splice definition ownership at the token-stable record boundary, then restore suffix regions.
     const blockDelta = newRecordEnd - oldRecordEnd;
     const definitionsChanged = oldDefinitionStart !== oldDefinitionEnd || replacementDefinitions !== void 0;
     const shiftedDefinitionSuffix = blockDelta !== 0 && oldDefinitionEnd < previousDefinitionEntries.length;
     let definitionEntries = this.#definitionEntries;
-    if (previousBlocks.length === 0) {
+    if (previousRegionsByBlock.length === 0) {
       definitionEntries = replacementDefinitions;
     }
     else if (definitionsChanged || shiftedDefinitionSuffix) {
@@ -130,7 +124,7 @@ export class SyntaxState {
 
     // Reuse the lookup set when neither side of the rebuilt record range contains a definition.
     let definitions = this.#definitions;
-    if (previousBlocks.length === 0 || definitionsChanged) {
+    if (previousRegionsByBlock.length === 0 || definitionsChanged) {
       const nextDefinitions = new Set<string>();
       for (const entry of definitionEntries ?? []) {
         nextDefinitions.add(entry.key);
@@ -141,19 +135,19 @@ export class SyntaxState {
     // Every region in the retained suffix shares the same source-offset and token-index shifts.
     const tokenChange = change?.tokenChange;
     const suffixTokenDelta = tokenChange ? tokenChange.newEnd - tokenChange.oldEnd : 0;
-    for (let index = oldRecordEnd; index < previousBlocks.length; index++) {
-      const block = previousBlocks[index];
+    for (let index = oldRecordEnd; index < previousRegionsByBlock.length; index++) {
+      const regions = previousRegionsByBlock[index];
       if (offsetDelta !== 0 || suffixTokenDelta !== 0) {
-        for (const region of block.regions) {
+        for (const region of regions) {
           region.shift(offsetDelta, suffixTokenDelta);
         }
       }
-      blocks.push(block);
+      regionsByBlock.push(regions);
     }
 
     const displacedRegions: InlineRegion[] = [];
     for (let index = oldRecordStart; index < oldRecordEnd; index++) {
-      for (const region of previousBlocks[index].regions) {
+      for (const region of previousRegionsByBlock[index]) {
         displacedRegions.push(region);
       }
     }
@@ -165,10 +159,12 @@ export class SyntaxState {
     // so one forward cursor can reuse regions whose opening token survived the edit.
     let displacedIndex = 0;
 
-    // 3. Rebuild region lists in source order. Prefix blocks reuse by block position;
+    // 3. Rebuild region lists in source order. Prefix regions reuse by block position;
     // displaced regions reuse only when their opening token survived token replacement.
     for (let blockIndex = stableBlockCount; blockIndex < newRecordEnd; blockIndex++) {
-      const previousBlock = blockIndex < oldRecordStart ? previousBlocks[blockIndex] : void 0;
+      const previousRegions = blockIndex < oldRecordStart
+        ? previousRegionsByBlock[blockIndex]
+        : void 0;
       const bindingOffset = blockIndex - stableBlockCount;
       const bindingStart = bindingOffsets[bindingOffset];
       const bindingEnd = bindingOffsets[bindingOffset + 1];
@@ -176,7 +172,7 @@ export class SyntaxState {
       for (let bindingIndex = bindingStart; bindingIndex < bindingEnd; bindingIndex++) {
         const binding = bindings[bindingIndex];
         const regionIndex = bindingIndex - bindingStart;
-        let candidate = previousBlock?.regions[regionIndex];
+        let candidate = previousRegions?.[regionIndex];
         if (!candidate && tokenChange && bindingIndex >= displacedBindingStart) {
           const previousTokenStart = binding.tokenStart < tokenChange.oldStart
             ? binding.tokenStart
@@ -199,23 +195,23 @@ export class SyntaxState {
         regions[regionIndex] = region;
       }
 
-      // Scanner-stable prefix records may survive token-equivalent edits with different source geometry.
-      // Only the retained suffix can preserve existing output nodes without rebuilding this interval.
-      blocks[blockIndex].regions = regions;
+      // Token-equivalent records before the narrowed damage can reuse region caches,
+      // but the scanner's rebuilt interval still requires corresponding tree rebuilds.
+      regionsByBlock[blockIndex] = regions;
     }
 
     // 4. Propagate changed definition visibility to retained blocks outside the rebuilt range.
     // Regions track consulted labels, so unrelated definitions preserve block identity.
     if (
-      previousBlocks.length > 0 &&
+      previousRegionsByBlock.length > 0 &&
       this.#definitions !== definitions &&
       !isSetEqual(this.#definitions, definitions)
     ) {
       const refreshDefinitions = (start: number, end: number): void => {
         for (let index = start; index < end; index++) {
-          const block = blocks[index];
+          const regions = regionsByBlock[index];
           let changed = false;
-          for (const region of block.regions) {
+          for (const region of regions) {
             if (region.updateDefinitions(definitions)) {
               changed = true;
             }
@@ -226,12 +222,12 @@ export class SyntaxState {
         }
       };
       refreshDefinitions(0, stableBlockCount);
-      refreshDefinitions(newRecordEnd, blocks.length);
+      refreshDefinitions(newRecordEnd, regionsByBlock.length);
     }
 
-    this.#blocks = blocks;
     this.#definitionEntries = definitionEntries;
     this.#definitions = definitions;
+    this.#regionsByBlock = regionsByBlock;
 
     return invalidatedBlocks ?? emptyArray;
   }
