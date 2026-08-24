@@ -125,15 +125,29 @@ export class BlockTokenStream {
     ) {
       return false;
     }
-    const ranges = this.#metadata?.get(index)?.rangeOffsets;
-    const nextRanges = next.#metadata?.get(nextIndex)?.rangeOffsets;
-    if (ranges !== nextRanges && !isArrayEqual(ranges ?? emptyArray, nextRanges ?? emptyArray)) {
-      return false;
-    }
-    const text = this.#metadata?.get(index)?.text;
-    const nextText = next.#metadata?.get(nextIndex)?.text;
-    if (text !== void 0 || nextText !== void 0) {
-      return text === nextText;
+    const metadata = this.#metadata?.get(index);
+    const nextMetadata = next.#metadata?.get(nextIndex);
+    if (metadata !== nextMetadata) {
+      const ranges = metadata?.rangeOffsets;
+      const nextRanges = nextMetadata?.rangeOffsets;
+      if (ranges !== nextRanges && !isArrayEqual(ranges ?? emptyArray, nextRanges ?? emptyArray)) {
+        return false;
+      }
+      const value = metadata?.value;
+      const nextValue = nextMetadata?.value;
+      if (
+        value !== nextValue && (
+          value === null || typeof value !== "object" ||
+          nextValue === null || typeof nextValue !== "object"
+        )
+      ) {
+        return false;
+      }
+      const text = metadata?.text;
+      const nextText = nextMetadata?.text;
+      if (text !== void 0 || nextText !== void 0) {
+        return text === nextText;
+      }
     }
     return (
       end - start === nextEnd - nextStart &&

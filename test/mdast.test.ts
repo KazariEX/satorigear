@@ -97,6 +97,27 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it.each([
+    { name: "nested quote blanks", source: "* a\n  > b\n  >\n  c\n", spread: false },
+    { name: "indented code trailing blanks", source: "-     code\n\n  para\n", spread: true },
+  ])("attributes $name to the direct list container", ({ source, spread }) => {
+    expect(parser.parse(source).children[0]).toMatchObject({
+      type: "list",
+      children: [{ spread }],
+    });
+  });
+
+  it("updates list-item spread when an edit adds or removes blank separation", () => {
+    const document = parser.createDocument("- a\n  b\n");
+    document.edit([{ start: 4, end: 4, text: "\n" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({ children: [{ spread: true }] });
+
+    document.edit([{ start: 4, end: 5, text: "" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({ children: [{ spread: false }] });
+  });
+
   it("maps soft line endings across stripped block quote prefixes", () => {
     const tree = parser.parse("> one\n> two\n");
     expect(tree.children[0]).toMatchObject({

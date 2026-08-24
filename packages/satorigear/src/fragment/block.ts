@@ -3,7 +3,6 @@ import { buildInlineFragment, type InlineFragment } from "./inline.ts";
 import type { BlockStructure } from "../block/structure.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
-import type { SourceSpan } from "../source-view.ts";
 import type { SpannedNode } from "./node.ts";
 
 export interface BlockBuildContext {
@@ -23,25 +22,6 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
   const tokens = context.structure.tokens;
   return tokens.contentEnd(tokenStart + tokens.nodeLength(tokenStart) - 1);
-}
-
-export function payloadBounds(
-  tokenStart: number,
-  context: BlockBuildContext,
-): SourceSpan {
-  const structure = context.structure;
-  const offset = structure.tokens.start(tokenStart);
-  const result = { start: offset + structure.lenOf(tokenStart), end: offset };
-  const endToken = tokenStart + structure.tokens.nodeLength(tokenStart);
-  for (let token = tokenStart; token < endToken; token++) {
-    const start = structure.tokens.start(token);
-    const end = structure.tokens.end(token);
-    if (end > start) {
-      result.start = Math.min(result.start, start);
-      result.end = Math.max(result.end, end);
-    }
-  }
-  return result;
 }
 
 export const buildBlockNode = <T extends object = TopLevelContent>(

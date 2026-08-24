@@ -6,7 +6,8 @@ import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanContext {
   endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
-  scanLines: (source: string, lines: readonly BlockLine[], tokens: BlockTokenStream) => void;
+  // Returns whether blank lines separate direct blocks in this line view.
+  scanLines: (source: string, lines: readonly BlockLine[], tokens: BlockTokenStream) => boolean;
   startsInterruptingBlock: (source: string, line: BlockLine) => boolean;
 }
 
@@ -147,13 +148,25 @@ function scanBlockLines(
   }
 }
 
-function createBlockScanContext(profile: BlockProfile): BlockScanContext {
-  const context: BlockScanContext = {
-    endsWithParagraphLeaf: (source, line) => endsWithParagraphLeaf(profile, context, source, line),
-    scanLines: (source, lines, tokens) => scanBlockLines(profile, context, source, lines, tokens),
-    startsInterruptingBlock: (source, line) => startsInterruptingBlock(profile, source, line),
-  };
-  return context;
+function scanSeparatedBlockLines(
+  profile: BlockProfile,
+  context: BlockScanContext,
+  source: string,
+  lines: readonly BlockLine[],
+  out: BlockTokenStream,
+): boolean {
+  let blankSeparated = false;
+  let previousContentEnd = -1;
+  scanBlockLines(profile, context, source, lines, out, (lineStart, lineEnd) => {
+    blankSeparated ||= previousContentEnd >= 0 && lineStart > previousContentEnd;
+    previousContentEnd = lineEnd;
+    // A child may consume trailing blank lines that still separate the following direct block.
+    while (previousContentEnd > lineStart && isBlank(source, lines[previousContentEnd - 1])) {
+      previousContentEnd--;
+    }
+    return false;
+  });
+  return blankSeparated;
 }
 
 function linesOf(source: string, start = 0, limit = source.length): BlockLine[] {
@@ -267,32 +280,6 @@ function sameShiftedBlock(
   return true;
 }
 
-// Mdast materialization visits nested spans in source order, so one cursor replaces a binary search per point.
-function createForwardLocator(
-  lines: readonly BlockLine[],
-  sourceLength: number,
-  endsInLineEnding: boolean,
-): (offset: number) => SourceLocation {
-  if (lines.length === 0) {
-    return (offset) => ({ line: 1, column: 1, offset });
-  }
-  let line = 0;
-  return (offset) => {
-    if (offset === sourceLength && endsInLineEnding) {
-      return { line: lines.length + 1, column: 1, offset };
-    }
-    while (line + 1 < lines.length && lines[line + 1].start <= offset) {
-      line++;
-    }
-    return { line: line + 1, column: offset - lines[line].start + 1, offset };
-  };
-}
-
-function endsInLineEnding(source: string): boolean {
-  const ending = source.charCodeAt(source.length - 1);
-  return ending === Character.LineFeed || ending === Character.CarriageReturn;
-}
-
 export class BlockScanner {
   #context: BlockScanContext;
   #lines: BlockLine[];
@@ -301,11 +288,15 @@ export class BlockScanner {
   #tokens: BlockTokenStream;
 
   constructor(profile: BlockProfile) {
-    this.#context = createBlockScanContext(profile);
+    this.#context = {
+      endsWithParagraphLeaf: (source, line) => endsWithParagraphLeaf(profile, this.#context, source, line),
+      scanLines: (source, lines, tokens) => scanSeparatedBlockLines(profile, this.#context, source, lines, tokens),
+      startsInterruptingBlock: (source, line) => startsInterruptingBlock(profile, source, line),
+    };
     this.#profile = profile;
     this.#lines = [];
-    this.#tokens = new BlockTokenStream();
     this.#records = [];
+    this.#tokens = new BlockTokenStream();
   }
 
   scan(source: string): void {
@@ -347,9 +338,26 @@ export class BlockScanner {
     return this.#records;
   }
 
+  // Mdast materialization visits nested spans in source order, so one cursor replaces a binary search per point.
   locator(source: string): (offset: number) => SourceLocation {
     const lines = this.#lines;
-    return createForwardLocator(lines, source.length, endsInLineEnding(source));
+    const sourceLength = source.length;
+    const ending = source.charCodeAt(sourceLength - 1);
+    const endsInLineEnding = ending === Character.LineFeed || ending === Character.CarriageReturn;
+
+    if (lines.length === 0) {
+      return (offset) => ({ line: 1, column: 1, offset });
+    }
+    let line = 0;
+    return (offset) => {
+      if (offset === sourceLength && endsInLineEnding) {
+        return { line: lines.length + 1, column: 1, offset };
+      }
+      while (line + 1 < lines.length && lines[line + 1].start <= offset) {
+        line++;
+      }
+      return { line: line + 1, column: offset - lines[line].start + 1, offset };
+    };
   }
 
   edit(change: SourceChange): BlockScanChange {

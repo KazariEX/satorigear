@@ -8,29 +8,22 @@ import {
 } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import {
-  type BlockBuildContext,
-  blockEnd,
-  type BlockNodeBuilder,
-  buildBlockChildren,
-  payloadBounds,
-} from "../../fragment/block.ts";
+import { blockEnd, type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
 import { lastChildEnd, type SpannedNode } from "../../fragment/node.ts";
 import { isThematicBreak } from "./break.ts";
 import type { BlockStart } from "../../block/profile.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
-import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface ListMarker {
   kind: "ordered" | "unordered";
   indent: number;
   offset: number;
+  end: number;
   contentOffset: number;
   contentIndent: number;
   contentPrefixColumns: number;
   delimiter: string;
-  text: string;
   startNumber?: number;
 }
 
@@ -74,11 +67,11 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | undefined {
       kind: "unordered",
       indent: indent.columns,
       offset: indent.offset,
+      end: markerEnd,
       contentOffset: padding.offset,
       contentIndent: indent.columns + 1 + padding.columns,
       contentPrefixColumns: padding.prefixColumns,
       delimiter: marker,
-      text: marker,
     };
   }
   const markerCode = source.charCodeAt(indent.offset);
@@ -113,11 +106,11 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | undefined {
     kind: "ordered",
     indent: indent.columns,
     offset: indent.offset,
+    end: orderedEnd,
     contentOffset: padding.offset,
     contentIndent: indent.columns + markerWidth + padding.columns,
     contentPrefixColumns: padding.prefixColumns,
     delimiter,
-    text: source.slice(indent.offset, orderedEnd),
     startNumber,
   };
 }
@@ -128,47 +121,6 @@ function sameList(a: ListMarker, b: ListMarker): boolean {
 
 function hasListContent(source: string, line: BlockLine, marker: ListMarker | undefined): boolean {
   return !!marker && /\S/.test(source.slice(marker.contentOffset, line.end));
-}
-
-function hasBlankLineBetween(source: string, start: number, end: number, stripBlockQuotes: boolean): boolean {
-  let lineEnd = Math.max(0, start - 1);
-  // Child spans may end and begin mid-line; only complete physical lines between them determine spread.
-  while (lineEnd < end && source[lineEnd] !== "\n" && source[lineEnd] !== "\r") {
-    lineEnd++;
-  }
-
-  while (lineEnd < end) {
-    let contentStart = lineEnd + (source[lineEnd] === "\r" && source[lineEnd + 1] === "\n" ? 2 : 1);
-    if (stripBlockQuotes) {
-      while (contentStart < end) {
-        let marker = contentStart;
-        for (let spaces = 0; spaces < 3 && source[marker] === " "; spaces++) {
-          marker++;
-        }
-        if (source[marker] !== ">") {
-          break;
-        }
-        contentStart = marker + 1;
-        if (source[contentStart] === " " || source[contentStart] === "\t") {
-          contentStart++;
-        }
-      }
-    }
-    while (contentStart < end && (source[contentStart] === " " || source[contentStart] === "\t")) {
-      contentStart++;
-    }
-    if (contentStart === end) {
-      return false;
-    }
-    if (source[contentStart] === "\n" || source[contentStart] === "\r") {
-      return true;
-    }
-    lineEnd = contentStart + 1;
-    while (lineEnd < end && source[lineEnd] !== "\n" && source[lineEnd] !== "\r") {
-      lineEnd++;
-    }
-  }
-  return false;
 }
 
 interface TaskListMarker {
@@ -234,42 +186,14 @@ function hasTaskListContent(
   return false;
 }
 
-function childrenSpread(
-  tokenStart: number,
-  stripBlockQuotes: boolean,
-  context: BlockBuildContext,
-  nestedRule?: BlockRule,
-): boolean {
-  const structure = context.structure;
-  const tokens = structure.tokens;
-  let previous: SourceSpan | undefined;
-  const tokenEnd = tokenStart + tokens.nodeLength(tokenStart) - 1;
-  for (let child = tokenStart + 1; child < tokenEnd;) {
-    const length = tokens.nodeLength(child);
-    if (
-      length > 0 && (
-        nestedRule === void 0
-          ? structure.isBlock(child)
-          : structure.isRule(child, nestedRule)
-      )
-    ) {
-      const current = payloadBounds(child, context);
-      if (previous && hasBlankLineBetween(context.source, previous.end, current.start, stripBlockQuotes)) {
-        return true;
-      }
-      previous = current;
-    }
-    child += length || 1;
-  }
-  return false;
-}
-
 const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
-  const markerKind = context.structure.tokens.kind(tokenStart);
+  const tokens = context.structure.tokens;
+  const markerKind = tokens.kind(tokenStart);
   const children = buildBlockChildren(tokenStart, context);
+  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return {
     type: "listItem",
-    spread: childrenSpread(tokenStart, true, context),
+    spread: tokens.value<boolean>(close) === true,
     checked: markerKind === BlockKind.CheckedTaskItemOpen
       ? true
       : markerKind === BlockKind.UncheckedTaskItemOpen ? false : null,
@@ -286,8 +210,8 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     const structure = context.structure;
     const tokens = structure.tokens;
     const items: SpannedNode<ListItem>[] = [];
-    const tokenEnd = tokenStart + tokens.nodeLength(tokenStart) - 1;
-    for (let child = tokenStart + 1; child < tokenEnd;) {
+    const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+    for (let child = tokenStart + 1; child < close;) {
       const length = tokens.nodeLength(child);
       if (length > 0 && structure.isRule(child, BlockRule.ListItem)) {
         items.push(buildListItem(child, context));
@@ -297,8 +221,8 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     return {
       type: "list",
       ordered,
-      start: ordered ? Number.parseInt(context.structure.tokens.text(context.source, tokenStart), 10) : null,
-      spread: childrenSpread(tokenStart, false, context, BlockRule.ListItem),
+      start: ordered ? tokens.value<number>(tokenStart)! : null,
+      spread: tokens.value<boolean>(close) === true,
       children: items,
       position: {
         start: context.structure.tokens.start(tokenStart),
@@ -316,15 +240,25 @@ const listStart: BlockStart = (source, lines, start, out, contentOffset, context
   const kind = listMarker.kind;
   const listOpen = kind === "ordered" ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
   const listClose = kind === "ordered" ? BlockKind.OrderedListClose : BlockKind.UnorderedListClose;
-  out.push(listOpen, listMarker.offset, listMarker.offset + listMarker.text.length);
+  out.push(
+    listOpen,
+    listMarker.offset,
+    listMarker.end,
+    kind === "ordered" ? { value: listMarker.startNumber } : void 0,
+  );
   let index = start;
-  let listEnd = listMarker.offset + listMarker.text.length;
+  let listEnd = listMarker.end;
+  let listSpread = false;
+  let trailingBlank = false;
   while (index < lines.length) {
     const marker = listMarkerAt(source, lines[index]);
     if (!marker || !sameList(marker, listMarker)) {
       break;
     }
-    out.push(BlockKind.ListItemOpen, marker.offset, marker.offset + marker.text.length);
+    // A trailing blank affects the list only when another sibling follows it.
+    listSpread ||= trailingBlank;
+    trailingBlank = false;
+    out.push(BlockKind.ListItemOpen, marker.offset, marker.end);
     const itemLines: BlockLine[] = [{
       ...lines[index],
       start: marker.contentOffset,
@@ -340,10 +274,12 @@ const listStart: BlockStart = (source, lines, start, out, contentOffset, context
       }
       if (isBlank(source, lines[index])) {
         if (!hasContent) {
+          trailingBlank = true;
           index++;
           break;
         }
         itemLines.push(lines[index]);
+        trailingBlank = true;
         lazyParagraph = false;
         index++;
         continue;
@@ -353,6 +289,7 @@ const listStart: BlockStart = (source, lines, start, out, contentOffset, context
         const content = contentAfterColumns(source, lines[index], marker.contentIndent);
         const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
         itemLines.push(contentLine);
+        trailingBlank = false;
         hasContent = true;
         lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
         index++;
@@ -362,13 +299,20 @@ const listStart: BlockStart = (source, lines, start, out, contentOffset, context
         break;
       }
       itemLines.push({ ...lines[index], lazy: true });
+      trailingBlank = false;
       index++;
     }
-    context.scanLines(source, itemLines, out);
+    const itemSpread = context.scanLines(source, itemLines, out);
     listEnd = itemLines.at(-1)?.next ?? marker.offset;
-    out.push(BlockKind.ListItemClose, listEnd, listEnd);
+    // A frame's blank-separation summary is known only when its close is emitted.
+    out.push(
+      BlockKind.ListItemClose,
+      listEnd,
+      listEnd,
+      itemSpread ? { value: true } : void 0,
+    );
   }
-  out.push(listClose, listEnd, listEnd);
+  out.push(listClose, listEnd, listEnd, listSpread ? { value: true } : void 0);
   return index;
 };
 
