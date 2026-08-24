@@ -1,7 +1,7 @@
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLine, lineIndent } from "../../../block/lines.ts";
-import { appendLogicalToken } from "../../../block/tokens.ts";
+import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import {
@@ -42,11 +42,6 @@ interface SlotOpening {
   offset: number;
 }
 
-interface YamlPropsBlock {
-  close: number;
-  open: number;
-}
-
 function skipSpaces(source: string, offset: number, end: number): number {
   while (offset < end && (source[offset] === " " || source[offset] === "\t")) {
     offset++;
@@ -76,19 +71,19 @@ function yamlClosingMarker(value: string | undefined): string | undefined {
   }
 }
 
-function yamlPropsAt(
+function yamlPropsEnd(
   source: string,
   lines: readonly BlockLine[],
   start: number,
   end: number,
-): YamlPropsBlock | undefined {
+): number | undefined {
   const marker = yamlClosingMarker(lineValue(source, lines[start]));
   if (!marker) {
     return;
   }
   for (let index = start + 1; index < end; index++) {
     if (lineValue(source, lines[index]) === marker) {
-      return { open: start, close: index };
+      return index + 1;
     }
   }
 }
@@ -281,11 +276,7 @@ function nextSlot(
   }
 }
 
-function emitSlotOpening(
-  source: string,
-  opening: SlotOpening,
-  out: Parameters<BlockStart>[3],
-): void {
+function emitSlotOpening(opening: SlotOpening, out: BlockTokenStream): void {
   out.push(BlockKind.BlockComponentSlotOpen, opening.offset, opening.nameEnd);
   if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
     out.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
@@ -298,14 +289,14 @@ function emitComponentBody(
   start: number,
   end: number,
   closingOffset: number,
-  out: Parameters<BlockStart>[3],
+  out: BlockTokenStream,
   context: Parameters<BlockStart>[5],
 ): void {
   let cursor = start;
-  const yaml = cursor < end ? yamlPropsAt(source, lines, cursor, end) : void 0;
-  if (yaml) {
-    appendLogicalToken(out, BlockKind.BlockComponentYamlProps, source, lines, yaml.open, yaml.close + 1);
-    cursor = yaml.close + 1;
+  const yamlEnd = cursor < end ? yamlPropsEnd(source, lines, cursor, end) : void 0;
+  if (yamlEnd !== void 0) {
+    appendLogicalToken(out, BlockKind.BlockComponentYamlProps, source, lines, cursor, yamlEnd);
+    cursor = yamlEnd;
   }
   let slot = nextSlot(source, lines, cursor, end);
   if (!slot) {
@@ -318,7 +309,7 @@ function emitComponentBody(
   while (slot) {
     const following = nextSlot(source, lines, slot.index + 1, end);
     const next = following?.index ?? end;
-    emitSlotOpening(source, slot.opening, out);
+    emitSlotOpening(slot.opening, out);
     context.scanLines(source, lines.slice(slot.index + 1, next), out);
     const slotEnd = following ? following.opening.offset : closingOffset;
     out.push(BlockKind.BlockComponentSlotClose, slotEnd, slotEnd);
@@ -327,10 +318,9 @@ function emitComponentBody(
 }
 
 function emitOpening(
-  source: string,
   contentOffset: number,
   opening: BlockOpening,
-  out: Parameters<BlockStart>[3],
+  out: BlockTokenStream,
 ): void {
   out.push(BlockKind.BlockComponentOpen, contentOffset, opening.nameEnd);
   if (opening.labelStart !== void 0 && opening.labelEnd !== void 0) {
@@ -365,16 +355,16 @@ function createBlockStart(shorthand: boolean): BlockStart {
       return;
     }
     if (shorthand) {
-      emitOpening(source, contentOffset, opening, out);
+      emitOpening(contentOffset, opening, out);
       out.push(BlockKind.BlockComponentClose, lines[start].end, lines[start].end);
       return start + 1;
     }
     const closing = blockClose(source, lines, start, opening);
     if (!closing) {
-      context.retainLookahead(lines.at(-1)?.next ?? lines[start].next);
+      context.retainLookahead(lines[lines.length - 1].next);
       return;
     }
-    emitOpening(source, contentOffset, opening, out);
+    emitOpening(contentOffset, opening, out);
     emitComponentBody(
       source,
       lines,
