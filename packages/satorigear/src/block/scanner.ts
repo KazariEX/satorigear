@@ -382,11 +382,14 @@ export class BlockScanner {
       affectedIndex = Math.max(0, previousRecords.length - 1);
     }
     const affectedRecord = previousRecords[affectedIndex];
-    const restartIndex = affectedRecord?.start > changedSpan.start
-      ? -1
-      : affectedRecord && affectedRecord.end < changedSpan.start
-        ? affectedIndex
-        : Math.max(0, affectedIndex - 1);
+    const restartIndex = (
+      // Only the leading gap has no preceding record to provide the usual one-record lookbehind.
+      affectedIndex === 0 && affectedRecord?.start > changedSpan.start
+        ? -1
+        : affectedRecord && affectedRecord.end < changedSpan.start
+          ? affectedIndex
+          : Math.max(0, affectedIndex - 1)
+    );
     const restartRecord = previousRecords[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
     const nextLines = updatePhysicalLines(this.#lines, nextSource, restartOffset, oldChangedEnd, offsetDelta);
