@@ -1,4 +1,3 @@
-import { emptyArray, isArrayEqual } from "../primitives.ts";
 import { type BlockLine, logicalLine } from "./lines.ts";
 import { BlockSyntaxKind } from "./profile.ts";
 import type { BlockKind } from "../constants/block.ts";
@@ -8,7 +7,7 @@ import type { BlockSyntaxSchema } from "./profile.ts";
 const blockTokenStride = 4;
 
 interface BlockTokenMeta {
-  rangeOffsets?: readonly number[];
+  contentEndOffset?: number;
   text?: string;
   value?: unknown;
 }
@@ -128,9 +127,9 @@ export class BlockTokenStream {
     const metadata = this.#metadata?.get(index);
     const nextMetadata = next.#metadata?.get(nextIndex);
     if (metadata !== nextMetadata) {
-      const ranges = metadata?.rangeOffsets;
-      const nextRanges = nextMetadata?.rangeOffsets;
-      if (ranges !== nextRanges && !isArrayEqual(ranges ?? emptyArray, nextRanges ?? emptyArray)) {
+      const contentEndOffset = metadata?.contentEndOffset ?? end - start;
+      const nextContentEndOffset = nextMetadata?.contentEndOffset ?? nextEnd - nextStart;
+      if (contentEndOffset !== nextContentEndOffset) {
         return false;
       }
       const value = metadata?.value;
@@ -152,21 +151,6 @@ export class BlockTokenStream {
     return (
       end - start === nextEnd - nextStart &&
       source.slice(start, end) === nextSource.slice(nextStart, nextEnd)
-    );
-  }
-
-  rangeCount(index: number): number {
-    return (this.#metadata?.get(index)?.rangeOffsets?.length ?? 2) / 2;
-  }
-
-  rangeEnd(index: number, range: number): number {
-    const offsets = this.#metadata?.get(index)?.rangeOffsets;
-    return offsets ? this.start(index) + offsets[range * 2 + 1] : this.end(index);
-  }
-
-  rangeStart(index: number, range: number): number {
-    return this.start(index) + (
-      this.#metadata?.get(index)?.rangeOffsets?.[range * 2] ?? 0
     );
   }
 
@@ -345,8 +329,8 @@ export class BlockTokenStream {
   }
 
   contentEnd(index: number): number {
-    const ranges = this.#metadata?.get(index)?.rangeOffsets;
-    return ranges ? this.start(index) + ranges[ranges.length - 1] : this.end(index);
+    const offset = this.#metadata?.get(index)?.contentEndOffset;
+    return offset === void 0 ? this.end(index) : this.start(index) + offset;
   }
 
   text(source: string, index: number): string {
@@ -386,15 +370,15 @@ export function appendLogicalToken(
 ): void {
   const count = end - start;
   const tokenStart = lines[start].start;
-  const rangeOffsets = new Array<number>(count * 2);
+  const lastLine = lines[end - 1];
+  const tokenEnd = lastLine.next;
+  const contentEndOffset = lastLine.end === tokenEnd
+    ? void 0
+    : lastLine.end - tokenStart;
   let canSliceSource = true;
   let previousLineEnd = 0;
   for (let index = 0; index < count; index++) {
     const line = lines[start + index];
-    // Ranges retain the physical source spans even when the token text needs logical indentation repair.
-    rangeOffsets[index * 2] = line.start - tokenStart;
-    rangeOffsets[index * 2 + 1] = (index + 1 === count ? line.end : line.next) - tokenStart;
-
     canSliceSource &&= (
       // Tab overshoot is represented as virtual leading columns that do not exist in the source slice.
       (line.prefixColumns ?? 0) === 0 &&
@@ -416,8 +400,10 @@ export function appendLogicalToken(
   }
   out.push(
     kind,
-    lines[start].start,
-    lines[end - 1].next,
-    { rangeOffsets, text, value },
+    tokenStart,
+    tokenEnd,
+    contentEndOffset === void 0 && text === void 0 && value === void 0
+      ? void 0
+      : { contentEndOffset, text, value },
   );
 }
