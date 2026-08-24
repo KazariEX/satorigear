@@ -1,4 +1,4 @@
-import { remark } from "remark";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { createParser } from "satorigear";
 import { markdownToMdast } from "satteri";
 
@@ -16,7 +16,6 @@ function selectEngines(engines: readonly Engine[]): readonly Engine[] {
 
 export function createCommonmarkEngines(): readonly Engine[] {
   const satorigear = createParser();
-  const remarkProcessor = remark();
   const satteriOptions = {
     features: {
       frontmatter: false,
@@ -26,7 +25,7 @@ export function createCommonmarkEngines(): readonly Engine[] {
   return selectEngines([
     { name: "satorigear", parse: satorigear.parse },
     { name: "satteri", parse: (source) => markdownToMdast(source, satteriOptions) },
-    { name: "remark", parse: remarkProcessor.parse.bind(remarkProcessor) },
+    { name: "remark", parse: fromMarkdown },
   ]);
 }
 

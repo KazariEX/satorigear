@@ -18,7 +18,6 @@ catalog:
   eslint: ^10.8.1
   mdast-util-from-markdown: ^2.0.3
   mitata: ^1.0.34
-  remark: ^15.0.1
   satteri: ^0.9.5
   tsdown: ^0.22.14
   vitest: ^4.1.10

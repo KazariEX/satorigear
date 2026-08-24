@@ -27,7 +27,6 @@
     "eslint": "catalog:",
     "mdast-util-from-markdown": "catalog:",
     "mitata": "catalog:",
-    "remark": "catalog:",
     "satteri": "catalog:",
     "tsdown": "catalog:",
     "vitest": "catalog:"
