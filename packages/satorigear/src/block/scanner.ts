@@ -339,11 +339,10 @@ export class BlockScanner {
   }
 
   // Mdast materialization visits nested spans in source order, so one cursor replaces a binary search per point.
-  locator(source: string): (offset: number) => SourceLocation {
+  locator(): (offset: number) => SourceLocation {
     const lines = this.#lines;
-    const sourceLength = source.length;
-    const ending = source.charCodeAt(sourceLength - 1);
-    const endsInLineEnding = ending === Character.LineFeed || ending === Character.CarriageReturn;
+    const sourceLength = this.#tokens.sourceLength;
+    const endsInLineEnding = lines.length > 0 && lines[lines.length - 1].end < sourceLength;
 
     if (lines.length === 0) {
       return (offset) => ({ line: 1, column: 1, offset });

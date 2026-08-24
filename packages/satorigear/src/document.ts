@@ -142,10 +142,7 @@ export class DocumentImpl implements Document {
     return { changedSpan: change.changedSpan };
   }
 
-  #updateTree(
-    invalidatedBlocks: readonly number[],
-    change?: BlockScanChange,
-  ): void {
+  #updateTree(invalidatedBlocks: readonly number[], change?: BlockScanChange): void {
     const blocks = this.#syntaxState.blocks();
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.
@@ -156,7 +153,7 @@ export class DocumentImpl implements Document {
       source: this.#source,
     };
 
-    const locate = this.#blockScanner.locator(this.#source);
+    const locate = this.#blockScanner.locator();
     const root = this.#tree;
     const start = locate(0);
     const children = root.children;
@@ -249,7 +246,7 @@ export class DocumentImpl implements Document {
       source,
     };
 
-    const locate = blockScanner.locator(source);
+    const locate = blockScanner.locator();
     const start = locate(0);
     const children = blockScanner.records.map((block) => {
       const node = buildBlockNode<TopLevelContent>(block.tokenStart, context);
