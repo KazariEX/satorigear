@@ -258,9 +258,16 @@ export class BlockTokenStream {
     const indexDelta = replacementLength - replacedLength;
     if (end === previousLength || indexDelta === 0) {
       if (this.#metadata) {
-        for (const index of this.#metadata.keys()) {
-          if (index >= start && index < end) {
+        if (replacedLength < this.#metadata.size) {
+          for (let index = start; index < end; index++) {
             this.#metadata.delete(index);
+          }
+        }
+        else {
+          for (const index of this.#metadata.keys()) {
+            if (index >= start && index < end) {
+              this.#metadata.delete(index);
+            }
           }
         }
       }
