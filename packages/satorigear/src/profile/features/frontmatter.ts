@@ -33,14 +33,11 @@ function frontmatterFenceAt(
 
 export const buildFrontmatter: BlockNodeBuilder<Yaml> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
-  const rangeCount = tokens.rangeCount(tokenStart);
-  if (rangeCount < 2) {
-    throw new Error("YAML token does not contain two fences");
-  }
-  let value = normalizeLines(context.source.slice(
-    tokens.rangeEnd(tokenStart, 0),
-    tokens.rangeStart(tokenStart, rangeCount - 1),
-  ));
+  const text = normalizeLines(tokens.text(context.source, tokenStart));
+  const contentStart = text.indexOf("\n") + 1;
+  const closingEnd = text.endsWith("\n") ? text.length - 1 : text.length;
+  const closingStart = text.lastIndexOf("\n", closingEnd - 1) + 1;
+  let value = text.slice(contentStart, closingStart);
   if (value.endsWith("\n")) {
     value = value.slice(0, -1);
   }

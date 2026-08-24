@@ -136,6 +136,16 @@ Body
     expect(yaml.value).toContain("  mode: dark");
   });
 
+  it("builds YAML props from container-stripped text", () => {
+    expect(parser.parse("> ::card\n> ---\n> a: b\n> ---\n> ::\n").children[0]).toMatchObject({
+      type: "blockquote",
+      children: [{
+        type: "blockComponent",
+        children: [{ type: "yaml", value: "a: b" }],
+      }],
+    });
+  });
+
   it("recognizes YAML props code fences without emitting code nodes", () => {
     for (const [open, close] of [
       ["```yaml [props]", "```"],
