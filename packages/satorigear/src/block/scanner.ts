@@ -1,7 +1,7 @@
 import { Character } from "../constants/character.ts";
 import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
-import type { SourceChange, SourceLocation, SourceSpan } from "../source-view.ts";
+import type { SourceLocation, SourceSpan } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanContext {
@@ -12,10 +12,18 @@ export interface BlockScanContext {
 
 export interface BlockScanChange {
   newRecordEnd: number;
+  offsetDelta: number;
   oldRecordEnd: number;
   oldRecordStart: number;
   stableBlockCount: number;
   tokenChange: BlockTokenChange;
+}
+
+export interface SourceChange {
+  changedSpan: SourceSpan;
+  nextSource: string;
+  offsetDelta: number;
+  previousSource: string;
 }
 
 // Scanner-owned top-level identity combines physical-line and token geometry.
@@ -522,6 +530,7 @@ export class BlockScanner {
 
     return {
       newRecordEnd,
+      offsetDelta,
       oldRecordEnd,
       oldRecordStart,
       stableBlockCount,

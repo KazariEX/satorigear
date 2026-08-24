@@ -9,17 +9,6 @@ export interface SourceSpan {
   start: number;
 }
 
-export interface TextEdit extends SourceSpan {
-  text: string;
-}
-
-export interface SourceChange {
-  changedSpan: SourceSpan;
-  nextSource: string;
-  offsetDelta: number;
-  previousSource: string;
-}
-
 export interface SourceView {
   readonly text: string;
   mapPoint: (offset: number) => number;

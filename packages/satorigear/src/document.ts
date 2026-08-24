@@ -1,5 +1,5 @@
 import type { Node, Root, TopLevelContent } from "mdast";
-import { type BlockScanChange, BlockScanner } from "./block/scanner.ts";
+import { type BlockScanChange, BlockScanner, type SourceChange } from "./block/scanner.ts";
 import { BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { InlineRegionCursor } from "./inline/region.ts";
@@ -11,7 +11,11 @@ import {
 } from "./syntax-state.ts";
 import type { SpannedValue } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
-import type { SourceChange, SourceLocation, SourceSpan, TextEdit } from "./source-view.ts";
+import type { SourceLocation, SourceSpan } from "./source-view.ts";
+
+export interface TextEdit extends SourceSpan {
+  text: string;
+}
 
 export interface EditResult {
   changedSpan: SourceSpan;
@@ -131,13 +135,9 @@ export class DocumentImpl implements Document {
     const change = applyEdits(this.source, edits);
 
     const blockChange = this.#blockScanner.edit(change);
-    const invalidatedBlocks = this.#syntaxState.update(
-      change.nextSource,
-      blockChange,
-      change.offsetDelta,
-    );
+    const invalidatedBlocks = this.#syntaxState.update(change.nextSource, blockChange);
     this.#source = change.nextSource;
-    this.#updateTree(invalidatedBlocks, blockChange, change.offsetDelta);
+    this.#updateTree(invalidatedBlocks, blockChange);
 
     return { changedSpan: change.changedSpan };
   }
@@ -145,7 +145,6 @@ export class DocumentImpl implements Document {
   #updateTree(
     invalidatedBlocks: readonly number[],
     change?: BlockScanChange,
-    suffixOffsetDelta = 0,
   ): void {
     const blocks = this.#syntaxState.blocks();
 
@@ -165,6 +164,7 @@ export class DocumentImpl implements Document {
     const oldRebuildEnd = change?.oldRecordEnd ?? 0;
     const newRebuildEnd = change?.newRecordEnd ?? blocks.length;
     const blockDelta = newRebuildEnd - oldRebuildEnd;
+    const suffixOffsetDelta = change?.offsetDelta ?? 0;
 
     // 1. Align materialized children with the scanner's record replacement by moving the
     // retained suffix once; rebuilt nodes fill the replacement slots below.

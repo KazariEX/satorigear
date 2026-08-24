@@ -51,7 +51,7 @@ export class SyntaxState {
     return this.#blocks;
   }
 
-  update(source: string, change?: BlockScanChange, offsetDelta = 0): readonly number[] {
+  update(source: string, change?: BlockScanChange): readonly number[] {
     // 1. Retain the scanner-stable prefix, then collect inline bindings from rebuilt records
     // and definitions only from the narrower token-damage window.
     const structure = this.#structure;
@@ -61,6 +61,7 @@ export class SyntaxState {
     const oldRecordStart = change?.oldRecordStart ?? 0;
     const oldRecordEnd = change?.oldRecordEnd ?? 0;
     const newRecordEnd = change?.newRecordEnd ?? structure.records.length;
+    const offsetDelta = change?.offsetDelta ?? 0;
     const blocks: SyntaxBlock[] = stableBlockCount === 0 ? [] : previousBlocks.slice(0, stableBlockCount);
     const previousDefinitionEntries = this.#definitionEntries ?? emptyArray;
     const oldDefinitionStart = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordStart);
