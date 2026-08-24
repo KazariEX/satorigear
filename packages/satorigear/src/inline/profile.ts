@@ -1,4 +1,3 @@
-import { createDelimiterResolver, type DelimiterConfig } from "./delimiter.ts";
 import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./lexer.ts";
 import type { InlineKind } from "../constants/inline.ts";
 import type {
@@ -7,6 +6,7 @@ import type {
   InlineTokenDecorator,
   InlineTokenHandler,
 } from "../fragment/inline.ts";
+import type { DelimiterConfig } from "./delimiter.ts";
 // Inline features compile into one token pipeline and the projection tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
 
@@ -14,11 +14,15 @@ export interface InlineResolutionContext {
   hasDefinition: (key: string) => boolean;
 }
 
-export type InlineTokenTransform = (
+type InlineResolver = (
   source: string,
   tokens: InlineTokenStream,
   context: InlineResolutionContext,
 ) => InlineTokenStream;
+
+export type InlineResolverCompiler = (
+  delimiters: readonly DelimiterConfig[],
+) => InlineResolver;
 
 export type InlineBuildRule =
   | {
@@ -64,53 +68,35 @@ export interface InlineSyntaxSchema {
 export interface InlineFeature {
   /** Recognize source ranges and append raw inline tokens. */
   scan?: readonly InlineScanRule[];
-  /** Resolve token relationships before semantic builders consume them. */
-  resolve?: {
-    delimiters?: readonly DelimiterConfig[];
-    transform?: InlineTokenTransform;
-  };
+  /** Participate in compiled delimiter pairing. */
+  delimiters?: readonly DelimiterConfig[];
   /** Build semantic nodes from the resolved token stream. */
   build?: readonly InlineBuildRule[];
 }
 
 export interface InlineProfile {
-  resolve: InlineTokenTransform;
+  resolve: InlineResolver;
   schema: InlineSyntaxSchema;
   tokenHandlers: readonly (InlineTokenHandler | undefined)[];
   tokenize: InlineTokenizer;
 }
 
-function composeTransforms(transforms: readonly InlineTokenTransform[]): InlineTokenTransform {
-  if (transforms.length === 1) {
-    return transforms[0];
-  }
-  return (source, tokens, context) => {
-    for (const transform of transforms) {
-      tokens = transform(source, tokens, context);
-    }
-    return tokens;
-  };
-}
-
-export function compileInlineProfile(features: readonly InlineFeature[]): InlineProfile {
+export function compileInlineProfile(
+  features: readonly InlineFeature[],
+  compileResolver: InlineResolverCompiler,
+): InlineProfile {
   const delimiters: DelimiterConfig[] = [];
   const scanRules: InlineScanRule[] = [];
-  const transforms: InlineTokenTransform[] = [];
   const tokenHandlers: (InlineTokenHandler | undefined)[] = [];
   const containerByKind: (InlineContainer | undefined)[] = [];
   const pairByOpenKind: (InlinePair | undefined)[] = [];
-  const isolationCloseByOpen: (number | undefined)[] = [];
 
   for (const feature of features) {
-    const resolve = feature.resolve;
     if (feature.scan) {
       scanRules.push(...feature.scan);
     }
-    if (resolve?.delimiters) {
-      delimiters.push(...resolve.delimiters);
-    }
-    if (resolve?.transform) {
-      transforms.push(resolve.transform);
+    if (feature.delimiters) {
+      delimiters.push(...feature.delimiters);
     }
     const build = feature.build;
     if (!build) {
@@ -127,8 +113,6 @@ export function compileInlineProfile(features: readonly InlineFeature[]): Inline
       }
 
       if (rule.kind === "container") {
-        // Semantic container boundaries also delimit formatting; derive that fact from the builder shape.
-        isolationCloseByOpen[rule.contentOpen] = rule.close;
         containerByKind[rule.token] = {
           closeKind: rule.close,
           contentOpenKind: rule.contentOpen,
@@ -136,7 +120,6 @@ export function compileInlineProfile(features: readonly InlineFeature[]): Inline
         };
       }
       else {
-        isolationCloseByOpen[rule.open] = rule.close;
         pairByOpenKind[rule.open] = {
           closeKind: rule.close,
           build: rule.build,
@@ -145,16 +128,8 @@ export function compileInlineProfile(features: readonly InlineFeature[]): Inline
     }
   }
 
-  const resolveDelimiters = createDelimiterResolver(delimiters, isolationCloseByOpen);
-  const transform = transforms.length ? composeTransforms(transforms) : void 0;
-
   return {
-    resolve: transform === void 0
-      ? resolveDelimiters
-      : (source, tokens, context) => {
-        const transformed = transform(source, tokens, context);
-        return resolveDelimiters(source, transformed);
-      },
+    resolve: compileResolver(delimiters),
     schema: {
       containerByKind,
       pairByOpenKind,

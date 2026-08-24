@@ -2,18 +2,12 @@ import { Character } from "../constants/character.ts";
 import {
   appendInlineToken,
   copyInlineToken,
-  inlineTokenCount,
   inlineTokenEnd,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
 } from "./tokens.ts";
 import type { InlineKind } from "../constants/inline.ts";
-
-type DelimiterResolver = (
-  source: string,
-  tokens: InlineTokenStream,
-) => InlineTokenStream;
 
 export interface DelimiterConfig {
   token: InlineKind;
@@ -32,19 +26,18 @@ interface CompiledDelimiterConfig {
   index: number;
 }
 
-interface DelimiterRun {
+export interface DelimiterRun {
   tokenIndex: number;
   config: CompiledDelimiterConfig;
   length: number;
   start: number;
   remaining: number;
   flanking: number;
-  scope: number;
   previous: number;
   next: number;
 }
 
-interface Replacement {
+interface DelimiterReplacement {
   offset: number;
   end: number;
   kind: number;
@@ -101,7 +94,7 @@ function flanking(source: string, start: number, end: number, config: CompiledDe
 }
 
 function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
-  if (!(opener.flanking & Flanking.Open) || !(closer.flanking & Flanking.Close)) {
+  if (!(opener.flanking & Flanking.Open)) {
     return false;
   }
   if (closer.config.flags & DelimiterFlag.MatchWholeRun && opener.length !== closer.length) {
@@ -127,7 +120,11 @@ function unlinkRun(runs: DelimiterRun[], runIndex: number): void {
   }
 }
 
-function addReplacement(replacements: Replacement[][], tokenIndex: number, replacement: Replacement): void {
+function addReplacement(
+  replacements: DelimiterReplacement[][],
+  tokenIndex: number,
+  replacement: DelimiterReplacement,
+): void {
   const tokenReplacements = replacements[tokenIndex];
   if (tokenReplacements) {
     tokenReplacements.push(replacement);
@@ -137,13 +134,22 @@ function addReplacement(replacements: Replacement[][], tokenIndex: number, repla
   }
 }
 
-function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: Replacement[][]): void {
+function matchDelimiterRuns(
+  runs: DelimiterRun[],
+  first: number,
+  replacements: DelimiterReplacement[][],
+): void {
   const openersBottom: number[] = [];
   let current = first;
+  // Matching unlinks exhausted runs, so every active run has remaining source.
   while (current >= 0) {
     const closer = runs[current];
     const next = closer.next;
-    if (!(closer.flanking & Flanking.Close) || closer.remaining === 0) {
+    if (!(closer.flanking & Flanking.Close)) {
+      if (closer.flanking === 0) {
+        // Inert runs cannot pair and only lengthen later opener searches.
+        unlinkRun(runs, current);
+      }
       current = next;
       continue;
     }
@@ -152,7 +158,7 @@ function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: R
     let openerIndex = closer.previous;
     while (openerIndex >= 0 && openerIndex !== bottom) {
       const opener = runs[openerIndex];
-      if (opener.config === closer.config && opener.remaining > 0 && canPair(opener, closer)) {
+      if (opener.config === closer.config && canPair(opener, closer)) {
         break;
       }
       openerIndex = opener.previous;
@@ -191,122 +197,85 @@ function matchDelimiterRuns(runs: DelimiterRun[], first: number, replacements: R
   }
 }
 
-function resolveDelimiterRuns(
+export function delimiterRunAt(
   source: string,
   tokens: InlineTokenStream,
+  tokenIndex: number,
   configByKind: readonly (CompiledDelimiterConfig | undefined)[],
-  isolationCloseByOpen: readonly (number | undefined)[],
-): InlineTokenStream {
-  const runs: DelimiterRun[] = [];
-  const isolationClosers: number[] = [];
-  const isolationScopes: number[] = [];
-  let nextIsolationScope = 0;
-  const count = inlineTokenCount(tokens);
-  for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-    const kind = inlineTokenKind(tokens, tokenIndex);
-    const isolationIndex = isolationClosers.length - 1;
-    if (isolationIndex >= 0 && isolationClosers[isolationIndex] === kind) {
-      isolationClosers.pop();
-      isolationScopes.pop();
-      continue;
-    }
-    const isolationClose = isolationCloseByOpen[kind];
-    if (isolationClose !== void 0) {
-      isolationClosers.push(isolationClose);
-      isolationScopes.push(nextIsolationScope++);
-      continue;
-    }
-    const config = configByKind[kind];
-    if (!config) {
-      continue;
-    }
-    const offset = inlineTokenStart(tokens, tokenIndex);
-    const end = inlineTokenEnd(tokens, tokenIndex);
-    const length = end - offset;
-    if (
-      config.flags & DelimiterFlag.MatchWholeRun &&
-      (length > 2 || (length === 1 ? !config.single : !config.double))
-    ) {
-      continue;
-    }
-    const flags = flanking(source, offset, end, config);
-    runs.push({
+): DelimiterRun | undefined {
+  const kind = inlineTokenKind(tokens, tokenIndex);
+  const config = configByKind[kind];
+  if (!config) {
+    return;
+  }
+  const offset = inlineTokenStart(tokens, tokenIndex);
+  const end = inlineTokenEnd(tokens, tokenIndex);
+  const length = end - offset;
+  if (
+    config.flags & DelimiterFlag.MatchWholeRun && (
+      length > 2 || (length === 1 ? !config.single : !config.double)
+    )
+  ) {
+    return;
+  }
+  const delimiterFlanking = flanking(source, offset, end, config);
+  if (config.flags & DelimiterFlag.Intraword || delimiterFlanking !== 0) {
+    return {
       tokenIndex,
       config,
       length,
       start: offset,
       remaining: length,
-      scope: isolationScopes[isolationScopes.length - 1] ?? -1,
       previous: -1,
       next: -1,
-      flanking: flags,
-    });
+      flanking: delimiterFlanking,
+    };
   }
-  if (runs.length === 0) {
-    return tokens;
-  }
-
-  const scopeFirst: number[] = [];
-  const scopeLast: number[] = [];
-  for (let runIndex = 0; runIndex < runs.length; runIndex++) {
-    const run = runs[runIndex];
-    const scope = run.scope + 1;
-    const previous = scopeLast[scope];
-    if (previous !== void 0) {
-      run.previous = previous;
-      runs[previous].next = runIndex;
-    }
-    else {
-      scopeFirst[scope] = runIndex;
-    }
-    scopeLast[scope] = runIndex;
-  }
-
-  const replacements: Replacement[][] = [];
-  for (const first of scopeFirst) {
-    if (first !== void 0) {
-      matchDelimiterRuns(runs, first, replacements);
-    }
-  }
-
-  if (replacements.length === 0) {
-    return tokens;
-  }
-
-  const result: number[] = [];
-  for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-    const kind = inlineTokenKind(tokens, tokenIndex);
-    const config = configByKind[kind];
-    if (!config) {
-      copyInlineToken(result, tokens, tokenIndex);
-      continue;
-    }
-    const matched = replacements[tokenIndex];
-    if (matched && matched.length > 1) {
-      matched.sort((left, right) => left.offset - right.offset);
-    }
-    let offset = inlineTokenStart(tokens, tokenIndex);
-    if (matched) {
-      for (const replacement of matched) {
-        if (replacement.offset > offset) {
-          appendInlineToken(result, kind, offset, replacement.offset);
-        }
-        appendInlineToken(result, replacement.kind, replacement.offset, replacement.end);
-        offset = replacement.end;
-      }
-    }
-    const end = inlineTokenEnd(tokens, tokenIndex);
-    if (offset < end) {
-      appendInlineToken(result, kind, offset, end);
-    }
-  }
-  return result;
 }
 
-export function createDelimiterResolver(
+export function resolveDelimiterMatches(runs: DelimiterRun[]): DelimiterReplacement[][] {
+  const replacements: DelimiterReplacement[][] = [];
+  // Walk backwards so unlinking a head cannot make its successor look like a new scope head later.
+  for (let runIndex = runs.length - 1; runIndex >= 0; runIndex--) {
+    if (runs[runIndex].previous < 0) {
+      matchDelimiterRuns(runs, runIndex, replacements);
+    }
+  }
+  return replacements;
+}
+
+export function appendResolvedDelimiterToken(
+  result: number[],
+  tokens: InlineTokenStream,
+  tokenIndex: number,
+  replacements: DelimiterReplacement[][],
+): void {
+  const matched = replacements[tokenIndex];
+  if (!matched) {
+    copyInlineToken(result, tokens, tokenIndex);
+    return;
+  }
+  if (matched.length > 1) {
+    matched.sort((left, right) => left.offset - right.offset);
+  }
+  const kind = inlineTokenKind(tokens, tokenIndex);
+  let offset = inlineTokenStart(tokens, tokenIndex);
+  for (const replacement of matched) {
+    if (replacement.offset > offset) {
+      appendInlineToken(result, kind, offset, replacement.offset);
+    }
+    appendInlineToken(result, replacement.kind, replacement.offset, replacement.end);
+    offset = replacement.end;
+  }
+  const end = inlineTokenEnd(tokens, tokenIndex);
+  if (offset < end) {
+    appendInlineToken(result, kind, offset, end);
+  }
+}
+
+export function compileDelimiterConfigs(
   delimiterConfigs: readonly DelimiterConfig[],
-  isolationCloseByOpen: readonly (number | undefined)[],
-): DelimiterResolver {
+): readonly (CompiledDelimiterConfig | undefined)[] {
   const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
   delimiterConfigs.forEach((config, index) => {
     delimiterByKind[config.token] = {
@@ -319,13 +288,5 @@ export function createDelimiterResolver(
       index,
     };
   });
-  return (source, tokens) => {
-    const count = inlineTokenCount(tokens);
-    for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-      if (delimiterByKind[inlineTokenKind(tokens, tokenIndex)]) {
-        return resolveDelimiterRuns(source, tokens, delimiterByKind, isolationCloseByOpen);
-      }
-    }
-    return tokens;
-  };
+  return delimiterByKind;
 }

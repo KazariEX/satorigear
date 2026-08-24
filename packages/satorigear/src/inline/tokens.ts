@@ -4,7 +4,7 @@ export type InlineTokenStream = readonly number[];
 // Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = 4;
 
-// The token kind owns the fourth slot's meaning; core transforms preserve it as opaque data.
+// The token kind owns the fourth slot's meaning; token copies preserve it as opaque data.
 // Zero means that the token carries no additional fact.
 
 export function inlineTokenCount(tokens: InlineTokenStream): number {
@@ -56,19 +56,4 @@ export function copyInlineToken(target: number[], tokens: InlineTokenStream, ind
     tokens[offset + 2],
     tokens[offset + 3],
   );
-}
-
-export function firstInlineTokenEndingAfter(tokens: InlineTokenStream, offset: number): number {
-  let low = 0;
-  let high = inlineTokenCount(tokens);
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (inlineTokenEnd(tokens, middle) <= offset) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-  return low;
 }

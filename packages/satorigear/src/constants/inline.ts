@@ -1,4 +1,4 @@
-// Raw lexing, feature transforms, pairing, and node building share this stable vocabulary.
+// Raw lexing, compiled resolution, and node building share this stable vocabulary.
 export const enum InlineKind {
   HtmlComment = 1,
   CodeSpan,

@@ -18,6 +18,7 @@ import { feature as featureParagraph } from "./features/paragraph.ts";
 import { feature as featureReference } from "./features/reference.ts";
 import { feature as featureTable } from "./features/table.ts";
 import { feature as featureText } from "./features/text.ts";
+import { compileInlineProgram } from "./inline-program.ts";
 import type { MathOptions } from "./features/math/types.ts";
 import type { SyntaxProfile } from "./types.ts";
 
@@ -82,7 +83,7 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
     features.push(featureComponent);
   }
 
-  // References resolve after feature-owned brackets, while their block starts still compile normally.
+  // Register generic link definitions after feature-specific `[` definitions such as footnotes.
   features.push(featureReference);
 
   const blockFeatures: BlockFeature[] = [];
@@ -98,6 +99,12 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
 
   return {
     block: compileBlockProfile(blockFeatures),
-    inline: compileInlineProfile(inlineFeatures),
+    inline: compileInlineProfile(
+      inlineFeatures,
+      compileInlineProgram({
+        component: options.component === true,
+        footnote: options.footnote === true,
+      }),
+    ),
   };
 }

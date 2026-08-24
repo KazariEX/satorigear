@@ -99,6 +99,26 @@ describe("footnote", () => {
     });
   });
 
+  it("isolates label delimiters without breaking the surrounding scope", () => {
+    const source = "[before *left [^*note*] right*](url)\n\n[^*note*]: note\n";
+    expect(parser.parse(source).children[0]).toMatchObject({
+      children: [{
+        type: "link",
+        children: [
+          { type: "text", value: "before " },
+          {
+            type: "emphasis",
+            children: [
+              { type: "text", value: "left " },
+              { type: "footnoteReference", identifier: "*note*" },
+              { type: "text", value: " right" },
+            ],
+          },
+        ],
+      }],
+    });
+  });
+
   it("separates adjacent calls from full reference tails", () => {
     const source = "[^a][^b] [text][^b]\n\n[^a]: first\n\n[^b]: second\n";
     expect(parser.parse(source).children[0]).toMatchObject({

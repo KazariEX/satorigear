@@ -91,7 +91,7 @@ describe("math", () => {
     });
   });
 
-  it("composes with component and attributes transforms", () => {
+  it("composes with component and attributes", () => {
     expect(componentParser.parse("[$x$]{.wide}").children[0]).toMatchObject({
       children: [{
         type: "inlineComponent",

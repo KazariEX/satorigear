@@ -1,23 +1,11 @@
 import { type BlockLine, isBlank } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import { InlineKind } from "../../constants/inline.ts";
 import { blockEnd } from "../../fragment/block.ts";
-import {
-  appendInlineToken,
-  copyInlineToken,
-  inlineTokenCount,
-  inlineTokenData,
-  inlineTokenEnd,
-  inlineTokenKind,
-  inlineTokenStart,
-  type InlineTokenStream,
-} from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockScanContext } from "../../block/scanner.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
-import type { InlineResolutionContext } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface LinkDefinitionFields {
@@ -251,199 +239,6 @@ function linkDefinitionAt(
   }
 }
 
-function referenceLabelEnd(source: string, start: number): number {
-  if (source.charCodeAt(start) !== Character.LeftSquareBracket) {
-    return -1;
-  }
-  let offset = start + 1;
-  if (source.charCodeAt(offset) === Character.RightSquareBracket) {
-    return offset + 1;
-  }
-  let characters = 0;
-  let hasContent = false;
-  while (offset < source.length && characters < 999) {
-    const code = source.charCodeAt(offset);
-    if (code === Character.RightSquareBracket) {
-      return hasContent ? offset + 1 : -1;
-    }
-    if (code === Character.LeftSquareBracket) {
-      return -1;
-    }
-    if (code === Character.ReverseSolidus) {
-      if (offset + 1 >= source.length) {
-        return -1;
-      }
-      hasContent = true;
-      offset += 2;
-    }
-    else {
-      hasContent ||= (
-        code !== Character.CharacterTabulation &&
-        code !== Character.LineFeed &&
-        code !== Character.CarriageReturn &&
-        code !== Character.Space
-      );
-      offset++;
-    }
-    characters++;
-  }
-  return -1;
-}
-
-function acceptsShortcutLabel(source: string, start: number, end: number): boolean {
-  let hasContent = false;
-  let characters = 0;
-  for (let offset = start; offset < end; offset++) {
-    const code = source.charCodeAt(offset);
-    hasContent ||= (
-      code !== Character.CharacterTabulation &&
-      code !== Character.LineFeed &&
-      code !== Character.CarriageReturn &&
-      code !== Character.Space
-    );
-    if (
-      code >= Character.HighSurrogateStart &&
-      code <= Character.HighSurrogateEnd &&
-      offset + 1 < end
-    ) {
-      const trailing = source.charCodeAt(offset + 1);
-      if (trailing >= Character.LowSurrogateStart && trailing <= Character.LowSurrogateEnd) {
-        offset++;
-      }
-    }
-    if (++characters > 999) {
-      return false;
-    }
-  }
-  return hasContent;
-}
-
-function transformReferenceTokens(
-  source: string,
-  tokens: InlineTokenStream,
-  context: InlineResolutionContext,
-): InlineTokenStream {
-  let closerEnds: number[] | undefined;
-  let inactiveBefore = 0;
-  let lastNestedOpener = 0;
-  // One source-order stack is sufficient; complemented indexes distinguish image openers without records.
-  let openers: number[] | undefined;
-  let replacementKinds: number[] | undefined;
-
-  const count = inlineTokenCount(tokens);
-  for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-    const kind = inlineTokenKind(tokens, tokenIndex);
-    if (kind === InlineKind.BracketOpen) {
-      (openers ??= []).push(tokenIndex);
-      lastNestedOpener = tokenIndex + 1;
-      continue;
-    }
-    if (kind === InlineKind.ImageOpen) {
-      (openers ??= []).push(~tokenIndex);
-      lastNestedOpener = tokenIndex + 1;
-      continue;
-    }
-    if (kind !== InlineKind.LinkTail && kind !== InlineKind.BracketClose) {
-      continue;
-    }
-
-    const encodedOpener = openers?.pop();
-    if (encodedOpener === void 0) {
-      continue;
-    }
-    const image = encodedOpener < 0;
-    const openerIndex = image ? ~encodedOpener : encodedOpener;
-    if (!image && openerIndex + 1 < inactiveBefore) {
-      continue;
-    }
-
-    const contentStart = inlineTokenEnd(tokens, openerIndex);
-    const contentEnd = inlineTokenStart(tokens, tokenIndex);
-    let closeEnd = inlineTokenEnd(tokens, tokenIndex);
-    let reference = false;
-
-    if (kind === InlineKind.BracketClose) {
-      const labelEnd = referenceLabelEnd(source, closeEnd);
-      if (labelEnd > 0) {
-        const explicit = source.slice(closeEnd + 1, labelEnd - 1);
-        const label = explicit || source.slice(contentStart, contentEnd);
-        if (!context.hasDefinition(normalizeAssociationLabel(label))) {
-          continue;
-        }
-        closeEnd = labelEnd;
-        reference = true;
-      }
-      else {
-        if (
-          lastNestedOpener > openerIndex + 1 ||
-          !acceptsShortcutLabel(source, contentStart, contentEnd) ||
-          !context.hasDefinition(normalizeAssociationLabel(source.slice(contentStart, contentEnd)))
-        ) {
-          continue;
-        }
-        reference = true;
-      }
-    }
-
-    replacementKinds ??= [];
-    replacementKinds[openerIndex] = image
-      ? reference ? InlineKind.ImageReferenceOpen : InlineKind.ImageLinkOpen
-      : reference ? InlineKind.ReferenceOpen : InlineKind.LinkOpen;
-    replacementKinds[tokenIndex] = image
-      ? reference ? InlineKind.ImageReferenceClose : InlineKind.ImageLinkClose
-      : reference ? InlineKind.ReferenceClose : InlineKind.LinkClose;
-    closerEnds ??= [];
-    closerEnds[tokenIndex] = closeEnd;
-
-    if (!image) {
-      inactiveBefore = Math.max(inactiveBefore, openerIndex + 1);
-    }
-    while (
-      tokenIndex + 1 < count &&
-      inlineTokenStart(tokens, tokenIndex + 1) < closeEnd
-    ) {
-      tokenIndex++;
-    }
-  }
-
-  if (!replacementKinds) {
-    return tokens;
-  }
-  const result: number[] = [];
-  for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-    const closerEnd = closerEnds?.[tokenIndex];
-    const kind = replacementKinds[tokenIndex];
-    if (closerEnd !== void 0) {
-      appendInlineToken(
-        result,
-        kind,
-        inlineTokenStart(tokens, tokenIndex),
-        closerEnd,
-        inlineTokenData(tokens, tokenIndex),
-      );
-      while (
-        tokenIndex + 1 < count &&
-        inlineTokenStart(tokens, tokenIndex + 1) < closerEnd
-      ) {
-        tokenIndex++;
-      }
-    }
-    else if (kind !== void 0) {
-      appendInlineToken(
-        result,
-        kind,
-        inlineTokenStart(tokens, tokenIndex),
-        inlineTokenEnd(tokens, tokenIndex),
-        inlineTokenData(tokens, tokenIndex),
-      );
-    }
-    else {
-      copyInlineToken(result, tokens, tokenIndex);
-    }
-  }
-  return result;
-}
-
 export const feature: SyntaxFeature = {
   block: {
     rules: [
@@ -500,10 +295,5 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-  },
-  inline: {
-    resolve: {
-      transform: transformReferenceTokens,
-    },
   },
 };

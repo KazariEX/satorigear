@@ -442,6 +442,34 @@ End
     });
   });
 
+  it.each([
+    "[foo][`bar] baz`]\n\n[`bar]: /u\n",
+    "[foo][`x]` *y*]\n\n[`x]: /u\n",
+    "[![foo][`x]`]](outer)\n\n[`x]: /inner\n",
+  ])("does not leak a consumed span beyond a full-reference label", (source) => {
+    expect(componentParser.parse(source)).toEqual(defaultParser.parse(source));
+  });
+
+  it("keeps consumed bracket closers inert inside component link labels", () => {
+    const source = "[:C[![foo][`x]` *y*]]](outer)\n\n[`x]: /inner\n";
+    expect(componentParser.parse(source).children[0]).toMatchObject({
+      children: [{
+        type: "link",
+        url: "outer",
+        children: [{
+          type: "inlineComponent",
+          name: "c",
+          children: [
+            { type: "imageReference", identifier: "`x" },
+            { type: "text", value: "` " },
+            { type: "emphasis", children: [{ type: "text", value: "y" }] },
+            { type: "text", value: "]" },
+          ],
+        }],
+      }],
+    });
+  });
+
   it("supports component and attributed span content inside links", () => {
     expect(parser.parse("[:Icon ![alt](image.png) [label]{.mark}](/url)\n").children[0]).toMatchObject({
       type: "paragraph",

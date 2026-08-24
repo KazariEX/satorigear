@@ -100,9 +100,7 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
   return {
     inline: {
       scan: scans,
-      resolve: {
-        delimiters,
-      },
+      delimiters,
       build: builds,
     },
   };
