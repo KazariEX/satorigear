@@ -63,7 +63,7 @@ describe("frontmatter", () => {
     expect(tree.children.some((node) => node.type === "yaml")).toBe(false);
   });
 
-  it("restarts from the document head when an edit closes frontmatter", () => {
+  it("reinterprets the document when an edit closes frontmatter", () => {
     const document = hyphenParser.createDocument("---\ntitle: test\n\n# heading\n");
     document.edit([{
       start: document.source.length,

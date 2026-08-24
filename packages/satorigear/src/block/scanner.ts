@@ -6,6 +6,7 @@ import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanContext {
   endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
+  retainLookahead: (end: number) => void;
   // Returns whether blank lines separate direct blocks in this line view.
   scanLines: (source: string, lines: readonly BlockLine[], tokens: BlockTokenStream) => boolean;
   startsInterruptingBlock: (source: string, line: BlockLine) => boolean;
@@ -28,6 +29,8 @@ export interface SourceChange {
 
 // Scanner-owned top-level identity combines physical-line and token geometry.
 export interface BlockRecord extends SourceSpan {
+  // Furthest source boundary whose contents can affect this record.
+  dependencyEnd: number;
   tokenEnd: number;
   tokenStart: number;
 }
@@ -280,6 +283,7 @@ function sameShiftedBlock(
 export class BlockScanner {
   #context: BlockScanContext;
   #lines: BlockLine[];
+  #lookaheadEnd: number;
   #profile: BlockProfile;
   #records: BlockRecord[];
   #tokens: BlockTokenStream;
@@ -287,11 +291,15 @@ export class BlockScanner {
   constructor(profile: BlockProfile) {
     this.#context = {
       endsWithParagraphLeaf: (source, line) => endsWithParagraphLeaf(profile, this.#context, source, line),
+      retainLookahead: (end) => {
+        this.#lookaheadEnd = Math.max(this.#lookaheadEnd, end);
+      },
       scanLines: (source, lines, tokens) => scanSeparatedBlockLines(profile, this.#context, source, lines, tokens),
       startsInterruptingBlock: (source, line) => startsInterruptingBlock(profile, source, line),
     };
     this.#profile = profile;
     this.#lines = [];
+    this.#lookaheadEnd = -1;
     this.#records = [];
     this.#tokens = new BlockTokenStream();
   }
@@ -302,19 +310,25 @@ export class BlockScanner {
     tokens.reset(source.length);
     const records = this.#records;
     let recordIndex = 0;
+    this.#lookaheadEnd = -1;
     scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+      const end = lines[lineEnd - 1].next;
+      const dependencyEnd = Math.max(end, this.#lookaheadEnd);
+      this.#lookaheadEnd = -1;
       const record = records[recordIndex++];
       // Reuse top-level records across one-shot parses instead of allocating one per block.
       if (record) {
         record.start = lines[lineStart].start;
-        record.end = lines[lineEnd - 1].next;
+        record.end = end;
+        record.dependencyEnd = dependencyEnd;
         record.tokenStart = tokenStart;
         record.tokenEnd = tokenEnd;
       }
       else {
         records.push({
           start: lines[lineStart].start,
-          end: lines[lineEnd - 1].next,
+          end,
+          dependencyEnd,
           tokenStart,
           tokenEnd,
         });
@@ -363,25 +377,18 @@ export class BlockScanner {
 
     // 1. Locate a conservative block restart and update the physical lines around the edit.
     const previousRecords = this.#records;
-    let affectedIndex = previousRecords.findIndex((record) => record.end >= changedSpan.start);
+    let affectedIndex = previousRecords.findIndex((record) => record.dependencyEnd >= changedSpan.start);
     if (affectedIndex < 0) {
       affectedIndex = Math.max(0, previousRecords.length - 1);
     }
-    let restartIndex = previousRecords[affectedIndex]?.start > changedSpan.start
+    const affectedRecord = previousRecords[affectedIndex];
+    const restartIndex = affectedRecord?.start > changedSpan.start
       ? -1
-      : Math.max(0, affectedIndex - 1);
+      : affectedRecord && affectedRecord.end < changedSpan.start
+        ? affectedIndex
+        : Math.max(0, affectedIndex - 1);
     const initialRestartOffset = previousRecords[restartIndex]?.start ?? 0;
     const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, oldChangedEnd, offsetDelta);
-    const profileRestart = this.#profile.restart(nextSource, nextLines, changedSpan.start, changedSpan.end);
-    if (profileRestart !== void 0 && profileRestart < changedSpan.start) {
-      const candidateIndex = previousRecords.findIndex((record) => (
-        record.start <= profileRestart &&
-        record.end > profileRestart
-      ));
-      if (candidateIndex >= 0 && restartIndex >= 0) {
-        restartIndex = Math.min(restartIndex, candidateIndex);
-      }
-    }
     const stableBlockCount = Math.max(0, restartIndex);
     const restartRecord = previousRecords[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
@@ -400,7 +407,9 @@ export class BlockScanner {
     while (true) {
       const scanSource = nextSource.slice(restartOffset, scanEnd);
       const scanLines = linesOf(scanSource);
+      let lookaheadReachedWindowEnd = false;
       let convergenceIndex = affectedIndex;
+      this.#lookaheadEnd = -1;
       // The visitor is consumed synchronously before this window can be expanded.
       // eslint-disable-next-line no-loop-func
       scanBlockLines(this.#profile, this.#context, scanSource, scanLines, replacement, (
@@ -411,8 +420,17 @@ export class BlockScanner {
       ) => {
         const blockStart = restartOffset + scanLines[lineStart].start;
         const blockEnd = restartOffset + scanLines[lineEnd - 1].next;
-        // A block ending at the temporary window boundary may continue in the next window.
-        if (blockEnd >= changedSpan.end && (blockEnd < scanEnd || scanEnd === nextSource.length)) {
+        const observedEnd = this.#lookaheadEnd;
+        const lookaheadEnd = observedEnd < 0 ? -1 : restartOffset + observedEnd;
+        const dependencyEnd = Math.max(blockEnd, lookaheadEnd);
+        lookaheadReachedWindowEnd ||= observedEnd >= scanSource.length && scanEnd < nextSource.length;
+        this.#lookaheadEnd = -1;
+        // A block or unresolved lookahead at the temporary boundary may change in the next window.
+        if (
+          blockEnd >= changedSpan.end &&
+          !lookaheadReachedWindowEnd &&
+          (blockEnd < scanEnd || scanEnd === nextSource.length)
+        ) {
           const candidateStart = Math.max(oldChangedEnd, blockStart - offsetDelta);
           while (
             convergenceIndex < previousRecords.length &&
@@ -424,6 +442,7 @@ export class BlockScanner {
           if (
             candidateRecord?.start + offsetDelta === blockStart &&
             candidateRecord.end + offsetDelta === blockEnd &&
+            candidateRecord.dependencyEnd + offsetDelta === dependencyEnd &&
             sameShiftedBlock(
               this.#tokens,
               candidateRecord,
@@ -441,6 +460,7 @@ export class BlockScanner {
         rescannedRecords.push({
           start: blockStart,
           end: blockEnd,
+          dependencyEnd,
           tokenStart: oldTokenStart + tokenStart,
           tokenEnd: oldTokenStart + tokenEnd,
         });
@@ -491,6 +511,7 @@ export class BlockScanner {
       for (const record of suffixRecords) {
         record.start += offsetDelta;
         record.end += offsetDelta;
+        record.dependencyEnd += offsetDelta;
         record.tokenStart += tokenDelta;
         record.tokenEnd += tokenDelta;
       }
@@ -505,6 +526,7 @@ export class BlockScanner {
       const nextRecord = nextRecords[index];
       record.start = nextRecord.start;
       record.end = nextRecord.end;
+      record.dependencyEnd = nextRecord.dependencyEnd;
       record.tokenStart = nextRecord.tokenStart;
       record.tokenEnd = nextRecord.tokenEnd;
       nextRecords[index] = record;
@@ -521,6 +543,7 @@ export class BlockScanner {
       const nextRecord = nextRecords[nextIndex];
       record.start = nextRecord.start;
       record.end = nextRecord.end;
+      record.dependencyEnd = nextRecord.dependencyEnd;
       record.tokenStart = nextRecord.tokenStart;
       record.tokenEnd = nextRecord.tokenEnd;
       nextRecords[nextIndex] = record;

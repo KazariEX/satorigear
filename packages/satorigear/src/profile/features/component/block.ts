@@ -371,6 +371,7 @@ function createBlockStart(shorthand: boolean): BlockStart {
     }
     const closing = blockClose(source, lines, start, opening);
     if (!closing) {
+      context.retainLookahead(lines.at(-1)?.next ?? lines[start].next);
       return;
     }
     emitOpening(source, contentOffset, opening, out);

@@ -88,17 +88,9 @@ export interface BlockDecoratorRegistration {
   decorate: BlockNodeBuilderDecorator;
 }
 
-export type BlockRestart = (
-  source: string,
-  lines: readonly BlockLine[],
-  changedStart: number,
-  changedEnd: number,
-) => number | undefined;
-
 export interface BlockFeature {
   decorators?: readonly BlockDecoratorRegistration[];
   fallbacks?: readonly BlockFallback[];
-  restart?: BlockRestart;
   rules?: readonly BlockRuleRegistration[];
   starts?: readonly BlockStartRegistration[];
 }
@@ -107,7 +99,6 @@ export interface BlockProfile {
   fallbacks: readonly BlockFallback[];
   interrupts: readonly (readonly BlockInterrupt[] | undefined)[];
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
-  restart: BlockRestart;
   schema: BlockSyntaxSchema;
   starts: readonly (readonly BlockStart[] | undefined)[];
 }
@@ -118,7 +109,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
   const interrupts: BlockInterrupt[][] = [];
   const ruleByKind: (CompiledBlockRule | undefined)[] = [];
   const rules: (CompiledBlockRule | undefined)[] = [];
-  const restarts: BlockRestart[] = [];
   const starts: BlockStart[][] = [];
   const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
 
@@ -128,9 +118,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     }
     if (feature.fallbacks) {
       fallbacks.push(...feature.fallbacks);
-    }
-    if (feature.restart) {
-      restarts.push(feature.restart);
     }
     if (feature.starts) {
       for (const registration of feature.starts) {
@@ -191,16 +178,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     fallbacks,
     interrupts,
     lazyContinuationUnwrappers,
-    restart(source, lines, changedStart, changedEnd) {
-      let result: number | undefined;
-      for (const restart of restarts) {
-        const candidate = restart(source, lines, changedStart, changedEnd);
-        if (candidate !== void 0 && (result === void 0 || candidate < result)) {
-          result = candidate;
-        }
-      }
-      return result;
-    },
     schema: {
       ruleByKind,
     },

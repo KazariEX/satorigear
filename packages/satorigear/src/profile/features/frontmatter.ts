@@ -54,21 +54,6 @@ export const buildFrontmatter: BlockNodeBuilder<Yaml> = (tokenStart, context) =>
 export function feature(marker: FrontmatterMarker): SyntaxFeature {
   return {
     block: {
-      restart(source, lines, changedStart) {
-        const opening = lines[0];
-        if (!opening) {
-          return;
-        }
-        if (!frontmatterFenceAt(source, opening, marker)) {
-          return changedStart < opening.next ? 0 : void 0;
-        }
-        for (let index = 1; index < lines.length; index++) {
-          if (frontmatterFenceAt(source, lines[index], marker)) {
-            return changedStart < lines[index].next ? 0 : void 0;
-          }
-        }
-        return 0;
-      },
       rules: [
         {
           rule: BlockRule.Frontmatter,
@@ -82,7 +67,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
       starts: [
         {
           codes: [marker.charCodeAt(0)],
-          start(source, lines, start, out) {
+          start(source, lines, start, out, contentOffset, context) {
             if (lines[start].start !== 0 || !frontmatterFenceAt(source, lines[start], marker)) {
               return;
             }
@@ -92,6 +77,8 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
                 return end + 1;
               }
             }
+            // A closing fence appended after this failed probe can reinterpret the document from offset 0.
+            context.retainLookahead(source.length);
           },
         },
       ],

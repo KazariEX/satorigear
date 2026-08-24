@@ -1,4 +1,4 @@
-import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank } from "../../block/lines.ts";
+import { type BlockLine, isBlank } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
@@ -15,6 +15,7 @@ import {
 } from "../../inline/tokens.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { semanticText } from "./text.ts";
+import type { BlockScanContext } from "../../block/scanner.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { InlineResolutionContext } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -44,190 +45,217 @@ function linkDefinitionAt(
   lines: readonly BlockLine[],
   startIndex: number,
   contentOffset: number,
+  context: BlockScanContext,
 ): LinkDefinitionMatch | undefined {
   let lineIndex = startIndex;
+  let lookaheadEnd = -1;
   let offset = contentOffset + 1;
   let label = "";
   let labelLength = 0;
   let labelHasContent = false;
   let labelStart = offset;
 
-  scanLabel: while (true) {
-    const line = lines[lineIndex];
-    while (offset < line.end) {
-      const code = source.charCodeAt(offset);
-      if (code === Character.ReverseSolidus && offset + 1 < line.end) {
-        labelHasContent = true;
-        labelLength += 2;
-        offset += 2;
-        continue;
-      }
-      if (code === Character.LeftSquareBracket) {
-        return;
-      }
-      if (code === Character.RightSquareBracket) {
-        if (source.charCodeAt(offset + 1) === Character.Colon) {
-          break scanLabel;
+  // Funnel failures through one exit so only unrepresented lookahead becomes scanner state.
+  parseDefinition: {
+    scanLabel: while (true) {
+      const line = lines[lineIndex];
+      while (offset < line.end) {
+        const code = source.charCodeAt(offset);
+        if (code === Character.ReverseSolidus && offset + 1 < line.end) {
+          labelHasContent = true;
+          labelLength += 2;
+          offset += 2;
+          continue;
         }
-        // Link labels cannot contain an unescaped "]",
-        // so a "]" that does not introduce the colon never yields a definition.
-        return;
+        if (code === Character.LeftSquareBracket) {
+          break parseDefinition;
+        }
+        if (code === Character.RightSquareBracket) {
+          if (source.charCodeAt(offset + 1) === Character.Colon) {
+            break scanLabel;
+          }
+          // Link labels cannot contain an unescaped "]",
+          // so a "]" that does not introduce the colon never yields a definition.
+          break parseDefinition;
+        }
+        if (code !== Character.Space && code !== Character.CharacterTabulation) {
+          labelHasContent = true;
+        }
+        if (++labelLength > 999) {
+          break parseDefinition;
+        }
+        offset++;
       }
-      if (code !== Character.Space && code !== Character.CharacterTabulation) {
-        labelHasContent = true;
+      const nextLine = lines[lineIndex + 1];
+      lookaheadEnd = nextLine?.end ?? line.next;
+      if (!nextLine || isBlank(source, nextLine)) {
+        break parseDefinition;
       }
       if (++labelLength > 999) {
-        return;
+        break parseDefinition;
       }
-      offset++;
+      label += source.slice(labelStart, line.next);
+      lineIndex++;
+      offset = lines[lineIndex].start;
+      labelStart = offset;
     }
-    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
-      return;
+    label += source.slice(labelStart, offset);
+    if (!labelHasContent) {
+      break parseDefinition;
     }
-    if (++labelLength > 999) {
-      return;
-    }
-    label += source.slice(labelStart, line.next);
-    lineIndex++;
-    offset = lines[lineIndex].start;
-    labelStart = offset;
-  }
-  label += source.slice(labelStart, offset);
-  if (!labelHasContent) {
-    return;
-  }
-  offset += 2;
+    offset += 2;
 
-  const skipSpaces = (): void => {
-    while (offset < lines[lineIndex].end && (source[offset] === " " || source[offset] === "\t")) {
-      offset++;
-    }
-  };
-  skipSpaces();
-  if (offset === lines[lineIndex].end) {
-    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
-      return;
-    }
-    lineIndex++;
-    offset = lines[lineIndex].start;
-    skipSpaces();
-  }
-
-  let destination: string;
-  if (source[offset] === "<") {
-    offset++;
-    const destinationStart = offset;
-    while (offset < lines[lineIndex].end && source[offset] !== ">") {
-      if (source[offset] === "<") {
-        return;
-      }
-      if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
-        offset += 2;
-      }
-      else {
+    const skipSpaces = (): void => {
+      while (offset < lines[lineIndex].end && (source[offset] === " " || source[offset] === "\t")) {
         offset++;
       }
-    }
-    if (source[offset] !== ">") {
-      return;
-    }
-    destination = source.slice(destinationStart, offset);
-    offset++;
-  }
-  else {
-    let depth = 0;
-    const destinationStart = offset;
-    while (offset < lines[lineIndex].end) {
-      const code = source.charCodeAt(offset);
-      if (code === Character.Space || code === Character.CharacterTabulation) {
-        break;
+    };
+    skipSpaces();
+    if (offset === lines[lineIndex].end) {
+      const nextLine = lines[lineIndex + 1];
+      lookaheadEnd = nextLine?.end ?? lines[lineIndex].next;
+      if (!nextLine || isBlank(source, nextLine)) {
+        break parseDefinition;
       }
-      if (code === Character.ReverseSolidus && offset + 1 < lines[lineIndex].end) {
-        offset += 2;
-        continue;
-      }
-      if (code === Character.LeftParenthesis) {
-        if (++depth > 32) {
-          return;
+      lineIndex++;
+      offset = lines[lineIndex].start;
+      skipSpaces();
+    }
+
+    let destination: string;
+    if (source[offset] === "<") {
+      offset++;
+      const destinationStart = offset;
+      while (offset < lines[lineIndex].end && source[offset] !== ">") {
+        if (source[offset] === "<") {
+          break parseDefinition;
+        }
+        if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
+          offset += 2;
+        }
+        else {
+          offset++;
         }
       }
-      else if (code === Character.RightParenthesis && --depth < 0) {
-        return;
+      if (source[offset] !== ">") {
+        break parseDefinition;
       }
+      destination = source.slice(destinationStart, offset);
       offset++;
     }
-    if (offset === destinationStart || depth !== 0) {
-      return;
-    }
-    destination = source.slice(destinationStart, offset);
-  }
-
-  const destinationLine = lineIndex;
-  if (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
-    return;
-  }
-  skipSpaces();
-  let titleOnNextLine = false;
-  if (offset === lines[lineIndex].end && lineIndex + 1 < lines.length) {
-    lineIndex++;
-    offset = lines[lineIndex].start;
-    skipSpaces();
-    titleOnNextLine = true;
-  }
-
-  const closer = source[offset] === "("
-    ? ")"
-    : source[offset] === "\"" || source[offset] === "'"
-      ? source[offset]
-      : void 0;
-  const fields: LinkDefinitionFields = {
-    definitionKey: normalizeAssociationLabel(label),
-    destination,
-    label,
-    title: void 0,
-  };
-  if (!closer) {
-    return { end: destinationLine + 1, fields };
-  }
-  offset++;
-  let title = "";
-  let titleStart = offset;
-  let closed = false;
-  while (lineIndex < lines.length) {
-    const line = lines[lineIndex];
-    while (offset < line.end) {
-      if (source[offset] === "\\" && offset + 1 < line.end) {
-        offset += 2;
-        continue;
-      }
-      if (source[offset] === closer) {
-        title += source.slice(titleStart, offset);
+    else {
+      let depth = 0;
+      const destinationStart = offset;
+      while (offset < lines[lineIndex].end) {
+        const code = source.charCodeAt(offset);
+        if (code === Character.Space || code === Character.CharacterTabulation) {
+          break;
+        }
+        if (code === Character.ReverseSolidus && offset + 1 < lines[lineIndex].end) {
+          offset += 2;
+          continue;
+        }
+        if (code === Character.LeftParenthesis) {
+          if (++depth > 32) {
+            break parseDefinition;
+          }
+        }
+        else if (code === Character.RightParenthesis && --depth < 0) {
+          break parseDefinition;
+        }
         offset++;
-        closed = true;
+      }
+      if (offset === destinationStart || depth !== 0) {
+        break parseDefinition;
+      }
+      destination = source.slice(destinationStart, offset);
+    }
+
+    const destinationLine = lineIndex;
+    if (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
+      break parseDefinition;
+    }
+    skipSpaces();
+    let titleOnNextLine = false;
+    if (offset === lines[lineIndex].end && lineIndex + 1 < lines.length) {
+      lookaheadEnd = lines[lineIndex + 1].end;
+      lineIndex++;
+      offset = lines[lineIndex].start;
+      skipSpaces();
+      titleOnNextLine = true;
+    }
+
+    const closer = source[offset] === "("
+      ? ")"
+      : source[offset] === "\"" || source[offset] === "'"
+        ? source[offset]
+        : void 0;
+    const fields: LinkDefinitionFields = {
+      definitionKey: normalizeAssociationLabel(label),
+      destination,
+      label,
+      title: void 0,
+    };
+    if (!closer) {
+      return { end: destinationLine + 1, fields };
+    }
+    offset++;
+    let title = "";
+    let titleStart = offset;
+    let closed = false;
+    while (lineIndex < lines.length) {
+      const line = lines[lineIndex];
+      while (offset < line.end) {
+        if (source[offset] === "\\" && offset + 1 < line.end) {
+          offset += 2;
+          continue;
+        }
+        if (source[offset] === closer) {
+          title += source.slice(titleStart, offset);
+          offset++;
+          closed = true;
+          break;
+        }
+        offset++;
+      }
+      if (closed) {
         break;
       }
-      offset++;
+      const nextLine = lines[lineIndex + 1];
+      lookaheadEnd = nextLine?.end ?? line.next;
+      if (!nextLine || isBlank(source, nextLine)) {
+        break;
+      }
+      title += source.slice(titleStart, line.next);
+      lineIndex++;
+      offset = lines[lineIndex].start;
+      titleStart = offset;
     }
-    if (closed) {
-      break;
+    if (!closed) {
+      if (!titleOnNextLine) {
+        break parseDefinition;
+      }
+      if (lookaheadEnd > lines[destinationLine + 1].next) {
+        context.retainLookahead(lookaheadEnd);
+      }
+      return { end: destinationLine + 1, fields };
     }
-    if (lineIndex + 1 >= lines.length || isBlank(source, lines[lineIndex + 1])) {
-      break;
+    skipSpaces();
+    if (offset !== lines[lineIndex].end) {
+      if (!titleOnNextLine) {
+        break parseDefinition;
+      }
+      if (lookaheadEnd > lines[destinationLine + 1].next) {
+        context.retainLookahead(lookaheadEnd);
+      }
+      return { end: destinationLine + 1, fields };
     }
-    title += source.slice(titleStart, line.next);
-    lineIndex++;
-    offset = lines[lineIndex].start;
-    titleStart = offset;
+    fields.title = title;
+    return { end: lineIndex + 1, fields };
   }
-  if (!closed) {
-    return titleOnNextLine ? { end: destinationLine + 1, fields } : void 0;
+  if (lookaheadEnd >= 0) {
+    context.retainLookahead(lookaheadEnd);
   }
-  skipSpaces();
-  if (offset !== lines[lineIndex].end) {
-    return titleOnNextLine ? { end: destinationLine + 1, fields } : void 0;
-  }
-  fields.title = title;
-  return { end: lineIndex + 1, fields };
 }
 
 function referenceLabelEnd(source: string, start: number): number {
@@ -425,21 +453,6 @@ function transformReferenceTokens(
 
 export const feature: SyntaxFeature = {
   block: {
-    restart(source, lines, changedStart, changedEnd) {
-      const end = firstLineIndexAtOrAfter(lines, Math.max(1, changedEnd));
-      let candidate: number | undefined;
-      for (let index = end - 1; index >= 0; index--) {
-        const line = lines[index];
-        if (isBlank(source, line)) {
-          break;
-        }
-        const indent = indentOf(source, line, 3);
-        if (source[indent.offset] === "[") {
-          candidate = line.start;
-        }
-      }
-      return candidate;
-    },
     rules: [
       {
         rule: BlockRule.LinkDefinition,
@@ -472,8 +485,8 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.LeftSquareBracket,
         ],
-        start(source, lines, start, out, contentOffset) {
-          const definition = linkDefinitionAt(source, lines, start, contentOffset);
+        start(source, lines, start, out, contentOffset, context) {
+          const definition = linkDefinitionAt(source, lines, start, contentOffset, context);
           if (!definition) {
             return;
           }

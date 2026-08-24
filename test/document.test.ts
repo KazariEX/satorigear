@@ -108,14 +108,29 @@ describe("markdown document", () => {
     expect(document.tree).toEqual(parser.parse(document.source));
   });
 
-  it("restarts an earlier multiline definition candidate", () => {
-    // A link label ends at the first unescaped "]",
-    // so the candidate must avoid interior brackets until the edit closes it.
-    const document = parser.createDocument("[alpha\nxxxdelta\n");
-    document.edit([{ start: 10, end: 15, text: "delta]: /u" }]);
+  it("invalidates an earlier multiline definition candidate", () => {
+    // The incomplete label crosses two records that the default one-record lookbehind cannot reach.
+    const document = parser.createDocument("[a\n# b\nx");
+    document.edit([{
+      start: document.source.length,
+      end: document.source.length,
+      text: "]: /u",
+    }]);
 
     expect(document.tree).toEqual(parser.parse(document.source));
-    expect(document.tree.children[0]).toMatchObject({ type: "definition", identifier: "alpha xxxdelta" });
+    expect(document.tree.children[0]).toMatchObject({ type: "definition", identifier: "a # b x" });
+  });
+
+  it("invalidates a definition when a later edit completes its title", () => {
+    const document = parser.createDocument("[a]: /u\n\"title\n# heading\nx");
+    document.edit([{
+      start: document.source.length,
+      end: document.source.length,
+      text: "\"",
+    }]);
+
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({ type: "definition", title: "title\n# heading\nx" });
   });
 
   it("expands a rescan when edited syntax crosses old block boundaries", () => {

@@ -561,12 +561,13 @@ End
     });
   });
 
-  it("restarts far enough when an edit closes a component", () => {
-    const document = parser.createDocument("before\n\n::Card\nbody\n");
+  it("invalidates an earlier component opener when an edit closes it", () => {
+    // The failed opener precedes two records that the default one-record lookbehind cannot reach.
+    const document = parser.createDocument("::Card\n# heading\nx");
     document.edit([{
       start: document.source.length,
       end: document.source.length,
-      text: "::\n",
+      text: "\n::\n",
     }]);
     expect(document.tree).toEqual(parser.parse(document.source));
     expect(document.tree.children.at(-1)).toMatchObject({
