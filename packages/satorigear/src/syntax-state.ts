@@ -216,9 +216,9 @@ export class SyntaxState {
           const block = blocks[index];
           let changed = false;
           for (const region of block.regions) {
-            const revision = region.revision;
-            region.updateDefinitions(definitions);
-            changed ||= revision !== region.revision;
+            if (region.updateDefinitions(definitions)) {
+              changed = true;
+            }
           }
           if (changed) {
             (invalidatedBlocks ??= []).push(index);

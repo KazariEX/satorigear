@@ -32,7 +32,6 @@ export class InlineRegion implements ResolvedInlineRegion {
   #rawTokens?: InlineTokenStream;
   #profile: InlineProfile;
   #tokens?: InlineTokenStream;
-  revision = 0;
   tokenStart: number;
   view: SourceView;
 
@@ -55,19 +54,13 @@ export class InlineRegion implements ResolvedInlineRegion {
     binding: InlineRegionBinding,
     definitions: ReadonlySet<string>,
   ): this {
-    const changed = this.#updateTokens(binding.view.text, definitions);
+    this.#updateTokens(binding.view.text, definitions);
     this.#rebind(binding);
-    if (!changed) {
-      return this;
-    }
-    this.revision++;
     return this;
   }
 
-  updateDefinitions(definitions: ReadonlySet<string>): void {
-    if (this.#updateTokens(this.view.text, definitions)) {
-      this.revision++;
-    }
+  updateDefinitions(definitions: ReadonlySet<string>): boolean {
+    return this.#updateTokens(this.view.text, definitions);
   }
 
   shift(delta: number, tokenDelta: number): void {
