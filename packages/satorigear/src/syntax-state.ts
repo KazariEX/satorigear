@@ -5,7 +5,7 @@ import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "./so
 import type { BlockScanChange } from "./block/scanner.ts";
 import type { BlockStructure } from "./block/structure.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
-import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
+import type { InlineProfile } from "./inline/profile.ts";
 
 export class SyntaxState {
   #profile: InlineProfile;
@@ -171,6 +171,7 @@ export function resolveInlineRegions(
   const regions: ResolvedInlineRegion[] = [];
   const tokens = structure.tokens;
 
+  // Block scanning has completed, so every region can resolve against the full definition index.
   for (const record of structure.records) {
     // Semantic nodes are the non-zero ranges in the flat block token stream.
     for (let token = record.tokenStart; token < record.tokenEnd; token++) {
@@ -182,9 +183,10 @@ export function resolveInlineRegions(
       if (rule.inlineContent) {
         const inlineView = inlineViewOf(source, tokens, token, nodeLength);
         if (inlineView) {
+          const text = inlineView.text;
           regions.push({
             tokenStart: token,
-            tokens: emptyArray,
+            tokens: profile.resolve(text, profile.tokenize(text), tokens),
             view: inlineView,
           });
         }
@@ -193,17 +195,6 @@ export function resolveInlineRegions(
     }
   }
 
-  // One-shot parsing needs definition visibility, but has no future edit to track dependencies for.
-  const context: InlineResolutionContext = tokens;
-  for (const region of regions) {
-    const text = region.view.text;
-    // @ts-expect-error override readonly tokens
-    region.tokens = profile.resolve(
-      text,
-      profile.tokenize(text),
-      context,
-    );
-  }
   return regions;
 }
 
