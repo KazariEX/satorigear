@@ -231,27 +231,20 @@ function linkDefinitionAt(
       offset = lines[lineIndex].start;
       titleStart = offset;
     }
-    if (!closed) {
-      if (!titleOnNextLine) {
-        break parseDefinition;
+    if (closed) {
+      skipSpaces();
+      if (offset === lines[lineIndex].end) {
+        fields.title = title;
+        return { end: lineIndex + 1, fields };
       }
-      if (lookaheadEnd > lines[destinationLine + 1].next) {
-        context.retainLookahead(lookaheadEnd);
-      }
-      return { end: destinationLine + 1, fields };
     }
-    skipSpaces();
-    if (offset !== lines[lineIndex].end) {
-      if (!titleOnNextLine) {
-        break parseDefinition;
-      }
-      if (lookaheadEnd > lines[destinationLine + 1].next) {
-        context.retainLookahead(lookaheadEnd);
-      }
-      return { end: destinationLine + 1, fields };
+    if (!titleOnNextLine) {
+      break parseDefinition;
     }
-    fields.title = title;
-    return { end: lineIndex + 1, fields };
+    if (lookaheadEnd > lines[destinationLine + 1].next) {
+      context.retainLookahead(lookaheadEnd);
+    }
+    return { end: destinationLine + 1, fields };
   }
   if (lookaheadEnd >= 0) {
     context.retainLookahead(lookaheadEnd);
