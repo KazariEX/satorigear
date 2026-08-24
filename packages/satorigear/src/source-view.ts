@@ -21,7 +21,6 @@ export class ContiguousSourceView implements SourceView {
   readonly text: string;
 
   constructor(source: string, start: number, end: number) {
-    validateSourceSpan(start, end, source.length);
     this.#offset = start;
     this.text = source.slice(start, end);
   }
@@ -47,15 +46,10 @@ export class SegmentedSourceView implements SourceView {
   constructor(source: string, ranges: number[]) {
     const parts: string[] = [];
     let viewOffset = 0;
-    let previousEnd = 0;
     let segmentCount = 0;
     for (let read = 0; read < ranges.length; read += 2) {
       const start = ranges[read];
       const end = ranges[read + 1];
-      validateSourceSpan(start, end, source.length);
-      if (segmentCount > 0 && start < previousEnd) {
-        throw new RangeError(`Source spans must be ordered and non-overlapping: ${start} < ${previousEnd}`);
-      }
       if (start === end) {
         continue;
       }
@@ -65,7 +59,6 @@ export class SegmentedSourceView implements SourceView {
       parts.push(source.slice(start, end));
       ranges[write + 1] = viewOffset;
       segmentCount++;
-      previousEnd = end;
     }
     ranges.length = segmentCount * 2;
     this.#segments = ranges;
@@ -118,11 +111,5 @@ export class SegmentedSourceView implements SourceView {
       }
     }
     return low * 2;
-  }
-}
-
-function validateSourceSpan(start: number, end: number, sourceLength: number): void {
-  if (start < 0 || end < start || end > sourceLength) {
-    throw new RangeError(`Invalid source span [${start}, ${end}) for source length ${sourceLength}`);
   }
 }
