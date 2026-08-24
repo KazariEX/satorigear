@@ -1,3 +1,4 @@
+import { emptySet } from "../primitives.ts";
 import { type BlockLine, logicalLine } from "./lines.ts";
 import { BlockSyntaxKind } from "./profile.ts";
 import type { BlockKind } from "../constants/block.ts";
@@ -8,17 +9,22 @@ const blockTokenStride = 4;
 
 interface BlockTokenMeta {
   contentEndOffset?: number;
+  definitionKey?: string;
   text?: string;
   value?: unknown;
 }
 
 export interface BlockTokenChange {
+  // Borrowed until reset() or the next replace(); contains exactly the keys whose membership changed.
+  definitionMembershipChanges: ReadonlySet<string>;
   newEnd: number;
   oldEnd: number;
   oldStart: number;
 }
 
 export class BlockTokenStream {
+  #definitionCounts: Map<string, number> | undefined;
+  #definitionMembershipChanges: Set<string> | undefined;
   #fieldLength: number;
   #fields: Int32Array;
   #metadata: Map<number, BlockTokenMeta> | undefined;
@@ -33,6 +39,8 @@ export class BlockTokenStream {
   }
 
   reset(sourceLength: number): void {
+    this.#definitionCounts?.clear();
+    this.#definitionMembershipChanges?.clear();
     this.#fieldLength = 0;
     this.#metadata = void 0;
     this.#relativeStart = Number.POSITIVE_INFINITY;
@@ -47,6 +55,10 @@ export class BlockTokenStream {
     return this.#sourceLength;
   }
 
+  hasDefinition(key: string): boolean {
+    return this.#definitionCounts?.has(key) === true;
+  }
+
   push(kind: BlockKind, start: number, end: number, meta?: BlockTokenMeta): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + blockTokenStride);
@@ -58,6 +70,10 @@ export class BlockTokenStream {
     if (meta) {
       this.#metadata ??= new Map();
       this.#metadata.set(this.length - 1, meta);
+      const definitionKey = meta.definitionKey;
+      if (definitionKey !== void 0) {
+        this.#updateDefinitionCount(definitionKey, 1, false);
+      }
     }
   }
 
@@ -127,6 +143,9 @@ export class BlockTokenStream {
     const metadata = this.#metadata?.get(index);
     const nextMetadata = next.#metadata?.get(nextIndex);
     if (metadata !== nextMetadata) {
+      if (metadata?.definitionKey !== nextMetadata?.definitionKey) {
+        return false;
+      }
       const contentEndOffset = metadata?.contentEndOffset ?? end - start;
       const nextContentEndOffset = nextMetadata?.contentEndOffset ?? nextEnd - nextStart;
       if (contentEndOffset !== nextContentEndOffset) {
@@ -197,10 +216,22 @@ export class BlockTokenStream {
     ) {
       stableSuffixLength++;
     }
-    const change = {
-      oldStart: start + stablePrefixLength,
-      oldEnd: end - stableSuffixLength,
-      newEnd: start + replacementLength - stableSuffixLength,
+    const oldStart = start + stablePrefixLength;
+    const oldEnd = end - stableSuffixLength;
+    const newEnd = start + replacementLength - stableSuffixLength;
+    // Stable prefix and suffix keys matched above, so only the narrowed ranges can change membership.
+    this.#definitionMembershipChanges?.clear();
+    for (let index = oldStart; index < oldEnd; index++) {
+      this.#updateDefinitionCount(this.#metadata?.get(index)?.definitionKey, -1, true);
+    }
+    for (let index = stablePrefixLength; index < replacementLength - stableSuffixLength; index++) {
+      this.#updateDefinitionCount(replacement.#metadata?.get(index)?.definitionKey, 1, true);
+    }
+    const change: BlockTokenChange = {
+      definitionMembershipChanges: this.#definitionMembershipChanges ?? emptySet,
+      newEnd,
+      oldEnd,
+      oldStart,
     };
 
     // 2. Align coordinate encoding with the replacement boundary. Positions before it
@@ -298,8 +329,9 @@ export class BlockTokenStream {
   truncate(length: number): void {
     this.#fieldLength = length * blockTokenStride;
     if (this.#metadata) {
-      for (const index of this.#metadata.keys()) {
+      for (const [index, value] of this.#metadata) {
         if (index >= length) {
+          this.#updateDefinitionCount(value.definitionKey, -1, false);
           this.#metadata.delete(index);
         }
       }
@@ -340,6 +372,35 @@ export class BlockTokenStream {
 
   value<T>(index: number): T | undefined {
     return this.#metadata?.get(index)?.value as T | undefined;
+  }
+
+  definitionKey(index: number): string | undefined {
+    return this.#metadata?.get(index)?.definitionKey;
+  }
+
+  #updateDefinitionCount(
+    key: string | undefined,
+    delta: number,
+    trackMembership: boolean,
+  ): void {
+    if (key === void 0) {
+      return;
+    }
+    const counts = this.#definitionCounts ??= new Map();
+    const previousCount = counts.get(key) ?? 0;
+    const nextCount = previousCount + delta;
+    if (nextCount === 0) {
+      counts.delete(key);
+    }
+    else {
+      counts.set(key, nextCount);
+    }
+    if (trackMembership && (previousCount === 0) !== (nextCount === 0)) {
+      const changes = this.#definitionMembershipChanges ??= new Set();
+      if (!changes.delete(key)) {
+        changes.add(key);
+      }
+    }
   }
 
   #ensureCapacity(length: number): void {

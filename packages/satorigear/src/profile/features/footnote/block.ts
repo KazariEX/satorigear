@@ -14,7 +14,6 @@ import type { BlockFeature } from "../../../block/profile.ts";
 import type { BlockTokenStream } from "../../../block/tokens.ts";
 
 interface FootnoteDefinitionFields {
-  definitionKey: string;
   label: string;
   normalizedLabel: string;
 }
@@ -80,9 +79,6 @@ export const blockRules: BlockFeature["rules"] = [
         },
       };
     },
-    definitionKey(tokens, token) {
-      return definitionFields(tokens, token).definitionKey;
-    },
   },
 ];
 
@@ -136,11 +132,13 @@ export const blockStarts: BlockFeature["starts"] = [
         BlockKind.FootnoteDefinitionOpen,
         match.markerStart,
         match.markerEnd,
-        { value: {
+        {
           definitionKey: match.definitionKey,
-          label: match.label,
-          normalizedLabel: match.normalizedLabel,
-        } },
+          value: {
+            label: match.label,
+            normalizedLabel: match.normalizedLabel,
+          },
+        },
       );
       context.scanLines(source, definitionLines, out);
       const end = definitionLines.at(-1)?.next ?? match.markerEnd;

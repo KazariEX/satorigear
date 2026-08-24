@@ -21,13 +21,13 @@ import type { InlineResolutionContext } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface LinkDefinitionFields {
-  definitionKey: string;
   destination: string;
   label: string;
   title: string | undefined;
 }
 
 interface LinkDefinitionMatch {
+  definitionKey: string;
   end: number;
   fields: LinkDefinitionFields;
 }
@@ -190,14 +190,14 @@ function linkDefinitionAt(
       : source[offset] === "\"" || source[offset] === "'"
         ? source[offset]
         : void 0;
+    const definitionKey = normalizeAssociationLabel(label);
     const fields: LinkDefinitionFields = {
-      definitionKey: normalizeAssociationLabel(label),
       destination,
       label,
       title: void 0,
     };
     if (!closer) {
-      return { end: destinationLine + 1, fields };
+      return { definitionKey, end: destinationLine + 1, fields };
     }
     offset++;
     let title = "";
@@ -235,7 +235,7 @@ function linkDefinitionAt(
       skipSpaces();
       if (offset === lines[lineIndex].end) {
         fields.title = title;
-        return { end: lineIndex + 1, fields };
+        return { definitionKey, end: lineIndex + 1, fields };
       }
     }
     if (!titleOnNextLine) {
@@ -244,7 +244,7 @@ function linkDefinitionAt(
     if (lookaheadEnd > lines[destinationLine + 1].next) {
       context.retainLookahead(lookaheadEnd);
     }
-    return { end: destinationLine + 1, fields };
+    return { definitionKey, end: destinationLine + 1, fields };
   }
   if (lookaheadEnd >= 0) {
     context.retainLookahead(lookaheadEnd);
@@ -455,10 +455,15 @@ export const feature: SyntaxFeature = {
           close: BlockKind.LinkDefinitionClose,
         },
         build(tokenStart, context) {
-          const fields = linkDefinitionFields(context.structure.tokens, tokenStart);
+          const tokens = context.structure.tokens;
+          const fields = linkDefinitionFields(tokens, tokenStart);
+          const definitionKey = tokens.definitionKey(tokenStart);
+          if (definitionKey === void 0) {
+            throw new Error("Expected LinkDefinitionOpen token to contain a definition key");
+          }
           return {
             type: "definition",
-            identifier: fields.definitionKey.toLowerCase(),
+            identifier: definitionKey.toLowerCase(),
             label: semanticText(fields.label),
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),
@@ -467,9 +472,6 @@ export const feature: SyntaxFeature = {
               end: blockEnd(tokenStart, context),
             },
           };
-        },
-        definitionKey(tokens, token) {
-          return linkDefinitionFields(tokens, token).definitionKey;
         },
       },
     ],
@@ -483,7 +485,10 @@ export const feature: SyntaxFeature = {
           if (!definition) {
             return;
           }
-          out.push(BlockKind.LinkDefinitionOpen, contentOffset, contentOffset, { value: definition.fields });
+          out.push(BlockKind.LinkDefinitionOpen, contentOffset, contentOffset, {
+            definitionKey: definition.definitionKey,
+            value: definition.fields,
+          });
           for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
             const current = lines[definitionLine];
             const end = definitionLine + 1 < definition.end ? current.next : current.end;

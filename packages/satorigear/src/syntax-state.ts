@@ -1,38 +1,13 @@
 import { BlockKind } from "./constants/block.ts";
 import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
-import { emptyArray, emptySet, isSetEqual } from "./primitives.ts";
+import { emptyArray, emptySet } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "./source-view.ts";
 import type { BlockScanChange } from "./block/scanner.ts";
 import type { BlockStructure } from "./block/structure.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./inline/profile.ts";
 
-interface BlockDefinition {
-  blockIndex: number;
-  key: string;
-}
-
-function firstDefinitionAtOrAfter(
-  entries: readonly BlockDefinition[],
-  blockIndex: number,
-): number {
-  let low = 0;
-  let high = entries.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (entries[middle].blockIndex < blockIndex) {
-      low = middle + 1;
-    }
-    else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
 export class SyntaxState {
-  #definitionEntries?: readonly BlockDefinition[];
-  #definitions: ReadonlySet<string> = emptySet;
   #profile: InlineProfile;
   #regionsByBlock: (readonly InlineRegion[])[] = [];
   #structure: BlockStructure;
@@ -47,8 +22,7 @@ export class SyntaxState {
   }
 
   update(source: string, change?: BlockScanChange): readonly number[] {
-    // 1. Retain the scanner-stable prefix, then collect inline bindings from rebuilt records
-    // and definitions only from the narrower token-damage window.
+    // 1. Retain the scanner-stable prefix, then collect inline bindings from rebuilt records.
     const structure = this.#structure;
     const tokens = structure.tokens;
     const previousRegionsByBlock = this.#regionsByBlock;
@@ -57,13 +31,10 @@ export class SyntaxState {
     const oldRecordEnd = change?.oldRecordEnd ?? 0;
     const newRecordEnd = change?.newRecordEnd ?? structure.records.length;
     const offsetDelta = change?.offsetDelta ?? 0;
+    const definitionMembershipChanges = change?.tokenChange.definitionMembershipChanges ?? emptySet;
     const regionsByBlock = stableBlockCount === 0
       ? []
       : previousRegionsByBlock.slice(0, stableBlockCount);
-    const previousDefinitionEntries = this.#definitionEntries ?? emptyArray;
-    const oldDefinitionStart = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordStart);
-    const oldDefinitionEnd = firstDefinitionAtOrAfter(previousDefinitionEntries, oldRecordEnd);
-    let replacementDefinitions: BlockDefinition[] | undefined;
     let invalidatedBlocks: number[] | undefined;
 
     const bindings: InlineRegionBinding[] = [];
@@ -79,10 +50,6 @@ export class SyntaxState {
           continue;
         }
         const rule = structure.ruleOf(token);
-        if (rule.definitionKey && index >= oldRecordStart) {
-          const key = rule.definitionKey(tokens, token);
-          (replacementDefinitions ??= []).push({ blockIndex: index, key });
-        }
         if (rule.inlineContent) {
           const inlineView = inlineViewOf(source, tokens, token, nodeLength);
           if (inlineView) {
@@ -98,41 +65,7 @@ export class SyntaxState {
     }
     bindingOffsets.push(bindings.length);
 
-    // 2. Splice definition ownership at the token-stable record boundary, then restore suffix regions.
-    const blockDelta = newRecordEnd - oldRecordEnd;
-    const definitionsChanged = oldDefinitionStart !== oldDefinitionEnd || replacementDefinitions !== void 0;
-    const shiftedDefinitionSuffix = blockDelta !== 0 && oldDefinitionEnd < previousDefinitionEntries.length;
-    let definitionEntries = this.#definitionEntries;
-    if (previousRegionsByBlock.length === 0) {
-      definitionEntries = replacementDefinitions;
-    }
-    else if (definitionsChanged || shiftedDefinitionSuffix) {
-      const nextEntries = previousDefinitionEntries.slice(0, oldDefinitionStart);
-      if (replacementDefinitions) {
-        nextEntries.push(...replacementDefinitions);
-      }
-      for (let index = oldDefinitionEnd; index < previousDefinitionEntries.length; index++) {
-        const previousEntry = previousDefinitionEntries[index];
-        nextEntries.push(
-          blockDelta === 0
-            ? previousEntry
-            : { blockIndex: previousEntry.blockIndex + blockDelta, key: previousEntry.key },
-        );
-      }
-      definitionEntries = nextEntries.length > 0 ? nextEntries : void 0;
-    }
-
-    // Reuse the lookup set when neither side of the rebuilt record range contains a definition.
-    let definitions = this.#definitions;
-    if (previousRegionsByBlock.length === 0 || definitionsChanged) {
-      const nextDefinitions = new Set<string>();
-      for (const entry of definitionEntries ?? []) {
-        nextDefinitions.add(entry.key);
-      }
-      definitions = nextDefinitions;
-    }
-
-    // Every region in the retained suffix shares the same source-offset and token-index shifts.
+    // 2. Every region in the retained suffix shares the same source-offset and token-index shifts.
     const tokenChange = change?.tokenChange;
     const suffixTokenDelta = tokenChange ? tokenChange.newEnd - tokenChange.oldEnd : 0;
     for (let index = oldRecordEnd; index < previousRegionsByBlock.length; index++) {
@@ -190,8 +123,8 @@ export class SyntaxState {
           }
         }
         const region = candidate
-          ? candidate.update(binding, definitions)
-          : new InlineRegion(this.#profile, binding, definitions);
+          ? candidate.update(binding, tokens, definitionMembershipChanges)
+          : new InlineRegion(this.#profile, binding, tokens);
         regions[regionIndex] = region;
       }
 
@@ -204,15 +137,14 @@ export class SyntaxState {
     // Regions track consulted labels, so unrelated definitions preserve block identity.
     if (
       previousRegionsByBlock.length > 0 &&
-      this.#definitions !== definitions &&
-      !isSetEqual(this.#definitions, definitions)
+      definitionMembershipChanges.size > 0
     ) {
       const refreshDefinitions = (start: number, end: number): void => {
         for (let index = start; index < end; index++) {
           const regions = regionsByBlock[index];
           let changed = false;
           for (const region of regions) {
-            if (region.updateDefinitions(definitions)) {
+            if (region.updateDefinitions(tokens, definitionMembershipChanges)) {
               changed = true;
             }
           }
@@ -225,8 +157,6 @@ export class SyntaxState {
       refreshDefinitions(newRecordEnd, regionsByBlock.length);
     }
 
-    this.#definitionEntries = definitionEntries;
-    this.#definitions = definitions;
     this.#regionsByBlock = regionsByBlock;
 
     return invalidatedBlocks ?? emptyArray;
@@ -238,7 +168,6 @@ export function resolveInlineRegions(
   profile: InlineProfile,
   structure: BlockStructure,
 ): readonly ResolvedInlineRegion[] {
-  const definitions = new Set<string>();
   const regions: ResolvedInlineRegion[] = [];
   const tokens = structure.tokens;
 
@@ -250,9 +179,6 @@ export function resolveInlineRegions(
         continue;
       }
       const rule = structure.ruleOf(token);
-      if (rule.definitionKey) {
-        definitions.add(rule.definitionKey(tokens, token));
-      }
       if (rule.inlineContent) {
         const inlineView = inlineViewOf(source, tokens, token, nodeLength);
         if (inlineView) {
@@ -268,9 +194,7 @@ export function resolveInlineRegions(
   }
 
   // One-shot parsing needs definition visibility, but has no future edit to track dependencies for.
-  const context: InlineResolutionContext = {
-    hasDefinition: (key) => definitions.has(key),
-  };
+  const context: InlineResolutionContext = tokens;
   for (const region of regions) {
     const text = region.view.text;
     // @ts-expect-error override readonly tokens

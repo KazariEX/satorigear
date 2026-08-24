@@ -65,6 +65,23 @@ describe("markdown document", () => {
     });
   });
 
+  it("invalidates references only after the last duplicate definition is removed", () => {
+    const document = parser.createDocument("[label]\n\nseparator\n\n[label]: /first\n\n[label]: /second\n");
+    const referenceBlock = document.tree.children[0];
+
+    const firstColon = document.source.indexOf(":");
+    document.edit([{ start: firstColon, end: firstColon + 1, text: "" }]);
+    expect(document.tree.children[0]).toBe(referenceBlock);
+
+    const lastColon = document.source.lastIndexOf(":");
+    document.edit([{ start: lastColon, end: lastColon + 1, text: "" }]);
+    expect(document.tree.children[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", value: "[label]" }],
+    });
+    expect(document.tree).toEqual(parser.parse(document.source));
+  });
+
   it("matches complete parses while appending streamed chunks", () => {
     const streamParser = createParser({
       features: {

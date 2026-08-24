@@ -8,7 +8,6 @@ import type { BlockTokenStream } from "./tokens.ts";
 export interface CompiledBlockRule {
   block: boolean;
   close: BlockKind;
-  definitionKey?: (tokens: BlockTokenStream, index: number) => string;
   inlineContent: boolean;
   rule: BlockRule;
   build?: BlockNodeBuilder;
@@ -78,7 +77,6 @@ export interface BlockRuleRegistration {
   syntax: BlockSyntaxRegistration;
   build?: BlockNodeBuilder;
   inlineContent?: true;
-  definitionKey?: (tokens: BlockTokenStream, index: number) => string;
 }
 
 export type BlockNodeBuilderDecorator = (build: BlockNodeBuilder) => BlockNodeBuilder;
@@ -138,7 +136,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
         const rule: CompiledBlockRule = {
           block: syntax.kind === "block" || syntax.kind === "leaf",
           close: syntax.kind === "block" || syntax.kind === "frame" ? syntax.close : BlockKind.None,
-          definitionKey: registration.definitionKey,
           inlineContent: registration.inlineContent === true,
           rule: registration.rule,
           build: registration.build,

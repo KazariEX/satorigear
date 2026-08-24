@@ -4,13 +4,13 @@ import type { InlineProfile, InlineResolutionContext } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
 interface TrackedResolutionContext extends InlineResolutionContext {
-  definitions: ReadonlySet<string>;
+  definitionContext: InlineResolutionContext;
   dependencies?: Set<string>;
 }
 
 function hasDefinition(this: TrackedResolutionContext, key: string): boolean {
   (this.dependencies ??= new Set()).add(key);
-  return this.definitions.has(key);
+  return this.definitionContext.hasDefinition(key);
 }
 
 export interface InlineRegionBinding {
@@ -27,7 +27,6 @@ export interface ResolvedInlineRegion {
 export class InlineRegion implements ResolvedInlineRegion {
   // Track only definitions consulted by this region so unrelated definitions do not invalidate it.
   #definitionDependencies!: ReadonlySet<string>;
-  #definitions!: ReadonlySet<string>;
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
   #profile: InlineProfile;
@@ -38,12 +37,12 @@ export class InlineRegion implements ResolvedInlineRegion {
   constructor(
     profile: InlineProfile,
     binding: InlineRegionBinding,
-    definitions: ReadonlySet<string>,
+    definitionContext: InlineResolutionContext,
   ) {
     this.#profile = profile;
     this.tokenStart = binding.tokenStart;
     this.view = binding.view;
-    this.#updateTokens(binding.view.text, definitions);
+    this.#updateTokens(binding.view.text, definitionContext, emptySet);
   }
 
   get tokens(): InlineTokenStream {
@@ -52,15 +51,19 @@ export class InlineRegion implements ResolvedInlineRegion {
 
   update(
     binding: InlineRegionBinding,
-    definitions: ReadonlySet<string>,
+    definitionContext: InlineResolutionContext,
+    definitionMembershipChanges: ReadonlySet<string>,
   ): this {
-    this.#updateTokens(binding.view.text, definitions);
+    this.#updateTokens(binding.view.text, definitionContext, definitionMembershipChanges);
     this.#rebind(binding);
     return this;
   }
 
-  updateDefinitions(definitions: ReadonlySet<string>): boolean {
-    return this.#updateTokens(this.view.text, definitions);
+  updateDefinitions(
+    definitionContext: InlineResolutionContext,
+    definitionMembershipChanges: ReadonlySet<string>,
+  ): boolean {
+    return this.#updateTokens(this.view.text, definitionContext, definitionMembershipChanges);
   }
 
   shift(delta: number, tokenDelta: number): void {
@@ -68,10 +71,21 @@ export class InlineRegion implements ResolvedInlineRegion {
     this.view.shift(delta);
   }
 
-  #dependenciesChanged(definitions: ReadonlySet<string>): boolean {
-    for (const candidate of this.#definitionDependencies) {
-      if (this.#definitions.has(candidate) !== definitions.has(candidate)) {
-        return true;
+  #dependenciesChanged(definitionMembershipChanges: ReadonlySet<string>): boolean {
+    const dependencies = this.#definitionDependencies;
+    // Definition-heavy edits stay linear in the smaller side of the intersection.
+    if (dependencies.size < definitionMembershipChanges.size) {
+      for (const key of dependencies) {
+        if (definitionMembershipChanges.has(key)) {
+          return true;
+        }
+      }
+    }
+    else {
+      for (const key of definitionMembershipChanges) {
+        if (dependencies.has(key)) {
+          return true;
+        }
       }
     }
     return false;
@@ -84,18 +98,18 @@ export class InlineRegion implements ResolvedInlineRegion {
 
   #updateTokens(
     source: string,
-    definitions: ReadonlySet<string>,
+    definitionContext: InlineResolutionContext,
+    definitionMembershipChanges: ReadonlySet<string>,
   ): boolean {
     const previousTokens = this.#rawTokens;
     const sourceUnchanged = previousTokens !== void 0 && source === this.view.text;
-    if (sourceUnchanged && !this.#dependenciesChanged(definitions)) {
-      this.#definitions = definitions;
+    if (sourceUnchanged && !this.#dependenciesChanged(definitionMembershipChanges)) {
       return false;
     }
 
     // Incremental regions retain exactly the definition lookups that can invalidate them.
     const context: TrackedResolutionContext = {
-      definitions,
+      definitionContext,
       hasDefinition,
     };
     const rawTokens = sourceUnchanged
@@ -104,7 +118,6 @@ export class InlineRegion implements ResolvedInlineRegion {
     const tokens = this.#profile.resolve(source, rawTokens, context);
 
     this.#definitionDependencies = context.dependencies ?? emptySet;
-    this.#definitions = definitions;
     this.#rawTokens = rawTokens;
     this.#tokens = tokens;
     return true;
