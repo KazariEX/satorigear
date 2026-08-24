@@ -157,8 +157,8 @@ function blockOpeningAt(
   let labelStart: number | undefined;
   let labelEnd: number | undefined;
   if (source[offset] === "[") {
-    const close = closingBracket(source, offset);
-    if (close === void 0 || close >= line.end) {
+    const close = closingBracket(source, offset, line.end);
+    if (close === void 0) {
       return;
     }
     labelStart = offset;

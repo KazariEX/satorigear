@@ -102,13 +102,13 @@ export interface ParsedAttributes {
   end: number;
 }
 
-export function closingBracket(source: string, start: number): number | undefined {
+export function closingBracket(source: string, start: number, limit = source.length): number | undefined {
   if (source[start] !== "[") {
     return;
   }
   let depth = 0;
-  for (let offset = start + 1; offset < source.length; offset++) {
-    if (source[offset] === "\\" && offset + 1 < source.length) {
+  for (let offset = start + 1; offset < limit; offset++) {
+    if (source[offset] === "\\" && offset + 1 < limit) {
       offset++;
     }
     else if (source[offset] === "[") {

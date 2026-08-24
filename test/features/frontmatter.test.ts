@@ -78,6 +78,16 @@ describe("frontmatter", () => {
     }]);
   });
 
+  it("does not treat a bounded rescan as the document start", () => {
+    const source = "# first\n\n---\na: b\n---\n\nend\n";
+    const document = hyphenParser.createDocument(source);
+    const start = source.indexOf(":");
+    document.edit([{ start, end: start + 1, text: "=" }]);
+
+    expect(document.tree).toEqual(hyphenParser.parse(document.source));
+    expect(document.tree.children.some((node) => node.type === "yaml")).toBe(false);
+  });
+
   it("keeps the selected fence fixed across edits", () => {
     const document = hyphenParser.createDocument("---\ntitle: test\n---\nbody\n");
     document.edit([

@@ -387,11 +387,10 @@ export class BlockScanner {
       : affectedRecord && affectedRecord.end < changedSpan.start
         ? affectedIndex
         : Math.max(0, affectedIndex - 1);
-    const initialRestartOffset = previousRecords[restartIndex]?.start ?? 0;
-    const nextLines = updatePhysicalLines(this.#lines, nextSource, initialRestartOffset, oldChangedEnd, offsetDelta);
-    const stableBlockCount = Math.max(0, restartIndex);
     const restartRecord = previousRecords[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
+    const nextLines = updatePhysicalLines(this.#lines, nextSource, restartOffset, oldChangedEnd, offsetDelta);
+    const stableBlockCount = Math.max(0, restartIndex);
     const oldTokenStart = restartRecord?.tokenStart ?? 0;
 
     // 2. Rescan from that boundary until block geometry and shifted tokens match an old record.
@@ -405,25 +404,23 @@ export class BlockScanner {
     );
     scanEnd = nextLines[firstLineIndexAtOrAfter(nextLines, scanEnd)]?.start ?? nextSource.length;
     while (true) {
-      const scanSource = nextSource.slice(restartOffset, scanEnd);
-      const scanLines = linesOf(scanSource);
+      const scanLines = linesOf(nextSource, restartOffset, scanEnd);
       let lookaheadReachedWindowEnd = false;
       let convergenceIndex = affectedIndex;
       this.#lookaheadEnd = -1;
       // The visitor is consumed synchronously before this window can be expanded.
       // eslint-disable-next-line no-loop-func
-      scanBlockLines(this.#profile, this.#context, scanSource, scanLines, replacement, (
+      scanBlockLines(this.#profile, this.#context, nextSource, scanLines, replacement, (
         lineStart,
         lineEnd,
         tokenStart,
         tokenEnd,
       ) => {
-        const blockStart = restartOffset + scanLines[lineStart].start;
-        const blockEnd = restartOffset + scanLines[lineEnd - 1].next;
+        const blockStart = scanLines[lineStart].start;
+        const blockEnd = scanLines[lineEnd - 1].next;
         const observedEnd = this.#lookaheadEnd;
-        const lookaheadEnd = observedEnd < 0 ? -1 : restartOffset + observedEnd;
-        const dependencyEnd = Math.max(blockEnd, lookaheadEnd);
-        lookaheadReachedWindowEnd ||= observedEnd >= scanSource.length && scanEnd < nextSource.length;
+        const dependencyEnd = Math.max(blockEnd, observedEnd);
+        lookaheadReachedWindowEnd ||= observedEnd >= scanEnd && scanEnd < nextSource.length;
         this.#lookaheadEnd = -1;
         // A block or unresolved lookahead at the temporary boundary may change in the next window.
         if (
@@ -449,7 +446,7 @@ export class BlockScanner {
               replacement,
               tokenStart,
               tokenEnd,
-              offsetDelta - restartOffset,
+              offsetDelta,
             )
           ) {
             replacement.truncate(tokenStart);
@@ -475,7 +472,6 @@ export class BlockScanner {
       const nextLine = firstLineIndexAtOrAfter(nextLines, expandedEnd);
       scanEnd = nextLines[nextLine]?.start ?? nextSource.length;
     }
-    replacement.shift(restartOffset);
     replacement.indexStructure(this.#profile.schema);
 
     // 3. Replace the rescanned token window, then reconcile record identity around the narrowed token damage.

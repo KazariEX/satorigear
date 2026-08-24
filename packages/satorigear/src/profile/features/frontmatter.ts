@@ -78,7 +78,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
               }
             }
             // A closing fence appended after this failed probe can reinterpret the document from offset 0.
-            context.retainLookahead(source.length);
+            context.retainLookahead(lines[lines.length - 1].next);
           },
         },
       ],
