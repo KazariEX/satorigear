@@ -54,7 +54,6 @@ function applyEdits(source: string, edits: readonly TextEdit[]): SourceChange {
     changedSpan: { start: edits[0].start, end: cursor + delta },
     nextSource: parts.join(""),
     offsetDelta: delta,
-    previousSource: source,
   };
 }
 

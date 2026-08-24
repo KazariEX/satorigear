@@ -24,7 +24,6 @@ export interface SourceChange {
   changedSpan: SourceSpan;
   nextSource: string;
   offsetDelta: number;
-  previousSource: string;
 }
 
 // Scanner-owned top-level identity combines physical-line and token geometry.
@@ -253,10 +252,8 @@ function updatePhysicalLines(
 
 function sameShiftedBlock(
   previous: BlockTokenStream,
-  previousSource: string,
   record: BlockRecord,
   next: BlockTokenStream,
-  nextSource: string,
   tokenStart: number,
   tokenEnd: number,
   delta: number,
@@ -265,13 +262,13 @@ function sameShiftedBlock(
   if (length !== tokenEnd - tokenStart) {
     return false;
   }
+  // Convergence only considers the unchanged source suffix, so matching geometry
+  // also proves that each token covers the same text after the shift.
   for (let index = 0; index < length; index++) {
     if (!previous.equalsAfterShift(
       record.tokenStart + index,
-      previousSource,
       next,
       tokenStart + index,
-      nextSource,
       delta,
     )) {
       return false;
@@ -360,7 +357,7 @@ export class BlockScanner {
   }
 
   edit(change: SourceChange): BlockScanChange {
-    const { changedSpan, nextSource, offsetDelta, previousSource } = change;
+    const { changedSpan, nextSource, offsetDelta } = change;
     // Map the new damage end back to the old source with the total edit delta.
     const oldChangedEnd = changedSpan.end - offsetDelta;
 
@@ -429,10 +426,8 @@ export class BlockScanner {
             candidateRecord.end + offsetDelta === blockEnd &&
             sameShiftedBlock(
               this.#tokens,
-              previousSource,
               candidateRecord,
               replacement,
-              scanSource,
               tokenStart,
               tokenEnd,
               offsetDelta - restartOffset,
@@ -468,11 +463,11 @@ export class BlockScanner {
       ? this.#tokens.length
       : previousRecords[convergedIndex].tokenStart;
     const tokenChange: BlockTokenChange = this.#tokens.replace(
-      previousSource,
-      nextSource,
       oldTokenStart,
       oldTokenEnd,
       replacement,
+      changedSpan.start,
+      oldChangedEnd,
     );
     const tokenDelta = tokenChange.newEnd - tokenChange.oldEnd;
     let oldRecordStart = stableBlockCount;

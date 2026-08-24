@@ -107,11 +107,11 @@ export class BlockTokenStream {
 
   equalsAfterShift(
     index: number,
-    source: string,
     next: BlockTokenStream,
     nextIndex: number,
-    nextSource: string,
     delta: number,
+    damageStart?: number,
+    damageEnd?: number,
   ): boolean {
     const start = this.start(index);
     const end = this.end(index);
@@ -148,30 +148,38 @@ export class BlockTokenStream {
         return text === nextText;
       }
     }
-    return (
-      end - start === nextEnd - nextStart &&
-      source.slice(start, end) === nextSource.slice(nextStart, nextEnd)
-    );
+    // Without a damage range, the caller has already proved the covered source stable.
+    if (damageStart === void 0 || damageEnd === void 0) {
+      return true;
+    }
+    return start === end || end <= damageStart || start >= damageEnd;
   }
 
   replace(
-    source: string,
-    nextSource: string,
     start: number,
     end: number,
     replacement: BlockTokenStream,
+    damageStart: number,
+    damageEnd: number,
   ): BlockTokenChange {
     const previousLength = this.length;
     const replacedLength = end - start;
     const replacementLength = replacement.length;
-    const sourceDelta = nextSource.length - source.length;
+    const sourceDelta = replacement.#sourceLength - this.#sourceLength;
 
     // 1. Narrow the reported damage to the tokens that actually changed.
     const overlapLength = Math.min(replacedLength, replacementLength);
     let stablePrefixLength = 0;
     while (
       stablePrefixLength < overlapLength &&
-      this.equalsAfterShift(start + stablePrefixLength, source, replacement, stablePrefixLength, nextSource, 0)
+      this.equalsAfterShift(
+        start + stablePrefixLength,
+        replacement,
+        stablePrefixLength,
+        0,
+        damageStart,
+        damageEnd,
+      )
     ) {
       stablePrefixLength++;
     }
@@ -180,11 +188,11 @@ export class BlockTokenStream {
       stableSuffixLength < overlapLength - stablePrefixLength &&
       this.equalsAfterShift(
         end - 1 - stableSuffixLength,
-        source,
         replacement,
         replacementLength - 1 - stableSuffixLength,
-        nextSource,
         sourceDelta,
+        damageStart,
+        damageEnd,
       )
     ) {
       stableSuffixLength++;
@@ -283,7 +291,7 @@ export class BlockTokenStream {
 
     const newSuffixStart = start + replacementLength;
     this.#relativeStart = newSuffixStart < this.length ? newSuffixStart : Number.POSITIVE_INFINITY;
-    this.#sourceLength = nextSource.length;
+    this.#sourceLength = replacement.#sourceLength;
     return change;
   }
 
