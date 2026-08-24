@@ -299,7 +299,7 @@ export class BlockScanner {
     };
     this.#profile = profile;
     this.#lines = [];
-    this.#lookaheadEnd = -1;
+    this.#lookaheadEnd = 0;
     this.#records = [];
     this.#tokens = new BlockTokenStream();
   }
@@ -310,11 +310,11 @@ export class BlockScanner {
     tokens.reset(source.length);
     const records = this.#records;
     let recordIndex = 0;
-    this.#lookaheadEnd = -1;
+    this.#lookaheadEnd = 0;
     scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
       const end = lines[lineEnd - 1].next;
       const dependencyEnd = Math.max(end, this.#lookaheadEnd);
-      this.#lookaheadEnd = -1;
+      this.#lookaheadEnd = 0;
       const record = records[recordIndex++];
       // Reuse top-level records across one-shot parses instead of allocating one per block.
       if (record) {
@@ -405,9 +405,8 @@ export class BlockScanner {
     scanEnd = nextLines[firstLineIndexAtOrAfter(nextLines, scanEnd)]?.start ?? nextSource.length;
     while (true) {
       const scanLines = linesOf(nextSource, restartOffset, scanEnd);
-      let lookaheadReachedWindowEnd = false;
       let convergenceIndex = affectedIndex;
-      this.#lookaheadEnd = -1;
+      this.#lookaheadEnd = 0;
       // The visitor is consumed synchronously before this window can be expanded.
       // eslint-disable-next-line no-loop-func
       scanBlockLines(this.#profile, this.#context, nextSource, scanLines, replacement, (
@@ -420,13 +419,16 @@ export class BlockScanner {
         const blockEnd = scanLines[lineEnd - 1].next;
         const observedEnd = this.#lookaheadEnd;
         const dependencyEnd = Math.max(blockEnd, observedEnd);
-        lookaheadReachedWindowEnd ||= observedEnd >= scanEnd && scanEnd < nextSource.length;
-        this.#lookaheadEnd = -1;
-        // A block or unresolved lookahead at the temporary boundary may change in the next window.
+        this.#lookaheadEnd = 0;
+        // A failed probe that reached the temporary boundary needs a larger window before convergence is meaningful.
+        if (observedEnd >= scanEnd && scanEnd < nextSource.length) {
+          return true;
+        }
+        // A block at the temporary boundary may change in the next window.
         if (
-          blockEnd >= changedSpan.end &&
-          !lookaheadReachedWindowEnd &&
-          (blockEnd < scanEnd || scanEnd === nextSource.length)
+          blockEnd >= changedSpan.end && (
+            blockEnd < scanEnd || scanEnd === nextSource.length
+          )
         ) {
           const candidateStart = Math.max(oldChangedEnd, blockStart - offsetDelta);
           while (
