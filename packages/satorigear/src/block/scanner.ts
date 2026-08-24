@@ -222,7 +222,14 @@ function updatePhysicalLines(
   const suffix = Math.min(previous.length, firstLineIndexAtOrAfter(previous, oldDamageEnd + 1) + 1);
   const oldSuffixOffset = previous[suffix]?.start ?? nextSource.length - delta;
   const newSuffixOffset = oldSuffixOffset + delta;
-  const prefixEnd = firstLineIndexAtOrAfter(previous, restartOffset);
+  let prefixEnd = firstLineIndexAtOrAfter(previous, restartOffset);
+  // A newly formed CRLF also changes the retained physical line before the block restart.
+  if (
+    nextSource.charCodeAt(restartOffset - 1) === Character.CarriageReturn &&
+    nextSource.charCodeAt(restartOffset) === Character.LineFeed
+  ) {
+    restartOffset = previous[--prefixEnd].start;
+  }
   const changed = linesOf(nextSource, restartOffset, newSuffixOffset);
   if (delta === 0 && changed.length === suffix - prefixEnd) {
     const next = previous.slice();

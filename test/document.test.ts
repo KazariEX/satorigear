@@ -201,6 +201,11 @@ describe("markdown document", () => {
     expect(split.tree).toEqual(parser.parse(split.source));
     split.edit([{ start: 0, end: 0, text: "\n" }]);
     expect(split.tree).toEqual(parser.parse(split.source));
+
+    const boundary = parser.createDocument("\ra");
+    boundary.edit([{ start: 1, end: 1, text: "\n" }]);
+    expect(boundary.tree).toEqual(parser.parse(boundary.source));
+    expect(boundary.tree.children[0].position?.start.line).toBe(2);
   });
 
   it("rebuilds the block touching a stable-prefix boundary", () => {
