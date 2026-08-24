@@ -503,19 +503,24 @@ export class BlockScanner {
       oldRecordEnd++;
     }
 
-    const prefixRecords = previousRecords.slice(0, stableBlockCount);
-    const suffixRecords = convergedIndex < 0 ? [] : previousRecords.slice(convergedIndex);
-    if (offsetDelta !== 0 || tokenDelta !== 0) {
-      for (const record of suffixRecords) {
-        record.start += offsetDelta;
-        record.end += offsetDelta;
-        record.dependencyEnd += offsetDelta;
-        record.tokenStart += tokenDelta;
-        record.tokenEnd += tokenDelta;
+    const nextRecords = previousRecords.slice(0, stableBlockCount);
+    nextRecords.push(...rescannedRecords);
+    const rescannedEnd = nextRecords.length;
+    const shiftSuffix = offsetDelta !== 0 || tokenDelta !== 0;
+    if (convergedIndex >= 0) {
+      for (let index = convergedIndex; index < previousRecords.length; index++) {
+        const record = previousRecords[index];
+        if (shiftSuffix) {
+          record.start += offsetDelta;
+          record.end += offsetDelta;
+          record.dependencyEnd += offsetDelta;
+          record.tokenStart += tokenDelta;
+          record.tokenEnd += tokenDelta;
+        }
+        nextRecords.push(record);
       }
     }
 
-    const nextRecords = [...prefixRecords, ...rescannedRecords, ...suffixRecords];
     const newRecordEnd = nextRecords.length - (previousRecords.length - oldRecordEnd);
 
     // Token equality can retain records inside the rescanned window even though line scanning restarted earlier.
@@ -529,7 +534,6 @@ export class BlockScanner {
       record.tokenEnd = nextRecord.tokenEnd;
       nextRecords[index] = record;
     }
-    const rescannedEnd = prefixRecords.length + rescannedRecords.length;
     const stableRescannedEnd = Math.min(
       previousRecords.length,
       oldRecordEnd + rescannedEnd - newRecordEnd,
