@@ -1,6 +1,6 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
 import { buildInlineFragment, type InlineFragment } from "./inline.ts";
-import type { BlockStructure } from "../block/structure.ts";
+import type { BlockStructure } from "../block/scanner.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
 import type { SpannedNode } from "./node.ts";

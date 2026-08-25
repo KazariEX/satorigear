@@ -2,7 +2,7 @@ import { Character } from "../constants/character.ts";
 import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocation, SourceSpan } from "../source-view.ts";
-import type { BlockProfile } from "./profile.ts";
+import type { BlockProfile, BlockSyntaxRule } from "./profile.ts";
 
 export interface BlockScanContext {
   endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
@@ -286,6 +286,9 @@ function sameShiftedBlock(
   return true;
 }
 
+// Projection and inline resolution borrow only the scanner's indexed semantic view.
+export type BlockStructure = Pick<BlockScanner, "records" | "ruleOf" | "tokens">;
+
 export class BlockScanner {
   #context: BlockScanContext;
   #lines: BlockLine[];
@@ -351,6 +354,15 @@ export class BlockScanner {
 
   get records(): readonly BlockRecord[] {
     return this.#records;
+  }
+
+  ruleOf(tokenStart: number): BlockSyntaxRule {
+    const kind = this.#tokens.kind(tokenStart);
+    const rule = this.#profile.rules[kind];
+    if (!rule) {
+      throw new Error(`Block token ${tokenStart} does not begin a semantic node`);
+    }
+    return rule;
   }
 
   // Mdast materialization visits nested spans in source order, so one cursor replaces a binary search per point.

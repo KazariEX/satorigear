@@ -5,7 +5,6 @@ import {
   BlockScanner,
   type SourceChange,
 } from "./block/scanner.ts";
-import { BlockStructure } from "./block/structure.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { InlineRegionCursor, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray } from "./primitives.ts";
@@ -104,7 +103,6 @@ function shiftPositions(value: object, shift: PositionShift): void {
 }
 
 export class DocumentImpl implements Document {
-  #blockStructure: BlockStructure;
   #blockScanner: BlockScanner;
   #profile: SyntaxProfile;
   #source: string;
@@ -115,9 +113,8 @@ export class DocumentImpl implements Document {
     this.#profile = profile;
     this.#source = source;
     this.#blockScanner = new BlockScanner(profile.block);
-    this.#blockStructure = new BlockStructure(profile.block.rules, this.#blockScanner);
     this.#blockScanner.scan(source);
-    this.#syntaxState = new SyntaxState(profile.inline, this.#blockStructure);
+    this.#syntaxState = new SyntaxState(profile.inline, this.#blockScanner);
     this.#updateTree(this.#syntaxState.update(source));
   }
 
@@ -144,12 +141,12 @@ export class DocumentImpl implements Document {
   }
 
   #updateTree(invalidatedBlocks: readonly number[], change?: BlockScanChange): void {
-    const records = this.#blockStructure.records;
+    const records = this.#blockScanner.records;
     const regionsByBlock = this.#syntaxState.regionsByBlock();
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.
     const context: BlockBuildContext = {
-      structure: this.#blockStructure,
+      structure: this.#blockScanner,
       cursor: new InlineRegionCursor(),
       profile: this.#profile.inline,
       source: this.#source,
@@ -236,13 +233,12 @@ export class DocumentImpl implements Document {
     source: string,
     profile: SyntaxProfile,
     blockScanner: BlockScanner,
-    blockStructure: BlockStructure,
   ): Root {
     blockScanner.scan(source);
 
-    const regions = resolveInlineRegions(source, profile.inline, blockStructure);
+    const regions = resolveInlineRegions(source, profile.inline, blockScanner);
     const context: BlockBuildContext = {
-      structure: blockStructure,
+      structure: blockScanner,
       cursor: new InlineRegionCursor(regions),
       profile: profile.inline,
       source,

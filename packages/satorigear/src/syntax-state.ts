@@ -2,8 +2,7 @@ import { BlockKind } from "./constants/block.ts";
 import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
 import { emptyArray, emptySet } from "./primitives.ts";
 import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "./source-view.ts";
-import type { BlockScanChange } from "./block/scanner.ts";
-import type { BlockStructure } from "./block/structure.ts";
+import type { BlockScanChange, BlockStructure } from "./block/scanner.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
 import type { InlineProfile } from "./inline/profile.ts";
 
