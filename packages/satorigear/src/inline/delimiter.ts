@@ -29,12 +29,11 @@ interface CompiledDelimiterConfig {
 export interface DelimiterRun {
   tokenIndex: number;
   config: CompiledDelimiterConfig;
-  length: number;
   start: number;
   remaining: number;
-  flanking: number;
   previous: number;
   next: number;
+  state: number;
 }
 
 interface DelimiterReplacement {
@@ -43,9 +42,13 @@ interface DelimiterReplacement {
   kind: number;
 }
 
-const enum Flanking {
+// Open/Close occupy the low bits; the high bits store the original run length modulo 3.
+const enum DelimiterRunState {
   Open = 1,
   Close = 2,
+  // eslint-disable-next-line ts/prefer-literal-enum-member
+  FlankingMask = Open | Close,
+  LengthModuloMask = 12,
 }
 
 const enum DelimiterFlag {
@@ -86,28 +89,34 @@ function flanking(source: string, start: number, end: number, config: CompiledDe
   const left = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
   const right = !beforeWhitespace && (!beforePunctuation || afterWhitespace || afterPunctuation);
   if (config.flags & DelimiterFlag.Intraword) {
-    return (left ? Flanking.Open : 0) | (right ? Flanking.Close : 0);
+    return (left ? DelimiterRunState.Open : 0) | (right ? DelimiterRunState.Close : 0);
   }
   const canOpen = left && (!right || beforePunctuation);
   const canClose = right && (!left || afterPunctuation);
-  return (canOpen ? Flanking.Open : 0) | (canClose ? Flanking.Close : 0);
+  return (canOpen ? DelimiterRunState.Open : 0) | (canClose ? DelimiterRunState.Close : 0);
 }
 
 function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
-  if (!(opener.flanking & Flanking.Open)) {
+  if (!(opener.state & DelimiterRunState.Open)) {
     return false;
   }
-  if (closer.config.flags & DelimiterFlag.MatchWholeRun && opener.length !== closer.length) {
+  if (
+    closer.config.flags & DelimiterFlag.MatchWholeRun &&
+    (opener.state & DelimiterRunState.LengthModuloMask) !== (closer.state & DelimiterRunState.LengthModuloMask)
+  ) {
     return false;
   }
   if (
     !(closer.config.flags & DelimiterFlag.RuleOfThree) ||
-    (!(opener.flanking & Flanking.Close) && !(closer.flanking & Flanking.Open))
+    !(opener.state & DelimiterRunState.Close) && !(closer.state & DelimiterRunState.Open)
   ) {
     return true;
   }
-  const sum = opener.length + closer.length;
-  return sum % 3 !== 0 || (opener.length % 3 === 0 && closer.length % 3 === 0);
+  // Encoded modulo 1 and 2 are the only invalid rule-of-three sum.
+  return (
+    (opener.state & DelimiterRunState.LengthModuloMask) +
+    (closer.state & DelimiterRunState.LengthModuloMask) !== DelimiterRunState.LengthModuloMask
+  );
 }
 
 function unlinkRun(runs: DelimiterRun[], runIndex: number): void {
@@ -145,15 +154,17 @@ function matchDelimiterRuns(
   while (current >= 0) {
     const closer = runs[current];
     const next = closer.next;
-    if (!(closer.flanking & Flanking.Close)) {
-      if (closer.flanking === 0) {
+    if (!(closer.state & DelimiterRunState.Close)) {
+      if ((closer.state & DelimiterRunState.FlankingMask) === 0) {
         // Inert runs cannot pair and only lengthen later opener searches.
         unlinkRun(runs, current);
       }
       current = next;
       continue;
     }
-    const bottomSlot = closer.config.index * 6 + (closer.flanking & Flanking.Open ? 3 : 0) + closer.length % 3;
+    const bottomSlot = closer.config.index * 6 +
+      (closer.state & DelimiterRunState.Open ? 3 : 0) +
+      (closer.state >> 2);
     const bottom = openersBottom[bottomSlot] ?? -1;
     let openerIndex = closer.previous;
     while (openerIndex >= 0 && openerIndex !== bottom) {
@@ -165,7 +176,7 @@ function matchDelimiterRuns(
     }
     if (openerIndex < 0 || openerIndex === bottom) {
       openersBottom[bottomSlot] = closer.previous;
-      if (!(closer.flanking & Flanking.Open)) {
+      if (!(closer.state & DelimiterRunState.Open)) {
         unlinkRun(runs, current);
       }
       current = next;
@@ -223,12 +234,11 @@ export function delimiterRunAt(
     return {
       tokenIndex,
       config,
-      length,
       start: offset,
       remaining: length,
       previous: -1,
       next: -1,
-      flanking: delimiterFlanking,
+      state: delimiterFlanking | ((length % 3) << 2),
     };
   }
 }
