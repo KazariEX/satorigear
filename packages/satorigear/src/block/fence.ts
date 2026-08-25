@@ -14,7 +14,7 @@ export interface FenceRule {
   minimumLength: number;
 }
 
-export type FenceIndentation = "columns" | "spaces";
+type FenceIndentation = "columns" | "spaces";
 
 // Scanning owns fence recognition; projection consumes this payload without recognizing it again.
 export interface FencedBlock {

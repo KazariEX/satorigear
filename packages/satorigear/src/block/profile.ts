@@ -33,7 +33,7 @@ export type BlockStart = (
   context: BlockScanContext,
 ) => number | undefined;
 
-export type BlockFallback = (
+type BlockFallback = (
   source: string,
   lines: readonly BlockLine[],
   start: number,
@@ -41,15 +41,15 @@ export type BlockFallback = (
   context: BlockScanContext,
 ) => number | undefined;
 
-export type BlockInterrupt = (
+type BlockInterrupt = (
   source: string,
   line: BlockLine,
   contentOffset: number,
 ) => boolean;
 
-export type LazyContinuationUnwrapper = (source: string, line: BlockLine) => BlockLine | undefined;
+type LazyContinuationUnwrapper = (source: string, line: BlockLine) => BlockLine | undefined;
 
-export interface BlockStartRegistration {
+interface BlockStartRegistration {
   codes: readonly number[];
   // A container owns the inverse view needed to test its lazy paragraph continuation.
   unwrapLazyContinuation?: LazyContinuationUnwrapper;
@@ -57,7 +57,7 @@ export interface BlockStartRegistration {
   start: BlockStart;
 }
 
-export type BlockSyntaxRegistration =
+type BlockSyntaxRegistration =
   | {
     kind: "block" | "frame";
     close: BlockKind;
@@ -72,7 +72,7 @@ export type BlockSyntaxRegistration =
     token: BlockKind;
   };
 
-export interface BlockRuleRegistration {
+interface BlockRuleRegistration {
   rule: BlockRule;
   syntax: BlockSyntaxRegistration;
   build?: BlockNodeBuilder;
@@ -81,7 +81,7 @@ export interface BlockRuleRegistration {
 
 export type BlockNodeBuilderDecorator = (build: BlockNodeBuilder) => BlockNodeBuilder;
 
-export interface BlockDecoratorRegistration {
+interface BlockDecoratorRegistration {
   rule: BlockRule;
   decorate: BlockNodeBuilderDecorator;
 }

@@ -52,7 +52,7 @@ export type InlineTokenDecorator = (
   target: InlineFragment,
 ) => boolean;
 
-export type InlineTokenHandler = (
+type InlineTokenHandler = (
   tokenIndex: number,
   sourceSpan: SourceSpan,
   context: InlineBuildContext,

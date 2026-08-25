@@ -97,7 +97,7 @@ export function mergeAttributes(target: Attributes, source: Attributes): void {
   }
 }
 
-export interface ParsedAttributes {
+interface ParsedAttributes {
   attributes: Attributes;
   end: number;
 }

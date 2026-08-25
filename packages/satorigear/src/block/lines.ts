@@ -7,7 +7,7 @@ export interface BlockLine extends SourceSpan {
   prefixColumns?: number;
 }
 
-export interface Indent {
+interface Indent {
   columns: number;
   offset: number;
 }
