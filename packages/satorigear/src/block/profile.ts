@@ -11,13 +11,6 @@ export interface BlockSyntaxRule {
   inlineContent: boolean;
   rule: BlockRule;
   build?: BlockNodeBuilder;
-  syntaxKind: BlockSyntaxKind;
-}
-
-export const enum BlockSyntaxKind {
-  Frame,
-  Group,
-  Leaf,
 }
 
 export type BlockStart = (
@@ -135,9 +128,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
           inlineContent: registration.inlineContent === true,
           rule: registration.rule,
           build: registration.build,
-          syntaxKind: syntax.kind === "block" || syntax.kind === "frame"
-            ? BlockSyntaxKind.Frame
-            : syntax.kind === "group" ? BlockSyntaxKind.Group : BlockSyntaxKind.Leaf,
         };
         ruleByBlockRule[registration.rule] = rule;
         if (syntax.kind === "block" || syntax.kind === "frame") {

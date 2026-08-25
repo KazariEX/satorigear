@@ -1,7 +1,6 @@
+import { BlockKind } from "../constants/block.ts";
 import { emptySet } from "../primitives.ts";
 import { type BlockLine, logicalLine } from "./lines.ts";
-import { BlockSyntaxKind } from "./profile.ts";
-import type { BlockKind } from "../constants/block.ts";
 import type { BlockSyntaxRule } from "./profile.ts";
 
 // The fourth slot stores the token length of a semantic node beginning here. Raw tokens use zero.
@@ -85,12 +84,12 @@ export class BlockTokenStream {
     for (let index = 0; index < this.length; index++) {
       const kind = this.kind(index);
       const rule = rules[kind];
-      if (rule?.syntaxKind === BlockSyntaxKind.Frame) {
+      if (rule && rule.close !== BlockKind.None) {
         opens.push(index);
         closes.push(rule.close);
         continue;
       }
-      if (rule?.syntaxKind === BlockSyntaxKind.Group) {
+      if (rule && !rule.block) {
         const start = index;
         do {
           index++;
@@ -108,7 +107,7 @@ export class BlockTokenStream {
         fields[open * blockTokenStride + 3] = index - open + 1;
         continue;
       }
-      if (rule?.syntaxKind === BlockSyntaxKind.Leaf) {
+      if (rule?.block) {
         fields[index * blockTokenStride + 3] = 1;
       }
     }
