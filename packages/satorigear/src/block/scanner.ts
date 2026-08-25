@@ -31,7 +31,6 @@ export interface SourceChange {
 export interface BlockRecord extends SourceSpan {
   // Furthest source boundary whose contents can affect this record.
   dependencyEnd: number;
-  tokenEnd: number;
   tokenStart: number;
 }
 
@@ -318,7 +317,7 @@ export class BlockScanner {
     const records = this.#records;
     let recordIndex = 0;
     this.#lookaheadEnd = 0;
-    scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart, tokenEnd) => {
+    scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
       const end = lines[lineEnd - 1].next;
       const dependencyEnd = Math.max(end, this.#lookaheadEnd);
       this.#lookaheadEnd = 0;
@@ -329,7 +328,6 @@ export class BlockScanner {
         record.end = end;
         record.dependencyEnd = dependencyEnd;
         record.tokenStart = tokenStart;
-        record.tokenEnd = tokenEnd;
       }
       else {
         records.push({
@@ -337,7 +335,6 @@ export class BlockScanner {
           end,
           dependencyEnd,
           tokenStart,
-          tokenEnd,
         });
       }
       return false;
@@ -475,7 +472,6 @@ export class BlockScanner {
           end: blockEnd,
           dependencyEnd,
           tokenStart: oldTokenStart + tokenStart,
-          tokenEnd: oldTokenStart + tokenEnd,
         });
         return false;
       });
@@ -490,8 +486,9 @@ export class BlockScanner {
     replacement.indexStructure(this.#profile.rules);
 
     // 3. Replace the rescanned token window, then map the narrowed token damage to record ranges.
+    const oldTokenLength = this.#tokens.length;
     const oldTokenEnd = convergedIndex < 0
-      ? this.#tokens.length
+      ? oldTokenLength
       : previousRecords[convergedIndex].tokenStart;
     const tokenChange: BlockTokenChange = this.#tokens.replace(
       oldTokenStart,
@@ -501,10 +498,11 @@ export class BlockScanner {
       oldChangedEnd,
     );
     const tokenDelta = tokenChange.newEnd - tokenChange.oldEnd;
+    // Record ranges are contiguous, and their starts remain in old coordinates until suffix shifting below.
     let oldRecordStart = stableBlockCount;
     while (
       oldRecordStart < previousRecords.length &&
-      previousRecords[oldRecordStart].tokenEnd <= tokenChange.oldStart
+      (previousRecords[oldRecordStart + 1]?.tokenStart ?? oldTokenLength) <= tokenChange.oldStart
     ) {
       oldRecordStart++;
     }
@@ -527,7 +525,6 @@ export class BlockScanner {
           record.end += offsetDelta;
           record.dependencyEnd += offsetDelta;
           record.tokenStart += tokenDelta;
-          record.tokenEnd += tokenDelta;
         }
         nextRecords.push(record);
       }

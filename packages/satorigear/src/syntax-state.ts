@@ -42,9 +42,11 @@ export class SyntaxState {
     const bindingOffsets: number[] = [];
     for (let index = stableBlockCount; index < newRecordEnd; index++) {
       const record = structure.records[index];
+      const tokenStart = record.tokenStart;
+      const tokenEnd = tokenStart + tokens.nodeLength(tokenStart);
       bindingOffsets.push(bindings.length);
       // Semantic nodes are the non-zero ranges in the flat block token stream.
-      for (let token = record.tokenStart; token < record.tokenEnd; token++) {
+      for (let token = tokenStart; token < tokenEnd; token++) {
         const nodeLength = tokens.nodeLength(token);
         if (nodeLength === 0) {
           continue;
@@ -173,8 +175,10 @@ export function resolveInlineRegions(
 
   // Block scanning has completed, so every region can resolve against the full definition index.
   for (const record of structure.records) {
+    const tokenStart = record.tokenStart;
+    const tokenEnd = tokenStart + tokens.nodeLength(tokenStart);
     // Semantic nodes are the non-zero ranges in the flat block token stream.
-    for (let token = record.tokenStart; token < record.tokenEnd; token++) {
+    for (let token = tokenStart; token < tokenEnd; token++) {
       const nodeLength = tokens.nodeLength(token);
       if (nodeLength === 0) {
         continue;
