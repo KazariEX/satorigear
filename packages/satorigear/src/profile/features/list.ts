@@ -213,7 +213,7 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
     for (let child = tokenStart + 1; child < close;) {
       const length = tokens.nodeLength(child);
-      if (length > 0 && structure.isRule(child, BlockRule.ListItem)) {
+      if (length > 0 && structure.ruleOf(child).rule === BlockRule.ListItem) {
         items.push(buildListItem(child, context));
       }
       child += length || 1;

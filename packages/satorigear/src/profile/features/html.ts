@@ -149,7 +149,7 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const offset = context.structure.tokens.start(tokenStart);
-          const end = offset + context.structure.lenOf(tokenStart);
+          const end = context.structure.tokens.end(tokenStart);
           const unterminated = htmlBlockUnterminated(tokenStart, context);
           let html = normalizeLines(context.structure.tokens.text(context.source, tokenStart));
           if (!unterminated && html.endsWith("\n")) {

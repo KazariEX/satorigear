@@ -1,4 +1,3 @@
-import type { BlockRule } from "../constants/block.ts";
 import type { BlockSyntaxRule } from "./profile.ts";
 import type { BlockRecord, BlockScanner } from "./scanner.ts";
 import type { BlockTokenStream } from "./tokens.ts";
@@ -22,20 +21,6 @@ export class BlockStructure {
 
   get tokens(): BlockTokenStream {
     return this.#tokens;
-  }
-
-  lenOf(tokenStart: number): number {
-    const tokens = this.#tokens;
-    const end = tokenStart + tokens.nodeLength(tokenStart);
-    return tokens.end(end - 1) - tokens.start(tokenStart);
-  }
-
-  isBlock(tokenStart: number): boolean {
-    return this.ruleOf(tokenStart).block;
-  }
-
-  isRule(tokenStart: number, rule: BlockRule): boolean {
-    return this.ruleOf(tokenStart).rule === rule;
   }
 
   ruleOf(tokenStart: number): BlockSyntaxRule {

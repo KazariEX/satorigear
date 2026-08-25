@@ -55,7 +55,7 @@ export const buildBlockChildren: (
   const tokenEnd = tokenStart + tokens.nodeLength(tokenStart) - 1;
   for (let child = tokenStart + 1; child < tokenEnd;) {
     const length = tokens.nodeLength(child);
-    if (length > 0 && structure.isBlock(child)) {
+    if (length > 0 && structure.ruleOf(child).block) {
       children.push(
         buildBlockNode<typeof children[number]>(
           child,

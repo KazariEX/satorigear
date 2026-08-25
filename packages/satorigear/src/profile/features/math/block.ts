@@ -28,7 +28,7 @@ export const blockRules: BlockFeature["rules"] = [
     },
     build(tokenStart, context) {
       const offset = context.structure.tokens.start(tokenStart);
-      const end = offset + context.structure.lenOf(tokenStart);
+      const end = context.structure.tokens.end(tokenStart);
       const value = context.structure.tokens.text(context.source, tokenStart);
       const block = context.structure.tokens.value<FencedBlock>(tokenStart);
       if (!block) {
