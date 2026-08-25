@@ -18,8 +18,7 @@ export type InlineTokenizer = (source: string) => InlineTokenStream;
 
 export function matchInlinePatternEnd(pattern: RegExp, source: string, start: number): number {
   pattern.lastIndex = start;
-  const match = pattern.exec(source);
-  return match === null ? -1 : start + match[0].length;
+  return pattern.test(source) ? pattern.lastIndex : -1;
 }
 
 export function inlineMarkerRunEnd(source: string, start: number): number {
@@ -33,16 +32,7 @@ export function inlineMarkerRunEnd(source: string, start: number): number {
 
 function inlineTextEnd(source: string, start: number, boundary: RegExp): number {
   boundary.lastIndex = start;
-  let match = boundary.exec(source);
-  while (match !== null && source.charCodeAt(match.index) === Character.ReverseSolidus) {
-    const next = source.charCodeAt(match.index + 1);
-    if (next !== Character.Space && next !== Character.CharacterTabulation) {
-      break;
-    }
-    boundary.lastIndex = match.index + 2;
-    match = boundary.exec(source);
-  }
-  return match?.index ?? source.length;
+  return boundary.test(source) ? boundary.lastIndex - 1 : source.length;
 }
 
 function tokenize(
@@ -99,24 +89,17 @@ function tokenize(
     }
 
     const code = source.charCodeAt(offset);
-    if (code === Character.Space || code === Character.CharacterTabulation) {
-      if (code === Character.Space) {
-        const end = inlineMarkerRunEnd(source, offset);
-        const next = source.charCodeAt(end);
-        if (end - offset >= 2 && (next === Character.LineFeed || next === Character.CarriageReturn)) {
-          tokens.push(InlineKind.HardBreak, offset, end, 0);
-          offset = end;
-          continue;
-        }
-        if (end > offset + 1) {
-          offset = end;
-          continue;
-        }
-      }
-      offset++;
-      continue;
-    }
     if (code === Character.LineFeed || code === Character.CarriageReturn) {
+      if (
+        source.charCodeAt(offset - 1) === Character.Space &&
+        source.charCodeAt(offset - 2) === Character.Space
+      ) {
+        let spaces = offset - 2;
+        while (source.charCodeAt(spaces - 1) === Character.Space) {
+          spaces--;
+        }
+        tokens.push(InlineKind.HardBreak, spaces, offset, 0);
+      }
       offset++;
       if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
         offset++;
@@ -134,8 +117,7 @@ function tokenize(
       }
       // A marker may be shared by multiple features. If none accepts it,
       // leave the marker in the source gap and continue to the next compiled boundary.
-      const end = inlineTextEnd(source, offset + 1, textBoundary);
-      offset = end;
+      offset = inlineTextEnd(source, offset + 1, textBoundary);
       continue;
     }
     offset = inlineTextEnd(source, offset, textBoundary);
@@ -160,7 +142,11 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
     }
   }
   const boundaries = String.fromCharCode(...boundaryCodes).replaceAll(/[\\\]-]/g, "\\$&");
-  const textBoundary = new RegExp(` {2,}(?=[\\n\\r]|$)|[\\n\\r${boundaries}]`, "g");
-
+  const textBoundary = new RegExp(
+    // The standard profile has 9 unique markers. With more feature markers,
+    // letting the expression start at hard-break spaces advances faster.
+    `${boundaryCodes.length > 9 ? " {2,}[\\n\\r]|" : ""}[\\n\\r${boundaries}]`,
+    "g",
+  );
   return (source) => tokenize(source, textBoundary, scannerByCode);
 }
