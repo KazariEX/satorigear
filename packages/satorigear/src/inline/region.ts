@@ -55,7 +55,8 @@ export class InlineRegion implements ResolvedInlineRegion {
     definitionMembershipChanges: ReadonlySet<string>,
   ): this {
     this.#updateTokens(binding.view.text, definitionContext, definitionMembershipChanges);
-    this.#rebind(binding);
+    this.tokenStart = binding.tokenStart;
+    this.view = binding.view;
     return this;
   }
 
@@ -89,11 +90,6 @@ export class InlineRegion implements ResolvedInlineRegion {
       }
     }
     return false;
-  }
-
-  #rebind(binding: InlineRegionBinding): void {
-    this.tokenStart = binding.tokenStart;
-    this.view = binding.view;
   }
 
   #updateTokens(
