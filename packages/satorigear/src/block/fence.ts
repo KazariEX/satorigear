@@ -52,6 +52,10 @@ export function fenceAt(source: string, line: BlockLine, rule: FenceRule): Fence
 }
 
 export function closesFence(source: string, line: BlockLine, fence: Fence): boolean {
+  const first = source[line.start];
+  if (first !== fence.marker && first !== " " && first !== "\t") {
+    return false;
+  }
   const indent = lineIndent(source, line);
   if (!indent || source[indent.offset] !== fence.marker) {
     return false;
