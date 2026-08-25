@@ -30,7 +30,7 @@ export class InlineRegion implements ResolvedInlineRegion {
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
   #profile: InlineProfile;
-  #tokens?: InlineTokenStream;
+  #tokens!: InlineTokenStream;
   tokenStart: number;
   view: SourceView;
 
@@ -46,7 +46,7 @@ export class InlineRegion implements ResolvedInlineRegion {
   }
 
   get tokens(): InlineTokenStream {
-    return this.#tokens ?? emptyArray;
+    return this.#tokens;
   }
 
   update(

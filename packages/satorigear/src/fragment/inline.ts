@@ -349,11 +349,12 @@ export function buildInlineFragment(
       children: [],
     };
   }
+  const tokens = region.tokens;
   const inlineContext: InlineBuildContext = {
     blockRule,
     schema: context.profile.schema,
     tokenHandlers: context.profile.tokenHandlers,
-    tokens: region.tokens,
+    tokens,
     view: region.view,
   };
   const result: InlineOutput = {
@@ -364,7 +365,7 @@ export function buildInlineFragment(
   };
   appendInlineRange(
     0,
-    inlineTokenCount(region.tokens),
+    inlineTokenCount(tokens),
     inlineContext,
     result,
   );
