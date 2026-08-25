@@ -5,31 +5,30 @@ import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.ts";
 import type { SpannedNode } from "../../fragment/node.ts";
-import type { SourceSpan } from "../../source-view.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-interface CellSpan extends SourceSpan {
+interface CellOffsets {
   contentEnd: number;
   contentStart: number;
+  start: number;
 }
 
 function tableCell(
   source: string,
   start: number,
-  end: number,
   contentStart: number,
   contentEnd: number,
-): CellSpan {
+): CellOffsets {
   while (contentStart < contentEnd && (source[contentStart] === " " || source[contentStart] === "\t")) {
     contentStart++;
   }
   while (contentEnd > contentStart && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
     contentEnd--;
   }
-  return { start, end, contentStart, contentEnd };
+  return { start, contentStart, contentEnd };
 }
 
-function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): CellSpan[] | undefined {
+function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): CellOffsets[] | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
     return;
@@ -58,7 +57,7 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): Ce
   }
   const trailingPipe = pipes.at(-1) === visibleEnd - 1;
   const leadingPipe = pipes[0] === indent.offset;
-  const cells: CellSpan[] = [];
+  const cells: CellOffsets[] = [];
   let contentStart = indent.offset;
   let spanStart = indent.offset;
   let pipeIndex = 0;
@@ -68,18 +67,17 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): Ce
   }
   for (; pipeIndex < pipes.length; pipeIndex++) {
     const pipe = pipes[pipeIndex];
-    const trailing = trailingPipe && pipeIndex === pipes.length - 1;
-    cells.push(tableCell(source, spanStart, trailing ? line.end : pipe, contentStart, pipe));
+    cells.push(tableCell(source, spanStart, contentStart, pipe));
     spanStart = pipe;
     contentStart = pipe + 1;
   }
   if (!trailingPipe) {
-    cells.push(tableCell(source, spanStart, line.end, contentStart, line.end));
+    cells.push(tableCell(source, spanStart, contentStart, line.end));
   }
   return cells.length > 0 ? cells : void 0;
 }
 
-function alignmentAt(source: string, cell: CellSpan): BlockKind | undefined {
+function alignmentAt(source: string, cell: CellOffsets): BlockKind | undefined {
   let start = cell.contentStart;
   let end = cell.contentEnd;
   const left = source[start] === ":";
@@ -103,7 +101,7 @@ function alignmentAt(source: string, cell: CellSpan): BlockKind | undefined {
     : right ? BlockKind.TableAlignRight : BlockKind.TableAlignNone;
 }
 
-function delimiterAt(source: string, line: BlockLine): { cells: CellSpan[]; tokens: BlockKind[] } | undefined {
+function delimiterAt(source: string, line: BlockLine): { cells: CellOffsets[]; tokens: BlockKind[] } | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
     return;
@@ -127,7 +125,7 @@ function delimiterAt(source: string, line: BlockLine): { cells: CellSpan[]; toke
   return { cells, tokens };
 }
 
-function emitTableRow(line: BlockLine, cells: readonly CellSpan[], out: BlockTokenStream): void {
+function emitTableRow(line: BlockLine, cells: readonly CellOffsets[], out: BlockTokenStream): void {
   out.push(BlockKind.TableRowOpen, cells[0].start, cells[0].start);
   for (const cell of cells) {
     // The possibly empty inline chunk closes the cell frame. The next cell or
@@ -207,9 +205,14 @@ export const feature: SyntaxFeature = {
 
         out.push(BlockKind.TableOpen, header[0].start, header[0].start);
         emitTableRow(lines[start], header, out);
-        for (let index = 0; index < delimiter.cells.length; index++) {
-          const cell = delimiter.cells[index];
-          out.push(delimiter.tokens[index], cell.start, cell.end);
+        const delimiterCells = delimiter.cells;
+        for (let index = 0; index < delimiterCells.length; index++) {
+          const cell = delimiterCells[index];
+          out.push(
+            delimiter.tokens[index],
+            cell.start,
+            delimiterCells[index + 1]?.start ?? delimiterLine.end,
+          );
         }
 
         let end = start + 2;
