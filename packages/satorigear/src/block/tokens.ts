@@ -441,14 +441,17 @@ export function appendLogicalToken(
   let previousLineEnd = 0;
   for (let index = 0; index < count; index++) {
     const line = lines[start + index];
-    canSliceSource &&= (
+    if (
       // Tab overshoot is represented as virtual leading columns that do not exist in the source slice.
-      (line.prefixColumns ?? 0) === 0 &&
+      (line.prefixColumns ?? 0) !== 0 ||
       // A derived line may begin inside its physical line after a container marker was stripped.
-      (line.start === 0 || source[line.start - 1] === "\n" || source[line.start - 1] === "\r") &&
+      (line.start !== 0 && source[line.start - 1] !== "\n" && source[line.start - 1] !== "\r") ||
       // Adjacent physical spans are required so a single slice cannot restore skipped container prefixes.
-      (index === 0 || line.start === previousLineEnd)
-    );
+      (index !== 0 && line.start !== previousLineEnd)
+    ) {
+      canSliceSource = false;
+      break;
+    }
     previousLineEnd = line.next;
   }
 
