@@ -491,7 +491,6 @@ function assignDelimiterScopes(
   const workspace = frames as number[];
   let runs: DelimiterRun[] | undefined;
   let activeTop = -1;
-  let currentScope = -1;
   let rootLastRun = -1;
   let frameCursor = frameHeaderSize;
   let skipEnd = -1;
@@ -504,7 +503,6 @@ function assignDelimiterScopes(
     ) {
       const frame = activeTop;
       activeTop = frames[frame + FrameSlot.WorkspaceA];
-      currentScope = frames[frame + FrameSlot.WorkspaceB];
       const resolvedEnd = frames[frame + FrameSlot.ResolvedEnd];
       if (resolvedEnd > inlineTokenEnd(tokens, tokenIndex)) {
         skipEnd = resolvedEnd;
@@ -537,9 +535,7 @@ function assignDelimiterScopes(
       );
       if (isolates) {
         workspace[frame + FrameSlot.WorkspaceA] = activeTop;
-        workspace[frame + FrameSlot.WorkspaceB] = currentScope;
         activeTop = frame;
-        currentScope = frame;
         workspace[frame + FrameSlot.WorkspaceC] = -1;
       }
     }
@@ -553,18 +549,18 @@ function assignDelimiterScopes(
       );
       if (run) {
         const runIndex = runs?.length ?? 0;
-        const previous = currentScope < 0
+        const previous = activeTop < 0
           ? rootLastRun
-          : frames[currentScope + FrameSlot.WorkspaceC];
+          : frames[activeTop + FrameSlot.WorkspaceC];
         if (previous >= 0) {
           run.previous = previous;
           runs![previous].next = runIndex;
         }
-        if (currentScope < 0) {
+        if (activeTop < 0) {
           rootLastRun = runIndex;
         }
         else {
-          workspace[currentScope + FrameSlot.WorkspaceC] = runIndex;
+          workspace[activeTop + FrameSlot.WorkspaceC] = runIndex;
         }
         (runs ??= []).push(run);
       }
