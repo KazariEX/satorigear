@@ -9,21 +9,32 @@ import {
 } from "./tokens.ts";
 import type { InlineKind } from "../constants/inline.ts";
 
-export interface DelimiterConfig {
+interface DelimiterPair {
+  open: InlineKind;
+  close: InlineKind;
+}
+
+interface BaseDelimiterConfig {
   token: InlineKind;
-  single?: { open: InlineKind; close: InlineKind };
-  double?: { open: InlineKind; close: InlineKind };
-  pairing:
-    | { kind: "partial"; ruleOfThree?: boolean }
-    | { kind: "whole" };
+  double?: DelimiterPair;
   allowIntraword?: boolean;
 }
 
+export type DelimiterConfig = BaseDelimiterConfig & (
+  | {
+    single: DelimiterPair;
+    pairing: { kind: "partial"; ruleOfThree?: boolean };
+  }
+  | {
+    single?: DelimiterPair;
+    pairing: { kind: "whole" };
+  }
+);
+
 interface CompiledDelimiterConfig {
-  single?: { open: number; close: number };
-  double?: { open: number; close: number };
-  flags: number;
-  index: number;
+  single?: DelimiterPair;
+  double?: DelimiterPair;
+  bits: number;
 }
 
 export interface DelimiterRun {
@@ -42,19 +53,31 @@ interface DelimiterReplacement {
   kind: number;
 }
 
-// Open/Close occupy the low bits; the high bits store the original run length modulo 3.
+// CanOpen/CanClose occupy the low bits; the high bits store the original run length modulo 3.
 const enum DelimiterRunState {
-  Open = 1,
-  Close = 2,
+  CanOpen = 1,
+  CanClose = 2,
   // eslint-disable-next-line ts/prefer-literal-enum-member
-  FlankingMask = Open | Close,
+  FlankingMask = CanOpen | CanClose,
   LengthModuloMask = 12,
 }
 
-const enum DelimiterFlag {
-  Intraword = 1,
+const enum DelimiterConfigFlag {
+  AllowIntraword = 1,
   MatchWholeRun = 2,
   RuleOfThree = 4,
+}
+
+// Feature flags occupy the low bits; the openers-bottom slot base follows them.
+const enum DelimiterConfigLayout {
+  BottomSlotBaseShift = 3,
+  BottomSlotsPerConfig = 6,
+}
+
+// Runs keep can-open/can-close in the low bits and original length modulo 3 above them.
+const enum DelimiterRunLayout {
+  OriginalLengthModuloShift = 2,
+  LengthModuloCount = 3,
 }
 
 const whitespace = /\s/u;
@@ -88,27 +111,30 @@ function flanking(source: string, start: number, end: number, config: CompiledDe
   const afterPunctuation = punctuation.test(after);
   const left = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
   const right = !beforeWhitespace && (!beforePunctuation || afterWhitespace || afterPunctuation);
-  if (config.flags & DelimiterFlag.Intraword) {
-    return (left ? DelimiterRunState.Open : 0) | (right ? DelimiterRunState.Close : 0);
+  if (config.bits & DelimiterConfigFlag.AllowIntraword) {
+    return (left ? DelimiterRunState.CanOpen : 0) | (right ? DelimiterRunState.CanClose : 0);
   }
   const canOpen = left && (!right || beforePunctuation);
   const canClose = right && (!left || afterPunctuation);
-  return (canOpen ? DelimiterRunState.Open : 0) | (canClose ? DelimiterRunState.Close : 0);
+  return (canOpen ? DelimiterRunState.CanOpen : 0) | (canClose ? DelimiterRunState.CanClose : 0);
 }
 
 function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
-  if (!(opener.state & DelimiterRunState.Open)) {
+  if (!(opener.state & DelimiterRunState.CanOpen)) {
     return false;
   }
   if (
-    closer.config.flags & DelimiterFlag.MatchWholeRun &&
-    (opener.state & DelimiterRunState.LengthModuloMask) !== (closer.state & DelimiterRunState.LengthModuloMask)
+    closer.config.bits & DelimiterConfigFlag.MatchWholeRun &&
+    (opener.state & DelimiterRunState.LengthModuloMask) !==
+    (closer.state & DelimiterRunState.LengthModuloMask)
   ) {
     return false;
   }
   if (
-    !(closer.config.flags & DelimiterFlag.RuleOfThree) ||
-    !(opener.state & DelimiterRunState.Close) && !(closer.state & DelimiterRunState.Open)
+    !(closer.config.bits & DelimiterConfigFlag.RuleOfThree) || (
+      !(opener.state & DelimiterRunState.CanClose) &&
+      !(closer.state & DelimiterRunState.CanOpen)
+    )
   ) {
     return true;
   }
@@ -154,7 +180,7 @@ function matchDelimiterRuns(
   while (current >= 0) {
     const closer = runs[current];
     const next = closer.next;
-    if (!(closer.state & DelimiterRunState.Close)) {
+    if (!(closer.state & DelimiterRunState.CanClose)) {
       if ((closer.state & DelimiterRunState.FlankingMask) === 0) {
         // Inert runs cannot pair and only lengthen later opener searches.
         unlinkRun(runs, current);
@@ -162,9 +188,11 @@ function matchDelimiterRuns(
       current = next;
       continue;
     }
-    const bottomSlot = closer.config.index * 6 +
-      (closer.state & DelimiterRunState.Open ? 3 : 0) +
-      (closer.state >> 2);
+    const bottomSlotBase = closer.config.bits >>> DelimiterConfigLayout.BottomSlotBaseShift;
+    // Each config owns two groups of three remainder classes; can-open selects the second group.
+    const bottomSlot = bottomSlotBase +
+      (closer.state & DelimiterRunState.CanOpen ? DelimiterRunLayout.LengthModuloCount : 0) +
+      (closer.state >> DelimiterRunLayout.OriginalLengthModuloShift);
     const bottom = openersBottom[bottomSlot] ?? -1;
     let openerIndex = closer.previous;
     while (openerIndex >= 0 && openerIndex !== bottom) {
@@ -176,7 +204,7 @@ function matchDelimiterRuns(
     }
     if (openerIndex < 0 || openerIndex === bottom) {
       openersBottom[bottomSlot] = closer.previous;
-      if (!(closer.state & DelimiterRunState.Open)) {
+      if (!(closer.state & DelimiterRunState.CanOpen)) {
         unlinkRun(runs, current);
       }
       current = next;
@@ -223,14 +251,15 @@ export function delimiterRunAt(
   const end = inlineTokenEnd(tokens, tokenIndex);
   const length = end - offset;
   if (
-    config.flags & DelimiterFlag.MatchWholeRun && (
+    config.bits & DelimiterConfigFlag.MatchWholeRun && (
       length > 2 || (length === 1 ? !config.single : !config.double)
     )
   ) {
     return;
   }
   const delimiterFlanking = flanking(source, offset, end, config);
-  if (config.flags & DelimiterFlag.Intraword || delimiterFlanking !== 0) {
+  // Retain inert runs only for intraword configs; matching unlinks them before opener search.
+  if (config.bits & DelimiterConfigFlag.AllowIntraword || delimiterFlanking !== 0) {
     return {
       tokenIndex,
       config,
@@ -238,7 +267,9 @@ export function delimiterRunAt(
       remaining: length,
       previous: -1,
       next: -1,
-      state: delimiterFlanking | ((length % 3) << 2),
+      state: delimiterFlanking | (
+        (length % DelimiterRunLayout.LengthModuloCount) << DelimiterRunLayout.OriginalLengthModuloShift
+      ),
     };
   }
 }
@@ -291,11 +322,11 @@ export function compileDelimiterConfigs(
     delimiterByKind[config.token] = {
       single: config.single,
       double: config.double,
-      flags:
-        (config.allowIntraword !== false ? DelimiterFlag.Intraword : 0) |
-        (config.pairing.kind === "whole" ? DelimiterFlag.MatchWholeRun : 0) |
-        (config.pairing.kind === "partial" && config.pairing.ruleOfThree ? DelimiterFlag.RuleOfThree : 0),
-      index,
+      bits:
+        ((index * DelimiterConfigLayout.BottomSlotsPerConfig) << DelimiterConfigLayout.BottomSlotBaseShift) |
+        (config.allowIntraword !== false ? DelimiterConfigFlag.AllowIntraword : 0) |
+        (config.pairing.kind === "whole" ? DelimiterConfigFlag.MatchWholeRun : 0) |
+        (config.pairing.kind === "partial" && config.pairing.ruleOfThree ? DelimiterConfigFlag.RuleOfThree : 0),
     };
   });
   return delimiterByKind;
