@@ -7,28 +7,30 @@ import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.t
 import type { SpannedNode } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-interface CellOffsets {
-  contentEnd: number;
-  contentStart: number;
-  start: number;
+// Cell records store [frame start, trimmed content start, trimmed content end].
+const enum CellSlot {
+  ContentStart = 1,
+  ContentEnd,
+  Stride,
 }
 
-function tableCell(
+function appendTableCell(
+  cells: number[],
   source: string,
   start: number,
   contentStart: number,
   contentEnd: number,
-): CellOffsets {
+): void {
   while (contentStart < contentEnd && (source[contentStart] === " " || source[contentStart] === "\t")) {
     contentStart++;
   }
   while (contentEnd > contentStart && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
     contentEnd--;
   }
-  return { start, contentStart, contentEnd };
+  cells.push(start, contentStart, contentEnd);
 }
 
-function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): CellOffsets[] | undefined {
+function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): number[] | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
     return;
@@ -57,7 +59,7 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): Ce
   }
   const trailingPipe = pipes.at(-1) === visibleEnd - 1;
   const leadingPipe = pipes[0] === indent.offset;
-  const cells: CellOffsets[] = [];
+  const cells: number[] = [];
   let contentStart = indent.offset;
   let spanStart = indent.offset;
   let pipeIndex = 0;
@@ -67,19 +69,19 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): Ce
   }
   for (; pipeIndex < pipes.length; pipeIndex++) {
     const pipe = pipes[pipeIndex];
-    cells.push(tableCell(source, spanStart, contentStart, pipe));
+    appendTableCell(cells, source, spanStart, contentStart, pipe);
     spanStart = pipe;
     contentStart = pipe + 1;
   }
   if (!trailingPipe) {
-    cells.push(tableCell(source, spanStart, contentStart, line.end));
+    appendTableCell(cells, source, spanStart, contentStart, line.end);
   }
   return cells.length > 0 ? cells : void 0;
 }
 
-function alignmentAt(source: string, cell: CellOffsets): BlockKind | undefined {
-  let start = cell.contentStart;
-  let end = cell.contentEnd;
+function alignmentAt(source: string, cells: readonly number[], cell: number): BlockKind | undefined {
+  let start = cells[cell + CellSlot.ContentStart];
+  let end = cells[cell + CellSlot.ContentEnd];
   const left = source[start] === ":";
   if (left) {
     start++;
@@ -101,7 +103,7 @@ function alignmentAt(source: string, cell: CellOffsets): BlockKind | undefined {
     : right ? BlockKind.TableAlignRight : BlockKind.TableAlignNone;
 }
 
-function delimiterAt(source: string, line: BlockLine): { cells: CellOffsets[]; tokens: BlockKind[] } | undefined {
+function delimiterAt(source: string, line: BlockLine): { cells: number[]; tokens: BlockKind[] } | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
     return;
@@ -115,8 +117,8 @@ function delimiterAt(source: string, line: BlockLine): { cells: CellOffsets[]; t
     return;
   }
   const tokens: BlockKind[] = [];
-  for (const cell of cells) {
-    const alignment = alignmentAt(source, cell);
+  for (let cell = 0; cell < cells.length; cell += CellSlot.Stride) {
+    const alignment = alignmentAt(source, cells, cell);
     if (!alignment) {
       return;
     }
@@ -125,13 +127,18 @@ function delimiterAt(source: string, line: BlockLine): { cells: CellOffsets[]; t
   return { cells, tokens };
 }
 
-function emitTableRow(line: BlockLine, cells: readonly CellOffsets[], out: BlockTokenStream): void {
-  out.push(BlockKind.TableRowOpen, cells[0].start, cells[0].start);
-  for (const cell of cells) {
+function emitTableRow(line: BlockLine, cells: readonly number[], out: BlockTokenStream): void {
+  out.push(BlockKind.TableRowOpen, cells[0], cells[0]);
+  for (let cell = 0; cell < cells.length; cell += CellSlot.Stride) {
     // The possibly empty inline chunk closes the cell frame. The next cell or
     // row-close token marks its outer end, so no separate close token is needed.
-    out.push(BlockKind.TableCellStart, cell.start, cell.start);
-    out.push(BlockKind.InlineChunk, cell.contentStart, cell.contentEnd);
+    const start = cells[cell];
+    out.push(BlockKind.TableCellStart, start, start);
+    out.push(
+      BlockKind.InlineChunk,
+      cells[cell + CellSlot.ContentStart],
+      cells[cell + CellSlot.ContentEnd],
+    );
   }
   out.push(BlockKind.TableRowClose, line.end, line.end);
 }
@@ -203,15 +210,14 @@ export const feature: SyntaxFeature = {
           return;
         }
 
-        out.push(BlockKind.TableOpen, header[0].start, header[0].start);
+        out.push(BlockKind.TableOpen, header[0], header[0]);
         emitTableRow(lines[start], header, out);
         const delimiterCells = delimiter.cells;
-        for (let index = 0; index < delimiterCells.length; index++) {
-          const cell = delimiterCells[index];
+        for (let index = 0, cell = 0; cell < delimiterCells.length; index++, cell += CellSlot.Stride) {
           out.push(
             delimiter.tokens[index],
-            cell.start,
-            delimiterCells[index + 1]?.start ?? delimiterLine.end,
+            delimiterCells[cell],
+            delimiterCells[cell + CellSlot.Stride] ?? delimiterLine.end,
           );
         }
 
