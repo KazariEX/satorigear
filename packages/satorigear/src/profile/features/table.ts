@@ -7,11 +7,14 @@ import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.t
 import type { SpannedNode } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-// Cell records store [frame start, trimmed content start, trimmed content end].
+// Cell records start as [frame start, trimmed content start, trimmed content end].
+// Delimiter validation reuses the content-start slot for its alignment kind.
 const enum CellSlot {
   ContentStart = 1,
-  ContentEnd,
-  Stride,
+  // eslint-disable-next-line ts/prefer-literal-enum-member
+  Alignment = ContentStart,
+  ContentEnd = 2,
+  Stride = 3,
 }
 
 function appendTableCell(
@@ -103,7 +106,7 @@ function alignmentAt(source: string, cells: readonly number[], cell: number): Bl
     : right ? BlockKind.TableAlignRight : BlockKind.TableAlignNone;
 }
 
-function delimiterAt(source: string, line: BlockLine): { cells: number[]; tokens: BlockKind[] } | undefined {
+function delimiterAt(source: string, line: BlockLine): number[] | undefined {
   const indent = lineIndent(source, line);
   if (!indent) {
     return;
@@ -116,15 +119,14 @@ function delimiterAt(source: string, line: BlockLine): { cells: number[]; tokens
   if (!cells) {
     return;
   }
-  const tokens: BlockKind[] = [];
   for (let cell = 0; cell < cells.length; cell += CellSlot.Stride) {
     const alignment = alignmentAt(source, cells, cell);
-    if (!alignment) {
+    if (alignment === void 0) {
       return;
     }
-    tokens.push(alignment);
+    cells[cell + CellSlot.Alignment] = alignment;
   }
-  return { cells, tokens };
+  return cells;
 }
 
 function emitTableRow(line: BlockLine, cells: readonly number[], out: BlockTokenStream): void {
@@ -205,19 +207,21 @@ export const feature: SyntaxFeature = {
           return;
         }
         const delimiter = delimiterAt(source, delimiterLine);
-        const header = delimiter ? tableCellsAt(source, lines[start], true) : void 0;
-        if (!header || !delimiter || header.length !== delimiter.cells.length) {
+        if (!delimiter) {
+          return;
+        }
+        const header = tableCellsAt(source, lines[start], true);
+        if (header?.length !== delimiter.length) {
           return;
         }
 
         out.push(BlockKind.TableOpen, header[0], header[0]);
         emitTableRow(lines[start], header, out);
-        const delimiterCells = delimiter.cells;
-        for (let index = 0, cell = 0; cell < delimiterCells.length; index++, cell += CellSlot.Stride) {
+        for (let cell = 0; cell < delimiter.length; cell += CellSlot.Stride) {
           out.push(
-            delimiter.tokens[index],
-            delimiterCells[cell],
-            delimiterCells[cell + CellSlot.Stride] ?? delimiterLine.end,
+            delimiter[cell + CellSlot.Alignment],
+            delimiter[cell],
+            delimiter[cell + CellSlot.Stride] ?? delimiterLine.end,
           );
         }
 
