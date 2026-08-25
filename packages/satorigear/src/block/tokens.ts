@@ -78,41 +78,41 @@ export class BlockTokenStream {
 
   indexStructure(rules: readonly (BlockSyntaxRule | undefined)[]): void {
     const fields = this.#fields;
+    const fieldLength = this.#fieldLength;
     const opens: number[] = [];
     const closes: BlockKind[] = [];
     // Scanning writes each token once with an empty node length, so indexing needs no clearing pass.
-    for (let index = 0; index < this.length; index++) {
-      const kind = this.kind(index);
+    for (let field = 0; field < fieldLength; field += blockTokenStride) {
+      const kind = fields[field];
       const rule = rules[kind];
       if (rule && rule.close !== BlockKind.None) {
-        opens.push(index);
+        opens.push(field);
         closes.push(rule.close);
         continue;
       }
       if (rule && !rule.block) {
-        const start = index;
+        const start = field;
         do {
-          index++;
+          field += blockTokenStride;
         } while (
-          index < this.length &&
-          rules[this.kind(index)] === rule
+          field < fieldLength && rules[fields[field]] === rule
         );
-        fields[start * blockTokenStride + 3] = index - start;
-        index--;
+        fields[start + 3] = (field - start) / blockTokenStride;
+        field -= blockTokenStride;
         continue;
       }
       if (closes.at(-1) === kind) {
         const open = opens.pop()!;
         closes.pop();
-        fields[open * blockTokenStride + 3] = index - open + 1;
+        fields[open + 3] = (field - open) / blockTokenStride + 1;
         continue;
       }
       if (rule?.block) {
-        fields[index * blockTokenStride + 3] = 1;
+        fields[field + 3] = 1;
       }
     }
     if (opens.length > 0) {
-      throw new Error(`Block token stream did not close token ${this.kind(opens.at(-1)!)}`);
+      throw new Error(`Block token stream did not close token ${fields[opens.at(-1)!]}`);
     }
   }
 
