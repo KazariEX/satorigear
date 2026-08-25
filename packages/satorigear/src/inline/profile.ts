@@ -1,10 +1,10 @@
 import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./lexer.ts";
 import type { InlineKind } from "../constants/inline.ts";
 import type {
+  InlineBuilder,
   InlineLeafBuilder,
   InlineNodeBuilder,
   InlineTokenDecorator,
-  InlineTokenHandler,
 } from "../fragment/inline.ts";
 import type { DelimiterConfig } from "./delimiter.ts";
 // Inline features compile into one token pipeline and the projection tables that consume it.
@@ -49,22 +49,6 @@ export type InlineBuildRule =
     build: InlineNodeBuilder;
   };
 
-interface InlinePair {
-  closeKind: number;
-  build: InlineNodeBuilder;
-}
-
-interface InlineContainer {
-  closeKind: number;
-  contentOpenKind: number;
-  build: InlineNodeBuilder;
-}
-
-export interface InlineSyntaxSchema {
-  containerByKind: readonly (InlineContainer | undefined)[];
-  pairByOpenKind: readonly (InlinePair | undefined)[];
-}
-
 export interface InlineFeature {
   /** Recognize source ranges and append raw inline tokens. */
   scan?: readonly InlineScanRule[];
@@ -75,9 +59,11 @@ export interface InlineFeature {
 }
 
 export interface InlineProfile {
+  buildByKind: readonly (InlineBuilder | undefined)[];
   resolve: InlineResolver;
-  schema: InlineSyntaxSchema;
-  tokenHandlers: readonly (InlineTokenHandler | undefined)[];
+  // Semantic open kinds store [close, content-open] at kind * 2;
+  // a missing close denotes a token handler, and zero content-open denotes a direct pair.
+  syntaxByKind: readonly number[];
   tokenize: InlineTokenizer;
 }
 
@@ -85,11 +71,10 @@ export function compileInlineProfile(
   features: readonly InlineFeature[],
   compileResolver: InlineResolverCompiler,
 ): InlineProfile {
+  const buildByKind: (InlineBuilder | undefined)[] = [];
   const delimiters: DelimiterConfig[] = [];
   const scanRules: InlineScanRule[] = [];
-  const tokenHandlers: (InlineTokenHandler | undefined)[] = [];
-  const containerByKind: (InlineContainer | undefined)[] = [];
-  const pairByOpenKind: (InlinePair | undefined)[] = [];
+  const syntaxByKind: number[] = [];
 
   for (const feature of features) {
     if (feature.scan) {
@@ -103,38 +88,35 @@ export function compileInlineProfile(
       continue;
     }
     for (const rule of build) {
-      if (rule.kind === "decorate") {
-        tokenHandlers[rule.token] = rule.apply;
-        continue;
-      }
-      if (rule.kind === "leaf") {
-        tokenHandlers[rule.token] = rule.build;
-        continue;
-      }
-
-      if (rule.kind === "container") {
-        containerByKind[rule.token] = {
-          closeKind: rule.close,
-          contentOpenKind: rule.contentOpen,
-          build: rule.build,
-        };
-      }
-      else {
-        pairByOpenKind[rule.open] = {
-          closeKind: rule.close,
-          build: rule.build,
-        };
+      switch (rule.kind) {
+        case "decorate": {
+          buildByKind[rule.token] = rule.apply;
+          break;
+        }
+        case "leaf": {
+          buildByKind[rule.token] = rule.build;
+          break;
+        }
+        case "container": {
+          buildByKind[rule.token] = rule.build;
+          syntaxByKind[rule.token * 2] = rule.close;
+          syntaxByKind[rule.token * 2 + 1] = rule.contentOpen;
+          break;
+        }
+        case "pair": {
+          buildByKind[rule.open] = rule.build;
+          syntaxByKind[rule.open * 2] = rule.close;
+          syntaxByKind[rule.open * 2 + 1] = 0;
+          break;
+        }
       }
     }
   }
 
   return {
+    buildByKind,
     resolve: compileResolver(delimiters),
-    schema: {
-      containerByKind,
-      pairByOpenKind,
-    },
-    tokenHandlers,
+    syntaxByKind,
     tokenize: compileInlineTokenizer(scanRules),
   };
 }

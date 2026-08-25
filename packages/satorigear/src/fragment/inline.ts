@@ -9,14 +9,13 @@ import {
 } from "../inline/tokens.ts";
 import { extendSpan, type SpannedNode } from "./node.ts";
 import type { BlockRule } from "../constants/block.ts";
-import type { InlineSyntaxSchema } from "../inline/profile.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
 
 export interface InlineBuildContext {
   blockRule: BlockRule;
-  schema: InlineSyntaxSchema;
-  tokenHandlers: readonly (InlineTokenHandler | undefined)[];
+  buildByKind: readonly (InlineBuilder | undefined)[];
+  syntaxByKind: readonly number[];
   tokens: InlineTokenStream;
   view: SourceView;
 }
@@ -59,6 +58,8 @@ export type InlineTokenHandler = (
   context: InlineBuildContext,
   target: InlineFragment,
 ) => SpannedNode<PhrasingContent> | boolean | undefined;
+
+export type InlineBuilder = InlineNodeBuilder | InlineTokenHandler;
 
 function lineStart(source: string, offset: number): number {
   while (offset > 0) {
@@ -168,12 +169,12 @@ function appendInline(
 
 function appendInlineLeaf(
   tokenIndex: number,
+  kind: number,
+  handle: InlineTokenHandler | undefined,
   sourceSpan: SourceSpan,
   output: InlineOutput,
   context: InlineBuildContext,
 ): boolean {
-  const kind = inlineTokenKind(context.tokens, tokenIndex);
-  const handle = context.tokenHandlers[kind];
   if (!handle) {
     throw new Error(`Unexpected inline token kind ${kind}`);
   }
@@ -211,26 +212,41 @@ function appendInlineRange(
     if (kind === closeKind) {
       break;
     }
+    const syntaxOffset = kind * 2;
+    const semanticCloseKind = context.syntaxByKind[syntaxOffset];
+    const build = context.buildByKind[kind];
     const childOffset = inlineTokenStart(context.tokens, index);
     if (childOffset > output.cursor) {
       output.gapStart = output.cursor;
       output.gapEnd = childOffset;
     }
-    const next = buildInlineSemantic(index, endToken, output, context);
+    const next = semanticCloseKind === void 0
+      ? void 0
+      : buildInlineSemantic(
+        index,
+        kind,
+        endToken,
+        output,
+        context,
+        build as InlineNodeBuilder,
+        semanticCloseKind,
+        context.syntaxByKind[syntaxOffset + 1],
+      );
     const childEnd = inlineTokenEnd(context.tokens, next === void 0 ? index : next - 1);
     const childEmitted = next === void 0
       ? appendInlineLeaf(
         index,
+        kind,
+        build as InlineTokenHandler,
         context.view.mapSpan(childOffset, childEnd),
         output,
         context,
       )
       : true;
-    index = next ?? index + 1;
-    if (!childEmitted) {
-      continue;
+    if (childEmitted) {
+      output.cursor = childEnd;
     }
-    output.cursor = childEnd;
+    index = next ?? index + 1;
   }
   if (closeKind !== void 0 && index < endToken) {
     const contentEnd = inlineTokenStart(context.tokens, index);
@@ -249,82 +265,46 @@ function appendInlineRange(
 
 function buildInlineSemantic(
   openToken: number,
+  kind: number,
   endToken: number,
   output: InlineOutput,
   context: InlineBuildContext,
-): number | undefined {
-  const kind = inlineTokenKind(context.tokens, openToken);
-  const container = context.schema.containerByKind[kind];
-  if (container) {
-    let closeToken = openToken;
-    let next = openToken + 1;
-    const children: SpannedNode<PhrasingContent>[] = [];
-    if (
-      next < endToken &&
-      inlineTokenKind(context.tokens, next) === container.contentOpenKind
-    ) {
-      const contentStart = inlineTokenEnd(context.tokens, next++);
-      const childOutput: InlineOutput = {
-        children,
-        cursor: contentStart,
-        gapEnd: -1,
-        gapStart: -1,
-      };
-      closeToken = appendInlineRange(
-        next,
-        endToken,
-        context,
-        childOutput,
-        container.closeKind,
-      );
-      if (
-        closeToken >= endToken ||
-        inlineTokenKind(context.tokens, closeToken) !== container.closeKind
-      ) {
-        throw new Error(`Resolved inline stream did not close token kind ${kind}`);
-      }
-      next = closeToken + 1;
-    }
-    const value = container.build(
-      openToken,
-      closeToken,
-      context.view.mapSpan(
-        inlineTokenStart(context.tokens, openToken),
-        inlineTokenEnd(context.tokens, closeToken),
-      ),
-      children,
-      context,
-    );
-    appendInline(output, context, openToken, value);
-    return next;
-  }
-
-  const pair = context.schema.pairByOpenKind[kind];
-  if (!pair) {
-    return;
-  }
-  const contentStart = inlineTokenEnd(context.tokens, openToken);
+  build: InlineNodeBuilder,
+  closeKind: number,
+  contentOpenKind: number,
+): number {
+  let closeToken = openToken;
+  let next = openToken + 1;
   const children: SpannedNode<PhrasingContent>[] = [];
-  const childOutput: InlineOutput = {
-    children,
-    cursor: contentStart,
-    gapEnd: -1,
-    gapStart: -1,
-  };
-  const closeToken = appendInlineRange(
-    openToken + 1,
-    endToken,
-    context,
-    childOutput,
-    pair.closeKind,
-  );
   if (
-    closeToken >= endToken ||
-    inlineTokenKind(context.tokens, closeToken) !== pair.closeKind
+    contentOpenKind === 0 ||
+    next < endToken && inlineTokenKind(context.tokens, next) === contentOpenKind
   ) {
-    throw new Error(`Resolved inline stream did not close token kind ${kind}`);
+    const contentStart = inlineTokenEnd(
+      context.tokens,
+      contentOpenKind === 0 ? openToken : next++,
+    );
+    const childOutput: InlineOutput = {
+      children,
+      cursor: contentStart,
+      gapEnd: -1,
+      gapStart: -1,
+    };
+    closeToken = appendInlineRange(
+      next,
+      endToken,
+      context,
+      childOutput,
+      closeKind,
+    );
+    if (
+      closeToken >= endToken ||
+      inlineTokenKind(context.tokens, closeToken) !== closeKind
+    ) {
+      throw new Error(`Resolved inline stream did not close token kind ${kind}`);
+    }
   }
-  const value = pair.build(
+  const value = build(
     openToken,
     closeToken,
     context.view.mapSpan(
@@ -352,8 +332,8 @@ export function buildInlineFragment(
   const tokens = region.tokens;
   const inlineContext: InlineBuildContext = {
     blockRule,
-    schema: context.profile.schema,
-    tokenHandlers: context.profile.tokenHandlers,
+    buildByKind: context.profile.buildByKind,
+    syntaxByKind: context.profile.syntaxByKind,
     tokens,
     view: region.view,
   };
