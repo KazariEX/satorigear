@@ -1,6 +1,7 @@
 import {
   closesFence,
   fenceAt,
+  FenceContentMode,
   fencedBlock,
   type FencedBlock,
   fencedBlockContent,
@@ -38,7 +39,7 @@ export const blockRules: BlockFeature["rules"] = [
       return {
         type: "math",
         meta: meta || null,
-        value: fencedBlockContent(value, block, "columns"),
+        value: fencedBlockContent(value, block, FenceContentMode.SourceColumns),
         position: {
           start: offset + block.markerOffset,
           end: block.closed || end < context.structure.tokens.sourceLength

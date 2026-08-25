@@ -14,7 +14,10 @@ export interface FenceRule {
   minimumLength: number;
 }
 
-type FenceIndentation = "columns" | "spaces";
+export const enum FenceContentMode {
+  NormalizedSpaces,
+  SourceColumns,
+}
 
 // Scanning owns fence recognition; projection consumes this payload without recognizing it again.
 export interface FencedBlock {
@@ -93,35 +96,46 @@ export function fencedBlock(source: string, line: BlockLine, fence: Fence, close
 export function fencedBlockContent(
   source: string,
   block: FencedBlock,
-  indentation: FenceIndentation = "spaces",
+  mode: FenceContentMode,
 ): string {
-  let contentStart = 0;
-  while (contentStart < source.length && source[contentStart] !== "\n" && source[contentStart] !== "\r") {
-    contentStart++;
-  }
-  if (source[contentStart] === "\r") {
-    contentStart += source[contentStart + 1] === "\n" ? 2 : 1;
-  }
-  else if (source[contentStart] === "\n") {
-    contentStart++;
-  }
-
+  let contentStart: number;
   let contentEnd = source.length;
-  if (block.closed) {
-    contentEnd = lineContentEnd(source, contentStart, contentEnd);
-    while (
-      contentEnd > contentStart &&
-      source[contentEnd - 1] !== "\n" &&
-      source[contentEnd - 1] !== "\r"
-    ) {
-      contentEnd--;
+  if (mode === FenceContentMode.NormalizedSpaces) {
+    // Code input is normalized before projection, so native LF searches can locate
+    // its opening and closing lines without walking their contents in JavaScript.
+    contentStart = source.indexOf("\n") + 1;
+    if (!contentStart) {
+      return "";
+    }
+    if (block.closed) {
+      // Search before the closing line, whether or not its final LF is retained.
+      contentEnd = source.lastIndexOf("\n", source.length - 2) + 1;
     }
   }
+  else {
+    contentStart = 0;
+    while (contentStart < source.length && source[contentStart] !== "\n" && source[contentStart] !== "\r") {
+      contentStart++;
+    }
+    if (contentStart < source.length) {
+      contentStart += source[contentStart] === "\r" && source[contentStart + 1] === "\n" ? 2 : 1;
+    }
+    if (block.closed) {
+      contentEnd = lineContentEnd(source, contentStart, contentEnd);
+      while (
+        contentEnd > contentStart &&
+        source[contentEnd - 1] !== "\n" &&
+        source[contentEnd - 1] !== "\r"
+      ) {
+        contentEnd--;
+      }
+    }
+  }
+
   const end = lineContentEnd(source, contentStart, contentEnd);
   if (!block.indent) {
     return source.slice(contentStart, end);
   }
-
   const chunks: string[] = [];
   let lineStart = contentStart;
   while (lineStart < end) {
@@ -129,21 +143,18 @@ export function fencedBlockContent(
     const cr = source.indexOf("\r", lineStart);
     const lineEnd = Math.min(lf < 0 ? end : lf, cr < 0 ? end : cr, end);
     let next = lineEnd;
-    if (next < end && source[next] === "\r") {
-      next += source[next + 1] === "\n" ? 2 : 1;
+    if (next < end) {
+      next += source[next] === "\r" && source[next + 1] === "\n" ? 2 : 1;
     }
-    else if (next < end && source[next] === "\n") {
-      next++;
-    }
-    if (indentation === "columns") {
+    if (mode === FenceContentMode.SourceColumns) {
       chunks.push(removeIndent(source.slice(lineStart, next), block.indent));
     }
     else {
-      let contentStart = lineStart;
-      while (contentStart - lineStart < block.indent && source.charCodeAt(contentStart) === Character.Space) {
-        contentStart++;
+      let start = lineStart;
+      while (start - lineStart < block.indent && source.charCodeAt(start) === Character.Space) {
+        start++;
       }
-      chunks.push(source.slice(contentStart, next));
+      chunks.push(source.slice(start, next));
     }
     lineStart = next;
   }
