@@ -3,7 +3,6 @@ import { InlineKind } from "../constants/inline.ts";
 import {
   appendResolvedDelimiterToken,
   compileDelimiterConfigs,
-  type DelimiterConfig,
   type DelimiterRun,
   delimiterRunAt,
   resolveDelimiterMatches,
@@ -35,9 +34,8 @@ const enum FrameSlot {
   WorkspaceC,
   State,
   ResolvedEnd,
+  Stride,
 }
-
-const frameStride = 7;
 
 const enum FrameClaim {
   Raw,
@@ -47,9 +45,9 @@ const enum FrameClaim {
   Link,
   Reference,
   Consumed,
+  // Claims are exclusive low-bit discriminants; flags occupy the higher bits.
+  Mask = 7,
 }
-
-const claimMask = 7;
 
 const enum FrameFlag {
   Attributed = 8,
@@ -72,11 +70,11 @@ const noDelimiterReplacements: ReturnType<typeof resolveDelimiterMatches> = [];
 // intrusive stack and scope links.
 
 function frameClaim(frames: readonly number[], frame: number): FrameClaim {
-  return frames[frame + FrameSlot.State] & claimMask;
+  return frames[frame + FrameSlot.State] & FrameClaim.Mask;
 }
 
 function setFrameClaim(frames: number[], frame: number, claim: FrameClaim): void {
-  frames[frame + FrameSlot.State] = (frames[frame + FrameSlot.State] & ~claimMask) | claim;
+  frames[frame + FrameSlot.State] = (frames[frame + FrameSlot.State] & ~FrameClaim.Mask) | claim;
 }
 
 function appendCandidate(frames: number[], owner: number, candidate: number): void {
@@ -124,7 +122,7 @@ function rewriteLinkCandidates(frames: number[], owner: number): void {
 
     const state = frames[candidate + FrameSlot.State];
     if (
-      (state & claimMask) === FrameClaim.Span &&
+      (state & FrameClaim.Mask) === FrameClaim.Span &&
       !(state & FrameFlag.Attributed)
     ) {
       frames[candidate + FrameSlot.State] = FrameClaim.Raw;
@@ -358,7 +356,7 @@ function resolveReferences(
 
     if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
       const frame = frameCursor;
-      frameCursor += frameStride;
+      frameCursor += FrameSlot.Stride;
       frames[frame + FrameSlot.WorkspaceA] = rawTop;
       rawTop = frame;
       if (consuming) {
@@ -516,7 +514,7 @@ function assignDelimiterScopes(
     }
     if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
       const frame = frameCursor;
-      frameCursor += frameStride;
+      frameCursor += FrameSlot.Stride;
       const claim = frameClaim(frames, frame);
       if (claim === FrameClaim.Footnote) {
         // Footnotes have no raw bracket children, so skipping preserves the enclosing scope.
@@ -570,7 +568,7 @@ function assignDelimiterScopes(
 }
 
 function hasBracketRewrite(frames: readonly number[]): boolean {
-  for (let frame = frameHeaderSize; frame < frames.length; frame += frameStride) {
+  for (let frame = frameHeaderSize; frame < frames.length; frame += FrameSlot.Stride) {
     if (frameClaim(frames, frame) !== FrameClaim.Raw) {
       return true;
     }
@@ -628,7 +626,7 @@ function emitResolvedTokens(
 
     if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
       const frame = frameCursor;
-      frameCursor += frameStride;
+      frameCursor += FrameSlot.Stride;
       workspace[frame + FrameSlot.WorkspaceA] = rawTop;
       rawTop = frame;
       const claim = frameClaim(frames, frame);
@@ -747,7 +745,7 @@ function emitResolvedTokens(
 }
 
 export function compileInlineProgram(options: InlineProgramOptions): InlineResolverCompiler {
-  return (delimiterConfigs: readonly DelimiterConfig[]) => {
+  return (delimiterConfigs) => {
     const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
     return (source, tokens, context) => {
       const frames = analyzeBrackets(
