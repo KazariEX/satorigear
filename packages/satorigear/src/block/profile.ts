@@ -5,7 +5,7 @@ import type { BlockLine } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
 import type { BlockTokenStream } from "./tokens.ts";
 
-export interface CompiledBlockRule {
+export interface BlockSyntaxRule {
   block: boolean;
   close: BlockKind;
   inlineContent: boolean;
@@ -18,10 +18,6 @@ export const enum BlockSyntaxKind {
   Frame,
   Group,
   Leaf,
-}
-
-export interface BlockSyntaxSchema {
-  ruleByKind: readonly (CompiledBlockRule | undefined)[];
 }
 
 export type BlockStart = (
@@ -97,7 +93,7 @@ export interface BlockProfile {
   fallbacks: readonly BlockFallback[];
   interrupts: readonly (readonly BlockInterrupt[] | undefined)[];
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
-  schema: BlockSyntaxSchema;
+  rules: readonly (BlockSyntaxRule | undefined)[];
   starts: readonly (readonly BlockStart[] | undefined)[];
 }
 
@@ -105,10 +101,10 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
   const decorators: BlockDecoratorRegistration[] = [];
   const fallbacks: BlockFallback[] = [];
   const interrupts: BlockInterrupt[][] = [];
-  const ruleByKind: (CompiledBlockRule | undefined)[] = [];
-  const rules: (CompiledBlockRule | undefined)[] = [];
-  const starts: BlockStart[][] = [];
   const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
+  const ruleByBlockRule: (BlockSyntaxRule | undefined)[] = [];
+  const rules: (BlockSyntaxRule | undefined)[] = [];
+  const starts: BlockStart[][] = [];
 
   for (const feature of features) {
     if (feature.decorators) {
@@ -133,7 +129,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     if (feature.rules) {
       for (const registration of feature.rules) {
         const syntax = registration.syntax;
-        const rule: CompiledBlockRule = {
+        const rule: BlockSyntaxRule = {
           block: syntax.kind === "block" || syntax.kind === "leaf",
           close: syntax.kind === "block" || syntax.kind === "frame" ? syntax.close : BlockKind.None,
           inlineContent: registration.inlineContent === true,
@@ -143,27 +139,27 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
             ? BlockSyntaxKind.Frame
             : syntax.kind === "group" ? BlockSyntaxKind.Group : BlockSyntaxKind.Leaf,
         };
-        rules[registration.rule] = rule;
+        ruleByBlockRule[registration.rule] = rule;
         if (syntax.kind === "block" || syntax.kind === "frame") {
           const opens = typeof syntax.open === "number" ? [syntax.open] : syntax.open;
           for (const open of opens) {
-            ruleByKind[open] = rule;
+            rules[open] = rule;
           }
         }
         else if (syntax.kind === "group") {
           for (const token of syntax.tokens) {
-            ruleByKind[token] = rule;
+            rules[token] = rule;
           }
         }
         else if (syntax.kind === "leaf") {
-          ruleByKind[syntax.token] = rule;
+          rules[syntax.token] = rule;
         }
       }
     }
   }
 
   for (const registration of decorators) {
-    const rule = rules[registration.rule];
+    const rule = ruleByBlockRule[registration.rule];
     const build = rule?.build;
     if (!build) {
       throw new Error(`Cannot decorate unknown block rule ${registration.rule}`);
@@ -175,9 +171,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     fallbacks,
     interrupts,
     lazyContinuationUnwrappers,
-    schema: {
-      ruleByKind,
-    },
+    rules,
     starts,
   };
 }

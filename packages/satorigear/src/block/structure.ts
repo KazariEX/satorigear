@@ -1,5 +1,5 @@
 import type { BlockRule } from "../constants/block.ts";
-import type { BlockSyntaxSchema, CompiledBlockRule } from "./profile.ts";
+import type { BlockSyntaxRule } from "./profile.ts";
 import type { BlockRecord, BlockScanner } from "./scanner.ts";
 import type { BlockTokenStream } from "./tokens.ts";
 
@@ -7,12 +7,12 @@ import type { BlockTokenStream } from "./tokens.ts";
 // Semantic nodes are token ranges; top-level records index those ranges in source order.
 export class BlockStructure {
   #scanner: BlockScanner;
-  #schema: BlockSyntaxSchema;
+  #rules: readonly (BlockSyntaxRule | undefined)[];
   #tokens: BlockTokenStream;
 
-  constructor(schema: BlockSyntaxSchema, scanner: BlockScanner) {
+  constructor(rules: readonly (BlockSyntaxRule | undefined)[], scanner: BlockScanner) {
     this.#scanner = scanner;
-    this.#schema = schema;
+    this.#rules = rules;
     this.#tokens = scanner.tokens;
   }
 
@@ -38,9 +38,9 @@ export class BlockStructure {
     return this.ruleOf(tokenStart).rule === rule;
   }
 
-  ruleOf(tokenStart: number): CompiledBlockRule {
+  ruleOf(tokenStart: number): BlockSyntaxRule {
     const kind = this.#tokens.kind(tokenStart);
-    const rule = this.#schema.ruleByKind[kind];
+    const rule = this.#rules[kind];
     if (!rule) {
       throw new Error(`Block token ${tokenStart} does not begin a semantic node`);
     }

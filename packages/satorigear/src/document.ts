@@ -115,7 +115,7 @@ export class DocumentImpl implements Document {
     this.#profile = profile;
     this.#source = source;
     this.#blockScanner = new BlockScanner(profile.block);
-    this.#blockStructure = new BlockStructure(profile.block.schema, this.#blockScanner);
+    this.#blockStructure = new BlockStructure(profile.block.rules, this.#blockScanner);
     this.#blockScanner.scan(source);
     this.#syntaxState = new SyntaxState(profile.inline, this.#blockStructure);
     this.#updateTree(this.#syntaxState.update(source));

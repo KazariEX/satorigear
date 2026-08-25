@@ -2,7 +2,7 @@ import { emptySet } from "../primitives.ts";
 import { type BlockLine, logicalLine } from "./lines.ts";
 import { BlockSyntaxKind } from "./profile.ts";
 import type { BlockKind } from "../constants/block.ts";
-import type { BlockSyntaxSchema } from "./profile.ts";
+import type { BlockSyntaxRule } from "./profile.ts";
 
 // The fourth slot stores the token length of a semantic node beginning here. Raw tokens use zero.
 const blockTokenStride = 4;
@@ -77,14 +77,14 @@ export class BlockTokenStream {
     }
   }
 
-  indexStructure(schema: BlockSyntaxSchema): void {
+  indexStructure(rules: readonly (BlockSyntaxRule | undefined)[]): void {
     const fields = this.#fields;
     const opens: number[] = [];
     const closes: BlockKind[] = [];
     // Scanning writes each token once with an empty node length, so indexing needs no clearing pass.
     for (let index = 0; index < this.length; index++) {
       const kind = this.kind(index);
-      const rule = schema.ruleByKind[kind];
+      const rule = rules[kind];
       if (rule?.syntaxKind === BlockSyntaxKind.Frame) {
         opens.push(index);
         closes.push(rule.close);
@@ -96,7 +96,7 @@ export class BlockTokenStream {
           index++;
         } while (
           index < this.length &&
-          schema.ruleByKind[this.kind(index)] === rule
+          rules[this.kind(index)] === rule
         );
         fields[start * blockTokenStride + 3] = index - start;
         index--;

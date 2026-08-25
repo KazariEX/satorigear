@@ -24,7 +24,7 @@ export function createParser(options?: ParserOptions): Parser {
     createDocument: (source) => new DocumentImpl(source, profile),
     parse: (source) => {
       blockScanner ??= new BlockScanner(profile.block);
-      blockStructure ??= new BlockStructure(profile.block.schema, blockScanner);
+      blockStructure ??= new BlockStructure(profile.block.rules, blockScanner);
       return DocumentImpl.parse(
         source,
         profile,
