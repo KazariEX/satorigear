@@ -30,11 +30,6 @@ export function inlineMarkerRunEnd(source: string, start: number): number {
   return end;
 }
 
-function inlineTextEnd(source: string, start: number, boundary: RegExp): number {
-  boundary.lastIndex = start;
-  return boundary.test(source) ? boundary.lastIndex - 1 : source.length;
-}
-
 function tokenize(
   source: string,
   textBoundary: RegExp,
@@ -117,10 +112,10 @@ function tokenize(
       }
       // A marker may be shared by multiple features. If none accepts it,
       // leave the marker in the source gap and continue to the next compiled boundary.
-      offset = inlineTextEnd(source, offset + 1, textBoundary);
-      continue;
+      offset++;
     }
-    offset = inlineTextEnd(source, offset, textBoundary);
+    textBoundary.lastIndex = offset;
+    offset = textBoundary.test(source) ? textBoundary.lastIndex - 1 : source.length;
   }
   return tokens;
 }
