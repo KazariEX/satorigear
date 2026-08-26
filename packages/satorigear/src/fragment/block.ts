@@ -30,10 +30,7 @@ export const buildBlockNode = <T extends object = TopLevelContent>(
 ): SpannedNode<T> => {
   const structure = context.structure;
   const rule = structure.ruleOf(tokenStart);
-  const build = rule.build;
-  if (!build) {
-    throw new Error(`Unexpected block syntax at token ${tokenStart}`);
-  }
+  const build = rule.build!;
   return (
     rule.inlineContent
       ? build(

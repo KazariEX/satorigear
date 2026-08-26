@@ -254,11 +254,7 @@ export class BlockScanner {
 
   ruleOf(tokenStart: number): BlockSyntaxRule {
     const kind = this.#tokens.kind(tokenStart);
-    const rule = this.#profile.rules[kind];
-    if (!rule) {
-      throw new Error(`Block token ${tokenStart} does not begin a semantic node`);
-    }
-    return rule;
+    return this.#profile.rules[kind]!;
   }
 
   locator(): (offset: number) => SourceLocation {
