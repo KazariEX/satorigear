@@ -13,24 +13,22 @@ const enum BlockLineState {
   Lazy = 1,
 }
 
-const typedLineThreshold = 64 * BlockLineField.Stride;
+const enum BlockLineCapacity {
+  Initial = 4,
+  DoublingLimit = 16,
+}
 
 export class BlockLines {
-  // Small line sets stay in a growable array so ordinary documents avoid a typed-array
-  // allocation. Larger sets promote once and retain compact, contiguous numeric storage.
   #fieldLength = 0;
-  #fields: number[] | Int32Array = [];
+  #fields: Int32Array;
   // Positions in the retained edit suffix are stored relative to source EOF. Changing
   // source length then shifts the whole suffix without rewriting every line coordinate.
   #relativeStart = Infinity;
   #sourceLength: number;
 
-  constructor(sourceLength = 0, capacity = 0) {
+  constructor(sourceLength = 0, lineCapacity: number = BlockLineCapacity.Initial) {
     this.#sourceLength = sourceLength;
-    const fieldLength = capacity * BlockLineField.Stride;
-    if (fieldLength > typedLineThreshold) {
-      this.#fields = new Int32Array(fieldLength);
-    }
+    this.#fields = new Int32Array(lineCapacity * BlockLineField.Stride);
   }
 
   static from(source: string, start = 0, limit = source.length): BlockLines {
@@ -83,18 +81,13 @@ export class BlockLines {
       else {
         lineFeed = source.indexOf("\n", next);
       }
-      if (field >= (Array.isArray(fields) ? typedLineThreshold : fields.length)) {
+      if (field >= fields.length) {
         lines.#ensureCapacity(field + BlockLineField.Stride);
         fields = lines.#fields;
       }
-      if (Array.isArray(fields)) {
-        fields.push(start, end, next, 0);
-      }
-      else {
-        fields[field + BlockLineField.Start] = start;
-        fields[field + BlockLineField.End] = end;
-        fields[field + BlockLineField.Next] = next;
-      }
+      fields[field + BlockLineField.Start] = start;
+      fields[field + BlockLineField.End] = end;
+      fields[field + BlockLineField.Next] = next;
       field += BlockLineField.Stride;
       start = next;
     }
@@ -189,20 +182,15 @@ export class BlockLines {
   ): void {
     const field = this.#fieldLength;
     let fields = this.#fields;
-    if (field >= (Array.isArray(fields) ? typedLineThreshold : fields.length)) {
+    if (field >= fields.length) {
       this.#ensureCapacity(field + BlockLineField.Stride);
       fields = this.#fields;
     }
     const state = prefixColumns * 2 + (lazy ? BlockLineState.Lazy : 0);
-    if (Array.isArray(fields)) {
-      fields.push(start, end, next, state);
-    }
-    else {
-      fields[field + BlockLineField.Start] = start;
-      fields[field + BlockLineField.End] = end;
-      fields[field + BlockLineField.Next] = next;
-      fields[field + BlockLineField.State] = state;
-    }
+    fields[field + BlockLineField.Start] = start;
+    fields[field + BlockLineField.End] = end;
+    fields[field + BlockLineField.Next] = next;
+    fields[field + BlockLineField.State] = state;
     this.#fieldLength += BlockLineField.Stride;
   }
 
@@ -231,17 +219,15 @@ export class BlockLines {
     const next = lines.next(index);
     this.#fieldLength = 0;
     this.#relativeStart = Infinity;
-    if (Array.isArray(this.#fields)) {
-      this.#fields.length = 0;
-    }
     this.push(start, end, next, prefixColumns, lazy);
   }
 
   slice(start = 0, end = this.length): BlockLines {
-    const result = new BlockLines(this.#sourceLength);
+    // The exact slice supplies its own backing store, so skip the default capacity.
+    const result = new BlockLines(this.#sourceLength, 0);
     const fieldStart = start * BlockLineField.Stride;
     const fieldEnd = end * BlockLineField.Stride;
-    result.#fields = this.#fields.slice(fieldStart, fieldEnd) as number[] | Int32Array;
+    result.#fields = this.#fields.slice(fieldStart, fieldEnd);
     result.#fieldLength = fieldEnd - fieldStart;
     if (this.#relativeStart < end) {
       result.#relativeStart = Math.max(0, this.#relativeStart - start);
@@ -296,9 +282,6 @@ export class BlockLines {
       if (this.#relativeStart >= this.length) {
         this.#relativeStart = Infinity;
       }
-      if (Array.isArray(this.#fields)) {
-        this.#fields.length = this.#fieldLength;
-      }
     }
   }
 
@@ -342,33 +325,26 @@ export class BlockLines {
     const targetStart = this.#fieldLength;
     const targetEnd = targetStart + sourceEnd - sourceStart;
     this.#ensureCapacity(targetEnd);
-    const source = lines.#fields;
-    const target = this.#fields;
-    const range = Array.isArray(source)
-      ? source.slice(sourceStart, sourceEnd)
-      : source.subarray(sourceStart, sourceEnd);
-    if (Array.isArray(target)) {
-      target.push(...range);
-    }
-    else {
-      target.set(range, targetStart);
-    }
+    this.#fields.set(lines.#fields.subarray(sourceStart, sourceEnd), targetStart);
     this.#fieldLength = targetEnd;
   }
 
-  #ensureCapacity(length: number): void {
+  #ensureCapacity(fieldLength: number): void {
     const fields = this.#fields;
-    const currentCapacity = Array.isArray(fields) ? typedLineThreshold : fields.length;
-    if (length <= currentCapacity) {
+    if (fieldLength <= fields.length) {
       return;
     }
-    let capacity = Math.max(typedLineThreshold * 2, fields.length * 2);
-    while (capacity < length) {
-      capacity *= 2;
+    let lineCapacity = fields.length / BlockLineField.Stride;
+    const requiredLines = fieldLength / BlockLineField.Stride;
+    // Allocate four lines initially, double through 16, then grow by 50%.
+    while (lineCapacity < requiredLines) {
+      lineCapacity += lineCapacity < BlockLineCapacity.DoublingLimit
+        ? Math.max(BlockLineCapacity.Initial, lineCapacity)
+        : lineCapacity >>> 1;
     }
-    const typed = new Int32Array(capacity);
-    typed.set(fields);
-    this.#fields = typed;
+    const nextFields = new Int32Array(lineCapacity * BlockLineField.Stride);
+    nextFields.set(fields);
+    this.#fields = nextFields;
   }
 
   #position(position: number): number {
