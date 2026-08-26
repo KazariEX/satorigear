@@ -61,7 +61,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
           rule: BlockRule.Frontmatter,
           syntax: {
             kind: "leaf",
-            token: BlockKind.FrontmatterToken,
+            token: BlockKind.Frontmatter,
           },
           build: buildFrontmatter,
         },
@@ -75,7 +75,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
             }
             for (let end = start + 1; end < lines.length; end++) {
               if (frontmatterFenceAt(source, lines, end, marker)) {
-                appendLogicalToken(out, BlockKind.FrontmatterToken, source, lines, start, end + 1);
+                appendLogicalToken(out, BlockKind.Frontmatter, source, lines, start, end + 1);
                 return end + 1;
               }
             }

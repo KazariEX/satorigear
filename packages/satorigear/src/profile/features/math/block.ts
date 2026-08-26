@@ -25,7 +25,7 @@ export const blockRules: BlockFeature["rules"] = [
     rule: BlockRule.MathBlock,
     syntax: {
       kind: "leaf",
-      token: BlockKind.MathBlockToken,
+      token: BlockKind.MathBlock,
     },
     build(tokenStart, context) {
       const offset = context.structure.tokens.start(tokenStart);
@@ -33,7 +33,7 @@ export const blockRules: BlockFeature["rules"] = [
       const value = context.structure.tokens.text(context.source, tokenStart);
       const block = context.structure.tokens.value<FencedBlock>(tokenStart);
       if (!block) {
-        throw new Error("MathBlockToken has no fence metadata");
+        throw new Error("Math block lacks fence metadata");
       }
       const meta = semanticText(block.info);
       return {
@@ -74,7 +74,7 @@ export const blockStarts: BlockFeature["starts"] = [
       }
       appendLogicalToken(
         out,
-        BlockKind.MathBlockToken,
+        BlockKind.MathBlock,
         source,
         lines,
         start,

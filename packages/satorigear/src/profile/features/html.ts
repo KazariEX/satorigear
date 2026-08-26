@@ -124,8 +124,8 @@ function htmlStartAt(
 
 function htmlBlockUnterminated(token: number, context: BlockBuildContext): boolean {
   const result = context.structure.tokens.value<boolean>(token);
-  if (context.structure.tokens.kind(token) !== BlockKind.HtmlBlockToken || result === void 0) {
-    throw new Error("Expected HtmlBlockToken to contain its termination state");
+  if (context.structure.tokens.kind(token) !== BlockKind.HtmlBlock || result === void 0) {
+    throw new Error("HTML block lacks termination state");
   }
   return result;
 }
@@ -146,7 +146,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.HtmlBlock,
         syntax: {
           kind: "leaf",
-          token: BlockKind.HtmlBlockToken,
+          token: BlockKind.HtmlBlock,
         },
         build(tokenStart, context) {
           const offset = context.structure.tokens.start(tokenStart);
@@ -204,7 +204,7 @@ export const feature: SyntaxFeature = {
               end++;
             }
           }
-          appendLogicalToken(out, BlockKind.HtmlBlockToken, source, lines, start, end, unterminated);
+          appendLogicalToken(out, BlockKind.HtmlBlock, source, lines, start, end, unterminated);
           return end;
         },
       },

@@ -19,7 +19,7 @@ import type { Attributes } from "./types.ts";
 
 type AttributableNode = SpannedNode<PhrasingContent> & { attributes?: Attributes };
 
-const enum AttributeTokenFlag {
+const enum AttributeFlag {
   Detached = 1,
   Terminal = 2,
 }
@@ -125,7 +125,7 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
   const previousEnd = previous >= 0 ? inlineTokenEnd(tokens, previous) : 0;
   if (
     previousEnd < start && (
-      previous >= 0 && inlineTokenKind(tokens, previous) === InlineKind.AttributesToken ||
+      previous >= 0 && inlineTokenKind(tokens, previous) === InlineKind.Attributes ||
       hasVisibleText(source, previousEnd, start)
     )
   ) {
@@ -135,11 +135,11 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
 
   appendInlineToken(
     tokens,
-    InlineKind.AttributesToken,
+    InlineKind.Attributes,
     start,
     end,
     start > 0 && isMarkdownWhitespace(source.charCodeAt(start - 1))
-      ? AttributeTokenFlag.Detached
+      ? AttributeFlag.Detached
       : 0,
   );
 
@@ -156,13 +156,13 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
       ) {
         continue;
       }
-      if (kind !== InlineKind.AttributesToken) {
+      if (kind !== InlineKind.Attributes) {
         break;
       }
       setInlineTokenData(
         tokens,
         index,
-        inlineTokenData(tokens, index) | AttributeTokenFlag.Terminal,
+        inlineTokenData(tokens, index) | AttributeFlag.Terminal,
       );
     }
   }
@@ -187,7 +187,7 @@ export const feature: SyntaxFeature = {
     build: [
       {
         kind: "decorate",
-        token: InlineKind.AttributesToken,
+        token: InlineKind.Attributes,
         apply(tokenIndex, sourceSpan, context, target) {
           // mdast extensions may declare unrelated `attributes` shapes; this parser only emits ours.
           const previous = target.children.at(-1) as AttributableNode | undefined;
@@ -199,8 +199,8 @@ export const feature: SyntaxFeature = {
             return false;
           }
           const flags = inlineTokenData(context.tokens, tokenIndex);
-          const terminal = Boolean(flags & AttributeTokenFlag.Terminal);
-          const detached = Boolean(flags & AttributeTokenFlag.Detached);
+          const terminal = Boolean(flags & AttributeFlag.Terminal);
+          const detached = Boolean(flags & AttributeFlag.Detached);
           if (
             terminal && (
               detached ||

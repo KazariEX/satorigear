@@ -64,7 +64,7 @@ export const feature: SyntaxFeature = {
         const contentLength = lines.end(contentEnd - 1) - lines.start(start);
         appendLogicalToken(
           out,
-          BlockKind.IndentedCodeBlockToken,
+          BlockKind.IndentedCodeBlock,
           source,
           lines,
           start,
@@ -113,7 +113,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.IndentedCodeBlock,
         syntax: {
           kind: "leaf",
-          token: BlockKind.IndentedCodeBlockToken,
+          token: BlockKind.IndentedCodeBlock,
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;

@@ -35,7 +35,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.ThematicBreak,
         syntax: {
           kind: "leaf",
-          token: BlockKind.ThematicBreakToken,
+          token: BlockKind.ThematicBreak,
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
@@ -63,7 +63,7 @@ export const feature: SyntaxFeature = {
           if (!isThematicBreak(source, lines, start, contentOffset)) {
             return;
           }
-          out.push(BlockKind.ThematicBreakToken, contentOffset, lines.end(start));
+          out.push(BlockKind.ThematicBreak, contentOffset, lines.end(start));
           return start + 1;
         },
       },
