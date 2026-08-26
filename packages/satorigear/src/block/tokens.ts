@@ -437,19 +437,18 @@ export function appendLogicalToken(
   const contentEndOffset = contentEnd === tokenEnd
     ? void 0
     : contentEnd - tokenStart;
-  let canSliceSource = true;
-  let previousLineEnd = 0;
-  for (let index = 0; index < count; index++) {
-    const line = start + index;
-    const lineStart = lines.start(line);
-    if (
-      // Tab overshoot is represented as virtual leading columns that do not exist in the source slice.
-      lines.prefixColumns(line) !== 0 ||
-      // A derived line may begin inside its physical line after a container marker was stripped.
-      (lineStart !== 0 && source[lineStart - 1] !== "\n" && source[lineStart - 1] !== "\r") ||
-      // Adjacent physical spans are required so a single slice cannot restore skipped container prefixes.
-      (index !== 0 && lineStart !== previousLineEnd)
-    ) {
+  const previous = source[tokenStart - 1];
+  let canSliceSource = (
+    // Tab overshoot is represented as virtual leading columns absent from the source slice.
+    lines.prefixColumns(start) === 0 && (
+      // A derived first line may begin inside its physical line after a container marker.
+      tokenStart === 0 || previous === "\n" || previous === "\r"
+    )
+  );
+  let previousLineEnd = lines.next(start);
+  for (let line = start + 1; canSliceSource && line < end; line++) {
+    // Continuity proves later lines begin at physical boundaries without rechecking source text.
+    if (lines.prefixColumns(line) !== 0 || lines.start(line) !== previousLineEnd) {
       canSliceSource = false;
       break;
     }
