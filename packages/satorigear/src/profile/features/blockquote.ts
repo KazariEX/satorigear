@@ -1,4 +1,4 @@
-import { type BlockLine, isBlank, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
+import { BlockLines, isBlank, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../fragment/block.ts";
@@ -9,13 +9,17 @@ interface BlockQuoteMarker {
   prefixColumns: number;
 }
 
-function blockQuoteOffset(source: string, line: BlockLine): BlockQuoteMarker | undefined {
-  const markerOffset = lineIndentOffset(source, line);
+function blockQuoteOffset(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  markerOffset: number,
+): BlockQuoteMarker | undefined {
   if (markerOffset < 0 || source[markerOffset] !== ">") {
     return;
   }
   let offset = markerOffset + 1;
-  let prefixColumns = line.prefixColumns ?? 0;
+  let prefixColumns = lines.prefixColumns(index);
   if (source[offset] === " ") {
     offset++;
   }
@@ -24,11 +28,6 @@ function blockQuoteOffset(source: string, line: BlockLine): BlockQuoteMarker | u
     offset++;
   }
   return { offset, prefixColumns };
-}
-
-function unwrapBlockQuote(source: string, line: BlockLine): BlockLine | undefined {
-  const marker = blockQuoteOffset(source, line);
-  return marker ? { ...line, start: marker.offset, prefixColumns: marker.prefixColumns } : void 0;
 }
 
 export const feature: SyntaxFeature = {
@@ -59,39 +58,43 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.GreaterThanSign,
         ],
-        unwrapLazyContinuation: unwrapBlockQuote,
-        interrupt(source, line) {
-          return blockQuoteOffset(source, line) !== void 0;
-        },
-        start(source, lines, start, out, contentOffset, context) {
-          const line = lines[start];
-          if (blockQuoteOffset(source, line) === void 0) {
-            return;
+        unwrapLazyContinuation(source, lines, index, contentOffset, target) {
+          const marker = blockQuoteOffset(source, lines, index, contentOffset);
+          if (!marker) {
+            return false;
           }
-          const quoteLines: BlockLine[] = [];
+          target.resetFrom(lines, index, marker.offset, marker.prefixColumns);
+          return true;
+        },
+        interrupt() {
+          return true;
+        },
+        start(source, lines, start, contentOffset, out, context) {
+          const quoteLines = new BlockLines();
           let index = start;
           let lazyParagraph = false;
-          while (index < lines.length) {
-            const contentLine = unwrapBlockQuote(source, lines[index]);
-            if (contentLine) {
-              quoteLines.push(contentLine);
-              lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
-              index++;
+          for (; index < lines.length; index++) {
+            const markerOffset = index === start
+              ? contentOffset
+              : lineIndentOffset(source, lines, index);
+            const marker = blockQuoteOffset(source, lines, index, markerOffset);
+            if (marker) {
+              quoteLines.pushFrom(lines, index, marker.offset, marker.prefixColumns);
+              lazyParagraph = context.endsWithParagraphLeaf(source, quoteLines, quoteLines.length - 1);
               continue;
             }
             if (
               !lazyParagraph ||
-              isBlank(source, lines[index]) ||
-              !lines[index].lazy && context.startsInterruptingBlock(source, lines[index])
+              isBlank(source, lines, index) ||
+              !lines.lazy(index) && context.startsInterruptingBlock(source, lines, index, markerOffset)
             ) {
               break;
             }
-            quoteLines.push({ ...lines[index], lazy: true });
-            index++;
+            quoteLines.pushLazy(lines, index);
           }
           out.push(BlockKind.BlockQuoteOpen, contentOffset, contentOffset + 1);
           context.scanLines(source, quoteLines, out);
-          const end = quoteLines.at(-1)?.next ?? line.start;
+          const end = quoteLines.next(quoteLines.length - 1);
           out.push(BlockKind.BlockQuoteClose, end, end);
           return index;
         },

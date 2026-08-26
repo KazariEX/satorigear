@@ -1,4 +1,4 @@
-import { type BlockLine, isBlank } from "../../block/lines.ts";
+import { type BlockLines, isBlank } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
@@ -30,7 +30,7 @@ function linkDefinitionFields(tokens: BlockTokenStream, token: number): LinkDefi
 
 function linkDefinitionAt(
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   startIndex: number,
   contentOffset: number,
   context: BlockScanContext,
@@ -46,10 +46,10 @@ function linkDefinitionAt(
   // Funnel failures through one exit so only unrepresented lookahead becomes scanner state.
   parseDefinition: {
     scanLabel: while (true) {
-      const line = lines[lineIndex];
-      while (offset < line.end) {
+      const lineEnd = lines.end(lineIndex);
+      while (offset < lineEnd) {
         const code = source.charCodeAt(offset);
-        if (code === Character.ReverseSolidus && offset + 1 < line.end) {
+        if (code === Character.ReverseSolidus && offset + 1 < lineEnd) {
           labelHasContent = true;
           labelLength += 2;
           offset += 2;
@@ -74,17 +74,17 @@ function linkDefinitionAt(
         }
         offset++;
       }
-      const nextLine = lines[lineIndex + 1];
-      lookaheadEnd = nextLine?.end ?? line.next;
-      if (!nextLine || isBlank(source, nextLine)) {
+      const nextLine = lineIndex + 1;
+      lookaheadEnd = nextLine < lines.length ? lines.end(nextLine) : lines.next(lineIndex);
+      if (nextLine >= lines.length || isBlank(source, lines, nextLine)) {
         break parseDefinition;
       }
       if (++labelLength > 999) {
         break parseDefinition;
       }
-      label += source.slice(labelStart, line.next);
+      label += source.slice(labelStart, lines.next(lineIndex));
       lineIndex++;
-      offset = lines[lineIndex].start;
+      offset = lines.start(lineIndex);
       labelStart = offset;
     }
     label += source.slice(labelStart, offset);
@@ -93,32 +93,34 @@ function linkDefinitionAt(
     }
     offset += 2;
 
-    const skipSpaces = (): void => {
-      while (offset < lines[lineIndex].end && (source[offset] === " " || source[offset] === "\t")) {
+    const skipSpaces = (lineEnd: number): void => {
+      while (offset < lineEnd && (source[offset] === " " || source[offset] === "\t")) {
         offset++;
       }
     };
-    skipSpaces();
-    if (offset === lines[lineIndex].end) {
-      const nextLine = lines[lineIndex + 1];
-      lookaheadEnd = nextLine?.end ?? lines[lineIndex].next;
-      if (!nextLine || isBlank(source, nextLine)) {
+    let lineEnd = lines.end(lineIndex);
+    skipSpaces(lineEnd);
+    if (offset === lineEnd) {
+      const nextLine = lineIndex + 1;
+      lookaheadEnd = nextLine < lines.length ? lines.end(nextLine) : lines.next(lineIndex);
+      if (nextLine >= lines.length || isBlank(source, lines, nextLine)) {
         break parseDefinition;
       }
       lineIndex++;
-      offset = lines[lineIndex].start;
-      skipSpaces();
+      offset = lines.start(lineIndex);
+      lineEnd = lines.end(lineIndex);
+      skipSpaces(lineEnd);
     }
 
     let destination: string;
     if (source[offset] === "<") {
       offset++;
       const destinationStart = offset;
-      while (offset < lines[lineIndex].end && source[offset] !== ">") {
+      while (offset < lineEnd && source[offset] !== ">") {
         if (source[offset] === "<") {
           break parseDefinition;
         }
-        if (source[offset] === "\\" && offset + 1 < lines[lineIndex].end) {
+        if (source[offset] === "\\" && offset + 1 < lineEnd) {
           offset += 2;
         }
         else {
@@ -134,12 +136,12 @@ function linkDefinitionAt(
     else {
       let depth = 0;
       const destinationStart = offset;
-      while (offset < lines[lineIndex].end) {
+      while (offset < lineEnd) {
         const code = source.charCodeAt(offset);
         if (code === Character.Space || code === Character.CharacterTabulation) {
           break;
         }
-        if (code === Character.ReverseSolidus && offset + 1 < lines[lineIndex].end) {
+        if (code === Character.ReverseSolidus && offset + 1 < lineEnd) {
           offset += 2;
           continue;
         }
@@ -160,16 +162,17 @@ function linkDefinitionAt(
     }
 
     const destinationLine = lineIndex;
-    if (offset < lines[lineIndex].end && source[offset] !== " " && source[offset] !== "\t") {
+    if (offset < lineEnd && source[offset] !== " " && source[offset] !== "\t") {
       break parseDefinition;
     }
-    skipSpaces();
+    skipSpaces(lineEnd);
     let titleOnNextLine = false;
-    if (offset === lines[lineIndex].end && lineIndex + 1 < lines.length) {
-      lookaheadEnd = lines[lineIndex + 1].end;
+    if (offset === lineEnd && lineIndex + 1 < lines.length) {
+      lookaheadEnd = lines.end(lineIndex + 1);
       lineIndex++;
-      offset = lines[lineIndex].start;
-      skipSpaces();
+      offset = lines.start(lineIndex);
+      lineEnd = lines.end(lineIndex);
+      skipSpaces(lineEnd);
       titleOnNextLine = true;
     }
 
@@ -192,9 +195,9 @@ function linkDefinitionAt(
     let titleStart = offset;
     let closed = false;
     while (lineIndex < lines.length) {
-      const line = lines[lineIndex];
-      while (offset < line.end) {
-        if (source[offset] === "\\" && offset + 1 < line.end) {
+      lineEnd = lines.end(lineIndex);
+      while (offset < lineEnd) {
+        if (source[offset] === "\\" && offset + 1 < lineEnd) {
           offset += 2;
           continue;
         }
@@ -209,19 +212,19 @@ function linkDefinitionAt(
       if (closed) {
         break;
       }
-      const nextLine = lines[lineIndex + 1];
-      lookaheadEnd = nextLine?.end ?? line.next;
-      if (!nextLine || isBlank(source, nextLine)) {
+      const nextLine = lineIndex + 1;
+      lookaheadEnd = nextLine < lines.length ? lines.end(nextLine) : lines.next(lineIndex);
+      if (nextLine >= lines.length || isBlank(source, lines, nextLine)) {
         break;
       }
-      title += source.slice(titleStart, line.next);
+      title += source.slice(titleStart, lines.next(lineIndex));
       lineIndex++;
-      offset = lines[lineIndex].start;
+      offset = lines.start(lineIndex);
       titleStart = offset;
     }
     if (closed) {
-      skipSpaces();
-      if (offset === lines[lineIndex].end) {
+      skipSpaces(lineEnd);
+      if (offset === lineEnd) {
         fields.title = title;
         return { definitionKey, end: lineIndex + 1, fields };
       }
@@ -229,7 +232,7 @@ function linkDefinitionAt(
     if (!titleOnNextLine) {
       break parseDefinition;
     }
-    if (lookaheadEnd > lines[destinationLine + 1].next) {
+    if (lookaheadEnd > lines.next(destinationLine + 1)) {
       context.retainLookahead(lookaheadEnd);
     }
     return { definitionKey, end: destinationLine + 1, fields };
@@ -275,7 +278,7 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.LeftSquareBracket,
         ],
-        start(source, lines, start, out, contentOffset, context) {
+        start(source, lines, start, contentOffset, out, context) {
           const definition = linkDefinitionAt(source, lines, start, contentOffset, context);
           if (!definition) {
             return;
@@ -284,13 +287,14 @@ export const feature: SyntaxFeature = {
             definitionKey: definition.definitionKey,
             value: definition.fields,
           });
+          let definitionEnd = contentOffset;
           for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
-            const current = lines[definitionLine];
-            const end = definitionLine + 1 < definition.end ? current.next : current.end;
-            out.push(BlockKind.LinkDefinitionChunk, current.start, end);
+            definitionEnd = definitionLine + 1 < definition.end
+              ? lines.next(definitionLine)
+              : lines.end(definitionLine);
+            out.push(BlockKind.LinkDefinitionChunk, lines.start(definitionLine), definitionEnd);
           }
-          const end = lines[definition.end - 1].end;
-          out.push(BlockKind.LinkDefinitionClose, end, end);
+          out.push(BlockKind.LinkDefinitionClose, definitionEnd, definitionEnd);
           return definition.end;
         },
       },

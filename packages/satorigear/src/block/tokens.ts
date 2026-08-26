@@ -1,6 +1,6 @@
 import { BlockKind } from "../constants/block.ts";
 import { emptySet } from "../primitives.ts";
-import { type BlockLine, logicalLine } from "./lines.ts";
+import { type BlockLines, logicalLine } from "./lines.ts";
 import type { BlockSyntaxRule } from "./profile.ts";
 
 // The fourth slot stores the token length of a semantic node beginning here. Raw tokens use zero.
@@ -424,41 +424,43 @@ export function appendLogicalToken(
   out: BlockTokenStream,
   kind: BlockKind,
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
   end: number,
   value?: unknown,
 ): void {
   const count = end - start;
-  const tokenStart = lines[start].start;
-  const lastLine = lines[end - 1];
-  const tokenEnd = lastLine.next;
-  const contentEndOffset = lastLine.end === tokenEnd
+  const tokenStart = lines.start(start);
+  const lastLine = end - 1;
+  const tokenEnd = lines.next(lastLine);
+  const contentEnd = lines.end(lastLine);
+  const contentEndOffset = contentEnd === tokenEnd
     ? void 0
-    : lastLine.end - tokenStart;
+    : contentEnd - tokenStart;
   let canSliceSource = true;
   let previousLineEnd = 0;
   for (let index = 0; index < count; index++) {
-    const line = lines[start + index];
+    const line = start + index;
+    const lineStart = lines.start(line);
     if (
       // Tab overshoot is represented as virtual leading columns that do not exist in the source slice.
-      (line.prefixColumns ?? 0) !== 0 ||
+      lines.prefixColumns(line) !== 0 ||
       // A derived line may begin inside its physical line after a container marker was stripped.
-      (line.start !== 0 && source[line.start - 1] !== "\n" && source[line.start - 1] !== "\r") ||
+      (lineStart !== 0 && source[lineStart - 1] !== "\n" && source[lineStart - 1] !== "\r") ||
       // Adjacent physical spans are required so a single slice cannot restore skipped container prefixes.
-      (index !== 0 && line.start !== previousLineEnd)
+      (index !== 0 && lineStart !== previousLineEnd)
     ) {
       canSliceSource = false;
       break;
     }
-    previousLineEnd = line.next;
+    previousLineEnd = lines.next(line);
   }
 
   let text: string | undefined;
   if (!canSliceSource) {
     const logicalLines = new Array<string>(count);
     for (let index = 0; index < count; index++) {
-      logicalLines[index] = logicalLine(source, lines[start + index]);
+      logicalLines[index] = logicalLine(source, lines, start + index);
     }
     text = logicalLines.join("");
   }

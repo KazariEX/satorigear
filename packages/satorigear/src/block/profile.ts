@@ -1,7 +1,7 @@
 // Block features compile into the immutable scanner, structure, and node builders shared by a parser.
 import { BlockKind, type BlockRule } from "../constants/block.ts";
 import type { BlockNodeBuilder } from "../fragment/block.ts";
-import type { BlockLine } from "./lines.ts";
+import type { BlockLines } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
 import type { BlockTokenStream } from "./tokens.ts";
 
@@ -15,28 +15,36 @@ export interface BlockSyntaxRule {
 
 export type BlockStart = (
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
-  tokens: BlockTokenStream,
   contentOffset: number,
+  out: BlockTokenStream,
   context: BlockScanContext,
 ) => number | undefined;
 
 type BlockFallback = (
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
-  tokens: BlockTokenStream,
+  contentOffset: number,
+  out: BlockTokenStream,
   context: BlockScanContext,
 ) => number | undefined;
 
 type BlockInterrupt = (
   source: string,
-  line: BlockLine,
+  lines: BlockLines,
+  index: number,
   contentOffset: number,
 ) => boolean;
 
-type LazyContinuationUnwrapper = (source: string, line: BlockLine) => BlockLine | undefined;
+type LazyContinuationUnwrapper = (
+  source: string,
+  lines: BlockLines,
+  index: number,
+  contentOffset: number,
+  target: BlockLines,
+) => boolean;
 
 interface BlockStartRegistration {
   codes: readonly number[];

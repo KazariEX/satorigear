@@ -1,4 +1,4 @@
-import { type BlockLine, indentOffset, isBlank } from "../../block/lines.ts";
+import { type BlockLines, indentOffset, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { firstChildStart } from "../../fragment/node.ts";
@@ -8,15 +8,15 @@ import type { SyntaxFeature } from "../types.ts";
 
 function emitInlineChunks(
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
   end: number,
   out: BlockTokenStream,
 ): void {
   while (start < end) {
-    const line = lines[start++];
-    const offset = indentOffset(source, line);
-    const chunkEnd = start < end ? line.next : line.end;
+    const line = start++;
+    const offset = indentOffset(source, lines, line);
+    const chunkEnd = start < end ? lines.next(line) : lines.end(line);
     if (chunkEnd > offset) {
       out.push(BlockKind.InlineChunk, offset, chunkEnd);
     }
@@ -26,40 +26,41 @@ function emitInlineChunks(
 export const feature: SyntaxFeature = {
   block: {
     fallbacks: [
-      (source, lines, start, out, context) => {
-        let index = start;
+      (source, lines, start, contentOffset, out, context) => {
+        // Earlier fallbacks rejected this nonblank line, so it begins the paragraph.
+        let index = start + 1;
         while (index < lines.length) {
-          const line = lines[index];
-          if (isBlank(source, line)) {
+          if (isBlank(source, lines, index)) {
             break;
           }
-          if (line.lazy) {
+          if (lines.lazy(index)) {
             index++;
             continue;
           }
-          const setext = setextMarkerAt(source, line);
-          if (index > start && setext) {
+          const contentOffset = lineIndentOffset(source, lines, index);
+          const setext = setextMarkerAt(source, lines, index, contentOffset);
+          if (setext) {
+            const headingStart = lines.start(start);
             out.push(
               setext === "=" ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
-              lines[start].start,
-              lines[start].start,
+              headingStart,
+              headingStart,
             );
             emitInlineChunks(source, lines, start, index, out);
-            out.push(BlockKind.HeadingClose, line.end, line.end);
+            const lineEnd = lines.end(index);
+            out.push(BlockKind.HeadingClose, lineEnd, lineEnd);
             return index + 1;
           }
-          if (index > start && context.startsInterruptingBlock(source, line)) {
+          if (context.startsInterruptingBlock(source, lines, index, contentOffset)) {
             break;
           }
           index++;
         }
-        if (index > start) {
-          const offset = lines[start].start;
-          out.push(BlockKind.ParagraphOpen, offset, offset);
-          emitInlineChunks(source, lines, start, index, out);
-          const close = lines[index - 1].end;
-          out.push(BlockKind.ParagraphClose, close, close);
-        }
+        const offset = lines.start(start);
+        out.push(BlockKind.ParagraphOpen, offset, offset);
+        emitInlineChunks(source, lines, start, index, out);
+        const close = lines.end(index - 1);
+        out.push(BlockKind.ParagraphClose, close, close);
         return index;
       },
     ],

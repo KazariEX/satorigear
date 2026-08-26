@@ -1,33 +1,34 @@
 import type { Heading } from "mdast";
-import { type BlockLine, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { firstChildStart } from "../../fragment/node.ts";
+import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-function atxAt(source: string, line: BlockLine): {
+function atxAt(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  markerOffset: number,
+): {
   contentEnd: number;
   contentOffset: number;
-  marker: string;
-  markerOffset: number;
+  markerEnd: number;
 } | undefined {
-  const markerOffset = lineIndentOffset(source, line);
-  if (markerOffset < 0 || source[markerOffset] !== "#") {
-    return;
-  }
   let markerEnd = markerOffset + 1;
-  while (markerEnd < line.end && markerEnd - markerOffset < 6 && source[markerEnd] === "#") {
+  const lineEnd = lines.end(index);
+  while (markerEnd < lineEnd && markerEnd - markerOffset < 6 && source[markerEnd] === "#") {
     markerEnd++;
   }
-  if (markerEnd < line.end && source[markerEnd] !== " " && source[markerEnd] !== "\t") {
+  if (markerEnd < lineEnd && source[markerEnd] !== " " && source[markerEnd] !== "\t") {
     return;
   }
   let contentOffset = markerEnd;
-  while (contentOffset < line.end && (source[contentOffset] === " " || source[contentOffset] === "\t")) {
+  while (contentOffset < lineEnd && (source[contentOffset] === " " || source[contentOffset] === "\t")) {
     contentOffset++;
   }
-  let contentEnd = line.end;
+  let contentEnd = lineEnd;
   while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
     contentEnd--;
   }
@@ -42,23 +43,34 @@ function atxAt(source: string, line: BlockLine): {
     }
   }
   return {
-    markerOffset,
-    marker: source.slice(markerOffset, markerEnd),
+    markerEnd,
     contentOffset,
     contentEnd,
   };
 }
 
-export function setextMarkerAt(source: string, line: BlockLine): "=" | "-" | undefined {
-  const markerOffset = lineIndentOffset(source, line);
+export function setextMarkerAt(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  markerOffset: number,
+): "=" | "-" | undefined {
   if (markerOffset < 0) {
     return;
   }
   const marker = source[markerOffset];
-  const match = marker === "=" || marker === "-"
-    ? /^(=+|-+)[ \t]*$/.exec(source.slice(markerOffset, line.end))
-    : void 0;
-  return match ? match[1][0] as "=" | "-" : void 0;
+  if (marker !== "=" && marker !== "-") {
+    return;
+  }
+  const lineEnd = lines.end(index);
+  let offset = markerOffset + 1;
+  while (offset < lineEnd && source[offset] === marker) {
+    offset++;
+  }
+  while (offset < lineEnd && (source[offset] === " " || source[offset] === "\t")) {
+    offset++;
+  }
+  return offset === lineEnd ? marker : void 0;
 }
 
 export const feature: SyntaxFeature = {
@@ -116,20 +128,20 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.NumberSign,
         ],
-        interrupt(source, line) {
-          return !!atxAt(source, line);
+        interrupt(source, lines, index, contentOffset) {
+          return !!atxAt(source, lines, index, contentOffset);
         },
-        start(source, lines, start, out) {
-          const line = lines[start];
-          const atx = atxAt(source, line);
+        start(source, lines, start, contentOffset, out) {
+          const atx = atxAt(source, lines, start, contentOffset);
           if (!atx) {
             return;
           }
-          out.push(BlockKind.AtxHeadingOpen, atx.markerOffset, atx.markerOffset + atx.marker.length);
+          out.push(BlockKind.AtxHeadingOpen, contentOffset, atx.markerEnd);
           if (atx.contentEnd > atx.contentOffset) {
             out.push(BlockKind.InlineChunk, atx.contentOffset, atx.contentEnd);
           }
-          out.push(BlockKind.HeadingClose, line.end, line.end);
+          const lineEnd = lines.end(start);
+          out.push(BlockKind.HeadingClose, lineEnd, lineEnd);
           return start + 1;
         },
       },

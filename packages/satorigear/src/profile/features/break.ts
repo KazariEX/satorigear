@@ -2,16 +2,21 @@ import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { blockEnd } from "../../fragment/block.ts";
-import type { BlockLine } from "../../block/lines.ts";
+import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-export function isThematicBreak(source: string, line: BlockLine, contentOffset: number): boolean {
+export function isThematicBreak(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  contentOffset: number,
+): boolean {
   const marker = source[contentOffset];
   if (marker !== "*" && marker !== "-" && marker !== "_") {
     return false;
   }
   let count = 0;
-  for (let offset = contentOffset; offset < line.end; offset++) {
+  for (let offset = contentOffset, end = lines.end(index); offset < end; offset++) {
     const character = source[offset];
     if (character === marker) {
       count++;
@@ -51,15 +56,14 @@ export const feature: SyntaxFeature = {
           Character.HyphenMinus,
           Character.LowLine,
         ],
-        interrupt(source, line, contentOffset) {
-          return isThematicBreak(source, line, contentOffset);
+        interrupt(source, lines, index, contentOffset) {
+          return isThematicBreak(source, lines, index, contentOffset);
         },
-        start(source, lines, start, out, contentOffset) {
-          const line = lines[start];
-          if (!isThematicBreak(source, line, contentOffset)) {
+        start(source, lines, start, contentOffset, out) {
+          if (!isThematicBreak(source, lines, start, contentOffset)) {
             return;
           }
-          out.push(BlockKind.ThematicBreakToken, contentOffset, line.end);
+          out.push(BlockKind.ThematicBreakToken, contentOffset, lines.end(start));
           return start + 1;
         },
       },

@@ -1,21 +1,19 @@
-import { Character } from "../constants/character.ts";
-import {
-  type BlockLine,
-  firstLineIndexAtOrAfter,
-  indentColumns,
-  isBlank,
-  lineIndentOffset,
-} from "./lines.ts";
+import { BlockLines, isBlank, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocation, SourceSpan } from "../source-view.ts";
 import type { BlockProfile, BlockSyntaxRule } from "./profile.ts";
 
 export interface BlockScanContext {
-  endsWithParagraphLeaf: (source: string, line: BlockLine) => boolean;
+  endsWithParagraphLeaf: (source: string, lines: BlockLines, index: number) => boolean;
   retainLookahead: (end: number) => void;
   // Returns whether blank lines separate direct blocks in this line view.
-  scanLines: (source: string, lines: readonly BlockLine[], tokens: BlockTokenStream) => boolean;
-  startsInterruptingBlock: (source: string, line: BlockLine) => boolean;
+  scanLines: (source: string, lines: BlockLines, tokens: BlockTokenStream) => boolean;
+  startsInterruptingBlock: (
+    source: string,
+    lines: BlockLines,
+    index: number,
+    contentOffset?: number,
+  ) => boolean;
 }
 
 export interface BlockScanChange {
@@ -40,32 +38,13 @@ export interface BlockRecord extends SourceSpan {
   tokenStart: number;
 }
 
-function profileStarts(
+function startsInterruptingBlock(
   profile: BlockProfile,
-  context: BlockScanContext,
   source: string,
-  lines: readonly BlockLine[],
-  start: number,
-  out: BlockTokenStream,
-): number | undefined {
-  const contentOffset = lineIndentOffset(source, lines[start]);
-  if (contentOffset < 0) {
-    return;
-  }
-  const starts = profile.starts[source.charCodeAt(contentOffset)];
-  if (!starts) {
-    return;
-  }
-  for (const resolve of starts) {
-    const end = resolve(source, lines, start, out, contentOffset, context);
-    if (end !== void 0) {
-      return end;
-    }
-  }
-}
-
-function startsInterruptingBlock(profile: BlockProfile, source: string, line: BlockLine): boolean {
-  const contentOffset = lineIndentOffset(source, line);
+  lines: BlockLines,
+  index: number,
+  contentOffset = lineIndentOffset(source, lines, index),
+): boolean {
   if (contentOffset < 0) {
     return false;
   }
@@ -74,7 +53,7 @@ function startsInterruptingBlock(profile: BlockProfile, source: string, line: Bl
     return false;
   }
   for (const interrupt of interrupts) {
-    if (interrupt(source, line, contentOffset)) {
+    if (interrupt(source, lines, index, contentOffset)) {
       return true;
     }
   }
@@ -85,25 +64,32 @@ function endsWithParagraphLeaf(
   profile: BlockProfile,
   context: BlockScanContext,
   source: string,
-  line: BlockLine,
+  lines: BlockLines,
+  index: number,
+  unwrappedLine: BlockLines,
 ): boolean {
-  let contentLine = line;
+  let contentLines = lines;
+  let contentIndex = index;
   while (true) {
-    let unwrapped: BlockLine | undefined;
+    const contentOffset = lineIndentOffset(source, contentLines, contentIndex);
+    if (contentOffset < 0) {
+      return false;
+    }
+    let unwrapped = false;
     for (const unwrap of profile.lazyContinuationUnwrappers) {
-      unwrapped = unwrap(source, contentLine);
+      unwrapped = unwrap(source, contentLines, contentIndex, contentOffset, unwrappedLine);
       if (unwrapped) {
         break;
       }
     }
     if (unwrapped) {
-      contentLine = unwrapped;
+      contentLines = unwrappedLine;
+      contentIndex = 0;
       continue;
     }
     return (
-      !isBlank(source, contentLine) &&
-      !context.startsInterruptingBlock(source, contentLine) &&
-      indentColumns(source, contentLine) < 4
+      !isBlank(source, contentLines, contentIndex) &&
+      !context.startsInterruptingBlock(source, contentLines, contentIndex, contentOffset)
     );
   }
 }
@@ -112,16 +98,24 @@ function scanBlock(
   profile: BlockProfile,
   context: BlockScanContext,
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
   out: BlockTokenStream,
 ): number {
-  const matchedEnd = profileStarts(profile, context, source, lines, start, out);
-  if (matchedEnd !== void 0) {
-    return matchedEnd;
+  const contentOffset = lineIndentOffset(source, lines, start);
+  if (contentOffset >= 0) {
+    const starts = profile.starts[source.charCodeAt(contentOffset)];
+    if (starts) {
+      for (const resolve of starts) {
+        const end = resolve(source, lines, start, contentOffset, out, context);
+        if (end !== void 0) {
+          return end;
+        }
+      }
+    }
   }
   for (const fallback of profile.fallbacks) {
-    const fallbackEnd = fallback(source, lines, start, out, context);
+    const fallbackEnd = fallback(source, lines, start, contentOffset, out, context);
     if (fallbackEnd !== void 0) {
       return fallbackEnd;
     }
@@ -133,12 +127,12 @@ function scanBlockLines(
   profile: BlockProfile,
   context: BlockScanContext,
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   out: BlockTokenStream,
   visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => boolean,
 ): void {
   for (let index = 0; index < lines.length;) {
-    if (isBlank(source, lines[index])) {
+    if (isBlank(source, lines, index)) {
       index++;
       continue;
     }
@@ -155,7 +149,7 @@ function scanSeparatedBlockLines(
   profile: BlockProfile,
   context: BlockScanContext,
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   out: BlockTokenStream,
 ): boolean {
   let blankSeparated = false;
@@ -164,100 +158,12 @@ function scanSeparatedBlockLines(
     blankSeparated ||= previousContentEnd >= 0 && lineStart > previousContentEnd;
     previousContentEnd = lineEnd;
     // A child may consume trailing blank lines that still separate the following direct block.
-    while (previousContentEnd > lineStart && isBlank(source, lines[previousContentEnd - 1])) {
+    while (previousContentEnd > lineStart && isBlank(source, lines, previousContentEnd - 1)) {
       previousContentEnd--;
     }
     return false;
   });
   return blankSeparated;
-}
-
-function linesOf(source: string, start = 0, limit = source.length): BlockLine[] {
-  const lines: BlockLine[] = [];
-  const sourceOffset = start;
-  // Bound the search window explicitly because String#indexOf has no end limit.
-  if (start > 0 || limit < source.length) {
-    source = source.slice(start, limit);
-    start = 0;
-    limit = source.length;
-  }
-  let lineFeed = source.indexOf("\n", start);
-  let carriageReturn = source.indexOf("\r", start);
-  while (start < limit) {
-    // Default to the LF-only path; only CR-bearing input pays for mixed-ending selection.
-    let end = lineFeed;
-    let next = end + 1;
-    if (carriageReturn >= 0 && (end < 0 || carriageReturn < end)) {
-      end = carriageReturn;
-      next = end + (source.charCodeAt(end + 1) === Character.LineFeed ? 2 : 1);
-      carriageReturn = source.indexOf("\r", next);
-      if (lineFeed < next) {
-        lineFeed = source.indexOf("\n", next);
-      }
-    }
-    else if (lineFeed < 0) {
-      end = next = limit;
-    }
-    else {
-      lineFeed = source.indexOf("\n", next);
-    }
-    lines.push({
-      start: sourceOffset + start,
-      end: sourceOffset + end,
-      next: sourceOffset + next,
-    });
-    start = next;
-  }
-  return lines;
-}
-
-function updatePhysicalLines(
-  previous: readonly BlockLine[],
-  nextSource: string,
-  restartOffset: number,
-  oldDamageEnd: number,
-  delta: number,
-): BlockLine[] {
-  // Rebuild one following line so edits at line-ending boundaries cannot retain stale geometry.
-  const suffix = Math.min(previous.length, firstLineIndexAtOrAfter(previous, oldDamageEnd + 1) + 1);
-  const oldSuffixOffset = previous[suffix]?.start ?? nextSource.length - delta;
-  const newSuffixOffset = oldSuffixOffset + delta;
-  let prefixEnd = firstLineIndexAtOrAfter(previous, restartOffset);
-  // A newly formed CRLF also changes the retained physical line before the block restart.
-  if (
-    nextSource.charCodeAt(restartOffset - 1) === Character.CarriageReturn &&
-    nextSource.charCodeAt(restartOffset) === Character.LineFeed
-  ) {
-    restartOffset = previous[--prefixEnd].start;
-  }
-  const changed = linesOf(nextSource, restartOffset, newSuffixOffset);
-  if (delta === 0 && changed.length === suffix - prefixEnd) {
-    const next = previous.slice();
-    for (let index = 0; index < changed.length; index++) {
-      next[prefixEnd + index] = changed[index];
-    }
-    return next;
-  }
-  // Assemble a new owner once; mutating previous suffix lines before scanning would break edit atomicity.
-  const next = new Array<BlockLine>(prefixEnd + changed.length + previous.length - suffix);
-  let write = 0;
-  for (let index = 0; index < prefixEnd; index++) {
-    next[write++] = previous[index];
-  }
-  for (const line of changed) {
-    next[write++] = line;
-  }
-  for (let index = suffix; index < previous.length; index++) {
-    const line = previous[index];
-    next[write++] = delta === 0
-      ? line
-      : {
-        start: line.start + delta,
-        end: line.end + delta,
-        next: line.next + delta,
-      };
-  }
-  return next;
 }
 
 function sameShiftedBlock(
@@ -292,50 +198,64 @@ export type BlockStructure = Pick<BlockScanner, "records" | "ruleOf" | "tokens">
 
 export class BlockScanner {
   #context: BlockScanContext;
-  #lines: BlockLine[];
+  #lines: BlockLines;
   #lookaheadEnd: number;
   #profile: BlockProfile;
   #records: BlockRecord[];
   #tokens: BlockTokenStream;
 
   constructor(profile: BlockProfile) {
+    const unwrappedLine = new BlockLines();
     this.#context = {
-      endsWithParagraphLeaf: (source, line) => endsWithParagraphLeaf(profile, this.#context, source, line),
+      endsWithParagraphLeaf: (source, lines, index) => endsWithParagraphLeaf(
+        profile,
+        this.#context,
+        source,
+        lines,
+        index,
+        unwrappedLine,
+      ),
       retainLookahead: (end) => {
         this.#lookaheadEnd = Math.max(this.#lookaheadEnd, end);
       },
       scanLines: (source, lines, tokens) => scanSeparatedBlockLines(profile, this.#context, source, lines, tokens),
-      startsInterruptingBlock: (source, line) => startsInterruptingBlock(profile, source, line),
+      startsInterruptingBlock: (source, lines, index, contentOffset) => startsInterruptingBlock(
+        profile,
+        source,
+        lines,
+        index,
+        contentOffset,
+      ),
     };
     this.#profile = profile;
-    this.#lines = [];
+    this.#lines = new BlockLines();
     this.#lookaheadEnd = 0;
     this.#records = [];
     this.#tokens = new BlockTokenStream();
   }
 
   scan(source: string): void {
-    const lines = linesOf(source);
+    const lines = BlockLines.from(source);
     const tokens = this.#tokens;
     tokens.reset(source.length);
     const records = this.#records;
     let recordIndex = 0;
     this.#lookaheadEnd = 0;
     scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
-      const end = lines[lineEnd - 1].next;
+      const end = lines.next(lineEnd - 1);
       const dependencyEnd = Math.max(end, this.#lookaheadEnd);
       this.#lookaheadEnd = 0;
       const record = records[recordIndex++];
       // Reuse top-level records across one-shot parses instead of allocating one per block.
       if (record) {
-        record.start = lines[lineStart].start;
+        record.start = lines.start(lineStart);
         record.end = end;
         record.dependencyEnd = dependencyEnd;
         record.tokenStart = tokenStart;
       }
       else {
         records.push({
-          start: lines[lineStart].start,
+          start: lines.start(lineStart),
           end,
           dependencyEnd,
           tokenStart,
@@ -366,25 +286,8 @@ export class BlockScanner {
     return rule;
   }
 
-  // Mdast materialization visits nested spans in source order, so one cursor replaces a binary search per point.
   locator(): (offset: number) => SourceLocation {
-    const lines = this.#lines;
-    const sourceLength = this.#tokens.sourceLength;
-    const endsInLineEnding = lines.length > 0 && lines[lines.length - 1].end < sourceLength;
-
-    if (lines.length === 0) {
-      return (offset) => ({ line: 1, column: 1, offset });
-    }
-    let line = 0;
-    return (offset) => {
-      if (offset === sourceLength && endsInLineEnding) {
-        return { line: lines.length + 1, column: 1, offset };
-      }
-      while (line + 1 < lines.length && lines[line + 1].start <= offset) {
-        line++;
-      }
-      return { line: line + 1, column: offset - lines[line].start + 1, offset };
-    };
+    return this.#lines.locator();
   }
 
   edit(change: SourceChange): BlockScanChange {
@@ -409,8 +312,8 @@ export class BlockScanner {
     );
     const restartRecord = previousRecords[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
-    const nextLines = updatePhysicalLines(this.#lines, nextSource, restartOffset, oldChangedEnd, offsetDelta);
-    const scanLineStart = firstLineIndexAtOrAfter(nextLines, restartOffset);
+    const nextLines = this.#lines.update(nextSource, restartOffset, oldChangedEnd, offsetDelta);
+    const scanLineStart = nextLines.indexAtOrAfter(restartOffset);
     const stableBlockCount = Math.max(0, restartIndex);
     const oldTokenStart = restartRecord?.tokenStart ?? 0;
 
@@ -419,15 +322,14 @@ export class BlockScanner {
     const rescannedRecords: BlockRecord[] = [];
     const initialEndRecord = previousRecords[Math.min(previousRecords.length - 1, affectedIndex + 2)];
     let convergedIndex = -1;
-    let scanLineEnd = firstLineIndexAtOrAfter(
-      nextLines,
+    let scanLineEnd = nextLines.indexAtOrAfter(
       Math.min(
         nextSource.length,
         Math.max(changedSpan.end, (initialEndRecord?.end ?? nextSource.length) + offsetDelta),
       ),
     );
     while (true) {
-      const scanEnd = nextLines[scanLineEnd]?.start ?? nextSource.length;
+      const scanEnd = scanLineEnd < nextLines.length ? nextLines.start(scanLineEnd) : nextSource.length;
       const scanLines = nextLines.slice(scanLineStart, scanLineEnd);
       let convergenceIndex = affectedIndex;
       this.#lookaheadEnd = 0;
@@ -439,8 +341,8 @@ export class BlockScanner {
         tokenStart,
         tokenEnd,
       ) => {
-        const blockStart = scanLines[lineStart].start;
-        const blockEnd = scanLines[lineEnd - 1].next;
+        const blockStart = scanLines.start(lineStart);
+        const blockEnd = scanLines.next(lineEnd - 1);
         const observedEnd = this.#lookaheadEnd;
         const dependencyEnd = Math.max(blockEnd, observedEnd);
         this.#lookaheadEnd = 0;
@@ -494,7 +396,7 @@ export class BlockScanner {
       replacement.reset(nextSource.length);
       rescannedRecords.length = 0;
       const expandedEnd = Math.min(nextSource.length, restartOffset + (scanEnd - restartOffset) * 2);
-      scanLineEnd = firstLineIndexAtOrAfter(nextLines, expandedEnd);
+      scanLineEnd = nextLines.indexAtOrAfter(expandedEnd);
     }
     replacement.indexStructure(this.#profile.rules);
 

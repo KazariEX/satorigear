@@ -1,5 +1,5 @@
 import type { List, ListItem } from "mdast";
-import { type BlockLine, contentAfterColumns, isBlank, lineIndent } from "../../block/lines.ts";
+import { BlockLines, contentAfterColumns, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd, type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
@@ -23,59 +23,67 @@ interface ListMarker {
 
 function listMarkerPadding(
   source: string,
-  line: BlockLine,
+  lines: BlockLines,
+  index: number,
   markerEnd: number,
   markerColumn: number,
 ): { offset: number; columns: number; prefixColumns: number } {
-  if (markerEnd === line.end) {
+  const lineEnd = lines.end(index);
+  if (markerEnd === lineEnd) {
     return { offset: markerEnd, columns: 1, prefixColumns: 0 };
   }
   let offset = markerEnd;
   let column = markerColumn;
-  while (offset < line.end && (source[offset] === " " || source[offset] === "\t")) {
+  while (offset < lineEnd && (source[offset] === " " || source[offset] === "\t")) {
     column += source[offset] === "\t" ? 4 - (column % 4) : 1;
     offset++;
   }
   const whitespaceColumns = column - markerColumn;
-  if (offset < line.end && whitespaceColumns <= 4) {
+  if (offset < lineEnd && whitespaceColumns <= 4) {
     return { offset, columns: whitespaceColumns, prefixColumns: 0 };
   }
   const consumedColumn = markerColumn + (source[markerEnd] === "\t" ? 4 - (markerColumn % 4) : 1);
   return { offset: markerEnd + 1, columns: 1, prefixColumns: Math.max(0, consumedColumn - markerColumn - 1) };
 }
 
-function listMarkerAt(source: string, line: BlockLine): ListMarker | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent) {
+function listMarkerAt(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  contentOffset = lineIndentOffset(source, lines, index),
+): ListMarker | undefined {
+  if (contentOffset < 0) {
     return;
   }
-  const marker = source[indent.offset];
-  const markerEnd = indent.offset + 1;
+  const indent = lines.prefixColumns(index) + contentOffset - lines.start(index);
+  const marker = source[contentOffset];
+  const markerEnd = contentOffset + 1;
+  const lineEnd = lines.end(index);
   if (
     (marker === "-" || marker === "+" || marker === "*") &&
-    (markerEnd === line.end || source[markerEnd] === " " || source[markerEnd] === "\t") &&
-    !isThematicBreak(source, line, indent.offset)
+    (markerEnd === lineEnd || source[markerEnd] === " " || source[markerEnd] === "\t") &&
+    !isThematicBreak(source, lines, index, contentOffset)
   ) {
-    const padding = listMarkerPadding(source, line, markerEnd, indent.columns + 1);
+    const padding = listMarkerPadding(source, lines, index, markerEnd, indent + 1);
     return {
       kind: "unordered",
-      indent: indent.columns,
-      offset: indent.offset,
+      indent,
+      offset: contentOffset,
       end: markerEnd,
       contentOffset: padding.offset,
-      contentIndent: indent.columns + 1 + padding.columns,
+      contentIndent: indent + 1 + padding.columns,
       contentPrefixColumns: padding.prefixColumns,
       delimiter: marker,
     };
   }
-  const markerCode = source.charCodeAt(indent.offset);
+  const markerCode = source.charCodeAt(contentOffset);
   if (markerCode < Character.DigitZero || markerCode > Character.DigitNine) {
     return;
   }
   let startNumber = 0;
-  let orderedEnd = indent.offset;
+  let orderedEnd = contentOffset;
   // CommonMark caps ordered markers at nine digits, so the prefix is cheaper to scan than to slice and match.
-  while (orderedEnd < line.end && orderedEnd - indent.offset < 9) {
+  while (orderedEnd < lineEnd && orderedEnd - contentOffset < 9) {
     const digit = source.charCodeAt(orderedEnd) - Character.DigitZero;
     if (digit < 0 || digit > 9) {
       break;
@@ -86,7 +94,7 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | undefined {
   const delimiter = source[orderedEnd];
   if (
     delimiter !== "." && delimiter !== ")" || (
-      orderedEnd + 1 < line.end &&
+      orderedEnd + 1 < lineEnd &&
       source[orderedEnd + 1] !== " " &&
       source[orderedEnd + 1] !== "\t"
     )
@@ -94,15 +102,15 @@ function listMarkerAt(source: string, line: BlockLine): ListMarker | undefined {
     return;
   }
   orderedEnd++;
-  const markerWidth = orderedEnd - indent.offset;
-  const padding = listMarkerPadding(source, line, orderedEnd, indent.columns + markerWidth);
+  const markerWidth = orderedEnd - contentOffset;
+  const padding = listMarkerPadding(source, lines, index, orderedEnd, indent + markerWidth);
   return {
     kind: "ordered",
-    indent: indent.columns,
-    offset: indent.offset,
+    indent,
+    offset: contentOffset,
     end: orderedEnd,
     contentOffset: padding.offset,
-    contentIndent: indent.columns + markerWidth + padding.columns,
+    contentIndent: indent + markerWidth + padding.columns,
     contentPrefixColumns: padding.prefixColumns,
     delimiter,
     startNumber,
@@ -113,8 +121,13 @@ function sameList(a: ListMarker, b: ListMarker): boolean {
   return a.kind === b.kind && a.delimiter === b.delimiter;
 }
 
-function hasListContent(source: string, line: BlockLine, marker: ListMarker | undefined): boolean {
-  return !!marker && /\S/.test(source.slice(marker.contentOffset, line.end));
+function hasListContent(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  marker: ListMarker | undefined,
+): boolean {
+  return !!marker && /\S/.test(source.slice(marker.contentOffset, lines.end(index)));
 }
 
 interface TaskListMarker {
@@ -226,11 +239,12 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   };
 }
 
-const listStart: BlockStart = (source, lines, start, out, contentOffset, context) => {
-  const listMarker = listMarkerAt(source, lines[start]);
-  if (!listMarker) {
+const listStart: BlockStart = (source, lines, start, contentOffset, out, context) => {
+  let marker = listMarkerAt(source, lines, start, contentOffset);
+  if (!marker) {
     return;
   }
+  const listMarker = marker;
   const kind = listMarker.kind;
   const listOpen = kind === "ordered" ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
   const listClose = kind === "ordered" ? BlockKind.OrderedListClose : BlockKind.UnorderedListClose;
@@ -244,59 +258,51 @@ const listStart: BlockStart = (source, lines, start, out, contentOffset, context
   let listEnd = listMarker.end;
   let listSpread = false;
   let trailingBlank = false;
-  while (index < lines.length) {
-    const marker = listMarkerAt(source, lines[index]);
-    if (!marker || !sameList(marker, listMarker)) {
-      break;
-    }
+  while (marker && sameList(marker, listMarker)) {
     // A trailing blank affects the list only when another sibling follows it.
     listSpread ||= trailingBlank;
     trailingBlank = false;
     out.push(BlockKind.ListItemOpen, marker.offset, marker.end);
-    const itemLines: BlockLine[] = [{
-      ...lines[index],
-      start: marker.contentOffset,
-      prefixColumns: marker.contentPrefixColumns,
-    }];
-    let hasContent = !isBlank(source, itemLines[0]);
-    let lazyParagraph = context.endsWithParagraphLeaf(source, itemLines[0]);
+    const itemLines = new BlockLines();
+    itemLines.pushFrom(lines, index, marker.contentOffset, marker.contentPrefixColumns);
+    let hasContent = !isBlank(source, itemLines, 0);
+    let lazyParagraph = context.endsWithParagraphLeaf(source, itemLines, 0);
     index++;
     while (index < lines.length) {
-      const candidate = listMarkerAt(source, lines[index]);
+      const candidate = listMarkerAt(source, lines, index);
       if (candidate && candidate.indent < marker.contentIndent) {
         break;
       }
-      if (isBlank(source, lines[index])) {
+      if (isBlank(source, lines, index)) {
         if (!hasContent) {
           trailingBlank = true;
           index++;
           break;
         }
-        itemLines.push(lines[index]);
+        itemLines.pushFrom(lines, index);
         trailingBlank = true;
         lazyParagraph = false;
         index++;
         continue;
       }
-      const content = contentAfterColumns(source, lines[index], marker.contentIndent);
+      const content = contentAfterColumns(source, lines, index, marker.contentIndent);
       if (content) {
-        const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
-        itemLines.push(contentLine);
+        itemLines.pushFrom(lines, index, content.offset, content.prefixColumns);
         trailingBlank = false;
         hasContent = true;
-        lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
+        lazyParagraph = context.endsWithParagraphLeaf(source, itemLines, itemLines.length - 1);
         index++;
         continue;
       }
-      if (!lazyParagraph || context.startsInterruptingBlock(source, lines[index])) {
+      if (!lazyParagraph || context.startsInterruptingBlock(source, lines, index)) {
         break;
       }
-      itemLines.push({ ...lines[index], lazy: true });
+      itemLines.pushLazy(lines, index);
       trailingBlank = false;
       index++;
     }
     const itemSpread = context.scanLines(source, itemLines, out);
-    listEnd = itemLines.at(-1)?.next ?? marker.offset;
+    listEnd = itemLines.next(itemLines.length - 1);
     // A frame's blank-separation summary is known only when its close is emitted.
     out.push(
       BlockKind.ListItemClose,
@@ -304,14 +310,15 @@ const listStart: BlockStart = (source, lines, start, out, contentOffset, context
       listEnd,
       itemSpread ? { value: true } : void 0,
     );
+    marker = index < lines.length ? listMarkerAt(source, lines, index) : void 0;
   }
   out.push(listClose, listEnd, listEnd, listSpread ? { value: true } : void 0);
   return index;
 };
 
-const taskListStart: BlockStart = (source, lines, start, out, contentOffset, context) => {
+const taskListStart: BlockStart = (source, lines, start, contentOffset, out, context) => {
   const listTokenStart = out.length;
-  const nextLine = listStart(source, lines, start, out, contentOffset, context);
+  const nextLine = listStart(source, lines, start, contentOffset, out, context);
   if (nextLine === void 0) {
     return;
   }
@@ -404,17 +411,19 @@ export function feature(taskList = false): SyntaxFeature {
             Character.DigitEight,
             Character.DigitNine,
           ],
-          unwrapLazyContinuation(source, line) {
-            const marker = listMarkerAt(source, line);
-            return marker
-              ? { ...line, start: marker.contentOffset, prefixColumns: marker.contentPrefixColumns }
-              : void 0;
+          unwrapLazyContinuation(source, lines, index, contentOffset, target) {
+            const marker = listMarkerAt(source, lines, index, contentOffset);
+            if (!marker) {
+              return false;
+            }
+            target.resetFrom(lines, index, marker.contentOffset, marker.contentPrefixColumns);
+            return true;
           },
-          interrupt(source, line) {
-            const marker = listMarkerAt(source, line);
-            return hasListContent(source, line, marker) && (
+          interrupt(source, lines, index, contentOffset) {
+            const marker = listMarkerAt(source, lines, index, contentOffset);
+            return hasListContent(source, lines, index, marker) && (
               marker?.kind === "unordered" ||
-            marker?.kind === "ordered" && marker.startNumber === 1
+              marker?.kind === "ordered" && marker.startNumber === 1
             );
           },
           start: taskList ? taskListStart : listStart,

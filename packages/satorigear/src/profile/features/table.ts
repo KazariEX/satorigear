@@ -1,5 +1,5 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
-import { type BlockLine, isBlank, lineIndentOffset } from "../../block/lines.ts";
+import { type BlockLines, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -35,9 +35,10 @@ function appendTableCell(
 
 function tableCellsAt(
   source: string,
-  line: BlockLine,
+  lines: BlockLines,
+  index: number,
   requirePipe: boolean,
-  contentOffset = lineIndentOffset(source, line),
+  contentOffset: number,
 ): number[] | undefined {
   if (contentOffset < 0) {
     return;
@@ -45,7 +46,8 @@ function tableCellsAt(
 
   const pipes: number[] = [];
   let backslashes = 0;
-  for (let offset = contentOffset; offset < line.end; offset++) {
+  const lineEnd = lines.end(index);
+  for (let offset = contentOffset; offset < lineEnd; offset++) {
     const character = source[offset];
     if (character === "\\") {
       backslashes++;
@@ -60,7 +62,7 @@ function tableCellsAt(
     return;
   }
 
-  let visibleEnd = line.end;
+  let visibleEnd = lineEnd;
   while (visibleEnd > contentOffset && (source[visibleEnd - 1] === " " || source[visibleEnd - 1] === "\t")) {
     visibleEnd--;
   }
@@ -81,7 +83,7 @@ function tableCellsAt(
     contentStart = pipe + 1;
   }
   if (!trailingPipe) {
-    appendTableCell(cells, source, spanStart, contentStart, line.end);
+    appendTableCell(cells, source, spanStart, contentStart, lineEnd);
   }
   return cells.length > 0 ? cells : void 0;
 }
@@ -110,16 +112,17 @@ function alignmentAt(source: string, cells: readonly number[], cell: number): Bl
     : right ? BlockKind.TableAlignRight : BlockKind.TableAlignNone;
 }
 
-function delimiterAt(source: string, line: BlockLine): number[] | undefined {
-  const contentOffset = lineIndentOffset(source, line);
-  if (contentOffset < 0) {
-    return;
-  }
+function delimiterAt(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  contentOffset: number,
+): number[] | undefined {
   const first = source[contentOffset];
   if (first !== "-" && first !== ":" && first !== "|") {
     return;
   }
-  const cells = tableCellsAt(source, line, false, contentOffset);
+  const cells = tableCellsAt(source, lines, index, false, contentOffset);
   if (!cells) {
     return;
   }
@@ -133,7 +136,12 @@ function delimiterAt(source: string, line: BlockLine): number[] | undefined {
   return cells;
 }
 
-function emitTableRow(line: BlockLine, cells: readonly number[], out: BlockTokenStream): void {
+function emitTableRow(
+  lines: BlockLines,
+  index: number,
+  cells: readonly number[],
+  out: BlockTokenStream,
+): void {
   out.push(BlockKind.TableRowOpen, cells[0], cells[0]);
   for (let cell = 0; cell < cells.length; cell += CellSlot.Stride) {
     // The possibly empty inline chunk closes the cell frame. The next cell or
@@ -146,7 +154,8 @@ function emitTableRow(line: BlockLine, cells: readonly number[], out: BlockToken
       cells[cell + CellSlot.ContentEnd],
     );
   }
-  out.push(BlockKind.TableRowClose, line.end, line.end);
+  const lineEnd = lines.end(index);
+  out.push(BlockKind.TableRowClose, lineEnd, lineEnd);
 }
 
 const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline) => {
@@ -205,48 +214,59 @@ function tableAlignment(
 export const feature: SyntaxFeature = {
   block: {
     fallbacks: [
-      (source, lines, start, out, context) => {
-        const delimiterLine = lines[start + 1];
-        if (!delimiterLine || context.startsInterruptingBlock(source, delimiterLine)) {
+      (source, lines, start, contentOffset, out, context) => {
+        const delimiterLine = start + 1;
+        if (delimiterLine >= lines.length) {
           return;
         }
-        const delimiter = delimiterAt(source, delimiterLine);
+        const delimiterOffset = lineIndentOffset(source, lines, delimiterLine);
+        if (
+          delimiterOffset < 0 ||
+          context.startsInterruptingBlock(source, lines, delimiterLine, delimiterOffset)
+        ) {
+          return;
+        }
+        const delimiter = delimiterAt(source, lines, delimiterLine, delimiterOffset);
         if (!delimiter) {
           return;
         }
-        const header = tableCellsAt(source, lines[start], true);
+        const header = tableCellsAt(source, lines, start, true, contentOffset);
         if (header?.length !== delimiter.length) {
           return;
         }
 
         out.push(BlockKind.TableOpen, header[0], header[0]);
-        emitTableRow(lines[start], header, out);
+        emitTableRow(lines, start, header, out);
+        const delimiterEnd = lines.end(delimiterLine);
         for (let cell = 0; cell < delimiter.length; cell += CellSlot.Stride) {
           out.push(
             delimiter[cell + CellSlot.Alignment],
             delimiter[cell],
-            delimiter[cell + CellSlot.Stride] ?? delimiterLine.end,
+            delimiter[cell + CellSlot.Stride] ?? delimiterEnd,
           );
         }
 
         let end = start + 2;
         while (end < lines.length) {
-          const line = lines[end];
+          if (isBlank(source, lines, end)) {
+            break;
+          }
+          const contentOffset = lineIndentOffset(source, lines, end);
           if (
-            isBlank(source, line) ||
-            lineIndentOffset(source, line) < 0 ||
-            context.startsInterruptingBlock(source, line)
+            contentOffset < 0 ||
+            context.startsInterruptingBlock(source, lines, end, contentOffset)
           ) {
             break;
           }
-          const cells = tableCellsAt(source, line, false);
+          const cells = tableCellsAt(source, lines, end, false, contentOffset);
           if (!cells) {
             break;
           }
-          emitTableRow(line, cells, out);
+          emitTableRow(lines, end, cells, out);
           end++;
         }
-        out.push(BlockKind.TableClose, lines[end - 1].end, lines[end - 1].end);
+        const tableEnd = lines.end(end - 1);
+        out.push(BlockKind.TableClose, tableEnd, tableEnd);
         return end;
       },
     ],

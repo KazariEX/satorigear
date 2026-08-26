@@ -9,9 +9,9 @@ import {
   type FenceRule,
 } from "../../block/fence.ts";
 import {
-  type BlockLine,
-  indentColumns,
+  type BlockLines,
   isBlank,
+  lineIndentOffset,
   normalizeLines,
   removeIndent,
 } from "../../block/lines.ts";
@@ -31,31 +31,36 @@ const codeFenceRule: FenceRule = {
   minimumLength: 3,
 };
 
-export function codeFenceAt(source: string, line: BlockLine): Fence | undefined {
-  return fenceAt(source, line, codeFenceRule);
+export function codeFenceAt(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  markerOffset: number,
+): Fence | undefined {
+  return fenceAt(source, lines, index, codeFenceRule, markerOffset);
 }
 
 export const feature: SyntaxFeature = {
   block: {
     fallbacks: [
-      (source, lines, start, out) => {
-        if (indentColumns(source, lines[start]) < 4) {
+      (source, lines, start, contentOffset, out) => {
+        if (contentOffset >= 0) {
           return;
         }
         let end = start + 1;
         while (
           end < lines.length && (
-            isBlank(source, lines[end]) || indentColumns(source, lines[end]) >= 4
+            isBlank(source, lines, end) || lineIndentOffset(source, lines, end) < 0
           )
         ) {
           end++;
         }
         // The block consumes trailing blank lines, but its code value and position do not include them.
         let contentEnd = end;
-        while (contentEnd > start && isBlank(source, lines[contentEnd - 1])) {
+        while (contentEnd > start && isBlank(source, lines, contentEnd - 1)) {
           contentEnd--;
         }
-        const contentLength = lines[contentEnd - 1].end - lines[start].start;
+        const contentLength = lines.end(contentEnd - 1) - lines.start(start);
         appendLogicalToken(
           out,
           BlockKind.IndentedCodeBlockToken,
@@ -135,16 +140,16 @@ export const feature: SyntaxFeature = {
           Character.GraveAccent,
           Character.Tilde,
         ],
-        interrupt(source, line) {
-          return !!codeFenceAt(source, line);
+        interrupt(source, lines, index, contentOffset) {
+          return !!codeFenceAt(source, lines, index, contentOffset);
         },
-        start(source, lines, start, out) {
-          const fence = codeFenceAt(source, lines[start]);
+        start(source, lines, start, contentOffset, out) {
+          const fence = codeFenceAt(source, lines, start, contentOffset);
           if (!fence) {
             return;
           }
           let end = start + 1;
-          while (end < lines.length && !closesFence(source, lines[end], fence)) {
+          while (end < lines.length && !closesFence(source, lines, end, fence)) {
             end++;
           }
           const closed = end < lines.length;
@@ -158,7 +163,7 @@ export const feature: SyntaxFeature = {
             lines,
             start,
             end,
-            fencedBlock(source, lines[start], fence, closed),
+            fencedBlock(source, lines, start, fence, closed),
           );
           return end;
         },

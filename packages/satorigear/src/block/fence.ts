@@ -1,8 +1,7 @@
 import { Character } from "../constants/character.ts";
 import {
-  type BlockLine,
+  type BlockLines,
   lineContentEnd,
-  lineIndent,
   lineIndentOffset,
   removeIndent,
 } from "./lines.ts";
@@ -33,35 +32,44 @@ export interface FencedBlock {
   markerOffset: number;
 }
 
-export function fenceAt(source: string, line: BlockLine, rule: FenceRule): Fence | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent) {
-    return;
-  }
-  const marker = source.charCodeAt(indent.offset);
+export function fenceAt(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  rule: FenceRule,
+  markerOffset: number,
+): Fence | undefined {
+  const marker = source.charCodeAt(markerOffset);
   if (!rule.markers.includes(marker)) {
     return;
   }
-  let offset = indent.offset;
+  let offset = markerOffset;
   while (source.charCodeAt(offset) === marker) {
     offset++;
   }
-  const length = offset - indent.offset;
+  const length = offset - markerOffset;
   if (length < rule.minimumLength) {
     return;
   }
   if (rule.forbiddenInfoMarkers.includes(marker)) {
-    while (offset < line.end) {
+    const lineEnd = lines.end(index);
+    while (offset < lineEnd) {
       if (source.charCodeAt(offset++) === marker) {
         return;
       }
     }
   }
-  return { indent: indent.columns, marker, length, offset: indent.offset };
+  return {
+    indent: lines.prefixColumns(index) + markerOffset - lines.start(index),
+    marker,
+    length,
+    offset: markerOffset,
+  };
 }
 
-export function closesFence(source: string, line: BlockLine, fence: Fence): boolean {
-  const first = source.charCodeAt(line.start);
+export function closesFence(source: string, lines: BlockLines, index: number, fence: Fence): boolean {
+  const lineStart = lines.start(index);
+  const first = source.charCodeAt(lineStart);
   if (
     first !== fence.marker &&
     first !== Character.Space &&
@@ -69,9 +77,9 @@ export function closesFence(source: string, line: BlockLine, fence: Fence): bool
   ) {
     return false;
   }
-  let offset = line.start;
+  let offset = lineStart;
   if (first !== fence.marker) {
-    const contentOffset = lineIndentOffset(source, line);
+    const contentOffset = lineIndentOffset(source, lines, index);
     if (contentOffset < 0 || source.charCodeAt(contentOffset) !== fence.marker) {
       return false;
     }
@@ -84,22 +92,30 @@ export function closesFence(source: string, line: BlockLine, fence: Fence): bool
   if (offset < markerEnd) {
     return false;
   }
-  while (offset < line.end && (source[offset] === " " || source[offset] === "\t")) {
+  const lineEnd = lines.end(index);
+  while (offset < lineEnd && (source[offset] === " " || source[offset] === "\t")) {
     offset++;
   }
-  return offset === line.end;
+  return offset === lineEnd;
 }
 
-export function fencedBlock(source: string, line: BlockLine, fence: Fence, closed: boolean): FencedBlock {
+export function fencedBlock(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  fence: Fence,
+  closed: boolean,
+): FencedBlock {
   let infoStart = fence.offset + fence.length;
-  while (infoStart < line.end && (source[infoStart] === " " || source[infoStart] === "\t")) {
+  const lineEnd = lines.end(index);
+  while (infoStart < lineEnd && (source[infoStart] === " " || source[infoStart] === "\t")) {
     infoStart++;
   }
   return {
     closed,
     indent: fence.indent,
-    info: source.slice(infoStart, line.end),
-    markerOffset: fence.offset - line.start,
+    info: source.slice(infoStart, lineEnd),
+    markerOffset: fence.offset - lines.start(index),
   };
 }
 

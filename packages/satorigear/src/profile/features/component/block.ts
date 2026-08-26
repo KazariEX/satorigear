@@ -1,6 +1,6 @@
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
-import { type BlockLine, lineIndentOffset } from "../../../block/lines.ts";
+import { type BlockLines, lineIndentOffset } from "../../../block/lines.ts";
 import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
@@ -19,6 +19,7 @@ import {
 import { codeFenceAt } from "../code.ts";
 import { buildFrontmatter } from "../frontmatter.ts";
 import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
+import type { BlockScanContext } from "../../../block/scanner.ts";
 import type { SpannedNode } from "../../../fragment/node.ts";
 
 interface BlockOpening {
@@ -49,9 +50,9 @@ function skipSpaces(source: string, offset: number, end: number): number {
   return offset;
 }
 
-function lineValue(source: string, line: BlockLine): string | undefined {
-  const offset = lineIndentOffset(source, line);
-  return offset < 0 ? void 0 : source.slice(offset, line.end);
+function lineValue(source: string, lines: BlockLines, index: number): string | undefined {
+  const offset = lineIndentOffset(source, lines, index);
+  return offset < 0 ? void 0 : source.slice(offset, lines.end(index));
 }
 
 function yamlClosingMarker(value: string | undefined): string | undefined {
@@ -69,16 +70,16 @@ function yamlClosingMarker(value: string | undefined): string | undefined {
 
 function yamlPropsEnd(
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
   end: number,
 ): number | undefined {
-  const marker = yamlClosingMarker(lineValue(source, lines[start]));
+  const marker = yamlClosingMarker(lineValue(source, lines, start));
   if (!marker) {
     return;
   }
   for (let index = start + 1; index < end; index++) {
-    if (lineValue(source, lines[index]) === marker) {
+    if (lineValue(source, lines, index) === marker) {
       return index + 1;
     }
   }
@@ -86,32 +87,34 @@ function yamlPropsEnd(
 
 function slotOpeningAt(
   source: string,
-  line: BlockLine,
+  lines: BlockLines,
+  index: number,
+  contentOffset: number,
 ): SlotOpening | undefined {
-  const contentOffset = lineIndentOffset(source, line);
   if (
-    contentOffset < 0 || source[contentOffset] !== "#" ||
+    source[contentOffset] !== "#" ||
     source[contentOffset + 1] === "#" || source[contentOffset + 1] === " " ||
     source[contentOffset + 1] === "\t"
   ) {
     return;
   }
   const nameEnd = componentNameEnd(source, contentOffset + 1, true);
-  if (nameEnd === void 0 || nameEnd > line.end) {
+  const lineEnd = lines.end(index);
+  if (nameEnd === void 0 || nameEnd > lineEnd) {
     return;
   }
-  let offset = skipSpaces(source, nameEnd, line.end);
+  let offset = skipSpaces(source, nameEnd, lineEnd);
   let attributesStart: number | undefined;
   let parsedAttributesEnd: number | undefined;
   if (source[offset] === "{") {
-    parsedAttributesEnd = attributesEnd(source, offset, line.end);
+    parsedAttributesEnd = attributesEnd(source, offset, lineEnd);
     if (parsedAttributesEnd === void 0) {
       return;
     }
     attributesStart = offset;
     offset = parsedAttributesEnd;
   }
-  if (skipSpaces(source, offset, line.end) !== line.end) {
+  if (skipSpaces(source, offset, lineEnd) !== lineEnd) {
     return;
   }
   return {
@@ -124,7 +127,8 @@ function slotOpeningAt(
 
 function blockOpeningAt(
   source: string,
-  line: BlockLine,
+  lines: BlockLines,
+  index: number,
   contentOffset: number,
   shorthand: boolean,
 ): BlockOpening | undefined {
@@ -136,37 +140,38 @@ function blockOpeningAt(
   if (shorthand ? fenceSize !== 1 : fenceSize < 2) {
     return;
   }
+  const lineEnd = lines.end(index);
   if (!shorthand) {
-    offset = skipSpaces(source, offset, line.end);
+    offset = skipSpaces(source, offset, lineEnd);
   }
   const nameStart = offset;
   const nameEnd = componentNameEnd(source, nameStart, true);
-  if (nameEnd === void 0 || nameEnd > line.end) {
+  if (nameEnd === void 0 || nameEnd > lineEnd) {
     return;
   }
-  offset = skipSpaces(source, nameEnd, line.end);
+  offset = skipSpaces(source, nameEnd, lineEnd);
   let labelStart: number | undefined;
   let labelEnd: number | undefined;
   if (source[offset] === "[") {
-    const close = closingBracket(source, offset, line.end);
+    const close = closingBracket(source, offset, lineEnd);
     if (close === void 0) {
       return;
     }
     labelStart = offset;
     labelEnd = close + 1;
-    offset = skipSpaces(source, labelEnd, line.end);
+    offset = skipSpaces(source, labelEnd, lineEnd);
   }
   let attributesStart: number | undefined;
   let parsedAttributesEnd: number | undefined;
   if (source[offset] === "{") {
-    parsedAttributesEnd = attributesEnd(source, offset, line.end);
+    parsedAttributesEnd = attributesEnd(source, offset, lineEnd);
     if (parsedAttributesEnd === void 0) {
       return;
     }
     attributesStart = offset;
     offset = parsedAttributesEnd;
   }
-  if (skipSpaces(source, offset, line.end) !== line.end) {
+  if (skipSpaces(source, offset, lineEnd) !== lineEnd) {
     return;
   }
   return {
@@ -179,29 +184,19 @@ function blockOpeningAt(
   };
 }
 
-function nestedComponentEnd(
+function fenceAt(
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   index: number,
+  size: number,
+  contentOffset: number,
 ): number | undefined {
-  const offset = lineIndentOffset(source, lines[index]);
-  if (offset < 0) {
-    return;
-  }
-  const opening = blockOpeningAt(source, lines[index], offset, false);
-  return opening ? blockClose(source, lines, index, opening)?.index : void 0;
-}
-
-function fenceAt(source: string, line: BlockLine, size: number): number | undefined {
-  const contentOffset = lineIndentOffset(source, line);
-  if (contentOffset < 0) {
-    return;
-  }
   let offset = contentOffset;
   while (source[offset] === ":") {
     offset++;
   }
-  if (offset - contentOffset !== size || skipSpaces(source, offset, line.end) !== line.end) {
+  const lineEnd = lines.end(index);
+  if (offset - contentOffset !== size || skipSpaces(source, offset, lineEnd) !== lineEnd) {
     return;
   }
   return contentOffset;
@@ -209,25 +204,28 @@ function fenceAt(source: string, line: BlockLine, size: number): number | undefi
 
 function blockClose(
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
   opening: BlockOpening,
 ): BlockClosing | undefined {
   let codeFence: Fence | undefined;
   let depth = 0;
   for (let index = start + 1; index < lines.length; index++) {
-    const line = lines[index];
     if (codeFence) {
-      if (closesFence(source, line, codeFence)) {
+      if (closesFence(source, lines, index, codeFence)) {
         codeFence = void 0;
       }
       continue;
     }
-    codeFence = codeFenceAt(source, line);
+    const contentOffset = lineIndentOffset(source, lines, index);
+    if (contentOffset < 0) {
+      continue;
+    }
+    codeFence = codeFenceAt(source, lines, index, contentOffset);
     if (codeFence) {
       continue;
     }
-    const closeOffset = fenceAt(source, line, opening.fenceSize);
+    const closeOffset = fenceAt(source, lines, index, opening.fenceSize, contentOffset);
     if (closeOffset !== void 0) {
       if (depth === 0) {
         return { index, offset: closeOffset };
@@ -235,8 +233,9 @@ function blockClose(
       depth--;
       continue;
     }
-    const contentOffset = lineIndentOffset(source, line);
-    if (contentOffset >= 0 && blockOpeningAt(source, line, contentOffset, false)?.fenceSize === opening.fenceSize) {
+    if (
+      blockOpeningAt(source, lines, index, contentOffset, false)?.fenceSize === opening.fenceSize
+    ) {
       depth++;
     }
   }
@@ -244,30 +243,33 @@ function blockClose(
 
 function nextSlot(
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
   end: number,
 ): { index: number; opening: SlotOpening } | undefined {
   let codeFence: Fence | undefined;
   for (let index = start; index < end; index++) {
-    const line = lines[index];
     if (codeFence) {
-      if (closesFence(source, line, codeFence)) {
+      if (closesFence(source, lines, index, codeFence)) {
         codeFence = void 0;
       }
       continue;
     }
-    codeFence = codeFenceAt(source, line);
+    const contentOffset = lineIndentOffset(source, lines, index);
+    if (contentOffset < 0) {
+      continue;
+    }
+    codeFence = codeFenceAt(source, lines, index, contentOffset);
     if (codeFence) {
       continue;
     }
-    const slot = slotOpeningAt(source, line);
+    const slot = slotOpeningAt(source, lines, index, contentOffset);
     if (slot) {
       return { index, opening: slot };
     }
-    const nestedEnd = nestedComponentEnd(source, lines, index);
-    if (nestedEnd !== void 0) {
-      index = nestedEnd;
+    const nested = blockOpeningAt(source, lines, index, contentOffset, false);
+    if (nested) {
+      index = blockClose(source, lines, index, nested)?.index ?? index;
     }
   }
 }
@@ -281,12 +283,12 @@ function emitSlotOpening(opening: SlotOpening, out: BlockTokenStream): void {
 
 function emitComponentBody(
   source: string,
-  lines: readonly BlockLine[],
+  lines: BlockLines,
   start: number,
   end: number,
   closingOffset: number,
   out: BlockTokenStream,
-  context: Parameters<BlockStart>[5],
+  context: BlockScanContext,
 ): void {
   let cursor = start;
   const yamlEnd = cursor < end ? yamlPropsEnd(source, lines, cursor, end) : void 0;
@@ -345,19 +347,20 @@ const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context, inlin
 };
 
 function createBlockStart(shorthand: boolean): BlockStart {
-  return (source, lines, start, out, contentOffset, context) => {
-    const opening = blockOpeningAt(source, lines[start], contentOffset, shorthand);
+  return (source, lines, start, contentOffset, out, context) => {
+    const opening = blockOpeningAt(source, lines, start, contentOffset, shorthand);
     if (!opening) {
       return;
     }
     if (shorthand) {
       emitOpening(contentOffset, opening, out);
-      out.push(BlockKind.BlockComponentClose, lines[start].end, lines[start].end);
+      const lineEnd = lines.end(start);
+      out.push(BlockKind.BlockComponentClose, lineEnd, lineEnd);
       return start + 1;
     }
     const closing = blockClose(source, lines, start, opening);
     if (!closing) {
-      context.retainLookahead(lines[lines.length - 1].next);
+      context.retainLookahead(lines.next(lines.length - 1));
       return;
     }
     emitOpening(contentOffset, opening, out);
@@ -370,7 +373,7 @@ function createBlockStart(shorthand: boolean): BlockStart {
       out,
       context,
     );
-    out.push(BlockKind.BlockComponentClose, closing.offset, lines[closing.index].end);
+    out.push(BlockKind.BlockComponentClose, closing.offset, lines.end(closing.index));
     return closing.index + 1;
   };
 }
@@ -481,10 +484,10 @@ export const blockStarts: BlockFeature["starts"] = [
     codes: [
       Character.Colon,
     ],
-    interrupt(source, line, contentOffset) {
+    interrupt(source, lines, index, contentOffset) {
       return (
-        blockOpeningAt(source, line, contentOffset, false) !== void 0 ||
-        blockOpeningAt(source, line, contentOffset, true) !== void 0
+        blockOpeningAt(source, lines, index, contentOffset, false) !== void 0 ||
+        blockOpeningAt(source, lines, index, contentOffset, true) !== void 0
       );
     },
     start: createBlockStart(false),

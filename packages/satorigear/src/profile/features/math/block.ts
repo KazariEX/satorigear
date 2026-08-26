@@ -56,16 +56,16 @@ export const blockStarts: BlockFeature["starts"] = [
     codes: [
       Character.DollarSign,
     ],
-    interrupt(source, line) {
-      return fenceAt(source, line, mathFenceRule) !== void 0;
+    interrupt(source, lines, index, contentOffset) {
+      return fenceAt(source, lines, index, mathFenceRule, contentOffset) !== void 0;
     },
-    start(source, lines, start, out) {
-      const fence = fenceAt(source, lines[start], mathFenceRule);
+    start(source, lines, start, contentOffset, out) {
+      const fence = fenceAt(source, lines, start, mathFenceRule, contentOffset);
       if (!fence) {
         return;
       }
       let end = start + 1;
-      while (end < lines.length && !closesFence(source, lines[end], fence)) {
+      while (end < lines.length && !closesFence(source, lines, end, fence)) {
         end++;
       }
       const closed = end < lines.length;
@@ -79,7 +79,7 @@ export const blockStarts: BlockFeature["starts"] = [
         lines,
         start,
         end,
-        fencedBlock(source, lines[start], fence, closed),
+        fencedBlock(source, lines, start, fence, closed),
       );
       return end;
     },

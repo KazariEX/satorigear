@@ -1,4 +1,4 @@
-import { type BlockLine, isBlank, lineIndentOffset, normalizeLines } from "../../block/lines.ts";
+import { type BlockLines, isBlank, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -88,12 +88,13 @@ const htmlComment = /<!-->|<!--->|<!--[\s\S]*?(?:-->|$)/y;
 const autolink = /<(?:[A-Z][A-Z0-9+.\-]{1,31}:[^ \t\n\r<>]+|[\w!#$%&'*+\-/=?^`{|}~.]+@[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*(?:\.[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*)+)>/iy;
 const inlineHtml = /<[A-Za-z][A-Za-z0-9-]*(?:[ \t\n\r]+[A-Za-z_:][\w.:-]*(?:[ \t\n\r]*=[ \t\n\r]*(?:[^ \t\n\r"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t\n\r]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t\n\r]*>|<\?[\s\S]*?\?>|<![A-Z][\s\S]*?>|<!\[CDATA\[[\s\S]*?\]\]>/y;
 
-function htmlStartAt(source: string, line: BlockLine): HtmlStart | undefined {
-  const contentOffset = lineIndentOffset(source, line);
-  if (contentOffset < 0 || source[contentOffset] !== "<") {
-    return;
-  }
-  const body = source.slice(contentOffset, line.end);
+function htmlStartAt(
+  source: string,
+  lines: BlockLines,
+  index: number,
+  contentOffset: number,
+): HtmlStart | undefined {
+  const body = source.slice(contentOffset, lines.end(index));
   const lower = body.toLowerCase();
   for (const tag of ["script", "pre", "style", "textarea"]) {
     if (lower.startsWith(`<${tag}`) && (lower.length === tag.length + 1 || /[ \t>]/.test(lower[tag.length + 1]))) {
@@ -171,21 +172,23 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.LessThanSign,
         ],
-        interrupt(source, line) {
-          return !!htmlStartAt(source, line)?.interruptParagraph;
+        interrupt(source, lines, index, contentOffset) {
+          return !!htmlStartAt(source, lines, index, contentOffset)?.interruptParagraph;
         },
-        start(source, lines, start, out) {
-          const line = lines[start];
-          const htmlStart = htmlStartAt(source, line);
+        start(source, lines, start, contentOffset, out) {
+          const htmlStart = htmlStartAt(source, lines, start, contentOffset);
           if (!htmlStart) {
             return;
           }
           let end = start + 1;
           let unterminated = false;
-          if (htmlStart.terminator && !source.slice(line.start, line.end).toLowerCase().includes(htmlStart.terminator)) {
+          if (
+            htmlStart.terminator &&
+            !source.slice(lines.start(start), lines.end(start)).toLowerCase().includes(htmlStart.terminator)
+          ) {
             while (
               end < lines.length &&
-              !source.slice(lines[end].start, lines[end].end).toLowerCase().includes(htmlStart.terminator)
+              !source.slice(lines.start(end), lines.end(end)).toLowerCase().includes(htmlStart.terminator)
             ) {
               end++;
             }
@@ -197,7 +200,7 @@ export const feature: SyntaxFeature = {
             }
           }
           else if (!htmlStart.terminator) {
-            while (end < lines.length && !isBlank(source, lines[end])) {
+            while (end < lines.length && !isBlank(source, lines, end)) {
               end++;
             }
           }
