@@ -33,6 +33,7 @@ export const enum InlineKind {
   ImageReferenceClose,
   FootnoteReference,
   Binding,
+  Emoji,
   InlineComponentOpen,
   InlineComponentLabelOpen,
   InlineComponentLabelClose,

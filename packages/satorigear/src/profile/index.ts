@@ -6,6 +6,7 @@ import { feature as featureBlockQuote } from "./features/blockquote.ts";
 import { feature as featureBreak } from "./features/break.ts";
 import { feature as featureCode } from "./features/code.ts";
 import { feature as featureComponent } from "./features/component/index.ts";
+import { feature as featureEmoji } from "./features/emoji/index.ts";
 import { feature as featureFootnote } from "./features/footnote/index.ts";
 import { feature as featureFormatting, type StrikethroughOptions } from "./features/formatting.ts";
 import { feature as frontmatterFeature, type FrontmatterOptions } from "./features/frontmatter.ts";
@@ -26,6 +27,7 @@ export interface FeatureOptions {
   attributes?: boolean;
   binding?: boolean;
   component?: boolean;
+  emoji?: boolean;
   footnote?: boolean;
   frontmatter?: boolean | FrontmatterOptions;
   math?: boolean | MathOptions;
@@ -78,6 +80,10 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
   }
   if (options.binding) {
     features.push(featureBinding);
+  }
+  if (options.emoji) {
+    // A closed shortcode must win over the component prefix that shares its opening colon.
+    features.push(featureEmoji);
   }
   if (options.component) {
     features.push(featureComponent);

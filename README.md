@@ -41,6 +41,7 @@ const parser = createParser({
     attributes: true,
     binding: true,
     component: true,
+    emoji: true,
     footnote: true,
     frontmatter: true,
     math: true,

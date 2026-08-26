@@ -14,9 +14,17 @@ import type { InlineBuildRule } from "../../../inline/profile.ts";
 
 const allowedPrevious = /[ \t\n\r\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}\p{P}]/u;
 
+/** Whether a colon has the left boundary required by an inline component. */
+export function canStartInlineColon(source: string, start: number): boolean {
+  if (start <= 0) {
+    return true;
+  }
+  const previous = source[start - 1];
+  return previous !== ":" && allowedPrevious.test(previous);
+}
+
 function inlineComponentEnd(source: string, start: number): number | undefined {
-  const prev = source[start - 1];
-  if (start <= 0 || prev !== ":" && allowedPrevious.test(prev)) {
+  if (canStartInlineColon(source, start)) {
     return componentNameEnd(source, start + 1, false);
   }
 }
