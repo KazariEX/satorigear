@@ -1,5 +1,6 @@
 import type { PhrasingContent } from "mdast";
 import { Character } from "../constants/character.ts";
+import { InlineKind } from "../constants/inline.ts";
 import {
   inlineTokenCount,
   inlineTokenEnd,
@@ -38,7 +39,7 @@ export type InlineLeafBuilder = (
   tokenIndex: number,
   sourceSpan: SourceSpan,
   context: InlineBuildContext,
-) => SpannedNode<PhrasingContent> | undefined;
+) => SpannedNode<PhrasingContent>;
 
 export type InlineNodeBuilder = (
   openToken: number,
@@ -86,19 +87,14 @@ function countTrailingSpaces(value: string): number {
 }
 
 function appendText(output: InlineOutput, value: string, span: SourceSpan): void {
-  if (!value) {
-    return;
-  }
   const previous = output.children.at(-1);
   if (output.trailingSpaces >= 0) {
     const trailingSpaces = countTrailingSpaces(value);
     output.trailingSpaces = (
-      trailingSpaces === value.length &&
-      previous?.type === "text" &&
-      !("attributes" in previous)
-    )
-      ? output.trailingSpaces + trailingSpaces
-      : trailingSpaces;
+      trailingSpaces === value.length && previous?.type === "text" && !("attributes" in previous)
+        ? output.trailingSpaces + trailingSpaces
+        : trailingSpaces
+    );
   }
   if (previous?.type === "text" && !("attributes" in previous)) {
     previous.value += value;
@@ -134,7 +130,6 @@ function appendGap(
   start: number,
   end: number,
 ): void {
-  output.gapStart = -1;
   appendText(
     output,
     context.view.text.slice(start, end),
@@ -151,14 +146,12 @@ function appendToken(
   const newline = value.type === "text" && value.value.startsWith("\n");
   if (output.gapStart >= 0) {
     const gapStart = output.gapStart;
+    output.gapStart = -1;
     const gapEnd = newline
       ? lineEndingStart(context.view.text, output.gapEnd)
       : output.gapEnd;
     if (gapEnd > gapStart) {
       appendGap(output, context, gapStart, gapEnd);
-    }
-    else {
-      output.gapStart = -1;
     }
   }
   if (newline) {
@@ -206,9 +199,6 @@ function appendLeaf(
   if (typeof value === "boolean") {
     return value;
   }
-  if (!value) {
-    return false;
-  }
   appendToken(output, context, tokenIndex, value);
   return true;
 }
@@ -220,7 +210,7 @@ function appendRange(
   endToken: number,
   context: InlineBuildContext,
   output: InlineOutput,
-  closeKind?: number,
+  closeKind = InlineKind.None,
 ): number {
   let index = startToken;
   while (index < endToken) {
@@ -230,20 +220,15 @@ function appendRange(
     }
     const syntaxOffset = kind * 2;
     const semanticCloseKind = context.syntaxByKind[syntaxOffset];
-    const build = context.buildByKind[kind];
-    if (!build) {
-      throw new Error(`Unexpected inline token kind ${kind}`);
-    }
+    const build = context.buildByKind[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
     if (childStart > output.cursor) {
       output.gapStart = output.cursor;
       output.gapEnd = childStart;
     }
-    const next = semanticCloseKind === void 0
-      ? void 0
-      : appendSemantic(
+    if (semanticCloseKind !== void 0) {
+      index = appendSemantic(
         index,
-        kind,
         endToken,
         output,
         context,
@@ -251,31 +236,29 @@ function appendRange(
         semanticCloseKind,
         context.syntaxByKind[syntaxOffset + 1],
       );
-    const childEnd = inlineTokenEnd(context.tokens, next === void 0 ? index : next - 1);
-    const childEmitted = next === void 0
-      ? appendLeaf(
+      continue;
+    }
+    const childEnd = inlineTokenEnd(context.tokens, index);
+    if (
+      appendLeaf(
         index,
         build as InlineTokenHandler,
         context.view.mapSpan(childStart, childEnd),
         output,
         context,
       )
-      : true;
-    if (childEmitted) {
+    ) {
       output.cursor = childEnd;
     }
-    index = next ?? index + 1;
+    index++;
   }
-  if (closeKind !== void 0 && index < endToken) {
+  if (index < endToken) {
     const contentEnd = inlineTokenStart(context.tokens, index);
     if (contentEnd > output.cursor) {
       appendGap(output, context, output.cursor, contentEnd);
     }
   }
-  else if (
-    closeKind === void 0 &&
-    context.view.text.length > output.cursor
-  ) {
+  else if (closeKind === InlineKind.None && context.view.text.length > output.cursor) {
     appendGap(output, context, output.cursor, context.view.text.length);
   }
   return index;
@@ -283,7 +266,6 @@ function appendRange(
 
 function appendSemantic(
   openToken: number,
-  kind: number,
   endToken: number,
   output: InlineOutput,
   context: InlineBuildContext,
@@ -315,24 +297,18 @@ function appendSemantic(
       childOutput,
       closeKind,
     );
-    if (
-      closeToken >= endToken ||
-      inlineTokenKind(context.tokens, closeToken) !== closeKind
-    ) {
-      throw new Error(`Resolved inline stream did not close token kind ${kind}`);
-    }
   }
+  const childStart = inlineTokenStart(context.tokens, openToken);
+  const childEnd = inlineTokenEnd(context.tokens, closeToken);
   const value = build(
     openToken,
     closeToken,
-    context.view.mapSpan(
-      inlineTokenStart(context.tokens, openToken),
-      inlineTokenEnd(context.tokens, closeToken),
-    ),
+    context.view.mapSpan(childStart, childEnd),
     children,
     context,
   );
   appendToken(output, context, openToken, value);
+  output.cursor = childEnd;
   return closeToken + 1;
 }
 
