@@ -83,39 +83,68 @@ const enum DelimiterRunLayout {
 const whitespace = /\s/u;
 const punctuation = /[\p{P}\p{S}]/u;
 
-function characterBefore(source: string, offset: number): string {
+const enum DelimiterCharacterClass {
+  Whitespace = 1,
+  Punctuation = 2,
+}
+
+function codePointBefore(source: string, offset: number): number {
   if (offset <= 0) {
-    return "\n";
+    return Character.LineFeed;
   }
   const trailing = source.charCodeAt(offset - 1);
   if (trailing >= Character.LowSurrogateStart && trailing <= Character.LowSurrogateEnd && offset > 1) {
     const leading = source.charCodeAt(offset - 2);
     if (leading >= Character.HighSurrogateStart && leading <= Character.HighSurrogateEnd) {
-      return source.slice(offset - 2, offset);
+      return source.codePointAt(offset - 2)!;
     }
   }
-  return source[offset - 1];
+  return trailing;
 }
 
-function characterAfter(source: string, offset: number): string {
-  return offset < source.length ? String.fromCodePoint(source.codePointAt(offset)!) : "\n";
+// Delimiter boundaries are predominantly ASCII. Keep this classification local to the hot
+// flanking path; non-ASCII code points retain the complete Unicode whitespace/punctuation rules.
+function delimiterCharacterClass(code: number): number {
+  if (code <= 0x7F) {
+    if (
+      code === Character.Space ||
+      code >= Character.CharacterTabulation && code <= Character.CarriageReturn
+    ) {
+      return DelimiterCharacterClass.Whitespace;
+    }
+    return (
+      code >= Character.ExclamationMark && code <= Character.Solidus ||
+      code >= Character.Colon && code <= Character.CommercialAt ||
+      code >= Character.LeftSquareBracket && code <= Character.GraveAccent ||
+      code >= Character.LeftCurlyBracket && code <= Character.Tilde
+    )
+      ? DelimiterCharacterClass.Punctuation
+      : 0;
+  }
+  const character = String.fromCodePoint(code);
+  return (
+    whitespace.test(character) ? DelimiterCharacterClass.Whitespace
+      : punctuation.test(character) ? DelimiterCharacterClass.Punctuation
+        : 0
+  );
 }
 
 // A bit mask avoids allocating a { canOpen, canClose } result for every delimiter run.
 function flanking(source: string, start: number, end: number, config: CompiledDelimiterConfig): number {
-  const before = characterBefore(source, start);
-  const after = characterAfter(source, end);
-  const beforeWhitespace = whitespace.test(before);
-  const afterWhitespace = whitespace.test(after);
-  const beforePunctuation = punctuation.test(before);
-  const afterPunctuation = punctuation.test(after);
-  const left = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
-  const right = !beforeWhitespace && (!beforePunctuation || afterWhitespace || afterPunctuation);
+  const before = delimiterCharacterClass(codePointBefore(source, start));
+  const after = delimiterCharacterClass(source.codePointAt(end) ?? Character.LineFeed);
+  // Other characters always flank; punctuation needs whitespace or punctuation on the opposite side.
+  const left = after === 0 || (
+    after === DelimiterCharacterClass.Punctuation && before !== 0
+  );
+  const right = before === 0 || (
+    before === DelimiterCharacterClass.Punctuation && after !== 0
+  );
   if (config.bits & DelimiterConfigFlag.AllowIntraword) {
     return (left ? DelimiterRunState.CanOpen : 0) | (right ? DelimiterRunState.CanClose : 0);
   }
-  const canOpen = left && (!right || beforePunctuation);
-  const canClose = right && (!left || afterPunctuation);
+  const canOpen = left && (!right || before === DelimiterCharacterClass.Punctuation);
+  const canClose = right && (!left || after === DelimiterCharacterClass.Punctuation);
   return (canOpen ? DelimiterRunState.CanOpen : 0) | (canClose ? DelimiterRunState.CanClose : 0);
 }
 
