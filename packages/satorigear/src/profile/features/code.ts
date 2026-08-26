@@ -10,7 +10,7 @@ import {
 } from "../../block/fence.ts";
 import {
   type BlockLine,
-  indentOf,
+  indentColumns,
   isBlank,
   normalizeLines,
   removeIndent,
@@ -39,11 +39,15 @@ export const feature: SyntaxFeature = {
   block: {
     fallbacks: [
       (source, lines, start, out) => {
-        if (indentOf(source, lines[start]).columns < 4) {
+        if (indentColumns(source, lines[start]) < 4) {
           return;
         }
         let end = start + 1;
-        while (end < lines.length && (isBlank(source, lines[end]) || indentOf(source, lines[end]).columns >= 4)) {
+        while (
+          end < lines.length && (
+            isBlank(source, lines[end]) || indentColumns(source, lines[end]) >= 4
+          )
+        ) {
           end++;
         }
         // The block consumes trailing blank lines, but its code value and position do not include them.

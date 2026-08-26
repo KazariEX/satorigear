@@ -1,5 +1,5 @@
 import type { Heading } from "mdast";
-import { type BlockLine, lineIndent } from "../../block/lines.ts";
+import { type BlockLine, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
@@ -12,12 +12,12 @@ function atxAt(source: string, line: BlockLine): {
   marker: string;
   markerOffset: number;
 } | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent || source[indent.offset] !== "#") {
+  const markerOffset = lineIndentOffset(source, line);
+  if (markerOffset < 0 || source[markerOffset] !== "#") {
     return;
   }
-  let markerEnd = indent.offset + 1;
-  while (markerEnd < line.end && markerEnd - indent.offset < 6 && source[markerEnd] === "#") {
+  let markerEnd = markerOffset + 1;
+  while (markerEnd < line.end && markerEnd - markerOffset < 6 && source[markerEnd] === "#") {
     markerEnd++;
   }
   if (markerEnd < line.end && source[markerEnd] !== " " && source[markerEnd] !== "\t") {
@@ -42,21 +42,21 @@ function atxAt(source: string, line: BlockLine): {
     }
   }
   return {
-    markerOffset: indent.offset,
-    marker: source.slice(indent.offset, markerEnd),
+    markerOffset,
+    marker: source.slice(markerOffset, markerEnd),
     contentOffset,
     contentEnd,
   };
 }
 
 export function setextMarkerAt(source: string, line: BlockLine): "=" | "-" | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent) {
+  const markerOffset = lineIndentOffset(source, line);
+  if (markerOffset < 0) {
     return;
   }
-  const marker = source[indent.offset];
+  const marker = source[markerOffset];
   const match = marker === "=" || marker === "-"
-    ? /^(=+|-+)[ \t]*$/.exec(source.slice(indent.offset, line.end))
+    ? /^(=+|-+)[ \t]*$/.exec(source.slice(markerOffset, line.end))
     : void 0;
   return match ? match[1][0] as "=" | "-" : void 0;
 }

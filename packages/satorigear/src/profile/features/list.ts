@@ -1,11 +1,5 @@
 import type { List, ListItem } from "mdast";
-import {
-  type BlockLine,
-  contentAfterColumns,
-  indentOf,
-  isBlank,
-  lineIndent,
-} from "../../block/lines.ts";
+import { type BlockLine, contentAfterColumns, isBlank, lineIndent } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd, type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
@@ -284,9 +278,8 @@ const listStart: BlockStart = (source, lines, start, out, contentOffset, context
         index++;
         continue;
       }
-      const indent = indentOf(source, lines[index]);
-      if (indent.columns >= marker.contentIndent) {
-        const content = contentAfterColumns(source, lines[index], marker.contentIndent);
+      const content = contentAfterColumns(source, lines[index], marker.contentIndent);
+      if (content) {
         const contentLine = { ...lines[index], start: content.offset, prefixColumns: content.prefixColumns };
         itemLines.push(contentLine);
         trailingBlank = false;

@@ -1,5 +1,11 @@
 import { Character } from "../constants/character.ts";
-import { type BlockLine, lineContentEnd, lineIndent, removeIndent } from "./lines.ts";
+import {
+  type BlockLine,
+  lineContentEnd,
+  lineIndent,
+  lineIndentOffset,
+  removeIndent,
+} from "./lines.ts";
 
 export interface Fence {
   indent: number;
@@ -65,11 +71,11 @@ export function closesFence(source: string, line: BlockLine, fence: Fence): bool
   }
   let offset = line.start;
   if (first !== fence.marker) {
-    const indent = lineIndent(source, line);
-    if (!indent || source.charCodeAt(indent.offset) !== fence.marker) {
+    const contentOffset = lineIndentOffset(source, line);
+    if (contentOffset < 0 || source.charCodeAt(contentOffset) !== fence.marker) {
       return false;
     }
-    offset = indent.offset;
+    offset = contentOffset;
   }
   const markerEnd = offset + fence.length;
   while (source.charCodeAt(offset) === fence.marker) {

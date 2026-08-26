@@ -1,4 +1,4 @@
-import { type BlockLine, indentOf, isBlank } from "../../block/lines.ts";
+import { type BlockLine, indentOffset, isBlank } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { firstChildStart } from "../../fragment/node.ts";
@@ -15,7 +15,7 @@ function emitInlineChunks(
 ): void {
   while (start < end) {
     const line = lines[start++];
-    const offset = indentOf(source, line, 3).offset;
+    const offset = indentOffset(source, line);
     const chunkEnd = start < end ? line.next : line.end;
     if (chunkEnd > offset) {
       out.push(BlockKind.InlineChunk, offset, chunkEnd);

@@ -1,9 +1,4 @@
-import {
-  type BlockLine,
-  isBlank,
-  lineIndent,
-  physicalColumnAt,
-} from "../../block/lines.ts";
+import { type BlockLine, isBlank, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../fragment/block.ts";
@@ -15,11 +10,11 @@ interface BlockQuoteMarker {
 }
 
 function blockQuoteOffset(source: string, line: BlockLine): BlockQuoteMarker | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent || source[indent.offset] !== ">") {
+  const markerOffset = lineIndentOffset(source, line);
+  if (markerOffset < 0 || source[markerOffset] !== ">") {
     return;
   }
-  let offset = indent.offset + 1;
+  let offset = markerOffset + 1;
   let prefixColumns = line.prefixColumns ?? 0;
   if (source[offset] === " ") {
     offset++;

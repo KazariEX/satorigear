@@ -1,5 +1,5 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
-import { type BlockLine, isBlank, lineIndent } from "../../block/lines.ts";
+import { type BlockLine, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -33,15 +33,19 @@ function appendTableCell(
   cells.push(start, contentStart, contentEnd);
 }
 
-function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): number[] | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent) {
+function tableCellsAt(
+  source: string,
+  line: BlockLine,
+  requirePipe: boolean,
+  contentOffset = lineIndentOffset(source, line),
+): number[] | undefined {
+  if (contentOffset < 0) {
     return;
   }
 
   const pipes: number[] = [];
   let backslashes = 0;
-  for (let offset = indent.offset; offset < line.end; offset++) {
+  for (let offset = contentOffset; offset < line.end; offset++) {
     const character = source[offset];
     if (character === "\\") {
       backslashes++;
@@ -57,14 +61,14 @@ function tableCellsAt(source: string, line: BlockLine, requirePipe: boolean): nu
   }
 
   let visibleEnd = line.end;
-  while (visibleEnd > indent.offset && (source[visibleEnd - 1] === " " || source[visibleEnd - 1] === "\t")) {
+  while (visibleEnd > contentOffset && (source[visibleEnd - 1] === " " || source[visibleEnd - 1] === "\t")) {
     visibleEnd--;
   }
   const trailingPipe = pipes.at(-1) === visibleEnd - 1;
-  const leadingPipe = pipes[0] === indent.offset;
+  const leadingPipe = pipes[0] === contentOffset;
   const cells: number[] = [];
-  let contentStart = indent.offset;
-  let spanStart = indent.offset;
+  let contentStart = contentOffset;
+  let spanStart = contentOffset;
   let pipeIndex = 0;
   if (leadingPipe) {
     contentStart++;
@@ -107,15 +111,15 @@ function alignmentAt(source: string, cells: readonly number[], cell: number): Bl
 }
 
 function delimiterAt(source: string, line: BlockLine): number[] | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent) {
+  const contentOffset = lineIndentOffset(source, line);
+  if (contentOffset < 0) {
     return;
   }
-  const first = source[indent.offset];
+  const first = source[contentOffset];
   if (first !== "-" && first !== ":" && first !== "|") {
     return;
   }
-  const cells = tableCellsAt(source, line, false);
+  const cells = tableCellsAt(source, line, false, contentOffset);
   if (!cells) {
     return;
   }
@@ -228,7 +232,11 @@ export const feature: SyntaxFeature = {
         let end = start + 2;
         while (end < lines.length) {
           const line = lines[end];
-          if (isBlank(source, line) || !lineIndent(source, line) || context.startsInterruptingBlock(source, line)) {
+          if (
+            isBlank(source, line) ||
+            lineIndentOffset(source, line) < 0 ||
+            context.startsInterruptingBlock(source, line)
+          ) {
             break;
           }
           const cells = tableCellsAt(source, line, false);

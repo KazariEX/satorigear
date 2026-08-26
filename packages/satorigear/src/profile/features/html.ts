@@ -1,4 +1,4 @@
-import { type BlockLine, isBlank, lineIndent, normalizeLines } from "../../block/lines.ts";
+import { type BlockLine, isBlank, lineIndentOffset, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -89,11 +89,11 @@ const autolink = /<(?:[A-Z][A-Z0-9+.\-]{1,31}:[^ \t\n\r<>]+|[\w!#$%&'*+\-/=?^`{|
 const inlineHtml = /<[A-Za-z][A-Za-z0-9-]*(?:[ \t\n\r]+[A-Za-z_:][\w.:-]*(?:[ \t\n\r]*=[ \t\n\r]*(?:[^ \t\n\r"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t\n\r]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t\n\r]*>|<\?[\s\S]*?\?>|<![A-Z][\s\S]*?>|<!\[CDATA\[[\s\S]*?\]\]>/y;
 
 function htmlStartAt(source: string, line: BlockLine): HtmlStart | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent || source[indent.offset] !== "<") {
+  const contentOffset = lineIndentOffset(source, line);
+  if (contentOffset < 0 || source[contentOffset] !== "<") {
     return;
   }
-  const body = source.slice(indent.offset, line.end);
+  const body = source.slice(contentOffset, line.end);
   const lower = body.toLowerCase();
   for (const tag of ["script", "pre", "style", "textarea"]) {
     if (lower.startsWith(`<${tag}`) && (lower.length === tag.length + 1 || /[ \t>]/.test(lower[tag.length + 1]))) {

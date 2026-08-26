@@ -1,6 +1,6 @@
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
-import { type BlockLine, lineIndent } from "../../../block/lines.ts";
+import { type BlockLine, lineIndentOffset } from "../../../block/lines.ts";
 import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
@@ -49,13 +49,9 @@ function skipSpaces(source: string, offset: number, end: number): number {
   return offset;
 }
 
-function contentOffsetOf(source: string, line: BlockLine): number | undefined {
-  return lineIndent(source, line)?.offset;
-}
-
 function lineValue(source: string, line: BlockLine): string | undefined {
-  const offset = contentOffsetOf(source, line);
-  return offset === void 0 ? void 0 : source.slice(offset, line.end);
+  const offset = lineIndentOffset(source, line);
+  return offset < 0 ? void 0 : source.slice(offset, line.end);
 }
 
 function yamlClosingMarker(value: string | undefined): string | undefined {
@@ -92,9 +88,9 @@ function slotOpeningAt(
   source: string,
   line: BlockLine,
 ): SlotOpening | undefined {
-  const contentOffset = contentOffsetOf(source, line);
+  const contentOffset = lineIndentOffset(source, line);
   if (
-    contentOffset === void 0 || source[contentOffset] !== "#" ||
+    contentOffset < 0 || source[contentOffset] !== "#" ||
     source[contentOffset + 1] === "#" || source[contentOffset + 1] === " " ||
     source[contentOffset + 1] === "\t"
   ) {
@@ -188,8 +184,8 @@ function nestedComponentEnd(
   lines: readonly BlockLine[],
   index: number,
 ): number | undefined {
-  const offset = contentOffsetOf(source, lines[index]);
-  if (offset === void 0) {
+  const offset = lineIndentOffset(source, lines[index]);
+  if (offset < 0) {
     return;
   }
   const opening = blockOpeningAt(source, lines[index], offset, false);
@@ -197,18 +193,18 @@ function nestedComponentEnd(
 }
 
 function fenceAt(source: string, line: BlockLine, size: number): number | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent) {
+  const contentOffset = lineIndentOffset(source, line);
+  if (contentOffset < 0) {
     return;
   }
-  let offset = indent.offset;
+  let offset = contentOffset;
   while (source[offset] === ":") {
     offset++;
   }
-  if (offset - indent.offset !== size || skipSpaces(source, offset, line.end) !== line.end) {
+  if (offset - contentOffset !== size || skipSpaces(source, offset, line.end) !== line.end) {
     return;
   }
-  return indent.offset;
+  return contentOffset;
 }
 
 function blockClose(
@@ -239,8 +235,8 @@ function blockClose(
       depth--;
       continue;
     }
-    const indent = lineIndent(source, line);
-    if (indent && blockOpeningAt(source, line, indent.offset, false)?.fenceSize === opening.fenceSize) {
+    const contentOffset = lineIndentOffset(source, line);
+    if (contentOffset >= 0 && blockOpeningAt(source, line, contentOffset, false)?.fenceSize === opening.fenceSize) {
       depth++;
     }
   }

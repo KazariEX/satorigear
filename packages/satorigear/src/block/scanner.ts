@@ -1,5 +1,11 @@
 import { Character } from "../constants/character.ts";
-import { type BlockLine, firstLineIndexAtOrAfter, indentOf, isBlank, lineIndent } from "./lines.ts";
+import {
+  type BlockLine,
+  firstLineIndexAtOrAfter,
+  indentColumns,
+  isBlank,
+  lineIndentOffset,
+} from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocation, SourceSpan } from "../source-view.ts";
 import type { BlockProfile, BlockSyntaxRule } from "./profile.ts";
@@ -42,16 +48,16 @@ function profileStarts(
   start: number,
   out: BlockTokenStream,
 ): number | undefined {
-  const indent = lineIndent(source, lines[start]);
-  if (!indent) {
+  const contentOffset = lineIndentOffset(source, lines[start]);
+  if (contentOffset < 0) {
     return;
   }
-  const starts = profile.starts[source.charCodeAt(indent.offset)];
+  const starts = profile.starts[source.charCodeAt(contentOffset)];
   if (!starts) {
     return;
   }
   for (const resolve of starts) {
-    const end = resolve(source, lines, start, out, indent.offset, context);
+    const end = resolve(source, lines, start, out, contentOffset, context);
     if (end !== void 0) {
       return end;
     }
@@ -59,28 +65,20 @@ function profileStarts(
 }
 
 function startsInterruptingBlock(profile: BlockProfile, source: string, line: BlockLine): boolean {
-  const indent = lineIndent(source, line);
-  if (!indent) {
+  const contentOffset = lineIndentOffset(source, line);
+  if (contentOffset < 0) {
     return false;
   }
-  const interrupts = profile.interrupts[source.charCodeAt(indent.offset)];
+  const interrupts = profile.interrupts[source.charCodeAt(contentOffset)];
   if (!interrupts) {
     return false;
   }
   for (const interrupt of interrupts) {
-    if (interrupt(source, line, indent.offset)) {
+    if (interrupt(source, line, contentOffset)) {
       return true;
     }
   }
   return false;
-}
-
-function startsParagraphAt(context: BlockScanContext, source: string, line: BlockLine): boolean {
-  return (
-    !isBlank(source, line) &&
-    !context.startsInterruptingBlock(source, line) &&
-    indentOf(source, line).columns < 4
-  );
 }
 
 function endsWithParagraphLeaf(
@@ -102,7 +100,11 @@ function endsWithParagraphLeaf(
       contentLine = unwrapped;
       continue;
     }
-    return startsParagraphAt(context, source, contentLine);
+    return (
+      !isBlank(source, contentLine) &&
+      !context.startsInterruptingBlock(source, contentLine) &&
+      indentColumns(source, contentLine) < 4
+    );
   }
 }
 

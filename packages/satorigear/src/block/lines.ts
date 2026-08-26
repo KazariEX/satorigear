@@ -41,35 +41,58 @@ export function lineContentEnd(source: string, start: number, end: number): numb
   return source.charCodeAt(end - 1) === Character.CarriageReturn ? end - 1 : end;
 }
 
-export function lineIndent(source: string, line: BlockLine): Indent | undefined {
-  const indent = indentOf(source, line, 3);
-  if (source[indent.offset] === " " || source[indent.offset] === "\t") {
-    return;
-  }
-  return indent;
-}
-
-export function indentOf(source: string, line: BlockLine, limit = Number.POSITIVE_INFINITY): Indent {
+export function indentColumns(source: string, line: BlockLine): number {
   let offset = line.start;
   let columns = line.prefixColumns ?? 0;
-  while (offset < line.end && columns < limit) {
+  while (offset < line.end) {
     if (source[offset] === " ") {
       offset++;
       columns++;
       continue;
     }
     if (source[offset] === "\t") {
-      const width = 4 - (columns % 4);
-      if (columns + width > limit) {
-        break;
-      }
       offset++;
-      columns += width;
+      columns += 4 - (columns % 4);
       continue;
     }
     break;
   }
-  return { offset, columns };
+  return columns;
+}
+
+/** Returns the offset after up to three indent columns; tabs exceed this limit. */
+export function indentOffset(source: string, line: BlockLine): number {
+  let offset = line.start;
+  const limit = offset + 3 - (line.prefixColumns ?? 0);
+  while (offset < line.end && offset < limit && source[offset] === " ") {
+    offset++;
+  }
+  return offset;
+}
+
+export function lineIndent(source: string, line: BlockLine): Indent | undefined {
+  const offset = lineIndentOffset(source, line);
+  if (offset !== -1) {
+    return {
+      columns: (line.prefixColumns ?? 0) + offset - line.start,
+      offset,
+    };
+  }
+}
+
+/**
+ * Returns the first content offset after consuming up to three indent columns.
+ *
+ * Unlike {@link indentOffset}, returns -1 when that boundary still points to a space or tab.
+ * Inlining the scan improves repeated large-document block-dispatch throughput.
+ */
+export function lineIndentOffset(source: string, line: BlockLine): number {
+  let offset = line.start;
+  const limit = offset + 3 - (line.prefixColumns ?? 0);
+  while (offset < line.end && offset < limit && source[offset] === " ") {
+    offset++;
+  }
+  return source[offset] === " " || source[offset] === "\t" ? -1 : offset;
 }
 
 export function isBlank(source: string, line: BlockLine): boolean {
@@ -121,26 +144,24 @@ export function contentAfterColumns(
   source: string,
   line: BlockLine,
   columns: number,
-): { offset: number; prefixColumns: number } {
+): { offset: number; prefixColumns: number } | undefined {
   let offset = line.start;
   let consumed = line.prefixColumns ?? 0;
-  if (consumed >= columns) {
-    return { offset, prefixColumns: consumed - columns };
-  }
   while (offset < line.end && consumed < columns) {
     if (source[offset] === " ") {
       consumed++;
-      offset++;
-      continue;
     }
-    if (source[offset] === "\t") {
+    else if (source[offset] === "\t") {
       consumed += 4 - (consumed % 4);
-      offset++;
-      continue;
     }
-    break;
+    else {
+      break;
+    }
+    offset++;
   }
-  return { offset, prefixColumns: Math.max(0, consumed - columns) };
+  if (consumed >= columns) {
+    return { offset, prefixColumns: consumed - columns };
+  }
 }
 
 export function normalizeLines(value: string): string {

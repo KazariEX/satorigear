@@ -1,10 +1,4 @@
-import {
-  type BlockLine,
-  contentAfterColumns,
-  indentOf,
-  isBlank,
-  lineIndent,
-} from "../../../block/lines.ts";
+import { type BlockLine, contentAfterColumns, isBlank, lineIndentOffset } from "../../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
@@ -25,11 +19,11 @@ interface FootnoteDefinitionMatch extends FootnoteLabel {
 }
 
 function definitionAt(source: string, line: BlockLine): FootnoteDefinitionMatch | undefined {
-  const indent = lineIndent(source, line);
-  if (!indent) {
+  const markerStart = lineIndentOffset(source, line);
+  if (markerStart < 0) {
     return;
   }
-  const label = footnoteLabelAt(source, indent.offset, line.end);
+  const label = footnoteLabelAt(source, markerStart, line.end);
   if (!label || source[label.end] !== ":") {
     return;
   }
@@ -42,7 +36,7 @@ function definitionAt(source: string, line: BlockLine): FootnoteDefinitionMatch 
     ...label,
     contentOffset,
     markerEnd,
-    markerStart: indent.offset,
+    markerStart,
   };
 }
 
@@ -110,9 +104,8 @@ export const blockStarts: BlockFeature["starts"] = [
           index++;
           continue;
         }
-        const indent = indentOf(source, line);
-        if (indent.columns >= 4) {
-          const content = contentAfterColumns(source, line, 4);
+        const content = contentAfterColumns(source, line, 4);
+        if (content) {
           const contentLine = { ...line, start: content.offset, prefixColumns: content.prefixColumns };
           definitionLines.push(contentLine);
           lazyParagraph = context.endsWithParagraphLeaf(source, contentLine);
