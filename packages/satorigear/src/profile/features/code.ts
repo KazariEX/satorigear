@@ -26,8 +26,8 @@ import { semanticText } from "./text.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const codeFenceRule: FenceRule = {
-  forbiddenInfoMarkers: "`",
-  markers: "`~",
+  forbiddenInfoMarkers: [Character.GraveAccent],
+  markers: [Character.GraveAccent, Character.Tilde],
   minimumLength: 3,
 };
 

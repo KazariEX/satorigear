@@ -15,8 +15,8 @@ import { semanticText } from "../text.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 
 const mathFenceRule: FenceRule = {
-  forbiddenInfoMarkers: "$",
-  markers: "$",
+  forbiddenInfoMarkers: [Character.DollarSign],
+  markers: [Character.DollarSign],
   minimumLength: 2,
 };
 
