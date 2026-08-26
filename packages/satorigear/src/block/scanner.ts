@@ -182,23 +182,22 @@ function linesOf(source: string, start = 0, limit = source.length): BlockLine[] 
   let lineFeed = source.indexOf("\n", start);
   let carriageReturn = source.indexOf("\r", start);
   while (start < limit) {
-    const nextEnding = lineFeed < 0
-      ? carriageReturn
-      : carriageReturn < 0 ? lineFeed : Math.min(lineFeed, carriageReturn);
-    const end = nextEnding < 0 || nextEnding >= limit ? limit : nextEnding;
-    let next = end;
-    if (next < limit) {
-      if (next === carriageReturn) {
-        next += next + 1 < limit && source.charCodeAt(next + 1) === Character.LineFeed ? 2 : 1;
-        carriageReturn = source.indexOf("\r", next);
-        if (lineFeed < next) {
-          lineFeed = source.indexOf("\n", next);
-        }
-      }
-      else {
-        next++;
+    // Default to the LF-only path; only CR-bearing input pays for mixed-ending selection.
+    let end = lineFeed;
+    let next = end + 1;
+    if (carriageReturn >= 0 && (end < 0 || carriageReturn < end)) {
+      end = carriageReturn;
+      next = end + (source.charCodeAt(end + 1) === Character.LineFeed ? 2 : 1);
+      carriageReturn = source.indexOf("\r", next);
+      if (lineFeed < next) {
         lineFeed = source.indexOf("\n", next);
       }
+    }
+    else if (lineFeed < 0) {
+      end = next = limit;
+    }
+    else {
+      lineFeed = source.indexOf("\n", next);
     }
     lines.push({
       start: sourceOffset + start,
