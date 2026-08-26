@@ -5,4 +5,7 @@ export default defineConfig({
   dts: {
     build: true,
   },
+  outputOptions: {
+    comments: false,
+  },
 });
