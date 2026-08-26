@@ -80,14 +80,16 @@ export class BlockTokenStream {
     const fields = this.#fields;
     const fieldLength = this.#fieldLength;
     const opens: number[] = [];
-    const closes: BlockKind[] = [];
-    // Scanning writes each token once with an empty node length, so indexing needs no clearing pass.
+    let close = BlockKind.None;
+    // Open nodes temporarily retain their parent's close kind in the empty length slot;
+    // closing replaces that workspace value with the final node length.
     for (let field = 0; field < fieldLength; field += blockTokenStride) {
       const kind = fields[field];
       const rule = rules[kind];
       if (rule && rule.close !== BlockKind.None) {
         opens.push(field);
-        closes.push(rule.close);
+        fields[field + 3] = close;
+        close = rule.close;
         continue;
       }
       if (rule && !rule.block) {
@@ -101,13 +103,13 @@ export class BlockTokenStream {
         field -= blockTokenStride;
         continue;
       }
-      if (closes.at(-1) === kind) {
+      if (close === kind) {
         const open = opens.pop()!;
-        closes.pop();
+        close = fields[open + 3];
         fields[open + 3] = (field - open) / blockTokenStride + 1;
         continue;
       }
-      if (rule?.block) {
+      if (rule) {
         fields[field + 3] = 1;
       }
     }
