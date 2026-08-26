@@ -61,7 +61,7 @@ function scanBlockLines(
   source: string,
   lines: BlockLines,
   out: BlockTokenStream,
-  visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => boolean,
+  visit: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
 ): void {
   for (let index = 0; index < lines.length;) {
     if (isBlank(source, lines, index)) {
@@ -71,7 +71,7 @@ function scanBlockLines(
     const lineStart = index;
     const tokenStart = out.length;
     index = scanBlock(profile, context, source, lines, index, out);
-    if (visit?.(lineStart, index, tokenStart, out.length)) {
+    if (visit(lineStart, index, tokenStart, out.length)) {
       return;
     }
   }
@@ -165,7 +165,6 @@ export class BlockScanContext {
       while (previousContentEnd > lineStart && isBlank(source, lines, previousContentEnd - 1)) {
         previousContentEnd--;
       }
-      return false;
     });
     return blankSeparated;
   }
@@ -237,7 +236,6 @@ export class BlockScanner {
           tokenStart,
         });
       }
-      return false;
     });
     tokens.indexStructure(this.#profile.rules);
     records.length = recordIndex;
@@ -360,7 +358,6 @@ export class BlockScanner {
           dependencyEnd,
           tokenStart: oldTokenStart + tokenStart,
         });
-        return false;
       });
       if (convergedIndex >= 0 || scanEnd === nextSource.length) {
         break;
