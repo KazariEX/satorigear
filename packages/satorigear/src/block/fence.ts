@@ -44,7 +44,7 @@ export function fenceAt(
   if (marker !== rule.marker && marker !== rule.alternateMarker) {
     return;
   }
-  let offset = markerOffset;
+  let offset = markerOffset + 1;
   while (source.charCodeAt(offset) === marker) {
     offset++;
   }
@@ -71,11 +71,7 @@ export function fenceAt(
 export function closesFence(source: string, lines: BlockLines, index: number, fence: Fence): boolean {
   const lineStart = lines.start(index);
   const first = source.charCodeAt(lineStart);
-  if (
-    first !== fence.marker &&
-    first !== Character.Space &&
-    first !== Character.CharacterTabulation
-  ) {
+  if (first !== fence.marker && first !== Character.Space) {
     return false;
   }
   let offset = lineStart;
@@ -87,6 +83,8 @@ export function closesFence(source: string, lines: BlockLines, index: number, fe
     offset = contentOffset;
   }
   const markerEnd = offset + fence.length;
+  // The first marker has already matched.
+  offset++;
   while (source.charCodeAt(offset) === fence.marker) {
     offset++;
   }
