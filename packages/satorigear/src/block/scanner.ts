@@ -3,19 +3,6 @@ import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocation, SourceSpan } from "../source-view.ts";
 import type { BlockProfile, BlockSyntaxRule } from "./profile.ts";
 
-export interface BlockScanContext {
-  endsWithParagraphLeaf: (source: string, lines: BlockLines, index: number) => boolean;
-  retainLookahead: (end: number) => void;
-  // Returns whether blank lines separate direct blocks in this line view.
-  scanLines: (source: string, lines: BlockLines, tokens: BlockTokenStream) => boolean;
-  startsInterruptingBlock: (
-    source: string,
-    lines: BlockLines,
-    index: number,
-    contentOffset?: number,
-  ) => boolean;
-}
-
 export interface BlockScanChange {
   newRecordEnd: number;
   offsetDelta: number;
@@ -36,62 +23,6 @@ export interface BlockRecord extends SourceSpan {
   // Furthest source boundary whose contents can affect this record.
   dependencyEnd: number;
   tokenStart: number;
-}
-
-function startsInterruptingBlock(
-  profile: BlockProfile,
-  source: string,
-  lines: BlockLines,
-  index: number,
-  contentOffset = lineIndentOffset(source, lines, index),
-): boolean {
-  if (contentOffset < 0) {
-    return false;
-  }
-  const interrupts = profile.interrupts[source.charCodeAt(contentOffset)];
-  if (!interrupts) {
-    return false;
-  }
-  for (const interrupt of interrupts) {
-    if (interrupt(source, lines, index, contentOffset)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function endsWithParagraphLeaf(
-  profile: BlockProfile,
-  context: BlockScanContext,
-  source: string,
-  lines: BlockLines,
-  index: number,
-  unwrappedLine: BlockLines,
-): boolean {
-  let contentLines = lines;
-  let contentIndex = index;
-  while (true) {
-    const contentOffset = lineIndentOffset(source, contentLines, contentIndex);
-    if (contentOffset < 0) {
-      return false;
-    }
-    let unwrapped = false;
-    for (const unwrap of profile.lazyContinuationUnwrappers) {
-      unwrapped = unwrap(source, contentLines, contentIndex, contentOffset, unwrappedLine);
-      if (unwrapped) {
-        break;
-      }
-    }
-    if (unwrapped) {
-      contentLines = unwrappedLine;
-      contentIndex = 0;
-      continue;
-    }
-    return (
-      !isBlank(source, contentLines, contentIndex) &&
-      !context.startsInterruptingBlock(source, contentLines, contentIndex, contentOffset)
-    );
-  }
 }
 
 function scanBlock(
@@ -145,27 +76,6 @@ function scanBlockLines(
   }
 }
 
-function scanSeparatedBlockLines(
-  profile: BlockProfile,
-  context: BlockScanContext,
-  source: string,
-  lines: BlockLines,
-  out: BlockTokenStream,
-): boolean {
-  let blankSeparated = false;
-  let previousContentEnd = -1;
-  scanBlockLines(profile, context, source, lines, out, (lineStart, lineEnd) => {
-    blankSeparated ||= previousContentEnd >= 0 && lineStart > previousContentEnd;
-    previousContentEnd = lineEnd;
-    // A child may consume trailing blank lines that still separate the following direct block.
-    while (previousContentEnd > lineStart && isBlank(source, lines, previousContentEnd - 1)) {
-      previousContentEnd--;
-    }
-    return false;
-  });
-  return blankSeparated;
-}
-
 function sameShiftedBlock(
   previous: BlockTokenStream,
   record: BlockRecord,
@@ -193,43 +103,108 @@ function sameShiftedBlock(
   return true;
 }
 
+export class BlockScanContext {
+  #lookaheadEnd = 0;
+  #profile: BlockProfile;
+  #unwrappedLine = new BlockLines();
+
+  constructor(profile: BlockProfile) {
+    this.#profile = profile;
+  }
+
+  endsWithParagraphLeaf(source: string, lines: BlockLines, index: number): boolean {
+    let contentLines = lines;
+    let contentIndex = index;
+    while (true) {
+      const contentOffset = lineIndentOffset(source, contentLines, contentIndex);
+      if (contentOffset < 0) {
+        return false;
+      }
+      let unwrapped = false;
+      for (const unwrap of this.#profile.lazyContinuationUnwrappers) {
+        unwrapped = unwrap(source, contentLines, contentIndex, contentOffset, this.#unwrappedLine);
+        if (unwrapped) {
+          break;
+        }
+      }
+      if (unwrapped) {
+        contentLines = this.#unwrappedLine;
+        contentIndex = 0;
+        continue;
+      }
+      return (
+        !isBlank(source, contentLines, contentIndex) &&
+        !this.startsInterruptingBlock(source, contentLines, contentIndex, contentOffset)
+      );
+    }
+  }
+
+  retainLookahead(end: number): void {
+    this.#lookaheadEnd = Math.max(this.#lookaheadEnd, end);
+  }
+
+  resetLookahead(): void {
+    this.#lookaheadEnd = 0;
+  }
+
+  consumeLookahead(): number {
+    const end = this.#lookaheadEnd;
+    this.#lookaheadEnd = 0;
+    return end;
+  }
+
+  // Returns whether blank lines separate direct blocks in this line view.
+  scanLines(source: string, lines: BlockLines, out: BlockTokenStream): boolean {
+    let blankSeparated = false;
+    let previousContentEnd = -1;
+    scanBlockLines(this.#profile, this, source, lines, out, (lineStart, lineEnd) => {
+      blankSeparated ||= previousContentEnd >= 0 && lineStart > previousContentEnd;
+      previousContentEnd = lineEnd;
+      // A child may consume trailing blank lines that still separate the following direct block.
+      while (previousContentEnd > lineStart && isBlank(source, lines, previousContentEnd - 1)) {
+        previousContentEnd--;
+      }
+      return false;
+    });
+    return blankSeparated;
+  }
+
+  startsInterruptingBlock(
+    source: string,
+    lines: BlockLines,
+    index: number,
+    contentOffset = lineIndentOffset(source, lines, index),
+  ): boolean {
+    if (contentOffset < 0) {
+      return false;
+    }
+    const interrupts = this.#profile.interrupts[source.charCodeAt(contentOffset)];
+    if (!interrupts) {
+      return false;
+    }
+    for (const interrupt of interrupts) {
+      if (interrupt(source, lines, index, contentOffset)) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
 // Projection and inline resolution borrow only the scanner's indexed semantic view.
 export type BlockStructure = Pick<BlockScanner, "records" | "ruleOf" | "tokens">;
 
 export class BlockScanner {
   #context: BlockScanContext;
   #lines: BlockLines;
-  #lookaheadEnd: number;
   #profile: BlockProfile;
   #records: BlockRecord[];
   #tokens: BlockTokenStream;
 
   constructor(profile: BlockProfile) {
-    const unwrappedLine = new BlockLines();
-    this.#context = {
-      endsWithParagraphLeaf: (source, lines, index) => endsWithParagraphLeaf(
-        profile,
-        this.#context,
-        source,
-        lines,
-        index,
-        unwrappedLine,
-      ),
-      retainLookahead: (end) => {
-        this.#lookaheadEnd = Math.max(this.#lookaheadEnd, end);
-      },
-      scanLines: (source, lines, tokens) => scanSeparatedBlockLines(profile, this.#context, source, lines, tokens),
-      startsInterruptingBlock: (source, lines, index, contentOffset) => startsInterruptingBlock(
-        profile,
-        source,
-        lines,
-        index,
-        contentOffset,
-      ),
-    };
+    this.#context = new BlockScanContext(profile);
     this.#profile = profile;
     this.#lines = new BlockLines();
-    this.#lookaheadEnd = 0;
     this.#records = [];
     this.#tokens = new BlockTokenStream();
   }
@@ -239,12 +214,12 @@ export class BlockScanner {
     const tokens = this.#tokens;
     tokens.reset(source.length);
     const records = this.#records;
+    const context = this.#context;
     let recordIndex = 0;
-    this.#lookaheadEnd = 0;
-    scanBlockLines(this.#profile, this.#context, source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
+    context.resetLookahead();
+    scanBlockLines(this.#profile, context, source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
       const end = lines.next(lineEnd - 1);
-      const dependencyEnd = Math.max(end, this.#lookaheadEnd);
-      this.#lookaheadEnd = 0;
+      const dependencyEnd = Math.max(end, context.consumeLookahead());
       const record = records[recordIndex++];
       // Reuse top-level records across one-shot parses instead of allocating one per block.
       if (record) {
@@ -292,6 +267,7 @@ export class BlockScanner {
 
   edit(change: SourceChange): BlockScanChange {
     const { changedSpan, nextSource, offsetDelta } = change;
+    const context = this.#context;
     // Map the new damage end back to the old source with the total edit delta.
     const oldChangedEnd = changedSpan.end - offsetDelta;
 
@@ -332,10 +308,10 @@ export class BlockScanner {
       const scanEnd = scanLineEnd < nextLines.length ? nextLines.start(scanLineEnd) : nextSource.length;
       const scanLines = nextLines.slice(scanLineStart, scanLineEnd);
       let convergenceIndex = affectedIndex;
-      this.#lookaheadEnd = 0;
+      context.resetLookahead();
       // The visitor is consumed synchronously before this window can be expanded.
       // eslint-disable-next-line no-loop-func
-      scanBlockLines(this.#profile, this.#context, nextSource, scanLines, replacement, (
+      scanBlockLines(this.#profile, context, nextSource, scanLines, replacement, (
         lineStart,
         lineEnd,
         tokenStart,
@@ -343,9 +319,8 @@ export class BlockScanner {
       ) => {
         const blockStart = scanLines.start(lineStart);
         const blockEnd = scanLines.next(lineEnd - 1);
-        const observedEnd = this.#lookaheadEnd;
+        const observedEnd = context.consumeLookahead();
         const dependencyEnd = Math.max(blockEnd, observedEnd);
-        this.#lookaheadEnd = 0;
         // A failed probe that reached the temporary boundary needs a larger window before convergence is meaningful.
         if (observedEnd >= scanEnd && scanEnd < nextSource.length) {
           return true;
