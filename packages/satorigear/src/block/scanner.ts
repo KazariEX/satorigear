@@ -1,3 +1,4 @@
+import { Character } from "../constants/character.ts";
 import { BlockLines, isBlank, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocation, SourceSpan } from "../source-view.ts";
@@ -34,14 +35,14 @@ function scanBlock(
   out: BlockTokenStream,
 ): number {
   const contentOffset = lineIndentOffset(source, lines, start);
-  if (contentOffset >= 0) {
-    const starts = profile.starts[source.charCodeAt(contentOffset)];
-    if (starts) {
-      for (const resolve of starts) {
-        const end = resolve(source, lines, start, contentOffset, out, context);
-        if (end !== void 0) {
-          return end;
-        }
+  const starts = profile.starts[
+    contentOffset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(contentOffset)
+  ];
+  if (starts) {
+    for (const resolve of starts) {
+      const end = resolve(source, lines, start, contentOffset, out, context);
+      if (end !== void 0) {
+        return end;
       }
     }
   }

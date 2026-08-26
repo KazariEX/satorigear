@@ -1,4 +1,5 @@
 export const enum Character {
+  VirtualBlockIndent = -1,
   CharacterTabulation = 9,
   LineFeed,
   LineTabulation,

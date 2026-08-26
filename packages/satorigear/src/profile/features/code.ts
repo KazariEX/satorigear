@@ -43,37 +43,6 @@ export function codeFenceAt(
 
 export const feature: SyntaxFeature = {
   block: {
-    fallbacks: [
-      (source, lines, start, contentOffset, out) => {
-        if (contentOffset >= 0) {
-          return;
-        }
-        let end = start + 1;
-        while (
-          end < lines.length && (
-            isBlank(source, lines, end) || lineIndentOffset(source, lines, end) < 0
-          )
-        ) {
-          end++;
-        }
-        // The block consumes trailing blank lines, but its code value and position do not include them.
-        let contentEnd = end;
-        while (contentEnd > start && isBlank(source, lines, contentEnd - 1)) {
-          contentEnd--;
-        }
-        const contentLength = lines.end(contentEnd - 1) - lines.start(start);
-        appendLogicalToken(
-          out,
-          BlockKind.IndentedCodeBlock,
-          source,
-          lines,
-          start,
-          end,
-          contentLength,
-        );
-        return end;
-      },
-    ],
     rules: [
       {
         rule: BlockRule.FencedCode,
@@ -136,6 +105,37 @@ export const feature: SyntaxFeature = {
       },
     ],
     starts: [
+      {
+        codes: [
+          Character.VirtualBlockIndent,
+        ],
+        start(source, lines, start, _contentOffset, out) {
+          let end = start + 1;
+          while (
+            end < lines.length && (
+              isBlank(source, lines, end) || lineIndentOffset(source, lines, end) < 0
+            )
+          ) {
+            end++;
+          }
+          // The block consumes trailing blank lines, but its code value and position do not include them.
+          let contentEnd = end;
+          while (contentEnd > start && isBlank(source, lines, contentEnd - 1)) {
+            contentEnd--;
+          }
+          const contentLength = lines.end(contentEnd - 1) - lines.start(start);
+          appendLogicalToken(
+            out,
+            BlockKind.IndentedCodeBlock,
+            source,
+            lines,
+            start,
+            end,
+            contentLength,
+          );
+          return end;
+        },
+      },
       {
         codes: [
           Character.GraveAccent,
