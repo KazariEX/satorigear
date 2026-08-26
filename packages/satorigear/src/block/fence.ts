@@ -14,8 +14,9 @@ export interface Fence {
 }
 
 export interface FenceRule {
-  forbiddenInfoMarkers: readonly number[];
-  markers: readonly number[];
+  alternateMarker?: number;
+  forbiddenInfoMarker: number;
+  marker: number;
   minimumLength: number;
 }
 
@@ -40,7 +41,7 @@ export function fenceAt(
   markerOffset: number,
 ): Fence | undefined {
   const marker = source.charCodeAt(markerOffset);
-  if (!rule.markers.includes(marker)) {
+  if (marker !== rule.marker && marker !== rule.alternateMarker) {
     return;
   }
   let offset = markerOffset;
@@ -51,7 +52,7 @@ export function fenceAt(
   if (length < rule.minimumLength) {
     return;
   }
-  if (rule.forbiddenInfoMarkers.includes(marker)) {
+  if (marker === rule.forbiddenInfoMarker) {
     const lineEnd = lines.end(index);
     while (offset < lineEnd) {
       if (source.charCodeAt(offset++) === marker) {
