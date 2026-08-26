@@ -34,19 +34,37 @@ export class BlockLines {
   }
 
   static from(source: string, start = 0, limit = source.length): BlockLines {
-    // Typical Markdown lines are longer than 16 characters. This hint avoids repeated
-    // backing-store growth on large documents while capping the hint at 16,384 lines.
-    const capacity = Math.min((limit - start + 15) >>> 4, 16_384);
-    const lines = new BlockLines(source.length, capacity);
-    const sourceOffset = start;
-    // Bound the search window explicitly because String#indexOf has no end limit.
-    if (start > 0 || limit < source.length) {
+    const sourceLength = source.length;
+    // Scan partial ranges in isolation because String#indexOf cannot take an end bound.
+    if (start > 0 || limit < sourceLength) {
       source = source.slice(start, limit);
-      start = 0;
-      limit = source.length;
     }
-    let lineFeed = source.indexOf("\n", start);
-    let carriageReturn = source.indexOf("\r", start);
+    // Typical Markdown lines exceed 16 characters; cap the capacity hint at 16,384 lines.
+    const lines = new BlockLines(
+      sourceLength,
+      Math.min((source.length + 15) >>> 4, 16384),
+    );
+    BlockLines.#scan(source, lines);
+    if (start !== 0) {
+      lines.#shiftPositions(0, start);
+    }
+    return lines;
+  }
+
+  /**
+   * Fills packed physical lines from a zero-based source segment.
+   *
+   * Range setup and coordinate rebasing remain in {@link BlockLines.from}, outside
+   * this hot loop.
+   */
+  static #scan(source: string, lines: BlockLines): void {
+    const limit = source.length;
+    let start = 0;
+    let lineFeed = source.indexOf("\n");
+    let carriageReturn = source.indexOf("\r");
+    // Physical lines have zero state, so write only their three position fields.
+    let field = 0;
+    let fields = lines.#fields;
     while (start < limit) {
       // Default to the LF-only path; only CR-bearing input pays for mixed-ending selection.
       let end = lineFeed;
@@ -65,10 +83,22 @@ export class BlockLines {
       else {
         lineFeed = source.indexOf("\n", next);
       }
-      lines.push(sourceOffset + start, sourceOffset + end, sourceOffset + next);
+      if (field >= (Array.isArray(fields) ? typedLineThreshold : fields.length)) {
+        lines.#ensureCapacity(field + BlockLineField.Stride);
+        fields = lines.#fields;
+      }
+      if (Array.isArray(fields)) {
+        fields.push(start, end, next, 0);
+      }
+      else {
+        fields[field + BlockLineField.Start] = start;
+        fields[field + BlockLineField.End] = end;
+        fields[field + BlockLineField.Next] = next;
+      }
+      field += BlockLineField.Stride;
       start = next;
     }
-    return lines;
+    lines.#fieldLength = field;
   }
 
   get length(): number {
@@ -289,7 +319,7 @@ export class BlockLines {
     this.#appendRawRange(lines, start, boundary);
     const relativeStart = this.length;
     this.#appendRawRange(lines, boundary, end);
-    this.#shiftPositions(relativeStart, this.length, lines.#sourceLength + 1);
+    this.#shiftPositions(relativeStart, lines.#sourceLength + 1);
   }
 
   /** Appends an EOF-relative suffix whose coordinates follow future source-length changes. */
@@ -298,7 +328,7 @@ export class BlockLines {
     const boundary = Math.max(start, Math.min(end, lines.#relativeStart));
     const absoluteStart = this.length;
     this.#appendRawRange(lines, start, boundary);
-    this.#shiftPositions(absoluteStart, this.length, -lines.#sourceLength - 1);
+    this.#shiftPositions(absoluteStart, -lines.#sourceLength - 1);
     this.#appendRawRange(lines, boundary, end);
   }
 
@@ -337,7 +367,7 @@ export class BlockLines {
       capacity *= 2;
     }
     const typed = new Int32Array(capacity);
-    typed.set(Array.isArray(fields) ? fields : fields.subarray(0, this.#fieldLength));
+    typed.set(fields);
     this.#fields = typed;
   }
 
@@ -345,13 +375,10 @@ export class BlockLines {
     return position < 0 ? position + this.#sourceLength + 1 : position;
   }
 
-  #shiftPositions(start: number, end: number, delta: number): void {
+  #shiftPositions(start: number, delta: number): void {
     const fields = this.#fields;
-    for (
-      let field = start * BlockLineField.Stride;
-      field < end * BlockLineField.Stride;
-      field += BlockLineField.Stride
-    ) {
+    const fieldLength = this.#fieldLength;
+    for (let field = start * BlockLineField.Stride; field < fieldLength; field += BlockLineField.Stride) {
       fields[field + BlockLineField.Start] += delta;
       fields[field + BlockLineField.End] += delta;
       fields[field + BlockLineField.Next] += delta;
