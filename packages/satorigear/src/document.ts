@@ -7,7 +7,6 @@ import {
 } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { InlineRegionCursor, type ResolvedInlineRegion } from "./inline/region.ts";
-import { emptyArray } from "./primitives.ts";
 import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
 import type { SpannedValue } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
@@ -61,11 +60,13 @@ function materializeNode(
   value: SpannedValue,
   locate: (offset: number) => SourceLocation,
 ): void {
-  const { position, children = emptyArray } = value;
+  const { position, children } = value;
   const result = position as unknown as NonNullable<Node["position"]>;
   result.start = locate(position.start);
-  for (const child of children) {
-    materializeNode(child, locate);
+  if (children) {
+    for (const child of children) {
+      materializeNode(child, locate);
+    }
   }
   result.end = locate(position.end);
 }
@@ -91,14 +92,16 @@ function shiftLocation(location: SourceLocation, shift: PositionShift): void {
 }
 
 function shiftPositions(value: object, shift: PositionShift): void {
-  const { position, children = emptyArray } = value as {
+  const { position, children } = value as {
     children?: object[];
     position: { start: SourceLocation; end: SourceLocation };
   };
   shiftLocation(position.start, shift);
   shiftLocation(position.end, shift);
-  for (const child of children) {
-    shiftPositions(child, shift);
+  if (children) {
+    for (const child of children) {
+      shiftPositions(child, shift);
+    }
   }
 }
 
