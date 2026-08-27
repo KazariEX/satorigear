@@ -10,14 +10,13 @@ import {
   type InlineTokenStream,
 } from "../inline/tokens.ts";
 import type { BlockRule } from "../constants/block.ts";
+import type { InlineProfile } from "../inline/profile.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
 import type { SpannedNode } from "./node.ts";
 
 export interface InlineBuildContext {
   blockRule: BlockRule;
-  buildByKind: readonly (InlineBuilder | undefined)[];
-  syntaxByKind: readonly number[];
   tokens: InlineTokenStream;
   view: SourceView;
 }
@@ -194,6 +193,7 @@ function appendToken(
 function appendRange(
   startToken: number,
   endToken: number,
+  profile: InlineProfile,
   context: InlineBuildContext,
   output: InlineOutput,
   closeKind = InlineKind.None,
@@ -205,8 +205,8 @@ function appendRange(
       break;
     }
     const syntaxOffset = kind * 2;
-    const semanticCloseKind = context.syntaxByKind[syntaxOffset];
-    const build = context.buildByKind[kind]!;
+    const semanticCloseKind = profile.syntaxByKind[syntaxOffset];
+    const build = profile.buildByKind[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
     if (childStart > output.cursor) {
       output.gapStart = output.cursor;
@@ -216,11 +216,12 @@ function appendRange(
       index = appendSemantic(
         index,
         endToken,
-        output,
+        profile,
         context,
+        output,
         build as InlineNodeBuilder,
         semanticCloseKind,
-        context.syntaxByKind[syntaxOffset + 1],
+        profile.syntaxByKind[syntaxOffset + 1],
       );
       continue;
     }
@@ -267,8 +268,9 @@ function appendRange(
 function appendSemantic(
   openToken: number,
   endToken: number,
-  output: InlineOutput,
+  profile: InlineProfile,
   context: InlineBuildContext,
+  output: InlineOutput,
   build: InlineNodeBuilder,
   closeKind: number,
   contentOpenKind: number,
@@ -294,6 +296,7 @@ function appendSemantic(
     closeToken = appendRange(
       next,
       endToken,
+      profile,
       context,
       childOutput,
       closeKind,
@@ -327,8 +330,6 @@ export function buildInlineFragment(
   const { tokens, view } = region;
   const inlineContext = context.inlineContext ??= {
     blockRule,
-    buildByKind: context.profile.buildByKind,
-    syntaxByKind: context.profile.syntaxByKind,
     tokens,
     view,
   };
@@ -346,6 +347,7 @@ export function buildInlineFragment(
   appendRange(
     0,
     inlineTokenCount(tokens),
+    context.profile,
     inlineContext,
     result,
   );
