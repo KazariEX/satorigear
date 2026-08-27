@@ -181,25 +181,20 @@ export const feature: SyntaxFeature = {
           }
           const openEnd = inlineMarkerRunEnd(source, start);
           const markerLength = openEnd - start;
-          let end = -1;
           let offset = openEnd;
           while (offset < source.length) {
-            if (source.charCodeAt(offset) !== Character.GraveAccent) {
-              offset++;
-              continue;
+            offset = source.indexOf("`", offset);
+            if (offset < 0) {
+              break;
             }
             const closeEnd = inlineMarkerRunEnd(source, offset);
             if (closeEnd - offset === markerLength) {
-              end = closeEnd;
-              break;
+              appendInlineToken(tokens, InlineKind.CodeSpan, start, closeEnd, markerLength);
+              return closeEnd;
             }
             offset = closeEnd;
           }
-          if (end < 0) {
-            return start + 1;
-          }
-          appendInlineToken(tokens, InlineKind.CodeSpan, start, end, markerLength);
-          return end;
+          return start + 1;
         },
       },
     ],
