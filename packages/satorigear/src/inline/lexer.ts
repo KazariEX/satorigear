@@ -37,17 +37,18 @@ function tokenize(
 ): InlineTokenStream {
   // Ordinary source text stays implicit between semantic tokens; the builder reads those gaps.
   const tokens: number[] = [];
+  const end = source.length;
   let hasContentLine = false;
   // A non-negative offset means the scanner is at the start of that physical line.
   let lineStart = 0;
   let offset = 0;
-  while (offset < source.length) {
+  while (offset < end) {
     if (lineStart >= 0) {
       let content = offset;
       while (source.charCodeAt(content) === Character.Space) {
         content++;
       }
-      if (content === source.length) {
+      if (content === end) {
         break;
       }
       let code = source.charCodeAt(content);
@@ -68,8 +69,8 @@ function tokenize(
           blankEnd++;
         }
         code = source.charCodeAt(blankEnd);
-        if (blankEnd === source.length || code === Character.LineFeed || code === Character.CarriageReturn) {
-          offset = blankEnd + (blankEnd < source.length ? 1 : 0);
+        if (blankEnd === end || code === Character.LineFeed || code === Character.CarriageReturn) {
+          offset = blankEnd + (blankEnd < end ? 1 : 0);
           if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
             offset++;
           }
@@ -83,7 +84,6 @@ function tokenize(
       }
       hasContentLine = true;
       lineStart = -1;
-      continue;
     }
 
     const code = source.charCodeAt(offset);
@@ -111,14 +111,15 @@ function tokenize(
       const scannedEnd = scan(source, offset, tokens);
       if (scannedEnd > offset) {
         offset = scannedEnd;
-        continue;
       }
-      // A marker may be shared by multiple features. If none accepts it,
-      // leave the marker in the source gap and continue to the next compiled boundary.
-      offset++;
+      else {
+        // A marker may be shared by multiple features. If none accepts it,
+        // leave the marker in the source gap and continue to the next compiled boundary.
+        offset++;
+      }
     }
     textBoundary.lastIndex = offset;
-    offset = textBoundary.test(source) ? textBoundary.lastIndex - 1 : source.length;
+    offset = textBoundary.test(source) ? textBoundary.lastIndex - 1 : end;
   }
   return tokens;
 }
