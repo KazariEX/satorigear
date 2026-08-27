@@ -1,65 +1,58 @@
-import { type BlockLines, indentOffset, isBlank, lineIndentOffset } from "../../block/lines.ts";
+import { indentOffset, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import { setextMarkerAt } from "./heading.ts";
-import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
-
-function emitInlineChunks(
-  source: string,
-  lines: BlockLines,
-  start: number,
-  end: number,
-  out: BlockTokenStream,
-): void {
-  while (start < end) {
-    const line = start++;
-    const offset = indentOffset(source, lines, line);
-    const chunkEnd = start < end ? lines.next(line) : lines.end(line);
-    if (chunkEnd > offset) {
-      out.push(BlockKind.InlineChunk, offset, chunkEnd);
-    }
-  }
-}
 
 export const feature: SyntaxFeature = {
   block: {
     fallbacks: [
       (source, lines, start, contentOffset, out, context) => {
         // Earlier fallbacks rejected this nonblank line, so it begins the paragraph.
-        let index = start + 1;
-        while (index < lines.length) {
-          if (isBlank(source, lines, index)) {
-            break;
-          }
-          if (lines.lazy(index)) {
-            index++;
-            continue;
-          }
-          const contentOffset = lineIndentOffset(source, lines, index);
-          const setext = setextMarkerAt(source, lines, index, contentOffset);
-          if (setext) {
-            const headingStart = lines.start(start);
-            out.push(
-              setext === "=" ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
-              headingStart,
-              headingStart,
-            );
-            emitInlineChunks(source, lines, start, index, out);
-            const lineEnd = lines.end(index);
-            out.push(BlockKind.HeadingClose, lineEnd, lineEnd);
-            return index + 1;
-          }
-          if (context.startsInterruptingBlock(source, lines, index, contentOffset)) {
-            break;
-          }
-          index++;
-        }
+        const openToken = out.length;
         const offset = lines.start(start);
         out.push(BlockKind.ParagraphOpen, offset, offset);
-        emitInlineChunks(source, lines, start, index, out);
+        // Hold one line so only the final inline chunk excludes its line ending.
+        let chunkOffset = contentOffset;
+        let index = start + 1;
+        while (index < lines.length) {
+          const lineOffset = lines.lazy(index)
+            ? -1
+            : lineIndentOffset(source, lines, index);
+          // Only lazy or deeply indented lines need a separate blank-line scan.
+          if (lineOffset < 0) {
+            if (isBlank(source, lines, index)) {
+              break;
+            }
+          }
+          else {
+            if (lineOffset === lines.end(index)) {
+              break;
+            }
+            const setext = setextMarkerAt(source, lines, index, lineOffset);
+            if (setext) {
+              out.setKind(
+                openToken,
+                setext === "=" ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
+              );
+              out.push(BlockKind.InlineChunk, chunkOffset, lines.end(index - 1));
+              const lineEnd = lines.end(index);
+              out.push(BlockKind.HeadingClose, lineEnd, lineEnd);
+              return index + 1;
+            }
+            if (context.startsInterruptingBlock(source, lines, index, lineOffset)) {
+              break;
+            }
+          }
+          out.push(BlockKind.InlineChunk, chunkOffset, lines.next(index - 1));
+          chunkOffset = lineOffset < 0
+            ? indentOffset(source, lines, index)
+            : lineOffset;
+          index++;
+        }
         const close = lines.end(index - 1);
+        out.push(BlockKind.InlineChunk, chunkOffset, close);
         out.push(BlockKind.ParagraphClose, close, close);
         return index;
       },
