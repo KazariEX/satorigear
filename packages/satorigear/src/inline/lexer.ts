@@ -38,10 +38,11 @@ function tokenize(
   // Ordinary source text stays implicit between semantic tokens; the builder reads those gaps.
   const tokens: number[] = [];
   let hasContentLine = false;
+  // A non-negative offset means the scanner is at the start of that physical line.
+  let lineStart = 0;
   let offset = 0;
-  let lineStart = true;
   while (offset < source.length) {
-    if (lineStart) {
+    if (lineStart >= 0) {
       let content = offset;
       while (source.charCodeAt(content) === Character.Space) {
         content++;
@@ -55,6 +56,7 @@ function tokenize(
         if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
           offset++;
         }
+        lineStart = offset;
         continue;
       }
       if (code === Character.CharacterTabulation) {
@@ -71,15 +73,16 @@ function tokenize(
           if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
             offset++;
           }
+          lineStart = offset;
           continue;
         }
       }
       offset = content;
       if (hasContentLine) {
-        tokens.push(InlineKind.Newline, offset, offset, 0);
+        tokens.push(InlineKind.Newline, offset, offset, lineStart);
       }
       hasContentLine = true;
-      lineStart = false;
+      lineStart = -1;
       continue;
     }
 
@@ -99,7 +102,7 @@ function tokenize(
       if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
         offset++;
       }
-      lineStart = true;
+      lineStart = offset;
       continue;
     }
 

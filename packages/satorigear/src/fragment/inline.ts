@@ -3,6 +3,7 @@ import { Character } from "../constants/character.ts";
 import { InlineKind } from "../constants/inline.ts";
 import {
   inlineTokenCount,
+  inlineTokenData,
   inlineTokenEnd,
   inlineTokenKind,
   inlineTokenStart,
@@ -60,22 +61,11 @@ type InlineTokenHandler = InlineLeafBuilder | InlineTokenDecorator;
 
 export type InlineBuilder = InlineNodeBuilder | InlineTokenHandler;
 
-function lineStart(source: string, offset: number): number {
-  while (offset > 0) {
-    const character = source.charCodeAt(--offset);
-    if (character === Character.LineFeed || character === Character.CarriageReturn) {
-      return offset + 1;
-    }
-  }
-  return 0;
-}
-
-function lineEndingStart(source: string, offset: number): number {
-  const start = lineStart(source, offset);
-  if (start === 0) {
-    return offset;
-  }
-  return source[start - 1] === "\n" && source[start - 2] === "\r" ? start - 2 : start - 1;
+function lineEndingStart(source: string, lineStart: number): number {
+  return source.charCodeAt(lineStart - 1) === Character.LineFeed &&
+    source.charCodeAt(lineStart - 2) === Character.CarriageReturn
+    ? lineStart - 2
+    : lineStart - 1;
 }
 
 function countTrailingSpaces(value: string): number {
@@ -144,45 +134,49 @@ function appendToken(
   value: SpannedNode<PhrasingContent>,
   syntaxNewline: boolean,
 ): void {
+  // Most tokens only flush the preceding source gap and append their node.
+  if (!syntaxNewline) {
+    if (output.gapStart >= 0) {
+      const gapStart = output.gapStart;
+      output.gapStart = -1;
+      if (output.gapEnd > gapStart) {
+        appendGap(output, context, gapStart, output.gapEnd);
+      }
+    }
+    appendChild(output, value);
+    return;
+  }
+
+  // Syntax newlines additionally trim line suffixes and repair mapped boundaries.
+  const viewLineStart = inlineTokenData(context.tokens, tokenIndex);
+  const viewLineEndingStart = lineEndingStart(context.view.text, viewLineStart);
   if (output.gapStart >= 0) {
     const gapStart = output.gapStart;
     output.gapStart = -1;
-    const gapEnd = syntaxNewline
-      ? lineEndingStart(context.view.text, output.gapEnd)
-      : output.gapEnd;
-    if (gapEnd > gapStart) {
-      appendGap(output, context, gapStart, gapEnd);
+    if (viewLineEndingStart > gapStart) {
+      appendGap(output, context, gapStart, viewLineEndingStart);
     }
   }
-  if (syntaxNewline) {
-    const viewStart = inlineTokenStart(context.tokens, tokenIndex);
-    // Markdown syntax newlines point past stripped container prefixes,
-    // while mdast spans include the physical line ending.
-    const previous = output.children.at(-1);
-    if (previous?.type === "break") {
-      const viewLineStart = lineStart(context.view.text, viewStart);
-      // At a stripped container boundary, the left side maps before the prefix while
-      // the right side maps after it. A hard break must span to the former.
-      extendSpan(
-        previous,
-        viewLineStart === 0
-          ? context.view.mapPoint(0)
-          : context.view.mapPoint(viewLineStart - 1) + 1,
+  // Markdown syntax newlines point past stripped container prefixes,
+  // while mdast spans include the physical line ending.
+  const previous = output.children.at(-1);
+  if (previous?.type === "break") {
+    // At a stripped container boundary, the left side maps before the prefix while
+    // the right side maps after it. A hard break must span to the former.
+    extendSpan(previous, context.view.mapPoint(viewLineStart - 1) + 1);
+    return;
+  }
+  value.position.start = context.view.mapPoint(viewLineEndingStart);
+  if (previous?.type === "text") {
+    if (output.trailingSpaces < 0) {
+      previous.value = previous.value.slice(
+        0,
+        previous.value.length - countTrailingSpaces(previous.value),
       );
-      return;
     }
-    value.position.start = context.view.mapPoint(lineEndingStart(context.view.text, viewStart));
-    if (previous?.type === "text") {
-      if (output.trailingSpaces < 0) {
-        previous.value = previous.value.slice(
-          0,
-          previous.value.length - countTrailingSpaces(previous.value),
-        );
-      }
-      else if (output.trailingSpaces > 0) {
-        previous.value = previous.value.slice(0, -output.trailingSpaces);
-        output.trailingSpaces = 0;
-      }
+    else if (output.trailingSpaces > 0) {
+      previous.value = previous.value.slice(0, -output.trailingSpaces);
+      output.trailingSpaces = 0;
     }
   }
   appendChild(output, value);

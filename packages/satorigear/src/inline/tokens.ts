@@ -4,7 +4,8 @@ export type InlineTokenStream = readonly number[];
 // Markdown inline tokens never need discontiguous ranges.
 export const inlineTokenStride = 4;
 
-// The token kind owns the fourth slot's meaning; token copies preserve it as opaque data.
+// The token kind owns the fourth slot's meaning; Newline stores the following view-line start.
+// Token copies preserve this slot as opaque data.
 // Zero means that the token carries no additional fact.
 
 export function inlineTokenCount(tokens: InlineTokenStream): number {
