@@ -266,7 +266,7 @@ export const feature: SyntaxFeature = {
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),
             position: {
-              start: context.structure.tokens.start(tokenStart),
+              start: tokens.start(tokenStart),
               end: blockEnd(tokenStart, context),
             },
           };

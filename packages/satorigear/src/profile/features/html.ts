@@ -3,7 +3,7 @@ import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { type BlockBuildContext, blockEnd } from "../../fragment/block.ts";
+import { blockEnd } from "../../fragment/block.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import type { InlineLeafBuilder } from "../../fragment/inline.ts";
@@ -122,14 +122,6 @@ function htmlStartAt(
   }
 }
 
-function htmlBlockUnterminated(token: number, context: BlockBuildContext): boolean {
-  const result = context.structure.tokens.value<boolean>(token);
-  if (context.structure.tokens.kind(token) !== BlockKind.HtmlBlock || result === void 0) {
-    throw new Error("HTML block lacks termination state");
-  }
-  return result;
-}
-
 const buildInlineHtml: InlineLeafBuilder = (tokenIndex, sourceSpan, context) => {
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   return {
@@ -149,10 +141,14 @@ export const feature: SyntaxFeature = {
           token: BlockKind.HtmlBlock,
         },
         build(tokenStart, context) {
-          const offset = context.structure.tokens.start(tokenStart);
-          const end = context.structure.tokens.end(tokenStart);
-          const unterminated = htmlBlockUnterminated(tokenStart, context);
-          let html = normalizeLines(context.structure.tokens.text(context.source, tokenStart));
+          const tokens = context.structure.tokens;
+          const offset = tokens.start(tokenStart);
+          const end = tokens.end(tokenStart);
+          const unterminated = tokens.value<boolean>(tokenStart);
+          if (tokens.kind(tokenStart) !== BlockKind.HtmlBlock || unterminated === void 0) {
+            throw new Error("HTML block lacks termination state");
+          }
+          let html = normalizeLines(tokens.text(context.source, tokenStart));
           if (!unterminated && html.endsWith("\n")) {
             html = html.slice(0, -1);
           }

@@ -50,12 +50,11 @@ export const feature: SyntaxFeature = {
           token: BlockKind.FencedCodeBlock,
         },
         build(tokenStart, context) {
-          const offset = context.structure.tokens.start(tokenStart);
-          const end = context.structure.tokens.end(tokenStart);
-          const source = normalizeLines(
-            context.structure.tokens.text(context.source, tokenStart),
-          );
-          const block = context.structure.tokens.value<FencedBlock>(tokenStart);
+          const tokens = context.structure.tokens;
+          const offset = tokens.start(tokenStart);
+          const end = tokens.end(tokenStart);
+          const source = normalizeLines(tokens.text(context.source, tokenStart));
+          const block = tokens.value<FencedBlock>(tokenStart);
           if (!block) {
             throw new Error("FencedCodeBlock token has no fence metadata");
           }
@@ -70,7 +69,7 @@ export const feature: SyntaxFeature = {
             value: normalizedFenceContent(source, block),
             position: {
               start: offset + block.markerOffset,
-              end: block.closed || end < context.structure.tokens.sourceLength
+              end: block.closed || end < tokens.sourceLength
                 ? blockEnd(tokenStart, context)
                 : end,
             },

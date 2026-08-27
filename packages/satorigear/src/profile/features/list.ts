@@ -227,7 +227,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
       : markerKind === BlockKind.UncheckedTaskItemOpen ? false : null,
     children,
     position: {
-      start: context.structure.tokens.start(tokenStart),
+      start: tokens.start(tokenStart),
       end: lastChildEnd(children, blockEnd(tokenStart, context)),
     },
   };
@@ -253,8 +253,8 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
       spread: tokens.value<boolean>(close) === true,
       children: items,
       position: {
-        start: context.structure.tokens.start(tokenStart),
-        end: lastChildEnd(items, context.structure.tokens.end(tokenStart)),
+        start: tokens.start(tokenStart),
+        end: lastChildEnd(items, tokens.end(tokenStart)),
       },
     };
   };
