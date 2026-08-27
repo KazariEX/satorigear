@@ -78,15 +78,16 @@ function countTrailingSpaces(value: string): number {
 
 function appendText(output: InlineOutput, value: string, span: SourceSpan): void {
   const previous = output.children.at(-1);
+  const mergeForward = previous?.type === "text" && !("attributes" in previous);
   if (output.trailingSpaces >= 0) {
     const trailingSpaces = countTrailingSpaces(value);
     output.trailingSpaces = (
-      trailingSpaces === value.length && previous?.type === "text" && !("attributes" in previous)
+      trailingSpaces === value.length && mergeForward
         ? output.trailingSpaces + trailingSpaces
         : trailingSpaces
     );
   }
-  if (previous?.type === "text" && !("attributes" in previous)) {
+  if (mergeForward) {
     previous.value += value;
     previous.position.end = span.end;
   }
