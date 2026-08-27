@@ -188,28 +188,6 @@ function appendToken(
   appendChild(output, value);
 }
 
-function appendLeaf(
-  tokenIndex: number,
-  handle: InlineTokenHandler,
-  sourceSpan: SourceSpan,
-  output: InlineOutput,
-  context: InlineBuildContext,
-): boolean {
-  const value = handle(tokenIndex, sourceSpan, context, output);
-  if (typeof value === "boolean") {
-    return value;
-  }
-  appendToken(
-    output,
-    context,
-    tokenIndex,
-    value,
-    // Distinguishes lexer-emitted newlines from text that merely decodes to "\n".
-    inlineTokenKind(context.tokens, tokenIndex) === InlineKind.Newline,
-  );
-  return true;
-}
-
 // Resolution has already made semantic pairs unambiguous, so projection can consume that stream
 // directly instead of copying it into a second syntax arena.
 function appendRange(
@@ -246,15 +224,26 @@ function appendRange(
       continue;
     }
     const childEnd = inlineTokenEnd(context.tokens, index);
-    if (
-      appendLeaf(
-        index,
-        build as InlineTokenHandler,
-        context.view.mapSpan(childStart, childEnd),
+    const value = (build as InlineTokenHandler)(
+      index,
+      context.view.mapSpan(childStart, childEnd),
+      context,
+      output,
+    );
+    if (typeof value === "boolean") {
+      if (value) {
+        output.cursor = childEnd;
+      }
+    }
+    else {
+      appendToken(
         output,
         context,
-      )
-    ) {
+        index,
+        value,
+        // Distinguishes lexer-emitted newlines from text that merely decodes to "\n".
+        kind === InlineKind.Newline,
+      );
       output.cursor = childEnd;
     }
     index++;
