@@ -2,34 +2,40 @@ export type InlineTokenStream = readonly number[];
 
 // The lexer, resolver, and node builders share this region-local record layout.
 // Markdown inline tokens never need discontiguous ranges.
-export const inlineTokenStride = 4;
+const enum InlineTokenField {
+  Kind,
+  Start,
+  End,
+  Data,
+  Stride,
+}
 
 // The token kind owns the fourth slot's meaning; Newline stores the following view-line start.
 // Token copies preserve this slot as opaque data.
 // Zero means that the token carries no additional fact.
 
 export function inlineTokenCount(tokens: InlineTokenStream): number {
-  return tokens.length / inlineTokenStride;
+  return tokens.length / InlineTokenField.Stride;
 }
 
 export function inlineTokenKind(tokens: InlineTokenStream, index: number): number {
-  return tokens[index * inlineTokenStride];
+  return tokens[index * InlineTokenField.Stride + InlineTokenField.Kind];
 }
 
 export function inlineTokenStart(tokens: InlineTokenStream, index: number): number {
-  return tokens[index * inlineTokenStride + 1];
+  return tokens[index * InlineTokenField.Stride + InlineTokenField.Start];
 }
 
 export function inlineTokenEnd(tokens: InlineTokenStream, index: number): number {
-  return tokens[index * inlineTokenStride + 2];
+  return tokens[index * InlineTokenField.Stride + InlineTokenField.End];
 }
 
 export function inlineTokenData(tokens: InlineTokenStream, index: number): number {
-  return tokens[index * inlineTokenStride + 3];
+  return tokens[index * InlineTokenField.Stride + InlineTokenField.Data];
 }
 
 export function setInlineTokenData(tokens: number[], index: number, data: number): void {
-  tokens[index * inlineTokenStride + 3] = data;
+  tokens[index * InlineTokenField.Stride + InlineTokenField.Data] = data;
 }
 
 export function inlineTokenText(source: string, tokens: InlineTokenStream, index: number): string {
@@ -50,11 +56,11 @@ export function appendInlineToken(
 }
 
 export function copyInlineToken(target: number[], tokens: InlineTokenStream, index: number): void {
-  const offset = index * inlineTokenStride;
+  const offset = index * InlineTokenField.Stride;
   target.push(
     tokens[offset],
-    tokens[offset + 1],
-    tokens[offset + 2],
-    tokens[offset + 3],
+    tokens[offset + InlineTokenField.Start],
+    tokens[offset + InlineTokenField.End],
+    tokens[offset + InlineTokenField.Data],
   );
 }

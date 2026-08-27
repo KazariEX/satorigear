@@ -384,26 +384,6 @@ export function lineContentEnd(source: string, start: number, end: number): numb
   return source.charCodeAt(end - 1) === Character.CarriageReturn ? end - 1 : end;
 }
 
-export function indentColumns(source: string, lines: BlockLines, index: number): number {
-  let offset = lines.start(index);
-  let columns = lines.prefixColumns(index);
-  const end = lines.end(index);
-  while (offset < end) {
-    if (source[offset] === " ") {
-      offset++;
-      columns++;
-      continue;
-    }
-    if (source[offset] === "\t") {
-      offset++;
-      columns += 4 - (columns % 4);
-      continue;
-    }
-    break;
-  }
-  return columns;
-}
-
 /** Returns the offset after up to three indent columns; tabs exceed this limit. */
 export function indentOffset(source: string, lines: BlockLines, index: number): number {
   let offset = lines.start(index);

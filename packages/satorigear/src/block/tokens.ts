@@ -3,8 +3,15 @@ import { emptySet } from "../primitives.ts";
 import { type BlockLines, logicalLine } from "./lines.ts";
 import type { BlockSyntaxRule } from "./profile.ts";
 
+const enum BlockTokenField {
+  Kind,
+  Start,
+  End,
+  Length,
+  Stride,
+}
+
 // The fourth slot stores the token length of a semantic node beginning here. Raw tokens use zero.
-const blockTokenStride = 4;
 
 interface BlockTokenMeta {
   contentEndOffset?: number;
@@ -47,7 +54,7 @@ export class BlockTokenStream {
   }
 
   get length(): number {
-    return this.#fieldLength / blockTokenStride;
+    return this.#fieldLength / BlockTokenField.Stride;
   }
 
   get sourceLength(): number {
@@ -60,12 +67,12 @@ export class BlockTokenStream {
 
   push(kind: BlockKind, start: number, end: number, meta?: BlockTokenMeta): void {
     const field = this.#fieldLength;
-    this.#ensureCapacity(field + blockTokenStride);
-    this.#fields[field] = kind;
-    this.#fields[field + 1] = start;
-    this.#fields[field + 2] = end;
-    this.#fields[field + 3] = 0;
-    this.#fieldLength += blockTokenStride;
+    this.#ensureCapacity(field + BlockTokenField.Stride);
+    this.#fields[field + BlockTokenField.Kind] = kind;
+    this.#fields[field + BlockTokenField.Start] = start;
+    this.#fields[field + BlockTokenField.End] = end;
+    this.#fields[field + BlockTokenField.Length] = 0;
+    this.#fieldLength += BlockTokenField.Stride;
     if (meta) {
       this.#metadata ??= new Map();
       this.#metadata.set(this.length - 1, meta);
@@ -83,34 +90,34 @@ export class BlockTokenStream {
     let close = BlockKind.None;
     // Open nodes temporarily retain their parent's close kind in the empty length slot;
     // closing replaces that workspace value with the final node length.
-    for (let field = 0; field < fieldLength; field += blockTokenStride) {
+    for (let field = 0; field < fieldLength; field += BlockTokenField.Stride) {
       const kind = fields[field];
       const rule = rules[kind];
       if (rule && rule.close !== BlockKind.None) {
         opens.push(field);
-        fields[field + 3] = close;
+        fields[field + BlockTokenField.Length] = close;
         close = rule.close;
         continue;
       }
       if (rule && !rule.block) {
         const start = field;
         do {
-          field += blockTokenStride;
+          field += BlockTokenField.Stride;
         } while (
           field < fieldLength && rules[fields[field]] === rule
         );
-        fields[start + 3] = (field - start) / blockTokenStride;
-        field -= blockTokenStride;
+        fields[start + BlockTokenField.Length] = (field - start) / BlockTokenField.Stride;
+        field -= BlockTokenField.Stride;
         continue;
       }
       if (close === kind) {
         const open = opens.pop()!;
-        close = fields[open + 3];
-        fields[open + 3] = (field - open) / blockTokenStride + 1;
+        close = fields[open + BlockTokenField.Length];
+        fields[open + BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
         continue;
       }
       if (rule) {
-        fields[field + 3] = 1;
+        fields[field + BlockTokenField.Length] = 1;
       }
     }
     // `close` is nonzero exactly while `opens` is nonempty, avoiding a cold `opens.length` read after OSR.
@@ -120,7 +127,7 @@ export class BlockTokenStream {
   }
 
   nodeLength(index: number): number {
-    return this.#fields[index * blockTokenStride + 3];
+    return this.#fields[index * BlockTokenField.Stride + BlockTokenField.Length];
   }
 
   equalsAfterShift(
@@ -240,36 +247,36 @@ export class BlockTokenStream {
     // stay absolute; the retained suffix becomes EOF-relative so sourceLength rebases it.
     if (this.#relativeStart < end) {
       for (let index = this.#relativeStart; index < end; index++) {
-        const field = index * blockTokenStride;
-        this.#fields[field + 1] += this.#sourceLength + 1;
-        this.#fields[field + 2] += this.#sourceLength + 1;
+        const field = index * BlockTokenField.Stride;
+        this.#fields[field + BlockTokenField.Start] += this.#sourceLength + 1;
+        this.#fields[field + BlockTokenField.End] += this.#sourceLength + 1;
       }
     }
     else if (this.#relativeStart > end) {
       const relativeEnd = Math.min(this.#relativeStart, previousLength);
       for (let index = end; index < relativeEnd; index++) {
-        const field = index * blockTokenStride;
-        this.#fields[field + 1] -= this.#sourceLength + 1;
-        this.#fields[field + 2] -= this.#sourceLength + 1;
+        const field = index * BlockTokenField.Stride;
+        this.#fields[field + BlockTokenField.Start] -= this.#sourceLength + 1;
+        this.#fields[field + BlockTokenField.End] -= this.#sourceLength + 1;
       }
     }
 
     // 3. Replace packed fields in place. A size-changing middle edit shifts the suffix,
     // growing the dense backing store only when its retained capacity is insufficient.
     if (end === previousLength) {
-      const fieldStart = start * blockTokenStride;
+      const fieldStart = start * BlockTokenField.Stride;
       const fieldEnd = fieldStart + replacement.#fieldLength;
       this.#ensureCapacity(fieldEnd);
       this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
       this.#fieldLength = fieldEnd;
     }
     else if (replacementLength === replacedLength) {
-      const fieldStart = start * blockTokenStride;
+      const fieldStart = start * BlockTokenField.Stride;
       this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
     }
     else {
-      const fieldStart = start * blockTokenStride;
-      const oldFieldEnd = end * blockTokenStride;
+      const fieldStart = start * BlockTokenField.Stride;
+      const oldFieldEnd = end * BlockTokenField.Stride;
       const newFieldEnd = fieldStart + replacement.#fieldLength;
       const nextFieldLength = this.#fieldLength + newFieldEnd - oldFieldEnd;
       this.#ensureCapacity(nextFieldLength);
@@ -329,7 +336,7 @@ export class BlockTokenStream {
   }
 
   truncate(length: number): void {
-    this.#fieldLength = length * blockTokenStride;
+    this.#fieldLength = length * BlockTokenField.Stride;
     if (this.#metadata) {
       for (const [index, value] of this.#metadata) {
         if (index >= length) {
@@ -344,23 +351,27 @@ export class BlockTokenStream {
   }
 
   kind(index: number): BlockKind {
-    return this.#fields[index * blockTokenStride] as BlockKind;
+    return this.#fields[index * BlockTokenField.Stride] as BlockKind;
   }
 
   setKind(index: number, kind: BlockKind): void {
-    this.#fields[index * blockTokenStride] = kind;
+    this.#fields[index * BlockTokenField.Stride] = kind;
   }
 
   start(index: number): number {
-    return this.#position(this.#fields[index * blockTokenStride + 1]);
+    return this.#position(
+      this.#fields[index * BlockTokenField.Stride + BlockTokenField.Start],
+    );
   }
 
   setStart(index: number, start: number): void {
-    this.#fields[index * blockTokenStride + 1] = start;
+    this.#fields[index * BlockTokenField.Stride + BlockTokenField.Start] = start;
   }
 
   end(index: number): number {
-    return this.#position(this.#fields[index * blockTokenStride + 2]);
+    return this.#position(
+      this.#fields[index * BlockTokenField.Stride + BlockTokenField.End],
+    );
   }
 
   contentEnd(index: number): number {
