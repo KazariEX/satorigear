@@ -113,7 +113,8 @@ export class BlockTokenStream {
         fields[field + 3] = 1;
       }
     }
-    if (opens.length > 0) {
+    // `close` is nonzero exactly while `opens` is nonempty, avoiding a cold `opens.length` read after OSR.
+    if (close) {
       throw new Error(`Block token stream did not close token ${fields[opens.at(-1)!]}`);
     }
   }
