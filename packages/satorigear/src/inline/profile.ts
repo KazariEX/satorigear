@@ -20,7 +20,7 @@ type InlineResolver = (
   context: InlineResolutionContext,
 ) => InlineTokenStream;
 
-export type InlineResolverCompiler = (
+export type InlineResolverFactory = (
   delimiters: readonly DelimiterConfig[],
 ) => InlineResolver;
 
@@ -69,7 +69,7 @@ export interface InlineProfile {
 
 export function compileInlineProfile(
   features: readonly InlineFeature[],
-  compileResolver: InlineResolverCompiler,
+  compileInlineResolver: InlineResolverFactory,
 ): InlineProfile {
   const buildByKind: (InlineBuilder | undefined)[] = [];
   const delimiters: DelimiterConfig[] = [];
@@ -115,7 +115,7 @@ export function compileInlineProfile(
 
   return {
     buildByKind,
-    resolve: compileResolver(delimiters),
+    resolve: compileInlineResolver(delimiters),
     syntaxByKind,
     tokenize: compileInlineTokenizer(scanRules),
   };

@@ -19,7 +19,7 @@ import { feature as featureParagraph } from "./features/paragraph.ts";
 import { feature as featureReference } from "./features/reference.ts";
 import { feature as featureTable } from "./features/table.ts";
 import { feature as featureText } from "./features/text.ts";
-import { compileInlineProgram } from "./inline-program.ts";
+import { compileInlineResolver } from "./resolve.ts";
 import type { MathOptions } from "./features/math/types.ts";
 import type { SyntaxProfile } from "./types.ts";
 
@@ -107,7 +107,7 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
     block: compileBlockProfile(blockFeatures),
     inline: compileInlineProfile(
       inlineFeatures,
-      compileInlineProgram({
+      compileInlineResolver({
         component: options.component === true,
         footnote: options.footnote === true,
       }),

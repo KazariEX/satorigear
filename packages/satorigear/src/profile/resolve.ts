@@ -19,9 +19,9 @@ import {
 import { attributesEnd } from "./features/attributes/syntax.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
 import { normalizeAssociationLabel } from "./utils.ts";
-import type { InlineResolutionContext, InlineResolverCompiler } from "../inline/profile.ts";
+import type { InlineResolutionContext, InlineResolverFactory } from "../inline/profile.ts";
 
-interface InlineProgramOptions {
+interface InlineResolverOptions {
   component: boolean;
   footnote: boolean;
 }
@@ -230,7 +230,7 @@ function analyzeBrackets(
   tokens: InlineTokenStream,
   delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
   context: InlineResolutionContext,
-  options: InlineProgramOptions,
+  options: InlineResolverOptions,
 ): readonly number[] {
   let discovery = 0;
   let frames: number[] | undefined;
@@ -727,9 +727,10 @@ function emitResolvedTokens(
       }
 
       if (
-        rawFrame >= 0 &&
-        (frameClaim(frames, rawFrame) === FrameClaim.Component ||
-          frameClaim(frames, rawFrame) === FrameClaim.Span) &&
+        rawFrame >= 0 && (
+          frameClaim(frames, rawFrame) === FrameClaim.Component ||
+          frameClaim(frames, rawFrame) === FrameClaim.Span
+        ) &&
         frames[rawFrame + FrameSlot.State] & FrameFlag.InLinkLabel
       ) {
         literalDepth--;
@@ -744,7 +745,7 @@ function emitResolvedTokens(
   return result;
 }
 
-export function compileInlineProgram(options: InlineProgramOptions): InlineResolverCompiler {
+export function compileInlineResolver(options: InlineResolverOptions): InlineResolverFactory {
   return (delimiterConfigs) => {
     const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
     return (source, tokens, context) => {
