@@ -1,6 +1,7 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
 import { type BlockLines, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.ts";
@@ -24,10 +25,18 @@ function appendTableCell(
   contentStart: number,
   contentEnd: number,
 ): void {
-  while (contentStart < contentEnd && (source[contentStart] === " " || source[contentStart] === "\t")) {
+  while (contentStart < contentEnd) {
+    const code = source.charCodeAt(contentStart);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+      break;
+    }
     contentStart++;
   }
-  while (contentEnd > contentStart && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
+  while (contentEnd > contentStart) {
+    const code = source.charCodeAt(contentEnd - 1);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+      break;
+    }
     contentEnd--;
   }
   cells.push(start, contentStart, contentEnd);
@@ -48,12 +57,12 @@ function tableCellsAt(
   let backslashes = 0;
   const lineEnd = lines.end(index);
   for (let offset = contentOffset; offset < lineEnd; offset++) {
-    const character = source[offset];
-    if (character === "\\") {
+    const code = source.charCodeAt(offset);
+    if (code === Character.ReverseSolidus) {
       backslashes++;
       continue;
     }
-    if (character === "|" && backslashes % 2 === 0) {
+    if (code === Character.VerticalLine && backslashes % 2 === 0) {
       pipes.push(offset);
     }
     backslashes = 0;
@@ -63,7 +72,11 @@ function tableCellsAt(
   }
 
   let visibleEnd = lineEnd;
-  while (visibleEnd > contentOffset && (source[visibleEnd - 1] === " " || source[visibleEnd - 1] === "\t")) {
+  while (visibleEnd > contentOffset) {
+    const code = source.charCodeAt(visibleEnd - 1);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+      break;
+    }
     visibleEnd--;
   }
   const trailingPipe = pipes.at(-1) === visibleEnd - 1;
@@ -91,11 +104,11 @@ function tableCellsAt(
 function alignmentAt(source: string, cells: readonly number[], cell: number): BlockKind | undefined {
   let start = cells[cell + CellSlot.ContentStart];
   let end = cells[cell + CellSlot.ContentEnd];
-  const left = source[start] === ":";
+  const left = source.charCodeAt(start) === Character.Colon;
   if (left) {
     start++;
   }
-  const right = source[end - 1] === ":";
+  const right = source.charCodeAt(end - 1) === Character.Colon;
   if (right) {
     end--;
   }
@@ -103,7 +116,7 @@ function alignmentAt(source: string, cells: readonly number[], cell: number): Bl
     return;
   }
   for (let offset = start; offset < end; offset++) {
-    if (source[offset] !== "-") {
+    if (source.charCodeAt(offset) !== Character.HyphenMinus) {
       return;
     }
   }
@@ -118,8 +131,12 @@ function delimiterAt(
   index: number,
   contentOffset: number,
 ): number[] | undefined {
-  const first = source[contentOffset];
-  if (first !== "-" && first !== ":" && first !== "|") {
+  const first = source.charCodeAt(contentOffset);
+  if (
+    first !== Character.HyphenMinus &&
+    first !== Character.Colon &&
+    first !== Character.VerticalLine
+  ) {
     return;
   }
   const cells = tableCellsAt(source, lines, index, false, contentOffset);

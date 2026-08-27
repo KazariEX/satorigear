@@ -25,12 +25,16 @@ function definitionAt(
 ): FootnoteDefinitionMatch | undefined {
   const lineEnd = lines.end(index);
   const label = footnoteLabelAt(source, markerStart, lineEnd);
-  if (!label || source[label.end] !== ":") {
+  if (!label || source.charCodeAt(label.end) !== Character.Colon) {
     return;
   }
   const markerEnd = label.end + 1;
   let contentOffset = markerEnd;
-  while (contentOffset < lineEnd && (source[contentOffset] === " " || source[contentOffset] === "\t")) {
+  while (contentOffset < lineEnd) {
+    const code = source.charCodeAt(contentOffset);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+      break;
+    }
     contentOffset++;
   }
   return {

@@ -70,7 +70,11 @@ function lineEndingStart(source: string, lineStart: number): number {
 
 function countTrailingSpaces(value: string): number {
   let offset = value.length;
-  while (offset > 0 && (value[offset - 1] === " " || value[offset - 1] === "\t")) {
+  while (offset > 0) {
+    const code = value.charCodeAt(offset - 1);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+      break;
+    }
     offset--;
   }
   return value.length - offset;

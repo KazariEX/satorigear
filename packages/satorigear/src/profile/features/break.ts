@@ -11,17 +11,21 @@ export function isThematicBreak(
   index: number,
   contentOffset: number,
 ): boolean {
-  const marker = source[contentOffset];
-  if (marker !== "*" && marker !== "-" && marker !== "_") {
+  const marker = source.charCodeAt(contentOffset);
+  if (
+    marker !== Character.Asterisk &&
+    marker !== Character.HyphenMinus &&
+    marker !== Character.LowLine
+  ) {
     return false;
   }
   let count = 0;
   for (let offset = contentOffset, end = lines.end(index); offset < end; offset++) {
-    const character = source[offset];
-    if (character === marker) {
+    const code = source.charCodeAt(offset);
+    if (code === marker) {
       count++;
     }
-    else if (character !== " " && character !== "\t") {
+    else if (code !== Character.Space && code !== Character.CharacterTabulation) {
       return false;
     }
   }

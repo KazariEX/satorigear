@@ -396,7 +396,7 @@ export function indentOffset(source: string, lines: BlockLines, index: number): 
   let offset = lines.start(index);
   const limit = offset + 3 - lines.prefixColumns(index);
   const end = lines.end(index);
-  while (offset < end && offset < limit && source[offset] === " ") {
+  while (offset < end && offset < limit && source.charCodeAt(offset) === Character.Space) {
     offset++;
   }
   return offset;
@@ -412,15 +412,22 @@ export function lineIndentOffset(source: string, lines: BlockLines, index: numbe
   let offset = lines.start(index);
   const limit = offset + 3 - lines.prefixColumns(index);
   const end = lines.end(index);
-  while (offset < end && offset < limit && source[offset] === " ") {
+  while (offset < end && offset < limit && source.charCodeAt(offset) === Character.Space) {
     offset++;
   }
-  return offset > limit || source[offset] === " " || source[offset] === "\t" ? -1 : offset;
+  if (offset > limit) {
+    return -1;
+  }
+  const code = source.charCodeAt(offset);
+  return code === Character.Space || code === Character.CharacterTabulation
+    ? -1
+    : offset;
 }
 
 export function isBlank(source: string, lines: BlockLines, index: number): boolean {
   for (let offset = lines.start(index), end = lines.end(index); offset < end; offset++) {
-    if (source[offset] !== " " && source[offset] !== "\t") {
+    const code = source.charCodeAt(offset);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
       return false;
     }
   }

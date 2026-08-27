@@ -34,16 +34,27 @@ function listMarkerPadding(
   }
   let offset = markerEnd;
   let column = markerColumn;
-  while (offset < lineEnd && (source[offset] === " " || source[offset] === "\t")) {
-    column += source[offset] === "\t" ? 4 - (column % 4) : 1;
+  while (offset < lineEnd) {
+    const code = source.charCodeAt(offset);
+    if (code === Character.Space) {
+      column++;
+    }
+    else if (code === Character.CharacterTabulation) {
+      column += 4 - (column % 4);
+    }
+    else {
+      break;
+    }
     offset++;
   }
   const whitespaceColumns = column - markerColumn;
   if (offset < lineEnd && whitespaceColumns <= 4) {
     return { offset, columns: whitespaceColumns, prefixColumns: 0 };
   }
-  const consumedColumn = markerColumn + (source[markerEnd] === "\t" ? 4 - (markerColumn % 4) : 1);
-  return { offset: markerEnd + 1, columns: 1, prefixColumns: Math.max(0, consumedColumn - markerColumn - 1) };
+  const firstPaddingColumns = source.charCodeAt(markerEnd) === Character.CharacterTabulation
+    ? 4 - (markerColumn % 4)
+    : 1;
+  return { offset: markerEnd + 1, columns: 1, prefixColumns: firstPaddingColumns - 1 };
 }
 
 function listMarkerAt(
@@ -56,14 +67,25 @@ function listMarkerAt(
     return;
   }
   const indent = lines.prefixColumns(index) + contentOffset - lines.start(index);
-  const marker = source[contentOffset];
+  const marker = source.charCodeAt(contentOffset);
   const markerEnd = contentOffset + 1;
   const lineEnd = lines.end(index);
   if (
-    (marker === "-" || marker === "+" || marker === "*") &&
-    (markerEnd === lineEnd || source[markerEnd] === " " || source[markerEnd] === "\t") &&
-    !isThematicBreak(source, lines, index, contentOffset)
+    marker === Character.HyphenMinus ||
+    marker === Character.PlusSign ||
+    marker === Character.Asterisk
   ) {
+    const following = source.charCodeAt(markerEnd);
+    if (
+      (
+        markerEnd !== lineEnd &&
+        following !== Character.Space &&
+        following !== Character.CharacterTabulation
+      ) ||
+      isThematicBreak(source, lines, index, contentOffset)
+    ) {
+      return;
+    }
     const padding = listMarkerPadding(source, lines, index, markerEnd, indent + 1);
     return {
       kind: "unordered",
@@ -73,11 +95,10 @@ function listMarkerAt(
       contentOffset: padding.offset,
       contentIndent: indent + 1 + padding.columns,
       contentPrefixColumns: padding.prefixColumns,
-      delimiter: marker,
+      delimiter: String.fromCharCode(marker),
     };
   }
-  const markerCode = source.charCodeAt(contentOffset);
-  if (markerCode < Character.DigitZero || markerCode > Character.DigitNine) {
+  if (marker < Character.DigitZero || marker > Character.DigitNine) {
     return;
   }
   let startNumber = 0;
@@ -92,14 +113,14 @@ function listMarkerAt(
     orderedEnd++;
   }
   const delimiter = source[orderedEnd];
-  if (
-    delimiter !== "." && delimiter !== ")" || (
-      orderedEnd + 1 < lineEnd &&
-      source[orderedEnd + 1] !== " " &&
-      source[orderedEnd + 1] !== "\t"
-    )
-  ) {
+  if (delimiter !== "." && delimiter !== ")") {
     return;
+  }
+  if (orderedEnd + 1 < lineEnd) {
+    const code = source.charCodeAt(orderedEnd + 1);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+      return;
+    }
   }
   orderedEnd++;
   const markerWidth = orderedEnd - contentOffset;

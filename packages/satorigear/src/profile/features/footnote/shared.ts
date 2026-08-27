@@ -1,6 +1,16 @@
+import { Character } from "../../../constants/character.ts";
 import { normalizeAssociationLabel } from "../../utils.ts";
 
 const footnoteDefinitionPrefix = "footnote\0";
+
+function isLabelWhitespace(code: number): boolean {
+  return (
+    code === Character.Space ||
+    code === Character.CharacterTabulation ||
+    code === Character.LineFeed ||
+    code === Character.CarriageReturn
+  );
+}
 
 export interface FootnoteLabel {
   definitionKey: string;
@@ -10,26 +20,28 @@ export interface FootnoteLabel {
 }
 
 export function footnoteLabelAt(source: string, start: number, limit: number): FootnoteLabel | undefined {
-  if (source[start] !== "[" || source[start + 1] !== "^") {
+  if (
+    source.charCodeAt(start) !== Character.LeftSquareBracket ||
+    source.charCodeAt(start + 1) !== Character.CircumflexAccent
+  ) {
     return;
   }
   const labelStart = start + 2;
   let offset = labelStart;
   let length = 0;
   while (offset < limit) {
-    const character = source[offset];
-    if (character === " " || character === "\t" || character === "\n" || character === "\r") {
+    const code = source.charCodeAt(offset);
+    if (isLabelWhitespace(code)) {
       return;
     }
-    if (character === "\\" && offset + 1 < limit) {
-      const escaped = source[offset + 1];
-      if (escaped === " " || escaped === "\t" || escaped === "\n" || escaped === "\r") {
+    if (code === Character.ReverseSolidus && offset + 1 < limit) {
+      if (isLabelWhitespace(source.charCodeAt(offset + 1))) {
         return;
       }
       offset += 2;
       length += 2;
     }
-    else if (character === "]") {
+    else if (code === Character.RightSquareBracket) {
       if (length === 0) {
         return;
       }
@@ -43,7 +55,7 @@ export function footnoteLabelAt(source: string, start: number, limit: number): F
       };
     }
     else {
-      if (character === "[") {
+      if (code === Character.LeftSquareBracket) {
         return;
       }
       offset++;
