@@ -17,6 +17,7 @@ catalog:
   entities: ^8.0.0
   eslint: ^10.8.1
   mdast-util-from-markdown: ^2.0.3
+  micromark-util-html-tag-name: ^2.0.1
   mitata: ^1.0.34
   satteri: ^0.9.5
   tsdown: ^0.22.14

@@ -23,5 +23,11 @@
   "dependencies": {
     "@types/mdast": "catalog:",
     "entities": "catalog:"
+  },
+  "devDependencies": {
+    "micromark-util-html-tag-name": "catalog:"
+  },
+  "inlinedDependencies": {
+    "micromark-util-html-tag-name": "2.0.1"
   }
 }

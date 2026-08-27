@@ -1,3 +1,4 @@
+import { htmlBlockNames, htmlRawNames } from "micromark-util-html-tag-name";
 import { type BlockLines, isBlank, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
@@ -14,70 +15,7 @@ interface HtmlStart {
   terminator?: string;
 }
 
-const htmlBlockTags = new Set([
-  "address",
-  "article",
-  "aside",
-  "base",
-  "basefont",
-  "blockquote",
-  "body",
-  "caption",
-  "center",
-  "col",
-  "colgroup",
-  "dd",
-  "details",
-  "dialog",
-  "dir",
-  "div",
-  "dl",
-  "dt",
-  "fieldset",
-  "figcaption",
-  "figure",
-  "footer",
-  "form",
-  "frame",
-  "frameset",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "head",
-  "header",
-  "hr",
-  "html",
-  "iframe",
-  "legend",
-  "li",
-  "link",
-  "main",
-  "menu",
-  "menuitem",
-  "nav",
-  "noframes",
-  "ol",
-  "optgroup",
-  "option",
-  "p",
-  "param",
-  "search",
-  "section",
-  "summary",
-  "table",
-  "tbody",
-  "td",
-  "tfoot",
-  "th",
-  "thead",
-  "title",
-  "tr",
-  "track",
-  "ul",
-]);
+const htmlBlockTags = new Set(htmlBlockNames);
 const htmlTagName = "[a-z][a-z0-9-]*";
 const htmlAttributeName = "[a-z_:][\\w.:-]*";
 const htmlUnquotedValue = `[^\\s"'=<>\`]+`;
@@ -96,7 +34,7 @@ function htmlStartAt(
 ): HtmlStart | undefined {
   const body = source.slice(contentOffset, lines.end(index));
   const lower = body.toLowerCase();
-  for (const tag of ["script", "pre", "style", "textarea"]) {
+  for (const tag of htmlRawNames) {
     if (lower.startsWith(`<${tag}`) && (lower.length === tag.length + 1 || /[ \t>]/.test(lower[tag.length + 1]))) {
       return { interruptParagraph: true, terminator: `</${tag}>` };
     }

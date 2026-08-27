@@ -36,6 +36,9 @@ catalogs:
     mdast-util-from-markdown:
       specifier: ^2.0.3
       version: 2.0.3
+    micromark-util-html-tag-name:
+      specifier: ^2.0.1
+      version: 2.0.1
     mitata:
       specifier: ^1.0.34
       version: 1.0.34
@@ -98,6 +101,10 @@ importers:
       entities:
         specifier: 'catalog:'
         version: 8.0.0
+    devDependencies:
+      micromark-util-html-tag-name:
+        specifier: 'catalog:'
+        version: 2.0.1
 
 packages:
 
