@@ -21,6 +21,12 @@ interface ListMarker {
   startNumber?: number;
 }
 
+const enum ParagraphLeafState {
+  No,
+  Yes,
+  Unknown,
+}
+
 function listMarkerPadding(
   source: string,
   lines: BlockLines,
@@ -280,6 +286,7 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
   let listSpread = false;
   let trailingBlank = false;
   while (marker && sameList(marker, listMarker)) {
+    let sibling: ListMarker | undefined;
     // A trailing blank affects the list only when another sibling follows it.
     listSpread ||= trailingBlank;
     trailingBlank = false;
@@ -287,22 +294,25 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
     const itemLines = new BlockLines();
     itemLines.pushFrom(lines, index, marker.contentOffset, marker.contentPrefixColumns);
     let hasContent = !isBlank(source, itemLines, 0);
-    let lazyParagraph = context.endsWithParagraphLeaf(source, itemLines, 0);
+    // Probe the paragraph leaf only when an underindented line needs lazy continuation.
+    let paragraphLeaf = hasContent ? ParagraphLeafState.Unknown : ParagraphLeafState.No;
     index++;
     while (index < lines.length) {
       const candidate = listMarkerAt(source, lines, index);
       if (candidate && candidate.indent < marker.contentIndent) {
+        sibling = candidate;
         break;
       }
       if (isBlank(source, lines, index)) {
         if (!hasContent) {
           trailingBlank = true;
           index++;
+          sibling = index < lines.length ? listMarkerAt(source, lines, index) : void 0;
           break;
         }
         itemLines.pushFrom(lines, index);
         trailingBlank = true;
-        lazyParagraph = false;
+        paragraphLeaf = ParagraphLeafState.No;
         index++;
         continue;
       }
@@ -311,15 +321,22 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
         itemLines.pushFrom(lines, index, content.offset, content.prefixColumns);
         trailingBlank = false;
         hasContent = true;
-        lazyParagraph = context.endsWithParagraphLeaf(source, itemLines, itemLines.length - 1);
+        paragraphLeaf = ParagraphLeafState.Unknown;
         index++;
         continue;
       }
-      if (!lazyParagraph || context.startsInterruptingBlock(source, lines, index)) {
+      if (paragraphLeaf === ParagraphLeafState.Unknown) {
+        paragraphLeaf = context.endsWithParagraphLeaf(source, itemLines, itemLines.length - 1)
+          ? ParagraphLeafState.Yes
+          : ParagraphLeafState.No;
+      }
+      if (
+        paragraphLeaf === ParagraphLeafState.No ||
+        context.startsInterruptingBlock(source, lines, index)
+      ) {
         break;
       }
       itemLines.pushLazy(lines, index);
-      trailingBlank = false;
       index++;
     }
     const itemSpread = context.scanLines(source, itemLines, out);
@@ -331,7 +348,7 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
       listEnd,
       itemSpread ? { value: true } : void 0,
     );
-    marker = index < lines.length ? listMarkerAt(source, lines, index) : void 0;
+    marker = sibling;
   }
   out.push(listClose, listEnd, listEnd, listSpread ? { value: true } : void 0);
   return index;
