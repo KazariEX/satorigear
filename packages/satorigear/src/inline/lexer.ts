@@ -38,12 +38,12 @@ function tokenize(
   // Ordinary source text stays implicit between semantic tokens; the builder reads those gaps.
   const tokens: number[] = [];
   const end = source.length;
-  let hasContentLine = false;
   // A non-negative offset means the scanner is at the start of that physical line.
   let lineStart = 0;
   let offset = 0;
   while (offset < end) {
     if (lineStart >= 0) {
+      // Block scanning excludes blank physical lines from inline regions.
       let content = offset;
       while (source.charCodeAt(content) === Character.Space) {
         content++;
@@ -51,38 +51,10 @@ function tokenize(
       if (content === end) {
         break;
       }
-      let code = source.charCodeAt(content);
-      if (code === Character.LineFeed || code === Character.CarriageReturn) {
-        offset = content + 1;
-        if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
-          offset++;
-        }
-        lineStart = offset;
-        continue;
-      }
-      if (code === Character.CharacterTabulation) {
-        let blankEnd = content;
-        while (
-          source.charCodeAt(blankEnd) === Character.CharacterTabulation ||
-          source.charCodeAt(blankEnd) === Character.Space
-        ) {
-          blankEnd++;
-        }
-        code = source.charCodeAt(blankEnd);
-        if (blankEnd === end || code === Character.LineFeed || code === Character.CarriageReturn) {
-          offset = blankEnd + (blankEnd < end ? 1 : 0);
-          if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
-            offset++;
-          }
-          lineStart = offset;
-          continue;
-        }
-      }
       offset = content;
-      if (hasContentLine) {
+      if (lineStart > 0) {
         tokens.push(InlineKind.Newline, offset, offset, lineStart);
       }
-      hasContentLine = true;
       lineStart = -1;
     }
 
