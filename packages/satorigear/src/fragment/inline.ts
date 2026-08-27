@@ -9,10 +9,10 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
 } from "../inline/tokens.ts";
-import { extendSpan, type SpannedNode } from "./node.ts";
 import type { BlockRule } from "../constants/block.ts";
 import type { SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
+import type { SpannedNode } from "./node.ts";
 
 export interface InlineBuildContext {
   blockRule: BlockRule;
@@ -88,7 +88,7 @@ function appendText(output: InlineOutput, value: string, span: SourceSpan): void
   }
   if (previous?.type === "text" && !("attributes" in previous)) {
     previous.value += value;
-    extendSpan(previous, span.end);
+    previous.position.end = span.end;
   }
   else {
     output.children.push({
@@ -163,7 +163,7 @@ function appendToken(
   if (previous?.type === "break") {
     // At a stripped container boundary, the left side maps before the prefix while
     // the right side maps after it. A hard break must span to the former.
-    extendSpan(previous, context.view.mapPoint(viewLineStart - 1) + 1);
+    previous.position.end = context.view.mapPoint(viewLineStart - 1) + 1;
     return;
   }
   value.position.start = context.view.mapPoint(viewLineEndingStart);

@@ -2,7 +2,6 @@ import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdas
 import { BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
-import { extendSpan, type SpannedNode } from "../../../fragment/node.ts";
 import {
   appendInlineToken,
   inlineTokenCount,
@@ -14,6 +13,7 @@ import {
 } from "../../../inline/tokens.ts";
 import { attributesEnd, mergeAttributes, parseAttributes } from "./syntax.ts";
 import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
+import type { SpannedNode } from "../../../fragment/node.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "./types.ts";
 
@@ -222,7 +222,7 @@ export const feature: SyntaxFeature = {
           else {
             previous.attributes = parsed.attributes;
           }
-          extendSpan(previous, sourceSpan.end);
+          previous.position.end = sourceSpan.end;
           return true;
         },
       },

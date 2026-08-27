@@ -17,11 +17,6 @@ export type SpannedNode<T extends object = Node> = T extends unknown
   )
   : never;
 
-export function extendSpan(value: object, end: number): void {
-  const node = value as SpannedValue;
-  node.position.end = Math.max(node.position.end, end);
-}
-
 export function firstChildStart(children: readonly SpannedValue[]): number {
   const first = children[0];
   if (!first) {
