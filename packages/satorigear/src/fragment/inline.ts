@@ -1,4 +1,4 @@
-import type { PhrasingContent } from "mdast";
+import type { PhrasingContent, Text } from "mdast";
 import { Character } from "../constants/character.ts";
 import { InlineKind } from "../constants/inline.ts";
 import {
@@ -32,6 +32,9 @@ interface InlineOutput extends InlineFragment {
   gapEnd: number;
   // A negative start invalidates the pending gap and its end.
   gapStart: number;
+  // Cache the last child when it is text so the hot append path does not retrieve
+  // heterogeneous node shapes through `.at(-1)` and force the optimized path to exit.
+  lastText: SpannedNode<Text> | undefined;
   // -1 defers counting trailing spaces/tabs to one final scan; otherwise this is the exact count.
   trailingSpaces: number;
 }
@@ -81,8 +84,8 @@ function countTrailingSpaces(value: string): number {
 }
 
 function appendText(output: InlineOutput, value: string, span: SourceSpan): void {
-  const previous = output.children.at(-1);
-  const mergeForward = previous?.type === "text" && !("attributes" in previous);
+  const previousText = output.lastText;
+  const mergeForward = previousText !== void 0 && !("attributes" in previousText);
   if (output.trailingSpaces >= 0) {
     const trailingSpaces = countTrailingSpaces(value);
     output.trailingSpaces = (
@@ -92,15 +95,13 @@ function appendText(output: InlineOutput, value: string, span: SourceSpan): void
     );
   }
   if (mergeForward) {
-    previous.value += value;
-    previous.position.end = span.end;
+    previousText.value += value;
+    previousText.position.end = span.end;
   }
   else {
-    output.children.push({
-      type: "text",
-      value,
-      position: span,
-    });
+    output.children.push(
+      output.lastText = { type: "text", value, position: span },
+    );
   }
 }
 
@@ -113,6 +114,7 @@ function appendChild(
   }
   else {
     output.children.push(value);
+    output.lastText = void 0;
     if (output.trailingSpaces > 0) {
       output.trailingSpaces = 0;
     }
@@ -230,6 +232,9 @@ function appendRange(
       output,
     );
     if (typeof value === "boolean") {
+      // Decorators may mutate the exposed child list, so refresh the cached projection.
+      const previous = output.children.at(-1);
+      output.lastText = previous?.type === "text" ? previous : void 0;
       if (value) {
         output.cursor = childEnd;
       }
@@ -283,6 +288,7 @@ function appendSemantic(
       ),
       gapEnd: -1,
       gapStart: -1,
+      lastText: void 0,
       trailingSpaces: output.trailingSpaces < 0 ? -1 : 0,
     };
     closeToken = appendRange(
@@ -334,6 +340,7 @@ export function buildInlineFragment(
     cursor: 0,
     gapEnd: -1,
     gapStart: -1,
+    lastText: void 0,
     trailingSpaces: tokens.length && (view.text.includes("\n") || view.text.includes("\r")) ? 0 : -1,
   };
   appendRange(
@@ -342,8 +349,8 @@ export function buildInlineFragment(
     inlineContext,
     result,
   );
-  const last = result.children.at(-1);
-  if (last?.type === "text") {
+  const last = result.lastText;
+  if (last) {
     const removed = result.trailingSpaces < 0
       ? countTrailingSpaces(last.value)
       : result.trailingSpaces;
