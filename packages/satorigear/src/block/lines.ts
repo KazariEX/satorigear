@@ -141,33 +141,28 @@ export class BlockLines {
     if (fieldLength === 0) {
       return (offset) => ({ line: 1, column: 1, offset });
     }
-    const positionBase = sourceLength + 1;
     const lineCount = fieldLength / BlockLineField.Stride;
-    let finalEnd = fields[fieldLength - BlockLineField.Stride + BlockLineField.End];
-    if (finalEnd < 0) {
-      finalEnd += positionBase;
-    }
+    const finalEnd = this.#position(
+      fields[fieldLength - BlockLineField.Stride + BlockLineField.End],
+    );
     const endsInLineEnding = finalEnd < sourceLength;
     let field = 0;
     let line = 0;
+    let start = this.#position(fields[BlockLineField.Start]);
     return (offset) => {
       if (offset === sourceLength && endsInLineEnding) {
         return { line: lineCount + 1, column: 1, offset };
       }
       while (field + BlockLineField.Stride < fieldLength) {
-        let nextStart = fields[field + BlockLineField.Stride + BlockLineField.Start];
-        if (nextStart < 0) {
-          nextStart += positionBase;
-        }
+        const nextStart = this.#position(
+          fields[field + BlockLineField.Stride + BlockLineField.Start],
+        );
         if (nextStart > offset) {
           break;
         }
         field += BlockLineField.Stride;
         line++;
-      }
-      let start = fields[field + BlockLineField.Start];
-      if (start < 0) {
-        start += positionBase;
+        start = nextStart;
       }
       return { line: line + 1, column: offset - start + 1, offset };
     };
