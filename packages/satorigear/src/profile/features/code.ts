@@ -2,11 +2,10 @@ import {
   closesFence,
   type Fence,
   fenceAt,
-  FenceContentMode,
   fencedBlock,
   type FencedBlock,
-  fencedBlockContent,
   type FenceRule,
+  normalizedFenceContent,
 } from "../../block/fence.ts";
 import {
   type BlockLines,
@@ -68,7 +67,7 @@ export const feature: SyntaxFeature = {
             type: "code",
             lang,
             meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
-            value: fencedBlockContent(source, block, FenceContentMode.NormalizedSpaces),
+            value: normalizedFenceContent(source, block),
             position: {
               start: offset + block.markerOffset,
               end: block.closed || end < context.structure.tokens.sourceLength

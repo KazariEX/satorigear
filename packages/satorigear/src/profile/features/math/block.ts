@@ -1,11 +1,10 @@
 import {
   closesFence,
   fenceAt,
-  FenceContentMode,
   fencedBlock,
   type FencedBlock,
-  fencedBlockContent,
   type FenceRule,
+  sourceColumnFenceContent,
 } from "../../../block/fence.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
@@ -39,7 +38,7 @@ export const blockRules: BlockFeature["rules"] = [
       return {
         type: "math",
         meta: meta || null,
-        value: fencedBlockContent(value, block, FenceContentMode.SourceColumns),
+        value: sourceColumnFenceContent(value, block),
         position: {
           start: offset + block.markerOffset,
           end: block.closed || end < context.structure.tokens.sourceLength
