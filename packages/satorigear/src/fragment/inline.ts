@@ -343,8 +343,10 @@ export function buildInlineFragment(
     const removed = result.trailingSpaces < 0
       ? countTrailingSpaces(last.value)
       : result.trailingSpaces;
-    last.value = last.value.slice(0, last.value.length - removed);
-    last.position.end -= removed;
+    if (removed > 0) {
+      last.value = last.value.slice(0, -removed);
+      last.position.end -= removed;
+    }
     if (!last.value) {
       result.children.pop();
     }
