@@ -32,9 +32,9 @@ function scanBlock(
   source: string,
   lines: BlockLines,
   start: number,
+  contentOffset: number,
   out: BlockTokenStream,
 ): number {
-  const contentOffset = lineIndentOffset(source, lines, start);
   const starts = profile.starts[
     contentOffset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(contentOffset)
   ];
@@ -64,13 +64,28 @@ function scanBlockLines(
   visit: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
 ): void {
   for (let index = 0; index < lines.length;) {
-    if (isBlank(source, lines, index)) {
+    // Scan leading whitespace once to distinguish blank lines from block indent.
+    let contentOffset = lines.start(index);
+    const lineEnd = lines.end(index);
+    let columns = lines.prefixColumns(index);
+    while (contentOffset < lineEnd) {
+      const code = source.charCodeAt(contentOffset);
+      if (code !== Character.Space && code !== Character.CharacterTabulation) {
+        break;
+      }
+      columns += code === Character.Space ? 1 : 4 - columns % 4;
+      contentOffset++;
+    }
+    if (contentOffset === lineEnd) {
       index++;
       continue;
     }
+    if (columns > 3) {
+      contentOffset = -1;
+    }
     const lineStart = index;
     const tokenStart = out.length;
-    index = scanBlock(profile, context, source, lines, index, out);
+    index = scanBlock(profile, context, source, lines, index, contentOffset, out);
     if (visit(lineStart, index, tokenStart, out.length)) {
       return;
     }
