@@ -149,6 +149,7 @@ export class DocumentImpl implements Document {
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.
     const context: BlockBuildContext = {
+      inlineContext: void 0,
       structure: this.#blockScanner,
       cursor: new InlineRegionCursor(),
       profile: this.#profile.inline,
@@ -241,6 +242,7 @@ export class DocumentImpl implements Document {
 
     const regions = resolveInlineRegions(source, profile.inline, blockScanner);
     const context: BlockBuildContext = {
+      inlineContext: void 0,
       structure: blockScanner,
       cursor: new InlineRegionCursor(regions),
       profile: profile.inline,

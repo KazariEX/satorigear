@@ -324,13 +324,16 @@ export function buildInlineFragment(
     };
   }
   const { tokens, view } = region;
-  const inlineContext: InlineBuildContext = {
+  const inlineContext = context.inlineContext ??= {
     blockRule,
     buildByKind: context.profile.buildByKind,
     syntaxByKind: context.profile.syntaxByKind,
     tokens,
     view,
   };
+  inlineContext.blockRule = blockRule;
+  inlineContext.tokens = tokens;
+  inlineContext.view = view;
   const result: InlineOutput = {
     children: [],
     cursor: 0,

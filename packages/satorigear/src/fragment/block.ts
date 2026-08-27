@@ -1,11 +1,13 @@
 import type { BlockContent, DefinitionContent, RootContent, TopLevelContent } from "mdast";
-import { buildInlineFragment, type InlineFragment } from "./inline.ts";
+import { buildInlineFragment, type InlineBuildContext, type InlineFragment } from "./inline.ts";
 import type { BlockStructure } from "../block/scanner.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
 import type { SpannedNode } from "./node.ts";
 
 export interface BlockBuildContext {
+  // Inline regions build serially, so this context can be rebound for each region.
+  inlineContext: InlineBuildContext | undefined;
   structure: BlockStructure;
   cursor: InlineRegionCursor;
   profile: InlineProfile;
