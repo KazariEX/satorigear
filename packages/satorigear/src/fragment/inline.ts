@@ -142,19 +142,19 @@ function appendToken(
   context: InlineBuildContext,
   tokenIndex: number,
   value: SpannedNode<PhrasingContent>,
+  syntaxNewline: boolean,
 ): void {
-  const newline = value.type === "text" && value.value.startsWith("\n");
   if (output.gapStart >= 0) {
     const gapStart = output.gapStart;
     output.gapStart = -1;
-    const gapEnd = newline
+    const gapEnd = syntaxNewline
       ? lineEndingStart(context.view.text, output.gapEnd)
       : output.gapEnd;
     if (gapEnd > gapStart) {
       appendGap(output, context, gapStart, gapEnd);
     }
   }
-  if (newline) {
+  if (syntaxNewline) {
     const viewStart = inlineTokenStart(context.tokens, tokenIndex);
     // Markdown syntax newlines point past stripped container prefixes,
     // while mdast spans include the physical line ending.
@@ -199,7 +199,14 @@ function appendLeaf(
   if (typeof value === "boolean") {
     return value;
   }
-  appendToken(output, context, tokenIndex, value);
+  appendToken(
+    output,
+    context,
+    tokenIndex,
+    value,
+    // Distinguishes lexer-emitted newlines from text that merely decodes to "\n".
+    inlineTokenKind(context.tokens, tokenIndex) === InlineKind.Newline,
+  );
   return true;
 }
 
@@ -307,7 +314,7 @@ function appendSemantic(
     children,
     context,
   );
-  appendToken(output, context, openToken, value);
+  appendToken(output, context, openToken, value, false);
   output.cursor = childEnd;
   return closeToken + 1;
 }

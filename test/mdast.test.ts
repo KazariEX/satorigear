@@ -64,6 +64,12 @@ describe("markdown mdast conversion", () => {
     expect(parser.parse("``` &#87654321;\nx\n```\n").children[0]).toMatchObject({ lang: "&#87654321;" });
   });
 
+  it("does not treat decoded line feeds as syntax newlines", () => {
+    expect(parser.parse("a &#10;b").children[0]).toMatchObject({
+      children: [{ type: "text", value: "a \nb" }],
+    });
+  });
+
   it("maps source offsets to mdast positions", () => {
     const tree = parser.parse("  foo  \nbar\n");
     expect(tree.position).toEqual({
