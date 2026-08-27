@@ -71,9 +71,6 @@ importers:
       commonmark-spec:
         specifier: 'catalog:'
         version: 0.31.2
-      entities:
-        specifier: 'catalog:'
-        version: 8.0.0
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)

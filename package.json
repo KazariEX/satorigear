@@ -23,7 +23,6 @@
     "@zinkawaii/tsconfig": "catalog:",
     "bumpp": "catalog:",
     "commonmark-spec": "catalog:",
-    "entities": "catalog:",
     "eslint": "catalog:",
     "mdast-util-from-markdown": "catalog:",
     "mitata": "catalog:",
