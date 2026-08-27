@@ -9,6 +9,10 @@ export interface SourceSpan {
   start: number;
 }
 
+export interface SourceLocator {
+  locationAt: (offset: number) => SourceLocation;
+}
+
 export interface SourceView {
   readonly text: string;
   mapPoint: (offset: number) => number;

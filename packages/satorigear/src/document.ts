@@ -10,7 +10,7 @@ import { InlineRegionCursor, type ResolvedInlineRegion } from "./inline/region.t
 import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
 import type { SpannedValue } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
-import type { SourceLocation, SourceSpan } from "./source-view.ts";
+import type { SourceLocation, SourceLocator, SourceSpan } from "./source-view.ts";
 
 export interface TextEdit extends SourceSpan {
   text: string;
@@ -58,28 +58,28 @@ function applyEdits(source: string, edits: readonly TextEdit[]): SourceChange {
 
 function materializeNode(
   value: SpannedValue,
-  locate: (offset: number) => SourceLocation,
+  locator: SourceLocator,
 ): void {
   const { position, children } = value;
   const result = position as unknown as NonNullable<Node["position"]>;
-  result.start = locate(position.start);
+  result.start = locator.locationAt(position.start);
   if (children) {
     for (const child of children) {
-      materializeNode(child, locate);
+      materializeNode(child, locator);
     }
   }
-  result.end = locate(position.end);
+  result.end = locator.locationAt(position.end);
 }
 
 function buildTreeBlock(
   record: BlockRecord,
   regions: readonly ResolvedInlineRegion[],
   context: BlockBuildContext,
-  locate: (offset: number) => SourceLocation,
+  locator: SourceLocator,
 ): TopLevelContent {
   context.cursor.reset(regions);
   const node = buildBlockNode<TopLevelContent>(record.tokenStart, context);
-  materializeNode(node, locate);
+  materializeNode(node, locator);
   return node as unknown as TopLevelContent;
 }
 
@@ -156,9 +156,9 @@ export class DocumentImpl implements Document {
       source: this.#source,
     };
 
-    const locate = this.#blockScanner.locator();
+    const locator = this.#blockScanner.locator();
     const root = this.#tree;
-    const start = locate(0);
+    const start = locator.locationAt(0);
     const children = root.children;
     const rebuildStart = change?.stableBlockCount ?? 0;
     const oldRebuildEnd = change?.oldRecordEnd ?? 0;
@@ -189,10 +189,10 @@ export class DocumentImpl implements Document {
       invalidatedBlocks[invalidatedIndex] < rebuildStart
     ) {
       const index = invalidatedBlocks[invalidatedIndex++];
-      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locate);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locator);
     }
     for (let index = rebuildStart; index < newRebuildEnd; index++) {
-      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locate);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locator);
     }
 
     // 3. Reconcile the retained suffix. Stable roots share one position shift;
@@ -200,13 +200,13 @@ export class DocumentImpl implements Document {
     let positionShift: PositionShift | undefined;
     for (let index = newRebuildEnd; index < records.length; index++) {
       if (invalidatedBlocks[invalidatedIndex] === index) {
-        children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locate);
+        children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locator);
         invalidatedIndex++;
         continue;
       }
       if (!positionShift) {
         const previousStart = children[index].position!.start as SourceLocation;
-        const nextStart = locate(previousStart.offset + suffixOffsetDelta);
+        const nextStart = locator.locationAt(previousStart.offset + suffixOffsetDelta);
         if (
           nextStart.offset === previousStart.offset &&
           nextStart.line === previousStart.line &&
@@ -225,11 +225,11 @@ export class DocumentImpl implements Document {
     }
     while (invalidatedIndex < invalidatedBlocks.length) {
       const index = invalidatedBlocks[invalidatedIndex++];
-      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locate);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locator);
     }
     root.position = {
       start,
-      end: locate(this.#source.length),
+      end: locator.locationAt(this.#source.length),
     };
   }
 
@@ -249,18 +249,18 @@ export class DocumentImpl implements Document {
       source,
     };
 
-    const locate = blockScanner.locator();
-    const start = locate(0);
+    const locator = blockScanner.locator();
+    const start = locator.locationAt(0);
     const children = blockScanner.records.map((block) => {
       const node = buildBlockNode<TopLevelContent>(block.tokenStart, context);
-      materializeNode(node, locate);
+      materializeNode(node, locator);
       return node as unknown as TopLevelContent;
     });
 
     return {
       type: "root",
       children,
-      position: { start, end: locate(source.length) },
+      position: { start, end: locator.locationAt(source.length) },
     };
   }
 }

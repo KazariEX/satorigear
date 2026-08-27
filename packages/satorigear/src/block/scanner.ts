@@ -1,7 +1,7 @@
 import { Character } from "../constants/character.ts";
 import { BlockLines, isBlank, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
-import type { SourceLocation, SourceSpan } from "../source-view.ts";
+import type { SourceLocator, SourceSpan } from "../source-view.ts";
 import type { BlockProfile, BlockSyntaxRule } from "./profile.ts";
 
 export interface BlockScanChange {
@@ -271,7 +271,7 @@ export class BlockScanner {
     return this.#profile.rules[kind]!;
   }
 
-  locator(): (offset: number) => SourceLocation {
+  locator(): SourceLocator {
     return this.#lines.locator();
   }
 

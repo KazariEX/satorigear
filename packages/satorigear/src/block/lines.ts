@@ -1,5 +1,5 @@
 import { Character } from "../constants/character.ts";
-import type { SourceLocation } from "../source-view.ts";
+import type { SourceLocation, SourceLocator } from "../source-view.ts";
 
 const enum BlockLineField {
   Start,
@@ -18,9 +18,10 @@ const enum BlockLineCapacity {
   DoublingLimit = 16,
 }
 
-export class BlockLines {
+export class BlockLines implements SourceLocator {
   #fieldLength = 0;
   #fields: Int32Array;
+  #locatorField = 0;
   // Positions in the retained edit suffix are stored relative to source EOF. Changing
   // source length then shifts the whole suffix without rewriting every line coordinate.
   #relativeStart = Infinity;
@@ -133,38 +134,50 @@ export class BlockLines {
     return low;
   }
 
-  /** Returns a locator for monotonically increasing source offsets. */
-  locator(): (offset: number) => SourceLocation {
-    const fields = this.#fields;
+  /** Resets and returns the line-owned locator for monotonically increasing source offsets. */
+  locator(): SourceLocator {
+    this.#locatorField = 0;
+    return this;
+  }
+
+  /**
+   * After {@link locator} resets the monotonic cursor, this stable method keeps projection
+   * monomorphic across documents; per-parse closures would invalidate its optimized call target.
+   */
+  locationAt(offset: number): SourceLocation {
     const fieldLength = this.#fieldLength;
-    const sourceLength = this.#sourceLength;
     if (fieldLength === 0) {
-      return (offset) => ({ line: 1, column: 1, offset });
+      return { line: 1, column: 1, offset };
     }
-    const lineCount = fieldLength / BlockLineField.Stride;
-    const finalEnd = this.#position(
-      fields[fieldLength - BlockLineField.Stride + BlockLineField.End],
-    );
-    const endsInLineEnding = finalEnd < sourceLength;
-    let field = 0;
-    let line = 0;
-    let start = this.#position(fields[BlockLineField.Start]);
-    return (offset) => {
-      if (offset === sourceLength && endsInLineEnding) {
-        return { line: lineCount + 1, column: 1, offset };
+    const fields = this.#fields;
+    const sourceLength = this.#sourceLength;
+    if (
+      offset === sourceLength &&
+      this.#position(fields[fieldLength - BlockLineField.Stride + BlockLineField.End]) < sourceLength
+    ) {
+      return {
+        line: fieldLength / BlockLineField.Stride + 1,
+        column: 1,
+        offset,
+      };
+    }
+    let field = this.#locatorField;
+    let start = this.#position(fields[field + BlockLineField.Start]);
+    while (field + BlockLineField.Stride < fieldLength) {
+      const nextStart = this.#position(
+        fields[field + BlockLineField.Stride + BlockLineField.Start],
+      );
+      if (nextStart > offset) {
+        break;
       }
-      while (field + BlockLineField.Stride < fieldLength) {
-        const nextStart = this.#position(
-          fields[field + BlockLineField.Stride + BlockLineField.Start],
-        );
-        if (nextStart > offset) {
-          break;
-        }
-        field += BlockLineField.Stride;
-        line++;
-        start = nextStart;
-      }
-      return { line: line + 1, column: offset - start + 1, offset };
+      field += BlockLineField.Stride;
+      start = nextStart;
+    }
+    this.#locatorField = field;
+    return {
+      line: field / BlockLineField.Stride + 1,
+      column: offset - start + 1,
+      offset,
     };
   }
 
