@@ -26,6 +26,8 @@ export class BlockLines implements SourceLocator {
   // source length then shifts the whole suffix without rewriting every line coordinate.
   #relativeStart = Infinity;
   #sourceLength: number;
+  // Once false, edits keep this conservative rather than rescanning retained source.
+  #lineEndingsNormalized = true;
 
   constructor(sourceLength = 0, lineCapacity: number = BlockLineCapacity.Initial) {
     this.#sourceLength = sourceLength;
@@ -61,6 +63,7 @@ export class BlockLines implements SourceLocator {
     let start = 0;
     let lineFeed = source.indexOf("\n");
     let carriageReturn = source.indexOf("\r");
+    lines.#lineEndingsNormalized = carriageReturn < 0;
     // Physical lines have zero state, so write only their three position fields.
     let field = 0;
     let fields = lines.#fields;
@@ -138,6 +141,13 @@ export class BlockLines implements SourceLocator {
   locator(): SourceLocator {
     this.#locatorField = 0;
     return this;
+  }
+
+  /** Normalizes a fragment only when retained source may contain carriage returns. */
+  normalizeLineEndings(value: string): string {
+    return this.#lineEndingsNormalized || !value.includes("\r")
+      ? value
+      : value.replace(/\r\n|\r/g, "\n");
   }
 
   /**
@@ -245,6 +255,7 @@ export class BlockLines implements SourceLocator {
     const fieldEnd = end * BlockLineField.Stride;
     result.#fields = this.#fields.slice(fieldStart, fieldEnd);
     result.#fieldLength = fieldEnd - fieldStart;
+    result.#lineEndingsNormalized = this.#lineEndingsNormalized;
     if (this.#relativeStart < end) {
       result.#relativeStart = Math.max(0, this.#relativeStart - start);
     }
@@ -278,6 +289,7 @@ export class BlockLines implements SourceLocator {
       for (let index = 0; index < changed.length; index++) {
         next.#setAbsoluteFrom(prefixEnd + index, changed, index);
       }
+      next.#lineEndingsNormalized &&= changed.#lineEndingsNormalized;
       return next;
     }
     const next = new BlockLines(
@@ -288,6 +300,7 @@ export class BlockLines implements SourceLocator {
     next.#appendAbsoluteRange(this, 0, prefixEnd);
     next.#appendRawRange(changed, 0, changed.length);
     next.#appendRelativeRange(this, suffix);
+    next.#lineEndingsNormalized = this.#lineEndingsNormalized && changed.#lineEndingsNormalized;
     return next;
   }
 
@@ -497,10 +510,6 @@ export function contentAfterColumns(
   if (consumed >= columns) {
     return { offset, prefixColumns: consumed - columns };
   }
-}
-
-export function normalizeLines(value: string): string {
-  return value.includes("\r") ? value.replace(/\r\n|\r/g, "\n") : value;
 }
 
 export function removeIndent(value: string, columns: number): string {

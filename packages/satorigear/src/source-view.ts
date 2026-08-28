@@ -15,6 +15,7 @@ export interface SourceSpan {
 }
 
 export interface SourceLocator {
+  normalizeLineEndings: (value: string) => string;
   locationAt: (offset: number) => SourceLocation;
   positionAt: (start: number, end: number) => SourcePosition;
 }

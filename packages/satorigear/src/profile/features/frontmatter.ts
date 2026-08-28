@@ -1,8 +1,8 @@
 import type { Yaml } from "mdast";
-import { type BlockLines, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { type BlockNodeBuilder, leafBlockPosition } from "../../fragment/block.ts";
+import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export type FrontmatterMarker = "+" | "-";
@@ -35,7 +35,9 @@ function frontmatterFenceAt(
 
 export const buildFrontmatter: BlockNodeBuilder<Yaml> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
-  const text = normalizeLines(tokens.text(context.source, tokenStart));
+  const text = context.locator.normalizeLineEndings(
+    tokens.text(context.source, tokenStart),
+  );
   const contentStart = text.indexOf("\n") + 1;
   const closingEnd = text.endsWith("\n") ? text.length - 1 : text.length;
   const closingStart = text.lastIndexOf("\n", closingEnd - 1) + 1;

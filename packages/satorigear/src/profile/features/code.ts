@@ -7,13 +7,7 @@ import {
   type FenceRule,
   normalizedFenceContent,
 } from "../../block/fence.ts";
-import {
-  type BlockLines,
-  isBlank,
-  lineIndentOffset,
-  normalizeLines,
-  removeIndent,
-} from "../../block/lines.ts";
+import { type BlockLines, isBlank, lineIndentOffset, removeIndent } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -51,7 +45,9 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const source = normalizeLines(tokens.text(context.source, tokenStart));
+          const source = context.locator.normalizeLineEndings(
+            tokens.text(context.source, tokenStart),
+          );
           const block = tokens.value<FencedBlock>(tokenStart);
           if (!block) {
             throw new Error("FencedCodeBlock token has no fence metadata");
@@ -79,7 +75,8 @@ export const feature: SyntaxFeature = {
           const tokens = context.structure.tokens;
           const offset = tokens.start(tokenStart);
           const contentLength = tokens.value<number>(tokenStart)!;
-          const lines = normalizeLines(tokens.text(context.source, tokenStart))
+          const lines = context.locator
+            .normalizeLineEndings(tokens.text(context.source, tokenStart))
             .split("\n")
             .map((line) => removeIndent(line, 4));
           while (lines.length && /^[ \t]*$/.test(lines[lines.length - 1])) {
@@ -196,7 +193,9 @@ export const feature: SyntaxFeature = {
         build: (tokenIndex, sourceSpan, context) => {
           const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
           const markerLength = inlineTokenData(context.tokens, tokenIndex);
-          let value = normalizeLines(text.slice(markerLength, -markerLength));
+          let value = context.locator.normalizeLineEndings(
+            text.slice(markerLength, -markerLength),
+          );
           if (/^[ \n]/.test(value) && /[ \n]$/.test(value) && /[^ \n]/.test(value)) {
             value = value.slice(1, -1);
           }

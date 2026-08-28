@@ -1,5 +1,5 @@
 import { htmlBlockNames, htmlRawNames } from "micromark-util-html-tag-name";
-import { type BlockLines, isBlank, normalizeLines } from "../../block/lines.ts";
+import { type BlockLines, isBlank } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -86,7 +86,9 @@ export const feature: SyntaxFeature = {
           if (tokens.kind(tokenStart) !== BlockKind.HtmlBlock || unterminated === void 0) {
             throw new Error("HTML block lacks termination state");
           }
-          let html = normalizeLines(tokens.text(context.source, tokenStart));
+          let html = context.locator.normalizeLineEndings(
+            tokens.text(context.source, tokenStart),
+          );
           if (!unterminated && html.endsWith("\n")) {
             html = html.slice(0, -1);
           }
