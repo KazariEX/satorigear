@@ -9,9 +9,9 @@ import type { InlineBuildContext } from "./inline.ts";
 export interface BlockBuildContext {
   // Inline regions build serially, so this context can be rebound for each region.
   inlineContext: InlineBuildContext | undefined;
+  cursor: InlineRegionCursor | undefined;
   locator: SourceLocator;
   structure: BlockStructure;
-  cursor: InlineRegionCursor | undefined;
   profile: InlineProfile;
   source: string;
 }
