@@ -1,4 +1,5 @@
 import { BlockKind } from "../constants/block.ts";
+import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
 import { type BlockLines, logicalLine } from "./lines.ts";
 import type { BlockSyntaxRule } from "./profile.ts";
@@ -14,7 +15,6 @@ const enum BlockTokenField {
 // The fourth slot stores the token length of a semantic node beginning here. Raw tokens use zero.
 
 interface BlockTokenMeta {
-  contentEndOffset?: number;
   definitionKey?: string;
   text?: string;
   value?: unknown;
@@ -153,11 +153,6 @@ export class BlockTokenStream {
     const nextMetadata = next.#metadata?.get(nextIndex);
     if (metadata !== nextMetadata) {
       if (metadata?.definitionKey !== nextMetadata?.definitionKey) {
-        return false;
-      }
-      const contentEndOffset = metadata?.contentEndOffset ?? end - start;
-      const nextContentEndOffset = nextMetadata?.contentEndOffset ?? nextEnd - nextStart;
-      if (contentEndOffset !== nextContentEndOffset) {
         return false;
       }
       const value = metadata?.value;
@@ -374,9 +369,13 @@ export class BlockTokenStream {
     );
   }
 
-  contentEnd(index: number): number {
-    const offset = this.#metadata?.get(index)?.contentEndOffset;
-    return offset === void 0 ? this.end(index) : this.start(index) + offset;
+  /** Returns the semantic content end before its trailing physical line ending. */
+  contentEnd(source: string, index: number): number {
+    const end = this.end(index);
+    const last = source.charCodeAt(end - 1);
+    return last === Character.LineFeed
+      ? end - (source.charCodeAt(end - 2) === Character.CarriageReturn ? 2 : 1)
+      : last === Character.CarriageReturn ? end - 1 : end;
   }
 
   text(source: string, index: number): string {
@@ -447,10 +446,6 @@ export function appendLogicalToken(
   const tokenStart = lines.start(start);
   const lastLine = end - 1;
   const tokenEnd = lines.next(lastLine);
-  const contentEnd = lines.end(lastLine);
-  const contentEndOffset = contentEnd === tokenEnd
-    ? void 0
-    : contentEnd - tokenStart;
   const previous = source[tokenStart - 1];
   let canSliceSource = (
     // Tab overshoot is represented as virtual leading columns absent from the source slice.
@@ -481,8 +476,8 @@ export function appendLogicalToken(
     kind,
     tokenStart,
     tokenEnd,
-    contentEndOffset === void 0 && text === void 0 && value === void 0
+    text === void 0 && value === void 0
       ? void 0
-      : { contentEndOffset, text, value },
+      : { text, value },
   );
 }

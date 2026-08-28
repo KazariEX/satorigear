@@ -24,7 +24,11 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
   const tokens = context.structure.tokens;
-  return tokens.contentEnd(tokenStart + tokens.nodeLength(tokenStart) - 1);
+  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+  // Structural close tokens include their boundary; semantic content drops its line ending.
+  return tokens.nodeLength(close) === 0
+    ? tokens.end(close)
+    : tokens.contentEnd(context.source, close);
 }
 
 export function leafBlockPosition(
@@ -33,7 +37,10 @@ export function leafBlockPosition(
 ): SourcePosition {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-  return context.locator.positionAt(tokens.start(tokenStart), tokens.contentEnd(close));
+  return context.locator.positionAt(
+    tokens.start(tokenStart),
+    tokens.contentEnd(context.source, close),
+  );
 }
 
 export function fencedBlockPosition(

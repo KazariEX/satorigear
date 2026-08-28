@@ -235,7 +235,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
     children,
     position: {
       start,
-      end: lastChildEnd(children) ?? context.locator.locationAt(tokens.contentEnd(close)),
+      end: lastChildEnd(children) ?? context.locator.locationAt(tokens.end(close)),
     },
   };
 };
