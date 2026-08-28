@@ -27,15 +27,15 @@ catalogs:
     commonmark-spec:
       specifier: ^0.31.2
       version: 0.31.2
-    entities:
-      specifier: ^8.0.0
-      version: 8.0.0
     eslint:
       specifier: ^10.9.1
       version: 10.9.1
     mdast-util-from-markdown:
       specifier: ^2.0.3
       version: 2.0.3
+    micromark-util-decode-string:
+      specifier: ^2.0.1
+      version: 2.0.1
     micromark-util-html-tag-name:
       specifier: ^2.0.1
       version: 2.0.1
@@ -98,10 +98,9 @@ importers:
       '@types/mdast':
         specifier: 'catalog:'
         version: 4.0.4
-      entities:
+      micromark-util-decode-string:
         specifier: 'catalog:'
-        version: 8.0.0
-    devDependencies:
+        version: 2.0.1
       micromark-util-html-tag-name:
         specifier: 'catalog:'
         version: 2.0.1
@@ -943,10 +942,6 @@ packages:
   entities@7.0.1:
     resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
     engines: {node: '>=0.12'}
-
-  entities@8.0.0:
-    resolution: {integrity: sha512-zwfzJecQ/Uej6tusMqwAqU/6KL2XaB2VZ2Jg54Je6ahNBGNH6Ek6g3jjNCF0fG9EWQKGZNddNjU5F1ZQn/sBnA==}
-    engines: {node: '>=20.19.0'}
 
   es-module-lexer@2.3.2:
     resolution: {integrity: sha512-poHGpORABojJJucnV9KbOavETW8lBVnphkW77ER5/BQ5Fz7oXSoCNek7IH3vR5nRjdsEz926ibFYX8KtLQmdyw==}
@@ -2716,8 +2711,6 @@ snapshots:
       tapable: 2.3.3
 
   entities@7.0.1: {}
-
-  entities@8.0.0: {}
 
   es-module-lexer@2.3.2: {}
 

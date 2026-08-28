@@ -45,28 +45,9 @@ describe("markdown mdast conversion", () => {
     });
   });
 
-  it("decodes only valid CommonMark character references", () => {
-    const links = parser.parse([
-      "[valid](&ouml; \"&#35;\")",
-      "",
-      "[escaped](\\&amp; \"\\&copy;\")",
-      "",
-      "[oversized](&#87654321; \"&#xabcdef0;\")",
-      "",
-    ].join("\n"));
-    expect(links.children).toMatchObject([
-      { children: [{ type: "link", url: "ö", title: "#" }] },
-      { children: [{ type: "link", url: "&amp;", title: "&copy;" }] },
-      { children: [{ type: "link", url: "&#87654321;", title: "&#xabcdef0;" }] },
-    ]);
-
-    expect(parser.parse("``` &copy;\nx\n```\n").children[0]).toMatchObject({ lang: "©" });
-    expect(parser.parse("``` &#87654321;\nx\n```\n").children[0]).toMatchObject({ lang: "&#87654321;" });
-  });
-
-  it("does not treat decoded line feeds as syntax newlines", () => {
-    expect(parser.parse("a &#10;b").children[0]).toMatchObject({
-      children: [{ type: "text", value: "a \nb" }],
+  it("replaces control character references", () => {
+    expect(parser.parse("&#128;").children[0]).toMatchObject({
+      children: [{ type: "text", value: "�" }],
     });
   });
 

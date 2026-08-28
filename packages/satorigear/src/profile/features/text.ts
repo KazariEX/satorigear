@@ -1,15 +1,11 @@
-import { decodeHTMLStrict } from "entities";
+import { decodeString } from "micromark-util-decode-string";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
-import {
-  appendInlineToken,
-  inlineTokenText,
-} from "../../inline/tokens.ts";
+import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import type { InlineTextBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
 const entity = /&(?:#x[0-9A-F]{1,6}|#\d{1,7}|[A-Z][A-Z0-9]{0,30});/iy;
 
 function isAsciiPunctuation(code: number): boolean {
@@ -22,14 +18,12 @@ function isAsciiPunctuation(code: number): boolean {
 }
 
 export function semanticText(value: string): string {
-  if (!value.includes("\\") && !value.includes("&")) {
-    return value;
-  }
-  return value.replace(semanticCharacter, (match, escaped) => escaped ?? decodeHTMLStrict(match));
+  return value.includes("\\") || value.includes("&") ? decodeString(value) : value;
 }
 
-export const buildInlineText: InlineTextBuilder = (tokenIndex, context) =>
-  inlineTokenText(context.view.text, context.tokens, tokenIndex);
+export const buildInlineText: InlineTextBuilder = (tokenIndex, context) => {
+  return inlineTokenText(context.view.text, context.tokens, tokenIndex);
+};
 
 export const buildDecodedInlineText: InlineTextBuilder = (tokenIndex, context) => {
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
