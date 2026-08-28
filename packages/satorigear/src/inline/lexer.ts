@@ -8,6 +8,18 @@ type InlineScanner = (
   tokens: number[],
 ) => number;
 
+type InlineScannerDispatch = (
+  code: number,
+  source: string,
+  start: number,
+  tokens: number[],
+) => number;
+
+type InlineScannerDispatchFactory = (...scanners: InlineScanner[]) => InlineScannerDispatch;
+
+// Cache generated control flow; scanner closures remain profile-specific.
+const scannerDispatchFactories = new Map<string, InlineScannerDispatchFactory>();
+
 // Features own marker recognition; the compiled lexer only dispatches scanners.
 export interface InlineScanRule {
   marker: number;
@@ -33,7 +45,7 @@ export function inlineMarkerRunEnd(source: string, start: number): number {
 function tokenize(
   source: string,
   textBoundary: RegExp,
-  scannerByCode: readonly (InlineScanner | undefined)[],
+  scanBoundary: InlineScannerDispatch,
 ): InlineTokenStream {
   // Ordinary source text stays implicit between semantic tokens; the builder reads those gaps.
   const tokens: number[] = [];
@@ -78,22 +90,39 @@ function tokenize(
       continue;
     }
 
-    const scan = scannerByCode[code];
-    if (scan) {
-      const scannedEnd = scan(source, offset, tokens);
-      if (scannedEnd > offset) {
-        offset = scannedEnd;
-      }
-      else {
-        // A marker may be shared by multiple features. If none accepts it,
-        // leave the marker in the source gap and continue to the next compiled boundary.
-        offset++;
-      }
-    }
+    const scannedEnd = scanBoundary(code, source, offset, tokens);
+    // Rejected markers and ordinary characters remain implicit source text.
+    offset = scannedEnd > offset ? scannedEnd : offset + 1;
     textBoundary.lastIndex = offset;
     offset = textBoundary.test(source) ? textBoundary.lastIndex - 1 : end;
   }
   return tokens;
+}
+
+function compileInlineScannerDispatch(
+  boundaryCodes: readonly number[],
+  scannerByCode: readonly (InlineScanner | undefined)[],
+): InlineScannerDispatch {
+  try {
+    const key = String.fromCharCode(...boundaryCodes);
+    let factory = scannerDispatchFactories.get(key);
+    if (factory === void 0) {
+      const names = boundaryCodes.map((code, index) => `scan${index}`);
+      // eslint-disable-next-line no-new-func
+      scannerDispatchFactories.set(key, factory = Function(
+        ...names,
+        `return(code,source,start,tokens)=>{switch(code){${
+          boundaryCodes
+            .map((code, index) => `case ${code}:return scan${index}(source,start,tokens);`)
+            .join("")
+        }default:return start}}`,
+      ) as InlineScannerDispatchFactory);
+    }
+    return factory(...boundaryCodes.map((code) => scannerByCode[code]!));
+  }
+  catch {
+    return (code, source, start, tokens) => scannerByCode[code]?.(source, start, tokens) ?? start;
+  }
 }
 
 export function compileInlineTokenizer(rules: readonly InlineScanRule[]): InlineTokenizer {
@@ -119,5 +148,6 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
     `${boundaryCodes.length > 9 ? " {2,}[\\n\\r]|" : ""}[\\n\\r${boundaries}]`,
     "g",
   );
-  return (source) => tokenize(source, textBoundary, scannerByCode);
+  const scanBoundary = compileInlineScannerDispatch(boundaryCodes, scannerByCode);
+  return (source) => tokenize(source, textBoundary, scanBoundary);
 }
