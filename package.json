@@ -1,7 +1,12 @@
 {
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@11.24.0",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^12.0.0"
+    }
+  },
   "scripts": {
     "build": "pnpm --filter satorigear... build",
     "dev": "pnpm --filter satorigear... --parallel dev",
