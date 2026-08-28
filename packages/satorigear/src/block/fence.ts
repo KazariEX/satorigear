@@ -1,10 +1,5 @@
 import { Character } from "../constants/character.ts";
-import {
-  type BlockLines,
-  lineContentEnd,
-  lineIndentOffset,
-  removeIndent,
-} from "./lines.ts";
+import { type BlockLines, lineContentEnd, lineIndentOffset } from "./lines.ts";
 
 export interface Fence {
   indent: number;
@@ -113,6 +108,18 @@ export function fencedBlock(
   };
 }
 
+// Multiline anchors also recognize Unicode separators, which block scanning treats as content.
+const fenceSpaceIndent = [
+  /^(?<![\u2028\u2029]) /gm,
+  /^(?<![\u2028\u2029]) {1,2}/gm,
+  /^(?<![\u2028\u2029]) {1,3}/gm,
+];
+const sourceColumnFenceTabIndent = [
+  /^(?<![\u2028\u2029])\t/gm,
+  /^(?<![\u2028\u2029]) ?\t/gm,
+  /^(?<![\u2028\u2029]) {0,2}\t/gm,
+];
+
 /** Extracts content from LF-normalized input, removing up to `block.indent` spaces per line. */
 export function normalizedFenceContent(source: string, block: FencedBlock): string {
   const contentStart = source.indexOf("\n") + 1;
@@ -124,23 +131,10 @@ export function normalizedFenceContent(source: string, block: FencedBlock): stri
     ? source.lastIndexOf("\n", source.length - 2) + 1
     : source.length;
   const end = lineContentEnd(source, contentStart, limit);
-  if (!block.indent) {
-    return source.slice(contentStart, end);
-  }
-  const chunks: string[] = [];
-  let lineStart = contentStart;
-  while (lineStart < end) {
-    const lineEnd = source.indexOf("\n", lineStart);
-    const next = lineEnd < 0 || lineEnd >= end ? end : lineEnd + 1;
-    let start = lineStart;
-    const indentEnd = lineStart + block.indent;
-    while (start < indentEnd && source.charCodeAt(start) === Character.Space) {
-      start++;
-    }
-    chunks.push(source.slice(start, next));
-    lineStart = next;
-  }
-  return chunks.join("");
+  const content = source.slice(contentStart, end);
+  return block.indent
+    ? content.replace(fenceSpaceIndent[block.indent - 1], "")
+    : content;
 }
 
 /** Extracts original source content, removing up to `block.indent` columns per line. */
@@ -162,20 +156,13 @@ export function sourceColumnFenceContent(source: string, block: FencedBlock): st
   }
 
   const end = lineContentEnd(source, contentStart, limit);
-  if (!block.indent) {
-    return source.slice(contentStart, end);
-  }
-  const chunks: string[] = [];
-  let lineStart = contentStart;
-  while (lineStart < end) {
-    const lf = source.indexOf("\n", lineStart);
-    const cr = source.indexOf("\r", lineStart);
-    let next = Math.min(lf < 0 ? end : lf, cr < 0 ? end : cr, end);
-    if (next < end) {
-      next += source[next] === "\r" && source[next + 1] === "\n" ? 2 : 1;
+  let content = source.slice(contentStart, end);
+  if (block.indent) {
+    if (content.includes("\t")) {
+      // Expand the first indentation tab to its stop so space removal retains its overshoot.
+      content = content.replace(sourceColumnFenceTabIndent[block.indent - 1], "    ");
     }
-    chunks.push(removeIndent(source.slice(lineStart, next), block.indent));
-    lineStart = next;
+    content = content.replace(fenceSpaceIndent[block.indent - 1], "");
   }
-  return chunks.join("");
+  return content;
 }

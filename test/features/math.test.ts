@@ -123,6 +123,13 @@ describe("math", () => {
     });
   });
 
+  it("removes source-column indentation only at physical line starts", () => {
+    expect(parser.parse(" $$\n\tx\u2028 y\n $$\n").children[0]).toMatchObject({
+      type: "math",
+      value: "   x\u2028 y",
+    });
+  });
+
   it("accepts empty and unclosed math blocks", () => {
     expect(parser.parse("$$\n\n$$\n").children[0]).toMatchObject({
       type: "math",

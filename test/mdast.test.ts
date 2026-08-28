@@ -70,6 +70,13 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it("removes fence indentation only at physical line starts", () => {
+    expect(parser.parse(" ```\n x\u2028 y\n ```\n").children[0]).toMatchObject({
+      type: "code",
+      value: "x\u2028 y",
+    });
+  });
+
   it("maps source offsets to mdast positions", () => {
     const tree = parser.parse("  foo  \nbar\n");
     expect(tree.position).toEqual({
