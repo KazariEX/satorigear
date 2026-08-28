@@ -1,6 +1,7 @@
 import type { PhrasingContent, Text } from "mdast";
 import { Character } from "../constants/character.ts";
 import { InlineKind } from "../constants/inline.ts";
+import { resolveInlineRegion } from "../inline/region.ts";
 import {
   inlineTokenCount,
   inlineTokenData,
@@ -352,7 +353,9 @@ export function buildInlineFragment(
   blockRule: BlockRule,
   context: BlockBuildContext,
 ): InlineFragment {
-  const region = context.cursor.take(tokenStart);
+  const region = context.cursor
+    ? context.cursor.take(tokenStart)
+    : resolveInlineRegion(context.source, context.profile, context.structure.tokens, tokenStart);
   if (!region) {
     return {
       children: [],

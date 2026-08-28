@@ -1,5 +1,7 @@
+import { BlockKind } from "../constants/block.ts";
 import { emptyArray, emptySet } from "../primitives.ts";
-import type { SourceView } from "../source-view.ts";
+import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "../source-view.ts";
+import type { BlockTokenStream } from "../block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
@@ -141,5 +143,69 @@ export class InlineRegionCursor {
     }
     this.#index++;
     return region;
+  }
+}
+
+export function resolveInlineRegion(
+  source: string,
+  profile: InlineProfile,
+  tokens: BlockTokenStream,
+  tokenStart: number,
+): ResolvedInlineRegion | undefined {
+  const view = inlineViewOf(
+    source,
+    tokens,
+    tokenStart,
+    tokens.nodeLength(tokenStart),
+  );
+  if (!view) {
+    return;
+  }
+  const text = view.text;
+  return {
+    tokenStart,
+    tokens: profile.resolve(text, profile.tokenize(text), tokens),
+    view,
+  };
+}
+
+export function inlineViewOf(
+  source: string,
+  tokens: BlockTokenStream,
+  tokenStart: number,
+  nodeLength: number,
+): SourceView | undefined {
+  let firstStart = -1;
+  let firstEnd = -1;
+  let ranges: number[] | undefined;
+  const tokenEnd = tokenStart + nodeLength;
+  for (let token = tokenStart + 1; token < tokenEnd; token++) {
+    if (tokens.kind(token) !== BlockKind.InlineChunk) {
+      continue;
+    }
+    const start = tokens.start(token);
+    const end = tokens.end(token);
+    if (firstStart < 0) {
+      firstStart = start;
+      firstEnd = end;
+    }
+    // Physically adjacent chunks still form one source slice; only stripped container gaps need segments.
+    else if (start === firstEnd) {
+      firstEnd = end;
+      if (ranges) {
+        ranges[ranges.length - 1] = end;
+      }
+    }
+    else {
+      ranges ??= [firstStart, firstEnd];
+      ranges.push(start, end);
+      firstEnd = end;
+    }
+  }
+  if (ranges) {
+    return new SegmentedSourceView(source, ranges);
+  }
+  if (firstStart >= 0) {
+    return new ContiguousSourceView(source, firstStart, firstEnd);
   }
 }

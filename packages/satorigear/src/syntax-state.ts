@@ -1,9 +1,6 @@
-import { BlockKind } from "./constants/block.ts";
-import { InlineRegion, type InlineRegionBinding, type ResolvedInlineRegion } from "./inline/region.ts";
+import { InlineRegion, type InlineRegionBinding, inlineViewOf } from "./inline/region.ts";
 import { emptyArray, emptySet } from "./primitives.ts";
-import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "./source-view.ts";
 import type { BlockScanChange, BlockStructure } from "./block/scanner.ts";
-import type { BlockTokenStream } from "./block/tokens.ts";
 import type { InlineProfile } from "./inline/profile.ts";
 
 export class SyntaxState {
@@ -161,82 +158,5 @@ export class SyntaxState {
     this.#regionsByBlock = regionsByBlock;
 
     return invalidatedBlocks ?? emptyArray;
-  }
-}
-
-export function resolveInlineRegions(
-  source: string,
-  profile: InlineProfile,
-  structure: BlockStructure,
-): readonly ResolvedInlineRegion[] {
-  const regions: ResolvedInlineRegion[] = [];
-  const tokens = structure.tokens;
-
-  // Block scanning has completed, so every region can resolve against the full definition index.
-  for (const record of structure.records) {
-    const tokenStart = record.tokenStart;
-    const tokenEnd = tokenStart + tokens.nodeLength(tokenStart);
-    // Semantic nodes are the non-zero ranges in the flat block token stream.
-    for (let token = tokenStart; token < tokenEnd; token++) {
-      const nodeLength = tokens.nodeLength(token);
-      if (nodeLength === 0) {
-        continue;
-      }
-      const rule = structure.ruleOf(token);
-      if (rule.inlineContent) {
-        const inlineView = inlineViewOf(source, tokens, token, nodeLength);
-        if (inlineView) {
-          const text = inlineView.text;
-          regions.push({
-            tokenStart: token,
-            tokens: profile.resolve(text, profile.tokenize(text), tokens),
-            view: inlineView,
-          });
-        }
-        token += nodeLength - 1;
-      }
-    }
-  }
-
-  return regions;
-}
-
-function inlineViewOf(
-  source: string,
-  tokens: BlockTokenStream,
-  tokenStart: number,
-  nodeLength: number,
-): SourceView | undefined {
-  let firstStart = -1;
-  let firstEnd = -1;
-  let ranges: number[] | undefined;
-  const tokenEnd = tokenStart + nodeLength;
-  for (let token = tokenStart + 1; token < tokenEnd; token++) {
-    if (tokens.kind(token) === BlockKind.InlineChunk) {
-      const start = tokens.start(token);
-      const end = tokens.end(token);
-      if (firstStart < 0) {
-        firstStart = start;
-        firstEnd = end;
-      }
-      // Physically adjacent chunks still form one source slice; only stripped container gaps need segments.
-      else if (start === firstEnd) {
-        firstEnd = end;
-        if (ranges) {
-          ranges[ranges.length - 1] = end;
-        }
-      }
-      else {
-        ranges ??= [firstStart, firstEnd];
-        ranges.push(start, end);
-        firstEnd = end;
-      }
-    }
-  }
-  if (ranges) {
-    return new SegmentedSourceView(source, ranges);
-  }
-  if (firstStart >= 0) {
-    return new ContiguousSourceView(source, firstStart, firstEnd);
   }
 }

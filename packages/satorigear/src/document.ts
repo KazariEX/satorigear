@@ -7,7 +7,7 @@ import {
 } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { InlineRegionCursor, type ResolvedInlineRegion } from "./inline/region.ts";
-import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
+import { SyntaxState } from "./syntax-state.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan } from "./source-view.ts";
 
@@ -60,7 +60,7 @@ function buildTreeBlock(
   regions: readonly ResolvedInlineRegion[],
   context: BlockBuildContext,
 ): TopLevelContent {
-  context.cursor.reset(regions);
+  context.cursor!.reset(regions);
   return buildBlockNode<TopLevelContent>(record.tokenStart, context);
 }
 
@@ -222,21 +222,22 @@ export class DocumentImpl implements Document {
   ): Root {
     blockScanner.scan(source);
 
-    const regions = resolveInlineRegions(source, profile.inline, blockScanner);
     const locator = blockScanner.locator();
     const context: BlockBuildContext = {
       inlineContext: void 0,
       locator,
       structure: blockScanner,
-      cursor: new InlineRegionCursor(regions),
+      cursor: void 0,
       profile: profile.inline,
       source,
     };
 
     const start = locator.locationAt(0);
-    const children = blockScanner.records.map((block) => (
-      buildBlockNode<TopLevelContent>(block.tokenStart, context)
-    ));
+    const records = blockScanner.records;
+    const children = new Array<TopLevelContent>(records.length);
+    for (let index = 0; index < records.length; index++) {
+      children[index] = buildBlockNode<TopLevelContent>(records[index].tokenStart, context);
+    }
 
     return {
       type: "root",

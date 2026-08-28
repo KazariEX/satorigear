@@ -11,7 +11,7 @@ export interface BlockBuildContext {
   inlineContext: InlineBuildContext | undefined;
   locator: SourceLocator;
   structure: BlockStructure;
-  cursor: InlineRegionCursor;
+  cursor: InlineRegionCursor | undefined;
   profile: InlineProfile;
   source: string;
 }
