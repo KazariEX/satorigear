@@ -20,18 +20,8 @@ for (const corpus of corpora) {
   summary(() => {
     const suffix = corpusLabel(corpus);
     for (const engine of engines) {
-      // This measures public API latency; lazy libraries may defer most tree construction.
-      bench(`${engine.name}, parse only (${suffix})`, () => {
-        parseCorpus(engine, corpus, false);
-      });
-    }
-  });
-  summary(() => {
-    const suffix = corpusLabel(corpus);
-    for (const engine of engines) {
-      // This is the comparable string-to-consumable-MDAST measurement.
-      bench(`${engine.name}, fully materialized (${suffix})`, () => {
-        parseCorpus(engine, corpus, true);
+      bench(`${engine.name}, parse (${suffix})`, () => {
+        parseCorpus(engine, corpus);
       });
     }
   });

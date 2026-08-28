@@ -2,38 +2,9 @@ import { do_not_optimize } from "mitata";
 import type { BenchmarkCorpus } from "./corpus.ts";
 import type { Engine } from "./engines.ts";
 
-export function fullyRead(node: unknown): number {
-  if (!node || typeof node !== "object") {
-    return 0;
-  }
-
-  const record = node as Record<string, unknown>;
-  let fields = 1;
-  for (const key in record) {
-    const value = record[key];
-    fields++;
-    if (key === "children" && Array.isArray(value)) {
-      for (const child of value) {
-        fields += fullyRead(child);
-      }
-    }
-  }
-  return fields;
-}
-
-export function parseCorpus(engine: Engine, corpus: BenchmarkCorpus, materialize: boolean): void {
-  if (materialize) {
-    for (const source of corpus.documents) {
-      const tree = engine.parse(source);
-      do_not_optimize(fullyRead(tree));
-      do_not_optimize(tree);
-    }
-  }
-  else {
-    for (const source of corpus.documents) {
-      const tree = engine.parse(source);
-      do_not_optimize(tree);
-    }
+export function parseCorpus(engine: Engine, corpus: BenchmarkCorpus): void {
+  for (const source of corpus.documents) {
+    do_not_optimize(engine.parse(source));
   }
 }
 

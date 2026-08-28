@@ -1,6 +1,6 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { createParser } from "satorigear";
-import { markdownToMdast } from "satteri";
+import { markdownToMdast, type TreeOptions } from "satteri";
 
 export interface Engine {
   name: string;
@@ -16,7 +16,7 @@ function selectEngines(engines: readonly Engine[]): readonly Engine[] {
 
 export function createCommonmarkEngines(): readonly Engine[] {
   const satorigear = createParser();
-  const satteriOptions = {
+  const satteriOptions: TreeOptions = {
     features: {
       frontmatter: false,
       gfm: false,
@@ -40,7 +40,7 @@ export function createFeatureEngines(): readonly Engine[] {
       taskList: true,
     },
   });
-  const satteriOptions = {
+  const satteriOptions: TreeOptions = {
     features: {
       frontmatter: true,
       gfm: true,

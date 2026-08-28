@@ -4,12 +4,10 @@ import { join } from "node:path";
 import { type BenchmarkCorpus, load } from "../test/benchmark/helpers/corpus.ts";
 import { corpusLabel } from "../test/benchmark/helpers/utils.ts";
 
-const modes = ["parse only", "fully materialized"] as const;
 const engines = ["satorigear", "satteri", "remark"] as const;
 const comparedEngines = ["satorigear", "satteri"] as const;
 const rounds = 5;
 
-type BenchmarkMode = typeof modes[number];
 type Engine = typeof engines[number];
 
 interface MitataRun {
@@ -129,24 +127,23 @@ function formatThroughput(bytes: number, nanoseconds: number): string {
   return `${throughput.toFixed(digits)} MiB/s`;
 }
 
-function benchmarkName(engine: Engine, mode: BenchmarkMode, corpus: BenchmarkCorpus): string {
-  return `${engine}, ${mode} (${corpusLabel(corpus)})`;
+function benchmarkName(engine: Engine, corpus: BenchmarkCorpus): string {
+  return `${engine}, parse (${corpusLabel(corpus)})`;
 }
 
 function renderCorpus(
   rounds: readonly BenchmarkRound[],
-  mode: BenchmarkMode,
   corpus: BenchmarkCorpus,
 ): string {
-  const baselineName = benchmarkName("satorigear", mode, corpus);
+  const baselineName = benchmarkName("satorigear", corpus);
   const lines = [
-    `##### ${corpusLabel(corpus)}`,
+    `#### ${corpusLabel(corpus)}`,
     "",
     "| Engine | Mean time | vs. SatoriGear | Throughput |",
     "| --- | ---: | ---: | ---: |",
   ];
   for (const engine of engines) {
-    const name = benchmarkName(engine, mode, corpus);
+    const name = benchmarkName(engine, corpus);
     const result = benchmarkResult(rounds, name, baselineName);
     if (!result) {
       continue;
@@ -164,29 +161,23 @@ function renderCorpus(
 
 function renderProfile(
   rounds: readonly BenchmarkRound[],
-  mode: BenchmarkMode,
   profile: BenchmarkCorpus["profile"],
 ): string {
   return corpora
     .filter((corpus) => corpus.profile === profile)
-    .map((corpus) => renderCorpus(rounds, mode, corpus))
+    .map((corpus) => renderCorpus(rounds, corpus))
     .join("\n\n");
 }
 
-function section(rounds: readonly BenchmarkRound[], mode: BenchmarkMode): string {
+function section(rounds: readonly BenchmarkRound[]): string {
   return [
-    "<details>",
-    `<summary><strong>${mode === "parse only" ? "Parse only" : "Fully materialized"}</strong></summary>`,
+    "### CommonMark",
     "",
-    "#### CommonMark",
+    renderProfile(rounds, "commonmark"),
     "",
-    renderProfile(rounds, mode, "commonmark"),
+    "### Built-in features",
     "",
-    "#### Built-in features",
-    "",
-    renderProfile(rounds, mode, "features"),
-    "",
-    "</details>",
+    renderProfile(rounds, "features"),
   ].join("\n");
 }
 
@@ -241,7 +232,5 @@ readme = replaceSection(
   "environment",
   `> Median of ${rounds} isolated mean-time runs at commit [\`${commit.slice(0, 7)}\`](https://github.com/KazariEX/satorigear/commit/${commit}) on ${cpu.name}, ${runtime} ${version}, ${arch}. SatoriGear and Sätteri run in paired AB/BA order; comparisons are normalized to SatoriGear (↑ faster, ↓ slower). Lower time and higher throughput are better.`,
 );
-for (const mode of modes) {
-  readme = replaceSection(readme, mode, section(times, mode));
-}
+readme = replaceSection(readme, "parse", section(times));
 writeFileSync(readmePath, readme);
