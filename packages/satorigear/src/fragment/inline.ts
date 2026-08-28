@@ -30,8 +30,6 @@ export interface InlineFragment {
 interface InlineOutput extends InlineFragment {
   // The cursor bounds source text that remains implicit between semantic tokens.
   cursor: number;
-  // A negative end invalidates the pending gap; its start is the cursor.
-  gapEnd: number;
   // Cache the last child when it is text so the hot append path does not retrieve
   // heterogeneous node shapes through `.at(-1)` and force the optimized path to exit.
   lastText: Text | undefined;
@@ -45,7 +43,6 @@ function createInlineOutput(children: PhrasingContent[], cursor: number): Inline
   return {
     children,
     cursor,
-    gapEnd: -1,
     lastText: void 0,
     textEnd: -1,
     trailingSpaces: 0,
@@ -157,35 +154,30 @@ function appendGap(
   appendText(output, value, sourceSpan.start, sourceSpan.end, context);
 }
 
-function flushGap(output: InlineOutput, context: InlineBuildContext): void {
-  const gapEnd = output.gapEnd;
-  if (gapEnd >= 0) {
-    output.gapEnd = -1;
-    appendGap(output, context, output.cursor, gapEnd);
-  }
-}
-
 function appendToken(
   output: InlineOutput,
   context: InlineBuildContext,
   tokenIndex: number,
-  sourceSpan: SourceSpan,
+  viewStart: number,
+  viewEnd: number,
   build: InlineLeafBuilder | InlineTextBuilder,
   textToken: boolean,
   syntaxNewline: boolean,
 ): void {
+  const cursor = output.cursor;
   // Most tokens only flush the preceding source gap and append their node.
   if (!syntaxNewline) {
-    flushGap(output, context);
+    if (viewStart > cursor) {
+      appendGap(output, context, cursor, viewStart);
+    }
   }
   else {
     // Syntax newlines additionally trim line suffixes and repair mapped boundaries.
     const viewLineStart = inlineTokenData(context.tokens, tokenIndex);
     const viewLineEndingStart = lineEndingStart(context.view.text, viewLineStart);
-    if (output.gapEnd >= 0) {
-      output.gapEnd = -1;
-      if (viewLineEndingStart > output.cursor) {
-        appendGap(output, context, output.cursor, viewLineEndingStart);
+    if (viewStart > cursor) {
+      if (viewLineEndingStart > cursor) {
+        appendGap(output, context, cursor, viewLineEndingStart);
       }
     }
     // Markdown syntax newlines point past stripped container prefixes,
@@ -199,9 +191,10 @@ function appendToken(
       );
       return;
     }
-    sourceSpan.start = context.view.mapPoint(viewLineEndingStart);
+    viewStart = viewLineEndingStart;
     trimTrailingText(output);
   }
+  const sourceSpan = context.view.mapSpan(viewStart, viewEnd);
   if (textToken) {
     appendText(
       output,
@@ -242,11 +235,10 @@ function appendRange(
     const semanticCloseKind = profile.syntaxByKind[syntaxOffset];
     const build = profile.buildByKind[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
-    if (childStart > output.cursor) {
-      output.gapEnd = childStart;
-    }
     if (semanticCloseKind !== void 0) {
-      flushGap(output, context);
+      if (childStart > output.cursor) {
+        appendGap(output, context, output.cursor, childStart);
+      }
       finishText(output, context);
       index = appendSemantic(
         index,
@@ -261,9 +253,9 @@ function appendRange(
       continue;
     }
     const childEnd = inlineTokenEnd(context.tokens, index);
-    const sourceSpan = context.view.mapSpan(childStart, childEnd);
     if (profile.decorateByKind[kind]) {
       finishText(output, context);
+      const sourceSpan = context.view.mapSpan(childStart, childEnd);
       if ((build as InlineTokenDecorator)(index, sourceSpan, context, output)) {
         // Applied decorators may mutate the exposed child list, so refresh the cached projection.
         const previous = output.children.at(-1);
@@ -278,7 +270,8 @@ function appendRange(
         output,
         context,
         index,
-        sourceSpan,
+        childStart,
+        childEnd,
         build as InlineLeafBuilder | InlineTextBuilder,
         profile.textByKind[kind],
         // Distinguishes lexer-emitted newlines from text that merely decodes to "\n".
