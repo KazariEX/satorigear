@@ -45,7 +45,7 @@ export class BlockLines implements SourceLocator {
       sourceLength,
       Math.min((source.length + 15) >>> 4, 16384),
     );
-    BlockLines.#scan(source, lines);
+    lines.#fieldLength = BlockLines.#scan(source, lines);
     if (start !== 0) {
       lines.#shiftPositions(0, start);
     }
@@ -54,11 +54,9 @@ export class BlockLines implements SourceLocator {
 
   /**
    * Fills packed physical lines from a zero-based source segment.
-   *
-   * Range setup and coordinate rebasing remain in {@link BlockLines.from}, outside
-   * this hot loop.
+   * Range setup and coordinate rebasing remain in {@link BlockLines.from}, outside this hot loop.
    */
-  static #scan(source: string, lines: BlockLines): void {
+  static #scan(source: string, lines: BlockLines): number {
     const limit = source.length;
     let start = 0;
     let lineFeed = source.indexOf("\n");
@@ -95,7 +93,7 @@ export class BlockLines implements SourceLocator {
       field += BlockLineField.Stride;
       start = next;
     }
-    lines.#fieldLength = field;
+    return field;
   }
 
   get length(): number {
