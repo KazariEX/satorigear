@@ -1,4 +1,4 @@
-import type { Node, Root, TopLevelContent } from "mdast";
+import type { Root, TopLevelContent } from "mdast";
 import {
   type BlockRecord,
   type BlockScanChange,
@@ -8,9 +8,8 @@ import {
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { InlineRegionCursor, type ResolvedInlineRegion } from "./inline/region.ts";
 import { resolveInlineRegions, SyntaxState } from "./syntax-state.ts";
-import type { SpannedValue } from "./fragment/node.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
-import type { SourceLocation, SourceLocator, SourceSpan } from "./source-view.ts";
+import type { SourceLocation, SourceSpan } from "./source-view.ts";
 
 export interface TextEdit extends SourceSpan {
   text: string;
@@ -56,31 +55,13 @@ function applyEdits(source: string, edits: readonly TextEdit[]): SourceChange {
   };
 }
 
-function materializeNode(
-  value: SpannedValue,
-  locator: SourceLocator,
-): void {
-  const { position, children } = value;
-  const result = position as unknown as NonNullable<Node["position"]>;
-  result.start = locator.locationAt(position.start);
-  if (children) {
-    for (const child of children) {
-      materializeNode(child, locator);
-    }
-  }
-  result.end = locator.locationAt(position.end);
-}
-
 function buildTreeBlock(
   record: BlockRecord,
   regions: readonly ResolvedInlineRegion[],
   context: BlockBuildContext,
-  locator: SourceLocator,
 ): TopLevelContent {
   context.cursor.reset(regions);
-  const node = buildBlockNode<TopLevelContent>(record.tokenStart, context);
-  materializeNode(node, locator);
-  return node as unknown as TopLevelContent;
+  return buildBlockNode<TopLevelContent>(record.tokenStart, context);
 }
 
 function shiftLocation(location: SourceLocation, shift: PositionShift): void {
@@ -146,17 +127,18 @@ export class DocumentImpl implements Document {
   #updateTree(invalidatedBlocks: readonly number[], change?: BlockScanChange): void {
     const records = this.#blockScanner.records;
     const regionsByBlock = this.#syntaxState.regionsByBlock();
+    const locator = this.#blockScanner.locator();
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.
     const context: BlockBuildContext = {
       inlineContext: void 0,
+      locator,
       structure: this.#blockScanner,
       cursor: new InlineRegionCursor(),
       profile: this.#profile.inline,
       source: this.#source,
     };
 
-    const locator = this.#blockScanner.locator();
     const root = this.#tree;
     const start = locator.locationAt(0);
     const children = root.children;
@@ -189,10 +171,10 @@ export class DocumentImpl implements Document {
       invalidatedBlocks[invalidatedIndex] < rebuildStart
     ) {
       const index = invalidatedBlocks[invalidatedIndex++];
-      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locator);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context);
     }
     for (let index = rebuildStart; index < newRebuildEnd; index++) {
-      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locator);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context);
     }
 
     // 3. Reconcile the retained suffix. Stable roots share one position shift;
@@ -200,7 +182,7 @@ export class DocumentImpl implements Document {
     let positionShift: PositionShift | undefined;
     for (let index = newRebuildEnd; index < records.length; index++) {
       if (invalidatedBlocks[invalidatedIndex] === index) {
-        children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locator);
+        children[index] = buildTreeBlock(records[index], regionsByBlock[index], context);
         invalidatedIndex++;
         continue;
       }
@@ -225,7 +207,7 @@ export class DocumentImpl implements Document {
     }
     while (invalidatedIndex < invalidatedBlocks.length) {
       const index = invalidatedBlocks[invalidatedIndex++];
-      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context, locator);
+      children[index] = buildTreeBlock(records[index], regionsByBlock[index], context);
     }
     root.position = {
       start,
@@ -241,21 +223,20 @@ export class DocumentImpl implements Document {
     blockScanner.scan(source);
 
     const regions = resolveInlineRegions(source, profile.inline, blockScanner);
+    const locator = blockScanner.locator();
     const context: BlockBuildContext = {
       inlineContext: void 0,
+      locator,
       structure: blockScanner,
       cursor: new InlineRegionCursor(regions),
       profile: profile.inline,
       source,
     };
 
-    const locator = blockScanner.locator();
     const start = locator.locationAt(0);
-    const children = blockScanner.records.map((block) => {
-      const node = buildBlockNode<TopLevelContent>(block.tokenStart, context);
-      materializeNode(node, locator);
-      return node as unknown as TopLevelContent;
-    });
+    const children = blockScanner.records.map((block) => (
+      buildBlockNode<TopLevelContent>(block.tokenStart, context)
+    ));
 
     return {
       type: "root",

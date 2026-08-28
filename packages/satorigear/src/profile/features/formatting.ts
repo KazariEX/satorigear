@@ -70,8 +70,8 @@ export interface StrikethroughOptions {
 
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {
   const builds: InlineBuildRule[] = [
-    { kind: "leaf", token: InlineKind.AsteriskRun, build: buildInlineText },
-    { kind: "leaf", token: InlineKind.UnderscoreRun, build: buildInlineText },
+    { kind: "text", token: InlineKind.AsteriskRun, build: buildInlineText },
+    { kind: "text", token: InlineKind.UnderscoreRun, build: buildInlineText },
     emphasisPair,
     strongPair,
   ];
@@ -86,7 +86,7 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
 
   if (strikethroughOptions) {
     builds.push(
-      { kind: "leaf", token: InlineKind.TildeRun, build: buildInlineText },
+      { kind: "text", token: InlineKind.TildeRun, build: buildInlineText },
       deletePair,
     );
     delimiters.push(

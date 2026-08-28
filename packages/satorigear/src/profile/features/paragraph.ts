@@ -1,6 +1,8 @@
+import type { Paragraph } from "mdast";
 import { indentOffset, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
+import { buildInlineFragment } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import { setextMarkerAt } from "./heading.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -66,16 +68,24 @@ export const feature: SyntaxFeature = {
           close: BlockKind.ParagraphClose,
         },
         inlineContent: true,
-        build(tokenStart, context, inline) {
-          const children = inline!.children;
-          return {
+        build(tokenStart, context) {
+          const inline = buildInlineFragment(
+            tokenStart,
+            BlockRule.Paragraph,
+            context,
+          );
+          const result: Paragraph = {
             type: "paragraph",
-            children,
+            children: inline.children,
             position: {
-              start: firstChildStart(children),
-              end: blockEnd(tokenStart, context),
+              start: firstChildStart(inline.children),
+              end: context.locator.locationAt(blockEnd(tokenStart, context)),
             },
           };
+          if (inline.attributes) {
+            result.attributes = inline.attributes;
+          }
+          return result;
         },
       },
     ],

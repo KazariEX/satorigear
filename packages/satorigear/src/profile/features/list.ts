@@ -2,8 +2,8 @@ import type { List, ListItem } from "mdast";
 import { BlockLines, contentAfterColumns, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import { blockEnd, type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
-import { lastChildEnd, type SpannedNode } from "../../fragment/node.ts";
+import { type BlockNodeBuilder, buildBlockChildren, buildBlockNode } from "../../fragment/block.ts";
+import { lastChildEnd } from "../../fragment/node.ts";
 import { isThematicBreak } from "./break.ts";
 import type { BlockStart } from "../../block/profile.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -223,6 +223,7 @@ function hasTaskListContent(
 const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const markerKind = tokens.kind(tokenStart);
+  const start = context.locator.locationAt(tokens.start(tokenStart));
   const children = buildBlockChildren(tokenStart, context);
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return {
@@ -233,24 +234,21 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
       : markerKind === BlockKind.UncheckedTaskItemOpen ? false : null,
     children,
     position: {
-      start: tokens.start(tokenStart),
-      end: lastChildEnd(children, blockEnd(tokenStart, context)),
+      start,
+      end: lastChildEnd(children) ?? context.locator.locationAt(tokens.contentEnd(close)),
     },
   };
 };
 
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context) => {
-    const structure = context.structure;
-    const tokens = structure.tokens;
-    const items: SpannedNode<ListItem>[] = [];
+    const tokens = context.structure.tokens;
+    const start = context.locator.locationAt(tokens.start(tokenStart));
+    const items: ListItem[] = [];
     const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-    for (let child = tokenStart + 1; child < close;) {
-      const length = tokens.nodeLength(child);
-      if (length > 0 && structure.ruleOf(child).rule === BlockRule.ListItem) {
-        items.push(buildListItem(child, context));
-      }
-      child += length || 1;
+    // Indexed list roots contain only direct item frames, so node lengths jump between siblings.
+    for (let child = tokenStart + 1; child < close; child += tokens.nodeLength(child)) {
+      items.push(buildBlockNode(child, context));
     }
     return {
       type: "list",
@@ -259,8 +257,8 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
       spread: tokens.value<boolean>(close) === true,
       children: items,
       position: {
-        start: tokens.start(tokenStart),
-        end: lastChildEnd(items, tokens.end(tokenStart)),
+        start,
+        end: lastChildEnd(items) ?? context.locator.locationAt(tokens.end(tokenStart)),
       },
     };
   };
@@ -412,6 +410,7 @@ export function feature(taskList = false): SyntaxFeature {
             ],
             close: BlockKind.ListItemClose,
           },
+          build: buildListItem,
         },
         {
           rule: BlockRule.UnorderedList,

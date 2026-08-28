@@ -12,7 +12,6 @@ import {
 import { normalizeAssociationLabel } from "../utils.ts";
 import { buildDecodedInlineText, buildInlineText, semanticText } from "./text.ts";
 import type { InlineBuildContext, InlineNodeBuilder } from "../../fragment/inline.ts";
-import type { SpannedNode } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface Reference {
@@ -228,7 +227,7 @@ function reference(
   };
 }
 
-function phrasingText(children: readonly SpannedNode<PhrasingContent>[]): string {
+function phrasingText(children: readonly PhrasingContent[]): string {
   let result = "";
   for (const child of children) {
     if (child.type === "text" || child.type === "inlineCode" || child.type === "html") {
@@ -369,17 +368,28 @@ export const feature: SyntaxFeature = {
               {
                 type: "text",
                 value: label,
-                position: { start: sourceSpan.start + 1, end: sourceSpan.end - 1 },
+                position: {
+                  start: {
+                    line: sourceSpan.start.line,
+                    column: sourceSpan.start.column + 1,
+                    offset: sourceSpan.start.offset + 1,
+                  },
+                  end: {
+                    line: sourceSpan.end.line,
+                    column: sourceSpan.end.column - 1,
+                    offset: sourceSpan.end.offset - 1,
+                  },
+                },
               },
             ],
             position: sourceSpan,
           };
         },
       },
-      { kind: "leaf", token: InlineKind.BracketOpen, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.ImageOpen, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.LinkTail, build: buildDecodedInlineText },
-      { kind: "leaf", token: InlineKind.BracketClose, build: buildInlineText },
+      { kind: "text", token: InlineKind.BracketOpen, build: buildInlineText },
+      { kind: "text", token: InlineKind.ImageOpen, build: buildInlineText },
+      { kind: "text", token: InlineKind.LinkTail, build: buildDecodedInlineText },
+      { kind: "text", token: InlineKind.BracketClose, build: buildInlineText },
     ],
   },
 };

@@ -93,10 +93,10 @@ export const feature: SyntaxFeature = {
           return {
             type: "html",
             value: html,
-            position: {
-              start: offset,
-              end: html.endsWith("\n") ? end : blockEnd(tokenStart, context),
-            },
+            position: context.locator.positionAt(
+              offset,
+              html.endsWith("\n") ? end : blockEnd(tokenStart, context),
+            ),
           };
         },
       },

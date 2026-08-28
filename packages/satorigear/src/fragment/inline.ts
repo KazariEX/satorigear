@@ -11,46 +11,65 @@ import {
 } from "../inline/tokens.ts";
 import type { BlockRule } from "../constants/block.ts";
 import type { InlineProfile } from "../inline/profile.ts";
-import type { SourceSpan, SourceView } from "../source-view.ts";
+import type { SourceLocator, SourcePosition, SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
-import type { SpannedNode } from "./node.ts";
+
+type InlineNonText = Exclude<PhrasingContent, Text>;
 
 export interface InlineBuildContext {
   blockRule: BlockRule;
+  locator: SourceLocator;
   tokens: InlineTokenStream;
   view: SourceView;
 }
 
 export interface InlineFragment {
-  children: SpannedNode<PhrasingContent>[];
+  children: PhrasingContent[];
 }
 
 interface InlineOutput extends InlineFragment {
   // The cursor bounds source text that remains implicit between semantic tokens.
   cursor: number;
+  // A negative end invalidates the pending gap; its start is the cursor.
   gapEnd: number;
-  // A negative start invalidates the pending gap and its end.
-  gapStart: number;
   // Cache the last child when it is text so the hot append path does not retrieve
   // heterogeneous node shapes through `.at(-1)` and force the optimized path to exit.
-  lastText: SpannedNode<Text> | undefined;
-  // -1 defers counting trailing spaces/tabs to one final scan; otherwise this is the exact count.
+  lastText: Text | undefined;
+  // A pending text run shares its start location until resolving the final end once.
+  textEnd: number;
+  // Maintain the suffix length while appending so trimming never scans merged text.
   trailingSpaces: number;
+}
+
+function createInlineOutput(children: PhrasingContent[], cursor: number): InlineOutput {
+  return {
+    children,
+    cursor,
+    gapEnd: -1,
+    lastText: void 0,
+    textEnd: -1,
+    trailingSpaces: 0,
+  };
 }
 
 export type InlineLeafBuilder = (
   tokenIndex: number,
-  sourceSpan: SourceSpan,
+  position: SourcePosition,
   context: InlineBuildContext,
-) => SpannedNode<PhrasingContent>;
+) => InlineNonText;
+
+export type InlineTextBuilder = (
+  tokenIndex: number,
+  context: InlineBuildContext,
+) => string;
 
 export type InlineNodeBuilder = (
   openToken: number,
   closeToken: number,
-  sourceSpan: SourceSpan,
-  children: SpannedNode<PhrasingContent>[],
+  position: SourcePosition,
+  children: PhrasingContent[],
   context: InlineBuildContext,
-) => SpannedNode<PhrasingContent>;
+) => InlineNonText;
 
 export type InlineTokenDecorator = (
   tokenIndex: number,
@@ -59,9 +78,11 @@ export type InlineTokenDecorator = (
   target: InlineFragment,
 ) => boolean;
 
-type InlineTokenHandler = InlineLeafBuilder | InlineTokenDecorator;
-
-export type InlineBuilder = InlineNodeBuilder | InlineTokenHandler;
+export type InlineBuilder =
+  | InlineLeafBuilder
+  | InlineNodeBuilder
+  | InlineTextBuilder
+  | InlineTokenDecorator;
 
 function lineEndingStart(source: string, lineStart: number): number {
   return source.charCodeAt(lineStart - 1) === Character.LineFeed &&
@@ -70,7 +91,25 @@ function lineEndingStart(source: string, lineStart: number): number {
     : lineStart - 1;
 }
 
-function countTrailingSpaces(value: string): number {
+function trimTrailingText(output: InlineOutput): number {
+  const text = output.lastText;
+  const removed = text ? output.trailingSpaces : 0;
+  if (removed > 0) {
+    text!.value = text!.value.slice(0, -removed);
+    output.trailingSpaces = 0;
+  }
+  return removed;
+}
+
+function appendText(
+  output: InlineOutput,
+  value: string,
+  start: number,
+  end: number,
+  context: InlineBuildContext,
+): void {
+  const previousText = output.lastText;
+  const mergeForward = previousText !== void 0 && !("attributes" in previousText);
   let offset = value.length;
   while (offset > 0) {
     const code = value.charCodeAt(offset - 1);
@@ -79,44 +118,31 @@ function countTrailingSpaces(value: string): number {
     }
     offset--;
   }
-  return value.length - offset;
-}
-
-function appendText(output: InlineOutput, value: string, span: SourceSpan): void {
-  const previousText = output.lastText;
-  const mergeForward = previousText !== void 0 && !("attributes" in previousText);
-  if (output.trailingSpaces >= 0) {
-    const trailingSpaces = countTrailingSpaces(value);
-    output.trailingSpaces = (
-      trailingSpaces === value.length && mergeForward
-        ? output.trailingSpaces + trailingSpaces
-        : trailingSpaces
-    );
-  }
+  const trailingSpaces = value.length - offset;
+  output.trailingSpaces = trailingSpaces === value.length && mergeForward
+    ? output.trailingSpaces + trailingSpaces
+    : trailingSpaces;
   if (mergeForward) {
-    previousText.value += value;
-    previousText.position.end = span.end;
+    previousText!.value += value;
   }
   else {
-    output.children.push(
-      output.lastText = { type: "text", value, position: span },
-    );
+    const startLocation = context.locator.locationAt(start);
+    const text: Text = {
+      type: "text",
+      value,
+      position: { start: startLocation, end: startLocation },
+    };
+    output.children.push(text);
+    output.lastText = text;
   }
+  output.textEnd = end;
 }
 
-function appendChild(
-  output: InlineOutput,
-  value: SpannedNode<PhrasingContent>,
-): void {
-  if (value.type === "text") {
-    appendText(output, value.value, value.position);
-  }
-  else {
-    output.children.push(value);
-    output.lastText = void 0;
-    if (output.trailingSpaces > 0) {
-      output.trailingSpaces = 0;
-    }
+function finishText(output: InlineOutput, context: InlineBuildContext): void {
+  const end = output.textEnd;
+  if (end >= 0) {
+    output.lastText!.position!.end = context.locator.locationAt(end);
+    output.textEnd = -1;
   }
 }
 
@@ -126,66 +152,74 @@ function appendGap(
   start: number,
   end: number,
 ): void {
-  appendText(
-    output,
-    context.view.text.slice(start, end),
-    context.view.mapSpan(start, end),
-  );
+  const value = context.view.text.slice(start, end);
+  const sourceSpan = context.view.mapSpan(start, end);
+  appendText(output, value, sourceSpan.start, sourceSpan.end, context);
+}
+
+function flushGap(output: InlineOutput, context: InlineBuildContext): void {
+  const gapEnd = output.gapEnd;
+  if (gapEnd >= 0) {
+    output.gapEnd = -1;
+    appendGap(output, context, output.cursor, gapEnd);
+  }
 }
 
 function appendToken(
   output: InlineOutput,
   context: InlineBuildContext,
   tokenIndex: number,
-  value: SpannedNode<PhrasingContent>,
+  sourceSpan: SourceSpan,
+  build: InlineLeafBuilder | InlineTextBuilder,
+  textToken: boolean,
   syntaxNewline: boolean,
 ): void {
   // Most tokens only flush the preceding source gap and append their node.
   if (!syntaxNewline) {
-    if (output.gapStart >= 0) {
-      const gapStart = output.gapStart;
-      output.gapStart = -1;
-      if (output.gapEnd > gapStart) {
-        appendGap(output, context, gapStart, output.gapEnd);
+    flushGap(output, context);
+  }
+  else {
+    // Syntax newlines additionally trim line suffixes and repair mapped boundaries.
+    const viewLineStart = inlineTokenData(context.tokens, tokenIndex);
+    const viewLineEndingStart = lineEndingStart(context.view.text, viewLineStart);
+    if (output.gapEnd >= 0) {
+      output.gapEnd = -1;
+      if (viewLineEndingStart > output.cursor) {
+        appendGap(output, context, output.cursor, viewLineEndingStart);
       }
     }
-    appendChild(output, value);
-    return;
-  }
-
-  // Syntax newlines additionally trim line suffixes and repair mapped boundaries.
-  const viewLineStart = inlineTokenData(context.tokens, tokenIndex);
-  const viewLineEndingStart = lineEndingStart(context.view.text, viewLineStart);
-  if (output.gapStart >= 0) {
-    const gapStart = output.gapStart;
-    output.gapStart = -1;
-    if (viewLineEndingStart > gapStart) {
-      appendGap(output, context, gapStart, viewLineEndingStart);
-    }
-  }
-  // Markdown syntax newlines point past stripped container prefixes,
-  // while mdast spans include the physical line ending.
-  const previous = output.children.at(-1);
-  if (previous?.type === "break") {
-    // At a stripped container boundary, the left side maps before the prefix while
-    // the right side maps after it. A hard break must span to the former.
-    previous.position.end = context.view.mapPoint(viewLineStart - 1) + 1;
-    return;
-  }
-  value.position.start = context.view.mapPoint(viewLineEndingStart);
-  if (previous?.type === "text") {
-    if (output.trailingSpaces < 0) {
-      previous.value = previous.value.slice(
-        0,
-        previous.value.length - countTrailingSpaces(previous.value),
+    // Markdown syntax newlines point past stripped container prefixes,
+    // while mdast spans include the physical line ending.
+    const previous = output.children.at(-1);
+    if (previous?.type === "break") {
+      // At a stripped container boundary, the left side maps before the prefix while
+      // the right side maps after it. A hard break must span to the former.
+      previous.position!.end = context.locator.locationAt(
+        context.view.mapPoint(viewLineStart - 1) + 1,
       );
+      return;
     }
-    else if (output.trailingSpaces > 0) {
-      previous.value = previous.value.slice(0, -output.trailingSpaces);
-      output.trailingSpaces = 0;
-    }
+    sourceSpan.start = context.view.mapPoint(viewLineEndingStart);
+    trimTrailingText(output);
   }
-  appendChild(output, value);
+  if (textToken) {
+    appendText(
+      output,
+      (build as InlineTextBuilder)(tokenIndex, context),
+      sourceSpan.start,
+      sourceSpan.end,
+      context,
+    );
+  }
+  else {
+    finishText(output, context);
+    output.children.push((build as InlineLeafBuilder)(
+      tokenIndex,
+      context.locator.positionAt(sourceSpan.start, sourceSpan.end),
+      context,
+    ));
+    output.lastText = void 0;
+  }
 }
 
 // Resolution has already made semantic pairs unambiguous, so projection can consume that stream
@@ -209,10 +243,11 @@ function appendRange(
     const build = profile.buildByKind[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
     if (childStart > output.cursor) {
-      output.gapStart = output.cursor;
       output.gapEnd = childStart;
     }
     if (semanticCloseKind !== void 0) {
+      flushGap(output, context);
+      finishText(output, context);
       index = appendSemantic(
         index,
         endToken,
@@ -226,17 +261,15 @@ function appendRange(
       continue;
     }
     const childEnd = inlineTokenEnd(context.tokens, index);
-    const value = (build as InlineTokenHandler)(
-      index,
-      context.view.mapSpan(childStart, childEnd),
-      context,
-      output,
-    );
-    if (typeof value === "boolean") {
-      // Decorators may mutate the exposed child list, so refresh the cached projection.
-      const previous = output.children.at(-1);
-      output.lastText = previous?.type === "text" ? previous : void 0;
-      if (value) {
+    const sourceSpan = context.view.mapSpan(childStart, childEnd);
+    if (profile.decorateByKind[kind]) {
+      finishText(output, context);
+      if ((build as InlineTokenDecorator)(index, sourceSpan, context, output)) {
+        // Applied decorators may mutate the exposed child list, so refresh the cached projection.
+        const previous = output.children.at(-1);
+        output.lastText = previous?.type === "text"
+          ? previous as Text
+          : void 0;
         output.cursor = childEnd;
       }
     }
@@ -245,7 +278,9 @@ function appendRange(
         output,
         context,
         index,
-        value,
+        sourceSpan,
+        build as InlineLeafBuilder | InlineTextBuilder,
+        profile.textByKind[kind],
         // Distinguishes lexer-emitted newlines from text that merely decodes to "\n".
         kind === InlineKind.Newline,
       );
@@ -259,9 +294,10 @@ function appendRange(
       appendGap(output, context, output.cursor, contentEnd);
     }
   }
-  else if (closeKind === InlineKind.None && context.view.text.length > output.cursor) {
+  else if (context.view.text.length > output.cursor) {
     appendGap(output, context, output.cursor, context.view.text.length);
   }
+  finishText(output, context);
   return index;
 }
 
@@ -275,24 +311,22 @@ function appendSemantic(
   closeKind: number,
   contentOpenKind: number,
 ): number {
+  const childStart = inlineTokenStart(context.tokens, openToken);
+  const positionStart = context.locator.locationAt(context.view.mapPoint(childStart));
   let closeToken = openToken;
   let next = openToken + 1;
-  const children: SpannedNode<PhrasingContent>[] = [];
+  const children: PhrasingContent[] = [];
   if (
     contentOpenKind === 0 ||
     next < endToken && inlineTokenKind(context.tokens, next) === contentOpenKind
   ) {
-    const childOutput: InlineOutput = {
+    const childOutput = createInlineOutput(
       children,
-      cursor: inlineTokenEnd(
+      inlineTokenEnd(
         context.tokens,
         contentOpenKind === 0 ? openToken : next++,
       ),
-      gapEnd: -1,
-      gapStart: -1,
-      lastText: void 0,
-      trailingSpaces: output.trailingSpaces < 0 ? -1 : 0,
-    };
+    );
     closeToken = appendRange(
       next,
       endToken,
@@ -302,16 +336,20 @@ function appendSemantic(
       closeKind,
     );
   }
-  const childStart = inlineTokenStart(context.tokens, openToken);
   const childEnd = inlineTokenEnd(context.tokens, closeToken);
+  const sourceSpan = context.view.mapSpan(childStart, childEnd);
   const value = build(
     openToken,
     closeToken,
-    context.view.mapSpan(childStart, childEnd),
+    {
+      start: positionStart,
+      end: context.locator.locationAt(sourceSpan.end),
+    },
     children,
     context,
   );
-  appendToken(output, context, openToken, value, false);
+  output.children.push(value);
+  output.lastText = void 0;
   output.cursor = childEnd;
   return closeToken + 1;
 }
@@ -330,20 +368,14 @@ export function buildInlineFragment(
   const { tokens, view } = region;
   const inlineContext = context.inlineContext ??= {
     blockRule,
+    locator: context.locator,
     tokens,
     view,
   };
   inlineContext.blockRule = blockRule;
   inlineContext.tokens = tokens;
   inlineContext.view = view;
-  const result: InlineOutput = {
-    children: [],
-    cursor: 0,
-    gapEnd: -1,
-    gapStart: -1,
-    lastText: void 0,
-    trailingSpaces: tokens.length && (view.text.includes("\n") || view.text.includes("\r")) ? 0 : -1,
-  };
+  const result = createInlineOutput([], 0);
   appendRange(
     0,
     inlineTokenCount(tokens),
@@ -353,12 +385,10 @@ export function buildInlineFragment(
   );
   const last = result.lastText;
   if (last) {
-    const removed = result.trailingSpaces < 0
-      ? countTrailingSpaces(last.value)
-      : result.trailingSpaces;
+    const removed = trimTrailingText(result);
     if (removed > 0) {
-      last.value = last.value.slice(0, -removed);
-      last.position.end -= removed;
+      last.position!.end.offset! -= removed;
+      last.position!.end.column -= removed;
     }
     if (!last.value) {
       result.children.pop();

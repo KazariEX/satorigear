@@ -7,6 +7,7 @@ import { Character } from "../../../constants/character.ts";
 import {
   type BlockNodeBuilder,
   buildBlockChildren,
+  buildBlockNode,
 } from "../../../fragment/block.ts";
 import { buildInlineFragment } from "../../../fragment/inline.ts";
 import {
@@ -20,7 +21,6 @@ import { codeFenceAt } from "../code.ts";
 import { buildFrontmatter } from "../frontmatter.ts";
 import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
 import type { BlockScanContext } from "../../../block/scanner.ts";
-import type { SpannedNode } from "../../../fragment/node.ts";
 
 interface BlockOpening {
   attributesEnd?: number;
@@ -333,15 +333,21 @@ function emitOpening(
   }
 }
 
-const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context, inline) => {
+const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+  const start = context.locator.locationAt(tokens.start(tokenStart));
+  const children = buildInlineFragment(
+    tokenStart,
+    BlockRule.BlockComponentLabel,
+    context,
+  ).children;
   return {
     type: "paragraph",
-    children: inline!.children,
+    children,
     position: {
-      start: tokens.start(tokenStart),
-      end: tokens.end(close),
+      start,
+      end: context.locator.locationAt(tokens.end(close)),
     },
   };
 };
@@ -423,13 +429,10 @@ export const blockRules: BlockFeature["rules"] = [
       const parsed = attributesToken !== void 0
         ? parseAttributes(context.source, tokens.start(attributesToken))
         : void 0;
-      const children: SpannedNode<RootContent>[] = [];
+      const start = context.locator.locationAt(tokens.start(tokenStart));
+      const children: RootContent[] = [];
       if (label) {
-        children.push(buildBlockLabel(
-          label,
-          context,
-          buildInlineFragment(label, BlockRule.BlockComponentLabel, context),
-        ));
+        children.push(buildBlockNode<Paragraph>(label, context));
       }
       children.push(...buildBlockChildren(tokenStart, context));
       const opening = tokens.text(context.source, tokenStart);
@@ -438,8 +441,8 @@ export const blockRules: BlockFeature["rules"] = [
         name: normalizeComponentName(opening.slice(opening.lastIndexOf(":") + 1).trim()),
         attributes: parsed?.attributes ?? {},
         position: {
-          start: tokens.start(tokenStart),
-          end: tokens.end(close),
+          start,
+          end: context.locator.locationAt(tokens.end(close)),
         },
         children,
       };
@@ -461,6 +464,7 @@ export const blockRules: BlockFeature["rules"] = [
       const parsed = attributesToken !== void 0
         ? parseAttributes(context.source, tokens.start(attributesToken))
         : void 0;
+      const start = context.locator.locationAt(tokens.start(tokenStart));
       const children = buildBlockChildren(tokenStart, context);
       return {
         type: "blockComponent",
@@ -471,8 +475,8 @@ export const blockRules: BlockFeature["rules"] = [
         },
         children,
         position: {
-          start: tokens.start(tokenStart),
-          end: tokens.end(close),
+          start,
+          end: context.locator.locationAt(tokens.end(close)),
         },
       };
     },

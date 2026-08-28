@@ -2,7 +2,7 @@ import type { Yaml } from "mdast";
 import { type BlockLines, normalizeLines } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
-import { blockEnd, type BlockNodeBuilder } from "../../fragment/block.ts";
+import { type BlockNodeBuilder, leafBlockPosition } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export type FrontmatterMarker = "+" | "-";
@@ -46,10 +46,7 @@ export const buildFrontmatter: BlockNodeBuilder<Yaml> = (tokenStart, context) =>
   return {
     type: "yaml",
     value,
-    position: {
-      start: tokens.start(tokenStart),
-      end: blockEnd(tokenStart, context),
-    },
+    position: leafBlockPosition(tokenStart, context),
   };
 };
 

@@ -42,12 +42,14 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
+          const start = context.locator.locationAt(tokens.start(tokenStart));
+          const children = buildBlockChildren(tokenStart, context);
           return {
             type: "blockquote",
-            children: buildBlockChildren(tokenStart, context),
+            children,
             position: {
-              start: tokens.start(tokenStart),
-              end: blockEnd(tokenStart, context),
+              start,
+              end: context.locator.locationAt(blockEnd(tokenStart, context)),
             },
           };
         },

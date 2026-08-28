@@ -9,7 +9,7 @@ import {
 import { appendLogicalToken } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
-import { blockEnd } from "../../../fragment/block.ts";
+import { fencedBlockPosition } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 
@@ -28,8 +28,6 @@ export const blockRules: BlockFeature["rules"] = [
     },
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
-      const offset = tokens.start(tokenStart);
-      const end = tokens.end(tokenStart);
       const value = tokens.text(context.source, tokenStart);
       const block = tokens.value<FencedBlock>(tokenStart);
       if (!block) {
@@ -40,12 +38,7 @@ export const blockRules: BlockFeature["rules"] = [
         type: "math",
         meta: meta || null,
         value: sourceColumnFenceContent(value, block),
-        position: {
-          start: offset + block.markerOffset,
-          end: block.closed || end < tokens.sourceLength
-            ? blockEnd(tokenStart, context)
-            : end,
-        },
+        position: fencedBlockPosition(tokenStart, block, context),
       };
     },
   },

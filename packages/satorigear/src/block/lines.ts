@@ -1,5 +1,5 @@
 import { Character } from "../constants/character.ts";
-import type { SourceLocation, SourceLocator } from "../source-view.ts";
+import type { SourceLocation, SourceLocator, SourcePosition } from "../source-view.ts";
 
 const enum BlockLineField {
   Start,
@@ -178,6 +178,14 @@ export class BlockLines implements SourceLocator {
       line: field / BlockLineField.Stride + 1,
       column: offset - start + 1,
       offset,
+    };
+  }
+
+  /** Locates both boundaries when no nested projection must occur between them. */
+  positionAt(start: number, end: number): SourcePosition {
+    return {
+      start: this.locationAt(start),
+      end: this.locationAt(end),
     };
   }
 

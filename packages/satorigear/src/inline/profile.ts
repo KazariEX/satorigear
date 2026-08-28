@@ -4,6 +4,7 @@ import type {
   InlineBuilder,
   InlineLeafBuilder,
   InlineNodeBuilder,
+  InlineTextBuilder,
   InlineTokenDecorator,
 } from "../fragment/inline.ts";
 import type { DelimiterConfig } from "./delimiter.ts";
@@ -36,6 +37,11 @@ export type InlineBuildRule =
     build: InlineLeafBuilder;
   }
   | {
+    kind: "text";
+    token: InlineKind;
+    build: InlineTextBuilder;
+  }
+  | {
     kind: "container";
     close: InlineKind;
     contentOpen: InlineKind;
@@ -60,10 +66,12 @@ export interface InlineFeature {
 
 export interface InlineProfile {
   buildByKind: readonly (InlineBuilder | undefined)[];
+  decorateByKind: readonly boolean[];
   resolve: InlineResolver;
   // Semantic open kinds store [close, content-open] at kind * 2;
   // a missing close denotes a token handler, and zero content-open denotes a direct pair.
   syntaxByKind: readonly number[];
+  textByKind: readonly boolean[];
   tokenize: InlineTokenizer;
 }
 
@@ -72,9 +80,11 @@ export function compileInlineProfile(
   compileInlineResolver: InlineResolverFactory,
 ): InlineProfile {
   const buildByKind: (InlineBuilder | undefined)[] = [];
+  const decorateByKind: boolean[] = [];
   const delimiters: DelimiterConfig[] = [];
   const scanRules: InlineScanRule[] = [];
   const syntaxByKind: number[] = [];
+  const textByKind: boolean[] = [];
 
   for (const feature of features) {
     if (feature.scan) {
@@ -91,10 +101,16 @@ export function compileInlineProfile(
       switch (rule.kind) {
         case "decorate": {
           buildByKind[rule.token] = rule.apply;
+          decorateByKind[rule.token] = true;
           break;
         }
         case "leaf": {
           buildByKind[rule.token] = rule.build;
+          break;
+        }
+        case "text": {
+          buildByKind[rule.token] = rule.build;
+          textByKind[rule.token] = true;
           break;
         }
         case "container": {
@@ -115,8 +131,10 @@ export function compileInlineProfile(
 
   return {
     buildByKind,
+    decorateByKind,
     resolve: compileInlineResolver(delimiters),
     syntaxByKind,
+    textByKind,
     tokenize: compileInlineTokenizer(scanRules),
   };
 }

@@ -18,7 +18,7 @@ import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { blockEnd } from "../../fragment/block.ts";
+import { fencedBlockPosition } from "../../fragment/block.ts";
 import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "./text.ts";
@@ -51,8 +51,6 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const offset = tokens.start(tokenStart);
-          const end = tokens.end(tokenStart);
           const source = normalizeLines(tokens.text(context.source, tokenStart));
           const block = tokens.value<FencedBlock>(tokenStart);
           if (!block) {
@@ -67,12 +65,7 @@ export const feature: SyntaxFeature = {
             lang,
             meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
             value: normalizedFenceContent(source, block),
-            position: {
-              start: offset + block.markerOffset,
-              end: block.closed || end < tokens.sourceLength
-                ? blockEnd(tokenStart, context)
-                : end,
-            },
+            position: fencedBlockPosition(tokenStart, block, context),
           };
         },
       },
@@ -97,7 +90,7 @@ export const feature: SyntaxFeature = {
             lang: null,
             meta: null,
             value: lines.join("\n"),
-            position: { start: offset, end: offset + contentLength },
+            position: context.locator.positionAt(offset, offset + contentLength),
           };
         },
       },

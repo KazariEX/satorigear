@@ -1,31 +1,20 @@
 import type { Node } from "mdast";
-import type { SourceSpan } from "../source-view.ts";
+import type { SourceLocation } from "../source-view.ts";
 
-// Builders store source offsets in the final position slot. Materialization resolves them in place
-// before one-shot or changed document nodes enter their output tree.
-export interface SpannedValue {
-  [key: string]: unknown;
-  children?: SpannedValue[];
-  position: SourceSpan;
+function cloneLocation(location: SourceLocation): SourceLocation {
+  return {
+    column: location.column,
+    line: location.line,
+    offset: location.offset,
+  };
 }
 
-export type SpannedNode<T extends object = Node> = T extends unknown
-  ? Omit<T, "children" | "position"> & { position: SourceSpan } & (
-    T extends { children: readonly object[] }
-      ? { children: SpannedNode<T["children"][number]>[] }
-      : unknown
-  )
-  : never;
-
-export function firstChildStart(children: readonly SpannedValue[]): number {
+export function firstChildStart(children: readonly Pick<Node, "position">[]): SourceLocation {
   const first = children[0];
-  if (!first) {
-    throw new Error("mdast container unexpectedly has no children");
-  }
-  return first.position.start;
+  return cloneLocation(first.position!.start as SourceLocation);
 }
 
-export function lastChildEnd(children: readonly SpannedValue[], emptyEnd: number): number {
+export function lastChildEnd(children: readonly Pick<Node, "position">[]): SourceLocation | undefined {
   const last = children.at(-1);
-  return last ? last.position.end : emptyEnd;
+  return last ? cloneLocation(last.position!.end as SourceLocation) : void 0;
 }

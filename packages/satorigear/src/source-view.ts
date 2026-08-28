@@ -4,6 +4,11 @@ export interface SourceLocation {
   offset: number;
 }
 
+export interface SourcePosition {
+  end: SourceLocation;
+  start: SourceLocation;
+}
+
 export interface SourceSpan {
   end: number;
   start: number;
@@ -11,6 +16,7 @@ export interface SourceSpan {
 
 export interface SourceLocator {
   locationAt: (offset: number) => SourceLocation;
+  positionAt: (start: number, end: number) => SourcePosition;
 }
 
 export interface SourceView {

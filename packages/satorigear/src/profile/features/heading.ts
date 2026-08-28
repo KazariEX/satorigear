@@ -2,6 +2,7 @@ import type { Heading } from "mdast";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
+import { buildInlineFragment } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -84,17 +85,27 @@ export const feature: SyntaxFeature = {
           close: BlockKind.HeadingClose,
         },
         inlineContent: true,
-        build(tokenStart, context, inline) {
+        build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          return {
+          const start = context.locator.locationAt(tokens.start(tokenStart));
+          const inline = buildInlineFragment(
+            tokenStart,
+            BlockRule.AtxHeading,
+            context,
+          );
+          const result: Heading = {
             type: "heading",
             depth: tokens.end(tokenStart) - tokens.start(tokenStart) as Heading["depth"],
-            children: inline!.children,
+            children: inline.children,
             position: {
-              start: tokens.start(tokenStart),
-              end: blockEnd(tokenStart, context),
+              start,
+              end: context.locator.locationAt(blockEnd(tokenStart, context)),
             },
           };
+          if (inline.attributes) {
+            result.attributes = inline.attributes;
+          }
+          return result;
         },
       },
       {
@@ -108,18 +119,29 @@ export const feature: SyntaxFeature = {
           close: BlockKind.HeadingClose,
         },
         inlineContent: true,
-        build(tokenStart, context, inline) {
+        build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const children = inline!.children;
-          return {
+          const inline = buildInlineFragment(
+            tokenStart,
+            BlockRule.SetextHeading,
+            context,
+          );
+          const children = inline.children;
+          const result: Heading = {
             type: "heading",
             depth: tokens.kind(tokenStart) === BlockKind.SetextHeading1Open ? 1 : 2,
             children,
             position: {
               start: firstChildStart(children),
-              end: tokens.start(tokenStart + tokens.nodeLength(tokenStart) - 1),
+              end: context.locator.locationAt(
+                tokens.start(tokenStart + tokens.nodeLength(tokenStart) - 1),
+              ),
             },
           };
+          if (inline.attributes) {
+            result.attributes = inline.attributes;
+          }
+          return result;
         },
       },
     ],

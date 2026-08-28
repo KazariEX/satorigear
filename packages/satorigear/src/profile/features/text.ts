@@ -6,7 +6,7 @@ import {
   appendInlineToken,
   inlineTokenText,
 } from "../../inline/tokens.ts";
-import type { InlineLeafBuilder } from "../../fragment/inline.ts";
+import type { InlineTextBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const semanticCharacter = /\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])|&(?:#x[\da-f]{1,6}|#\d{1,7}|[a-z][\da-z]{1,31});/gi;
@@ -28,22 +28,12 @@ export function semanticText(value: string): string {
   return value.replace(semanticCharacter, (match, escaped) => escaped ?? decodeHTMLStrict(match));
 }
 
-export const buildInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, context) => {
-  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  return {
-    type: "text",
-    value: text,
-    position: sourceSpan,
-  };
-};
+export const buildInlineText: InlineTextBuilder = (tokenIndex, context) =>
+  inlineTokenText(context.view.text, context.tokens, tokenIndex);
 
-export const buildDecodedInlineText: InlineLeafBuilder = (tokenIndex, sourceSpan, context) => {
+export const buildDecodedInlineText: InlineTextBuilder = (tokenIndex, context) => {
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  return {
-    type: "text",
-    value: semanticText(text),
-    position: sourceSpan,
-  };
+  return semanticText(text);
 };
 
 export const feature: SyntaxFeature = {
@@ -82,9 +72,9 @@ export const feature: SyntaxFeature = {
       },
     ],
     build: [
-      { kind: "leaf", token: InlineKind.LiteralText, build: buildInlineText },
-      { kind: "leaf", token: InlineKind.Escape, build: buildDecodedInlineText },
-      { kind: "leaf", token: InlineKind.Entity, build: buildDecodedInlineText },
+      { kind: "text", token: InlineKind.LiteralText, build: buildInlineText },
+      { kind: "text", token: InlineKind.Escape, build: buildDecodedInlineText },
+      { kind: "text", token: InlineKind.Entity, build: buildDecodedInlineText },
     ],
   },
 };

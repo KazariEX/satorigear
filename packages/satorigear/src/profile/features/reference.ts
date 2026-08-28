@@ -1,7 +1,7 @@
 import { type BlockLines, isBlank } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import { blockEnd } from "../../fragment/block.ts";
+import { leafBlockPosition } from "../../fragment/block.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockScanContext } from "../../block/scanner.ts";
@@ -265,10 +265,7 @@ export const feature: SyntaxFeature = {
             label: semanticText(fields.label),
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),
-            position: {
-              start: tokens.start(tokenStart),
-              end: blockEnd(tokenStart, context),
-            },
+            position: leafBlockPosition(tokenStart, context),
           };
         },
       },

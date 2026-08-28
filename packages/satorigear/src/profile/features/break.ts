@@ -1,7 +1,7 @@
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { blockEnd } from "../../fragment/block.ts";
+import { leafBlockPosition } from "../../fragment/block.ts";
 import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -42,13 +42,9 @@ export const feature: SyntaxFeature = {
           token: BlockKind.ThematicBreak,
         },
         build(tokenStart, context) {
-          const tokens = context.structure.tokens;
           return {
             type: "thematicBreak",
-            position: {
-              start: tokens.start(tokenStart),
-              end: blockEnd(tokenStart, context),
-            },
+            position: leafBlockPosition(tokenStart, context),
           };
         },
       },
@@ -86,14 +82,10 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        kind: "leaf",
+        kind: "text",
         token: InlineKind.Newline,
-        build(tokenIndex, sourceSpan) {
-          return {
-            type: "text",
-            value: "\n",
-            position: sourceSpan,
-          };
+        build() {
+          return "\n";
         },
       },
     ],

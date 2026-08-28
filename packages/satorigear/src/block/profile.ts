@@ -9,7 +9,6 @@ export interface BlockSyntaxRule {
   block: boolean;
   close: BlockKind;
   inlineContent: boolean;
-  rule: BlockRule;
   build?: BlockNodeBuilder;
 }
 
@@ -134,7 +133,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
           block: syntax.kind === "block" || syntax.kind === "leaf",
           close: syntax.kind === "block" || syntax.kind === "frame" ? syntax.close : BlockKind.None,
           inlineContent: registration.inlineContent === true,
-          rule: registration.rule,
           build: registration.build,
         };
         ruleByBlockRule[registration.rule] = rule;

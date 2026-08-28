@@ -63,14 +63,16 @@ export const blockRules: BlockFeature["rules"] = [
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
       const fields = definitionFields(tokens, tokenStart);
+      const start = context.locator.locationAt(tokens.start(tokenStart));
+      const children = buildBlockChildren(tokenStart, context);
       return {
         type: "footnoteDefinition",
         identifier: fields.normalizedLabel.toLowerCase(),
         label: semanticText(fields.label),
-        children: buildBlockChildren(tokenStart, context),
+        children,
         position: {
-          start: tokens.start(tokenStart),
-          end: blockEnd(tokenStart, context),
+          start,
+          end: context.locator.locationAt(blockEnd(tokenStart, context)),
         },
       };
     },

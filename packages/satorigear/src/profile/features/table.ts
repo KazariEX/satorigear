@@ -2,10 +2,9 @@ import type { AlignType, TableCell, TableRow } from "mdast";
 import { type BlockLines, isBlank, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
+import { type BlockBuildContext, type BlockNodeBuilder, buildBlockNode } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
-import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.ts";
-import type { SpannedNode } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 // Cell records start as [frame start, trimmed content start, trimmed content end].
@@ -175,14 +174,18 @@ function emitTableRow(
   out.push(BlockKind.TableRowClose, lineEnd, lineEnd);
 }
 
-const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline) => {
+const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
+  const start = context.locator.locationAt(tokens.start(tokenStart));
+  const children = buildInlineFragment(tokenStart, BlockRule.TableCell, context).children;
   return {
     type: "tableCell",
-    children: inline!.children,
+    children,
     position: {
-      start: tokens.start(tokenStart),
-      end: tokens.start(tokenStart + tokens.nodeLength(tokenStart)),
+      start,
+      end: context.locator.locationAt(
+        tokens.start(tokenStart + tokens.nodeLength(tokenStart)),
+      ),
     },
   };
 };
@@ -190,20 +193,17 @@ const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context, inline
 const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-  const children: SpannedNode<TableCell>[] = [];
+  const start = context.locator.locationAt(tokens.start(tokenStart));
+  const children: TableCell[] = [];
   for (let cell = tokenStart + 1; cell < close; cell += tokens.nodeLength(cell)) {
-    children.push(buildTableCell(
-      cell,
-      context,
-      buildInlineFragment(cell, BlockRule.TableCell, context),
-    ));
+    children.push(buildBlockNode<TableCell>(cell, context));
   }
   return {
     type: "tableRow",
     children,
     position: {
-      start: tokens.start(tokenStart),
-      end: tokens.start(close),
+      start,
+      end: context.locator.locationAt(tokens.start(close)),
     },
   };
 };
@@ -296,6 +296,7 @@ export const feature: SyntaxFeature = {
           close: BlockKind.InlineChunk,
         },
         inlineContent: true,
+        build: buildTableCell,
       },
       {
         rule: BlockRule.TableRow,
@@ -304,6 +305,7 @@ export const feature: SyntaxFeature = {
           open: BlockKind.TableRowOpen,
           close: BlockKind.TableRowClose,
         },
+        build: buildTableRow,
       },
       {
         rule: BlockRule.TableDelimiter,
@@ -327,24 +329,25 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+          const start = context.locator.locationAt(tokens.start(tokenStart));
           // Tables are emitted as a header row, delimiter group, then body rows.
           const header = tokenStart + 1;
           const delimiter = header + tokens.nodeLength(header);
-          const rows = [buildTableRow(header, context)];
+          const rows = [buildBlockNode<TableRow>(header, context)];
           for (
             let row = delimiter + tokens.nodeLength(delimiter);
             row < close;
             row += tokens.nodeLength(row)
           ) {
-            rows.push(buildTableRow(row, context));
+            rows.push(buildBlockNode<TableRow>(row, context));
           }
           return {
             type: "table",
             align: tableAlignment(delimiter, context),
             children: rows,
             position: {
-              start: tokens.start(tokenStart),
-              end: tokens.start(close),
+              start,
+              end: context.locator.locationAt(tokens.start(close)),
             },
           };
         },

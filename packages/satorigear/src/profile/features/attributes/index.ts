@@ -1,4 +1,4 @@
-import type { Blockquote, Heading, List, Paragraph, PhrasingContent } from "mdast";
+import type { Blockquote, List } from "mdast";
 import { BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
@@ -13,11 +13,8 @@ import {
 } from "../../../inline/tokens.ts";
 import { attributesEnd, mergeAttributes, parseAttributes } from "./syntax.ts";
 import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
-import type { SpannedNode } from "../../../fragment/node.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "./types.ts";
-
-type AttributableNode = SpannedNode<PhrasingContent> & { attributes?: Attributes };
 
 const enum AttributeFlag {
   Detached = 1,
@@ -32,16 +29,8 @@ declare module "../../../fragment/inline.ts" {
   }
 }
 
-const decorateInlineContainer: BlockNodeBuilderDecorator = (build) => (tokenStart, context, inline) => {
-  const result = build(tokenStart, context, inline) as SpannedNode<Paragraph | Heading>;
-  if (inline?.attributes) {
-    result.attributes = inline.attributes;
-  }
-  return result;
-};
-
 const decorateList: BlockNodeBuilderDecorator = (build) => (tokenStart, context) => {
-  const result = build(tokenStart, context) as SpannedNode<List>;
+  const result = build(tokenStart, context) as List;
   if (!result.spread) {
     for (const item of result.children) {
       const paragraph = !item.spread && item.children.length === 1 && item.children[0].type === "paragraph"
@@ -57,7 +46,7 @@ const decorateList: BlockNodeBuilderDecorator = (build) => (tokenStart, context)
 };
 
 const decorateBlockquote: BlockNodeBuilderDecorator = (build) => (tokenStart, context) => {
-  const result = build(tokenStart, context) as SpannedNode<Blockquote>;
+  const result = build(tokenStart, context) as Blockquote;
   const paragraph = result.children.length === 1 && result.children[0].type === "paragraph"
     ? result.children[0]
     : void 0;
@@ -172,9 +161,6 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
 export const feature: SyntaxFeature = {
   block: {
     decorators: [
-      { rule: BlockRule.Paragraph, decorate: decorateInlineContainer },
-      { rule: BlockRule.AtxHeading, decorate: decorateInlineContainer },
-      { rule: BlockRule.SetextHeading, decorate: decorateInlineContainer },
       { rule: BlockRule.UnorderedList, decorate: decorateList },
       { rule: BlockRule.OrderedList, decorate: decorateList },
       { rule: BlockRule.BlockQuote, decorate: decorateBlockquote },
@@ -190,7 +176,7 @@ export const feature: SyntaxFeature = {
         token: InlineKind.Attributes,
         apply(tokenIndex, sourceSpan, context, target) {
           // mdast extensions may declare unrelated `attributes` shapes; this parser only emits ours.
-          const previous = target.children.at(-1) as AttributableNode | undefined;
+          const previous = target.children.at(-1);
           const parsed = parseAttributes(
             context.view.text,
             inlineTokenStart(context.tokens, tokenIndex),
@@ -216,13 +202,14 @@ export const feature: SyntaxFeature = {
             }
             return true;
           }
-          if (previous.attributes) {
-            mergeAttributes(previous.attributes, parsed.attributes);
+          const attributes = previous.attributes;
+          if (attributes) {
+            mergeAttributes(attributes, parsed.attributes);
           }
           else {
             previous.attributes = parsed.attributes;
           }
-          previous.position.end = sourceSpan.end;
+          previous.position!.end = context.locator.locationAt(sourceSpan.end);
           return true;
         },
       },
