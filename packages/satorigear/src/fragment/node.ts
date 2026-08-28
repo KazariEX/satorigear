@@ -3,8 +3,8 @@ import type { SourceLocation } from "../source-view.ts";
 
 function cloneLocation(location: SourceLocation): SourceLocation {
   return {
-    column: location.column,
     line: location.line,
+    column: location.column,
     offset: location.offset,
   };
 }

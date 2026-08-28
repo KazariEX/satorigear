@@ -1,6 +1,6 @@
 export interface SourceLocation {
-  column: number;
   line: number;
+  column: number;
   offset: number;
 }
 
