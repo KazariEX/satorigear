@@ -221,7 +221,7 @@ function reference(
   const full = closeText.startsWith("][") && closeText !== "][]";
   const labelSource = full ? closeText.slice(2, -1) : content;
   return {
-    identifier: normalizeAssociationLabel(labelSource).toLowerCase(),
+    identifier: normalizeAssociationLabel(labelSource),
     label: semanticText(labelSource),
     referenceType: full ? "full" : closeText === "][]" ? "collapsed" : "shortcut",
   };

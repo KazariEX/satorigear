@@ -261,7 +261,7 @@ export const feature: SyntaxFeature = {
           }
           return {
             type: "definition",
-            identifier: definitionKey.toLowerCase(),
+            identifier: definitionKey,
             label: semanticText(fields.label),
             url: semanticText(fields.destination),
             title: fields.title === void 0 ? null : semanticText(fields.title),

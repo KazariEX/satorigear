@@ -1,8 +1,8 @@
 export function normalizeAssociationLabel(label: string): string {
   // Already-clean labels skip the pipeline: nothing to trim, and over pure ASCII
-  // a single toUpperCase() equals the toLowerCase().toUpperCase() round trip.
+  // lowercase is the final folded form expected by mdast identifiers.
   scan: {
-    let hasLowercase = false;
+    let hasUppercase = false;
     for (let index = 0; index < label.length; index++) {
       const code = label.charCodeAt(index);
       if (code === 32) {
@@ -16,11 +16,11 @@ export function normalizeAssociationLabel(label: string): string {
       if (code < 32 || code > 126) {
         break scan;
       }
-      if (code >= 97 && code <= 122) {
-        hasLowercase = true;
+      if (code >= 65 && code <= 90) {
+        hasUppercase = true;
       }
     }
-    return hasLowercase ? label.toUpperCase() : label;
+    return hasUppercase ? label.toLowerCase() : label;
   }
-  return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase();
+  return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase().toLowerCase();
 }

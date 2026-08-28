@@ -13,7 +13,7 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
       const label = source.slice(2, -1);
       return {
         type: "footnoteReference",
-        identifier: normalizeAssociationLabel(label).toLowerCase(),
+        identifier: normalizeAssociationLabel(label),
         label: semanticText(label),
         position: sourceSpan,
       };

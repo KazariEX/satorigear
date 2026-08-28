@@ -67,7 +67,7 @@ export const blockRules: BlockFeature["rules"] = [
       const children = buildBlockChildren(tokenStart, context);
       return {
         type: "footnoteDefinition",
-        identifier: fields.normalizedLabel.toLowerCase(),
+        identifier: fields.normalizedLabel,
         label: semanticText(fields.label),
         children,
         position: {
