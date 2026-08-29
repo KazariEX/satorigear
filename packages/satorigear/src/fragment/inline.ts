@@ -151,8 +151,8 @@ function appendGap(
   end: number,
 ): void {
   const value = context.view.text.slice(start, end);
-  const sourceSpan = context.view.mapSpan(start, end);
-  appendText(output, value, sourceSpan.start, sourceSpan.end, context);
+  const sourceStart = context.view.mapOffset(start);
+  appendText(output, value, sourceStart, context.view.mapEnd(end), context);
 }
 
 function appendToken(
@@ -188,20 +188,21 @@ function appendToken(
       // At a stripped container boundary, the left side maps before the prefix while
       // the right side maps after it. A hard break must span to the former.
       previous.position!.end = context.locator.locationAt(
-        context.view.mapPoint(viewLineStart - 1) + 1,
+        context.view.mapOffset(viewLineStart - 1) + 1,
       );
       return;
     }
     viewStart = viewLineEndingStart;
     trimTrailingText(output);
   }
-  const sourceSpan = context.view.mapSpan(viewStart, viewEnd);
+  const sourceStart = context.view.mapOffset(viewStart);
+  const sourceEnd = viewStart === viewEnd ? sourceStart : context.view.mapEnd(viewEnd);
   if (textToken) {
     appendText(
       output,
       (build as InlineTextBuilder)(tokenIndex, context),
-      sourceSpan.start,
-      sourceSpan.end,
+      sourceStart,
+      sourceEnd,
       context,
     );
   }
@@ -209,7 +210,7 @@ function appendToken(
     finishText(output, context);
     output.children.push((build as InlineLeafBuilder)(
       tokenIndex,
-      context.locator.positionAt(sourceSpan.start, sourceSpan.end),
+      context.locator.positionAt(sourceStart, sourceEnd),
       context,
     ));
     output.lastText = void 0;
@@ -256,7 +257,11 @@ function appendRange(
     const childEnd = inlineTokenEnd(context.tokens, index);
     if (profile.decorateByKind[kind]) {
       finishText(output, context);
-      const sourceSpan = context.view.mapSpan(childStart, childEnd);
+      const sourceStart = context.view.mapOffset(childStart);
+      const sourceSpan = {
+        start: sourceStart,
+        end: childStart === childEnd ? sourceStart : context.view.mapEnd(childEnd),
+      };
       if ((build as InlineTokenDecorator)(index, sourceSpan, context, output)) {
         // Applied decorators may mutate the exposed child list, so refresh the cached projection.
         const previous = output.children.at(-1);
@@ -306,7 +311,7 @@ function appendSemantic(
   contentOpenKind: number,
 ): number {
   const childStart = inlineTokenStart(context.tokens, openToken);
-  const positionStart = context.locator.locationAt(context.view.mapPoint(childStart));
+  const positionStart = context.locator.locationAt(context.view.mapOffset(childStart));
   let closeToken = openToken;
   let next = openToken + 1;
   const children: PhrasingContent[] = [];
@@ -331,13 +336,12 @@ function appendSemantic(
     );
   }
   const childEnd = inlineTokenEnd(context.tokens, closeToken);
-  const sourceSpan = context.view.mapSpan(childStart, childEnd);
   const value = build(
     openToken,
     closeToken,
     {
       start: positionStart,
-      end: context.locator.locationAt(sourceSpan.end),
+      end: context.locator.locationAt(context.view.mapEnd(childEnd)),
     },
     children,
     context,

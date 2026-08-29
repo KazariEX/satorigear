@@ -20,41 +20,37 @@ export interface SourceLocator {
   positionAt: (start: number, end: number) => SourcePosition;
 }
 
-export interface SourceView {
-  readonly text: string;
-  mapPoint: (offset: number) => number;
-  mapSpan: (start: number, end: number) => SourceSpan;
-  shift: (delta: number) => void;
+function containingSegment(segments: number[], offset: number): number {
+  let low = 0;
+  let high = segments.length >>> 1;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (offset < segments[middle * 2 + 1]) {
+      high = middle;
+    }
+    else {
+      low = middle + 1;
+    }
+  }
+  return low * 2;
 }
 
-export class ContiguousSourceView implements SourceView {
-  #offset: number;
+export class SourceView {
+  #offset = 0;
+  // Segmented views store sourceStart - viewStart and cumulative view end pairs;
+  // contiguous views need only the offset above.
+  readonly #segments: number[] | undefined;
   readonly text: string;
 
-  constructor(source: string, start: number, end: number) {
-    this.#offset = start;
-    this.text = source.slice(start, end);
-  }
-
-  mapPoint(offset: number): number {
-    return this.#offset + offset;
-  }
-
-  mapSpan(start: number, end: number): SourceSpan {
-    return { start: this.#offset + start, end: this.#offset + end };
-  }
-
-  shift(delta: number): void {
-    this.#offset += delta;
-  }
-}
-
-export class SegmentedSourceView implements SourceView {
-  // Each pair stores sourceStart - viewStart and the cumulative view end.
-  #segments: number[];
-  readonly text: string;
-
-  constructor(source: string, ranges: number[]) {
+  constructor(source: string, start: number, end: number);
+  constructor(source: string, ranges: number[]);
+  constructor(source: string, startOrRanges: number | number[], end?: number) {
+    if (typeof startOrRanges === "number") {
+      this.#offset = startOrRanges;
+      this.text = source.slice(startOrRanges, end);
+      return;
+    }
+    const ranges = startOrRanges;
     const parts: string[] = [];
     let viewOffset = 0;
     let segmentCount = 0;
@@ -76,51 +72,37 @@ export class SegmentedSourceView implements SourceView {
     this.text = parts.join("");
   }
 
-  mapPoint(offset: number): number {
-    if (this.#segments.length === 0) {
-      return 0;
+  /** Maps an offset at an internal gap to the following source segment. */
+  mapOffset(offset: number): number {
+    const segments = this.#segments;
+    if (!segments) {
+      return this.#offset + offset;
     }
     if (offset === this.text.length) {
-      return this.#segments[this.#segments.length - 2] + offset;
+      return segments[segments.length - 2] + offset;
     }
-    const segment = this.#containingSegment(offset);
-    return this.#segments[segment] + offset;
+    const segment = containingSegment(segments, offset);
+    return segments[segment] + offset;
   }
 
-  mapSpan(start: number, end: number): SourceSpan {
-    if (this.#segments.length === 0) {
-      return { start: 0, end: 0 };
+  /** Maps an exclusive end at an internal gap to the preceding source segment. */
+  mapEnd(offset: number): number {
+    const segments = this.#segments;
+    if (!segments) {
+      return this.#offset + offset;
     }
-    if (start === end) {
-      const point = this.mapPoint(start);
-      return { start: point, end: point };
-    }
-    const first = this.#containingSegment(start);
-    const last = this.#containingSegment(end - 1);
-    return {
-      start: this.#segments[first] + start,
-      end: this.#segments[last] + end,
-    };
+    const segment = containingSegment(segments, Math.max(0, offset - 1));
+    return segments[segment] + offset;
   }
 
   shift(delta: number): void {
-    for (let index = 0; index < this.#segments.length; index += 2) {
-      this.#segments[index] += delta;
+    const segments = this.#segments;
+    if (!segments) {
+      this.#offset += delta;
+      return;
     }
-  }
-
-  #containingSegment(offset: number): number {
-    let low = 0;
-    let high = this.#segments.length >>> 1;
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (offset < this.#segments[middle * 2 + 1]) {
-        high = middle;
-      }
-      else {
-        low = middle + 1;
-      }
+    for (let index = 0; index < segments.length; index += 2) {
+      segments[index] += delta;
     }
-    return low * 2;
   }
 }

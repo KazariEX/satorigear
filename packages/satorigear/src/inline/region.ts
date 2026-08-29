@@ -1,6 +1,6 @@
 import { BlockKind } from "../constants/block.ts";
 import { emptyArray, emptySet } from "../primitives.ts";
-import { ContiguousSourceView, SegmentedSourceView, type SourceView } from "../source-view.ts";
+import { SourceView } from "../source-view.ts";
 import type { BlockTokenStream } from "../block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
@@ -203,9 +203,9 @@ export function inlineViewOf(
     }
   }
   if (ranges) {
-    return new SegmentedSourceView(source, ranges);
+    return new SourceView(source, ranges);
   }
   if (firstStart >= 0) {
-    return new ContiguousSourceView(source, firstStart, firstEnd);
+    return new SourceView(source, firstStart, firstEnd);
   }
 }
