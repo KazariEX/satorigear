@@ -126,7 +126,16 @@ function linkTitleEnd(source: string, start: number): number {
   return -1;
 }
 
+const simpleLinkTail = /\([^<\\()\t\n\r ]+\)/y;
+
 function scanLinkTail(source: string, start: number, tokens: number[]): number {
+  simpleLinkTail.lastIndex = start + 1;
+  // Fast path for simple inline link tails such as `](destination)`.
+  if (simpleLinkTail.test(source)) {
+    const end = simpleLinkTail.lastIndex;
+    appendInlineToken(tokens, InlineKind.LinkTail, start, end, end - start - 1);
+    return end;
+  }
   if (source.charCodeAt(start + 1) !== Character.LeftParenthesis) {
     return -1;
   }
@@ -144,12 +153,11 @@ function scanLinkTail(source: string, start: number, tokens: number[]): number {
       if (titleEnd < 0) {
         return -1;
       }
-      offset = titleEnd;
+      offset = skipWhitespace(source, titleEnd);
     }
     else {
       offset = whitespaceEnd;
     }
-    offset = skipWhitespace(source, offset);
     if (source.charCodeAt(offset) !== Character.RightParenthesis) {
       return -1;
     }
