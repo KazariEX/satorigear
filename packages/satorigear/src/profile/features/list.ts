@@ -353,16 +353,13 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
 };
 
 const taskListStart: BlockStart = (source, lines, start, contentOffset, out, context) => {
-  const listTokenStart = out.length;
+  const listToken = out.length;
   const nextLine = listStart(source, lines, start, contentOffset, out, context);
   if (nextLine === void 0) {
     return;
   }
-  // Task variants share the list-item frame role, so the indexed kind can be refined in place.
-  for (let item = listTokenStart + 1; item < out.length; item++) {
-    if (out.kind(item) !== BlockKind.ListItemOpen) {
-      continue;
-    }
+  // List node lengths jump over nested frames; task variants refine direct item kinds in place.
+  for (let item = listToken + 1; item < out.length - 1; item += out.nodeLength(item)) {
     let paragraph = item + 1;
     let contentKind = out.kind(paragraph);
     // Link definition tokens are contiguous and do not count as the item's first content block.
