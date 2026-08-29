@@ -35,9 +35,27 @@ function linkDefinitionAt(
   contentOffset: number,
   context: BlockScanContext,
 ): LinkDefinitionMatch | undefined {
+  let offset = contentOffset + 1;
+  const labelClose = source.indexOf("]", offset);
+  if (
+    labelClose >= 0 &&
+    labelClose < lines.end(startIndex) &&
+    source.charCodeAt(labelClose + 1) !== Character.Colon
+  ) {
+    let escapeStart = labelClose;
+    while (
+      escapeStart > offset &&
+      source.charCodeAt(escapeStart - 1) === Character.ReverseSolidus
+    ) {
+      escapeStart--;
+    }
+    // The first unescaped close fixes the label boundary; only `]:` can form a definition.
+    if (((labelClose - escapeStart) & 1) === 0) {
+      return;
+    }
+  }
   let lineIndex = startIndex;
   let lookaheadEnd = -1;
-  let offset = contentOffset + 1;
   let label = "";
   let labelLength = 0;
   let labelHasContent = false;
