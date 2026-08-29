@@ -1,6 +1,6 @@
 import type { PhrasingContent, Text } from "mdast";
 import { Character } from "../constants/character.ts";
-import { InlineKind } from "../constants/inline.ts";
+import { InlineKind, InlineTokenRole } from "../constants/inline.ts";
 import { resolveInlineRegion } from "../inline/region.ts";
 import {
   inlineTokenCount,
@@ -233,11 +233,26 @@ function appendRange(
     if (kind === closeKind) {
       break;
     }
-    const syntaxOffset = kind * 2;
-    const semanticCloseKind = profile.syntaxByKind[syntaxOffset];
     const build = profile.buildByKind[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
-    if (semanticCloseKind !== void 0) {
+    if (kind < InlineTokenRole.Pair) {
+      const childEnd = inlineTokenEnd(context.tokens, index);
+      appendToken(
+        output,
+        context,
+        index,
+        childStart,
+        childEnd,
+        build as InlineLeafBuilder | InlineTextBuilder,
+        kind < InlineTokenRole.Leaf,
+        // Distinguishes lexer-emitted newlines from text that merely decodes to "\n".
+        kind === InlineKind.Newline,
+      );
+      output.cursor = childEnd;
+      index++;
+      continue;
+    }
+    if (kind < InlineTokenRole.Decorate) {
       if (childStart > output.cursor) {
         appendGap(output, context, output.cursor, childStart);
       }
@@ -249,40 +264,23 @@ function appendRange(
         context,
         output,
         build as InlineNodeBuilder,
-        semanticCloseKind,
-        profile.syntaxByKind[syntaxOffset + 1],
+        kind + 1,
       );
       continue;
     }
     const childEnd = inlineTokenEnd(context.tokens, index);
-    if (profile.decorateByKind[kind]) {
-      finishText(output, context);
-      const sourceStart = context.view.mapOffset(childStart);
-      const sourceSpan = {
-        start: sourceStart,
-        end: childStart === childEnd ? sourceStart : context.view.mapEnd(childEnd),
-      };
-      if ((build as InlineTokenDecorator)(index, sourceSpan, context, output)) {
-        // Applied decorators may mutate the exposed child list, so refresh the cached projection.
-        const previous = output.children.at(-1);
-        output.lastText = previous?.type === "text"
-          ? previous as Text
-          : void 0;
-        output.cursor = childEnd;
-      }
-    }
-    else {
-      appendToken(
-        output,
-        context,
-        index,
-        childStart,
-        childEnd,
-        build as InlineLeafBuilder | InlineTextBuilder,
-        profile.textByKind[kind],
-        // Distinguishes lexer-emitted newlines from text that merely decodes to "\n".
-        kind === InlineKind.Newline,
-      );
+    finishText(output, context);
+    const sourceStart = context.view.mapOffset(childStart);
+    const sourceSpan = {
+      start: sourceStart,
+      end: childStart === childEnd ? sourceStart : context.view.mapEnd(childEnd),
+    };
+    if ((build as InlineTokenDecorator)(index, sourceSpan, context, output)) {
+      // Applied decorators may mutate the exposed child list, so refresh the cached projection.
+      const previous = output.children.at(-1);
+      output.lastText = previous?.type === "text"
+        ? previous as Text
+        : void 0;
       output.cursor = childEnd;
     }
     index++;
@@ -308,33 +306,22 @@ function appendSemantic(
   output: InlineOutput,
   build: InlineNodeBuilder,
   closeKind: number,
-  contentOpenKind: number,
 ): number {
   const childStart = inlineTokenStart(context.tokens, openToken);
   const positionStart = context.locator.locationAt(context.view.mapOffset(childStart));
-  let closeToken = openToken;
-  let next = openToken + 1;
   const children: PhrasingContent[] = [];
-  if (
-    contentOpenKind === 0 ||
-    next < endToken && inlineTokenKind(context.tokens, next) === contentOpenKind
-  ) {
-    const childOutput = createInlineOutput(
-      children,
-      inlineTokenEnd(
-        context.tokens,
-        contentOpenKind === 0 ? openToken : next++,
-      ),
-    );
-    closeToken = appendRange(
-      next,
-      endToken,
-      profile,
-      context,
-      childOutput,
-      closeKind,
-    );
-  }
+  const childOutput = createInlineOutput(
+    children,
+    inlineTokenEnd(context.tokens, openToken),
+  );
+  const closeToken = appendRange(
+    openToken + 1,
+    endToken,
+    profile,
+    context,
+    childOutput,
+    closeKind,
+  );
   const childEnd = inlineTokenEnd(context.tokens, closeToken);
   const value = build(
     openToken,

@@ -3,12 +3,11 @@ import { InlineKind } from "../../../constants/inline.ts";
 import {
   appendInlineToken,
   inlineTokenEnd,
+  inlineTokenKind,
   inlineTokenStart,
 } from "../../../inline/tokens.ts";
-import {
-  componentNameEnd,
-  normalizeComponentName,
-} from "../attributes/syntax.ts";
+import { componentNameEnd, normalizeComponentName } from "../attributes/syntax.ts";
+import type { InlineNodeBuilder } from "../../../fragment/inline.ts";
 import type { InlineScanRule } from "../../../inline/lexer.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
 
@@ -23,50 +22,64 @@ export function canStartInlineColon(source: string, start: number): boolean {
   return previous !== ":" && allowedPrevious.test(previous);
 }
 
-function inlineComponentEnd(source: string, start: number): number | undefined {
-  if (canStartInlineColon(source, start)) {
-    return componentNameEnd(source, start + 1, false);
-  }
-}
-
 export const inlineScans: readonly InlineScanRule[] = [
   {
     marker: Character.Colon,
     scan(source, start, tokens) {
-      const end = inlineComponentEnd(source, start);
+      const end = canStartInlineColon(source, start)
+        ? componentNameEnd(source, start + 1, false)
+        : void 0;
       if (end === void 0) {
         return -1;
       }
-      appendInlineToken(tokens, InlineKind.InlineComponentOpen, start, end);
+      appendInlineToken(tokens, InlineKind.InlineComponent, start, end);
       return end;
     },
   },
 ];
 
+// Pair openers include `[`, while leaf tokens end at the component name.
+const buildInlineComponent: InlineNodeBuilder = (
+  open,
+  close,
+  sourceSpan,
+  children,
+  context,
+) => {
+  const nameEnd = inlineTokenEnd(context.tokens, open) - (
+    inlineTokenKind(context.tokens, open) === InlineKind.InlineComponentOpen ? 1 : 0
+  );
+  const name = normalizeComponentName(
+    context.view.text.slice(
+      inlineTokenStart(context.tokens, open) + 1,
+      nameEnd,
+    ),
+  );
+  return {
+    type: "inlineComponent",
+    name,
+    attributes: {},
+    children,
+    position: sourceSpan,
+  };
+};
+
 export const inlineBuilds: readonly InlineBuildRule[] = [
   {
-    kind: "container",
-    token: InlineKind.InlineComponentOpen,
-    contentOpen: InlineKind.InlineComponentLabelOpen,
-    close: InlineKind.InlineComponentLabelClose,
-    build(open, close, sourceSpan, children, context) {
-      const text = context.view.text.slice(
-        inlineTokenStart(context.tokens, open) + 1,
-        inlineTokenEnd(context.tokens, open),
-      );
-      return {
-        type: "inlineComponent",
-        name: normalizeComponentName(text),
-        attributes: {},
-        children,
-        position: sourceSpan,
-      };
+    kind: "leaf",
+    token: InlineKind.InlineComponent,
+    build(token, sourceSpan, context) {
+      return buildInlineComponent(token, token, sourceSpan, [], context);
     },
   },
   {
     kind: "pair",
-    open: InlineKind.InlineSpanOpen,
-    close: InlineKind.InlineSpanClose,
+    token: InlineKind.InlineComponentOpen,
+    build: buildInlineComponent,
+  },
+  {
+    kind: "pair",
+    token: InlineKind.InlineSpanOpen,
     build(open, close, sourceSpan, children) {
       return {
         type: "inlineComponent",

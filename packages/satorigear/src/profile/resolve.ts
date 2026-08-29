@@ -15,6 +15,7 @@ import {
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
+  rewriteInlineTokenTail,
 } from "../inline/tokens.ts";
 import { attributesEnd } from "./features/attributes/syntax.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
@@ -154,7 +155,7 @@ function hasAdjacentComponent(
   const openToken = frames[frame + FrameSlot.OpenToken];
   const componentToken = openToken - 1;
   return componentToken >= 0 &&
-    inlineTokenKind(tokens, componentToken) === InlineKind.InlineComponentOpen &&
+    inlineTokenKind(tokens, componentToken) === InlineKind.InlineComponent &&
     inlineTokenEnd(tokens, componentToken) === inlineTokenStart(tokens, openToken);
 }
 
@@ -639,11 +640,11 @@ function emitResolvedTokens(
         }
         else if (claim === FrameClaim.Component) {
           const closeToken = frames[frame + FrameSlot.CloseToken];
+          // Nonempty labels promote the adjacent leaf and include `[` in the pair opener.
           if (inlineTokenEnd(tokens, tokenIndex) < inlineTokenStart(tokens, closeToken)) {
-            appendInlineToken(
+            rewriteInlineTokenTail(
               result,
-              InlineKind.InlineComponentLabelOpen,
-              inlineTokenStart(tokens, tokenIndex),
+              InlineKind.InlineComponentOpen,
               inlineTokenEnd(tokens, tokenIndex),
             );
           }
@@ -697,7 +698,7 @@ function emitResolvedTokens(
           if (claim === FrameClaim.Component) {
             const openToken = frames[rawFrame + FrameSlot.OpenToken];
             if (inlineTokenEnd(tokens, openToken) < tokenStart) {
-              appendInlineToken(result, InlineKind.InlineComponentLabelClose, tokenStart, tokenStart + 1);
+              appendInlineToken(result, InlineKind.InlineComponentClose, tokenStart, tokenStart + 1);
             }
           }
           else if (claim === FrameClaim.Span) {

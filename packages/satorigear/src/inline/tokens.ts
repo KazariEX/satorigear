@@ -38,6 +38,16 @@ export function setInlineTokenData(tokens: number[], index: number, data: number
   tokens[index * InlineTokenField.Stride + InlineTokenField.Data] = data;
 }
 
+export function rewriteInlineTokenTail(
+  tokens: number[],
+  kind: number,
+  end: number,
+): void {
+  const offset = tokens.length - InlineTokenField.Stride;
+  tokens[offset + InlineTokenField.Kind] = kind;
+  tokens[offset + InlineTokenField.End] = end;
+}
+
 export function inlineTokenText(source: string, tokens: InlineTokenStream, index: number): string {
   return source.slice(
     inlineTokenStart(tokens, index),

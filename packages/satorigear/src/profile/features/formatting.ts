@@ -8,7 +8,10 @@ import type { DelimiterConfig } from "../../inline/delimiter.ts";
 import type { InlineBuildRule } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-type InlinePairBuildRule = Extract<InlineBuildRule, { kind: "pair" }>;
+type InlinePairBuildRule = Extract<InlineBuildRule, { kind: "pair" }> & {
+  open: InlineKind;
+  close: InlineKind;
+};
 
 const scanFormatting: InlineScanRule["scan"] = (source, start, tokens) => {
   const code = source.charCodeAt(start);
@@ -27,6 +30,7 @@ function createFormattingPair(
 ): InlinePairBuildRule {
   return {
     kind: "pair",
+    token: open,
     open,
     close,
     build(openToken, closeToken, sourceSpan, children) {

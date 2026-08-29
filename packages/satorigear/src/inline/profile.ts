@@ -42,16 +42,8 @@ export type InlineBuildRule =
     build: InlineTextBuilder;
   }
   | {
-    kind: "container";
-    close: InlineKind;
-    contentOpen: InlineKind;
-    token: InlineKind;
-    build: InlineNodeBuilder;
-  }
-  | {
     kind: "pair";
-    close: InlineKind;
-    open: InlineKind;
+    token: InlineKind;
     build: InlineNodeBuilder;
   };
 
@@ -66,12 +58,7 @@ export interface InlineFeature {
 
 export interface InlineProfile {
   buildByKind: readonly (InlineBuilder | undefined)[];
-  decorateByKind: readonly boolean[];
   resolve: InlineResolver;
-  // Semantic open kinds store [close, content-open] at kind * 2;
-  // a missing close denotes a token handler, and zero content-open denotes a direct pair.
-  syntaxByKind: readonly number[];
-  textByKind: readonly boolean[];
   tokenize: InlineTokenizer;
 }
 
@@ -80,11 +67,8 @@ export function compileInlineProfile(
   compileInlineResolver: InlineResolverFactory,
 ): InlineProfile {
   const buildByKind: (InlineBuilder | undefined)[] = [];
-  const decorateByKind: boolean[] = [];
   const delimiters: DelimiterConfig[] = [];
   const scanRules: InlineScanRule[] = [];
-  const syntaxByKind: number[] = [];
-  const textByKind: boolean[] = [];
 
   for (const feature of features) {
     if (feature.scan) {
@@ -101,7 +85,6 @@ export function compileInlineProfile(
       switch (rule.kind) {
         case "decorate": {
           buildByKind[rule.token] = rule.apply;
-          decorateByKind[rule.token] = true;
           break;
         }
         case "leaf": {
@@ -110,19 +93,10 @@ export function compileInlineProfile(
         }
         case "text": {
           buildByKind[rule.token] = rule.build;
-          textByKind[rule.token] = true;
-          break;
-        }
-        case "container": {
-          buildByKind[rule.token] = rule.build;
-          syntaxByKind[rule.token * 2] = rule.close;
-          syntaxByKind[rule.token * 2 + 1] = rule.contentOpen;
           break;
         }
         case "pair": {
-          buildByKind[rule.open] = rule.build;
-          syntaxByKind[rule.open * 2] = rule.close;
-          syntaxByKind[rule.open * 2 + 1] = 0;
+          buildByKind[rule.token] = rule.build;
           break;
         }
       }
@@ -131,10 +105,7 @@ export function compileInlineProfile(
 
   return {
     buildByKind,
-    decorateByKind,
     resolve: compileInlineResolver(delimiters),
-    syntaxByKind,
-    textByKind,
     tokenize: compileInlineTokenizer(scanRules),
   };
 }

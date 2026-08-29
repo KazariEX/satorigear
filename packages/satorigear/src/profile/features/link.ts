@@ -332,26 +332,22 @@ export const feature: SyntaxFeature = {
     build: [
       {
         kind: "pair",
-        open: InlineKind.LinkOpen,
-        close: InlineKind.LinkClose,
+        token: InlineKind.LinkOpen,
         build: buildInlineLink,
       },
       {
         kind: "pair",
-        open: InlineKind.ImageLinkOpen,
-        close: InlineKind.ImageLinkClose,
+        token: InlineKind.ImageLinkOpen,
         build: buildInlineImage,
       },
       {
         kind: "pair",
-        open: InlineKind.ReferenceOpen,
-        close: InlineKind.ReferenceClose,
+        token: InlineKind.ReferenceOpen,
         build: buildInlineReferenceLink,
       },
       {
         kind: "pair",
-        open: InlineKind.ImageReferenceOpen,
-        close: InlineKind.ImageReferenceClose,
+        token: InlineKind.ImageReferenceOpen,
         build: buildInlineReferenceImage,
       },
       {
