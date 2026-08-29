@@ -25,6 +25,7 @@ export class BlockLines implements SourceLocator {
   // Positions in the retained edit suffix are stored relative to source EOF. Changing
   // source length then shifts the whole suffix without rewriting every line coordinate.
   #relativeStart = Infinity;
+  // Projected views omit source ownership, so a positive length also proves physical contiguity.
   #sourceLength: number;
   // Once false, edits keep this conservative rather than rescanning retained source.
   #lineEndingsNormalized = true;
@@ -195,6 +196,11 @@ export class BlockLines implements SourceLocator {
       start: this.locationAt(start),
       end: this.locationAt(end),
     };
+  }
+
+  /** Whether this view retains physically adjacent source lines. */
+  physicallyContiguous(): boolean {
+    return this.#sourceLength > 0;
   }
 
   push(

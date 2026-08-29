@@ -447,22 +447,25 @@ export function appendLogicalToken(
   const tokenStart = lines.start(start);
   const lastLine = end - 1;
   const tokenEnd = lines.next(lastLine);
-  const previous = source[tokenStart - 1];
-  let canSliceSource = (
-    // Tab overshoot is represented as virtual leading columns absent from the source slice.
-    lines.prefixColumns(start) === 0 && (
-      // A derived first line may begin inside its physical line after a container marker.
-      tokenStart === 0 || previous === "\n" || previous === "\r"
-    )
-  );
-  let previousLineEnd = lines.next(start);
-  for (let line = start + 1; canSliceSource && line < end; line++) {
-    // Continuity proves later lines begin at physical boundaries without rechecking source text.
-    if (lines.prefixColumns(line) !== 0 || lines.start(line) !== previousLineEnd) {
-      canSliceSource = false;
-      break;
+  let canSliceSource = lines.physicallyContiguous();
+  if (!canSliceSource) {
+    const previous = source[tokenStart - 1];
+    canSliceSource = (
+      // Tab overshoot is represented as virtual leading columns absent from the source slice.
+      lines.prefixColumns(start) === 0 && (
+        // A derived first line may begin inside its physical line after a container marker.
+        tokenStart === 0 || previous === "\n" || previous === "\r"
+      )
+    );
+    let previousLineEnd = lines.next(start);
+    for (let line = start + 1; canSliceSource && line < end; line++) {
+      // Continuity proves later lines begin at physical boundaries without rechecking source text.
+      if (lines.prefixColumns(line) !== 0 || lines.start(line) !== previousLineEnd) {
+        canSliceSource = false;
+        break;
+      }
+      previousLineEnd = lines.next(line);
     }
-    previousLineEnd = lines.next(line);
   }
 
   let text: string | undefined;
