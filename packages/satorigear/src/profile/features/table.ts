@@ -1,6 +1,6 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
 import { type BlockLines, isBlank, lineIndentOffset } from "../../block/lines.ts";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind, BlockRule, BlockTokenRole } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockBuildContext, type BlockNodeBuilder, buildBlockNode } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -11,7 +11,6 @@ import type { SyntaxFeature } from "../types.ts";
 // Delimiter validation reuses the content-start slot for its alignment kind.
 const enum CellSlot {
   ContentStart = 1,
-  // eslint-disable-next-line ts/prefer-literal-enum-member
   Alignment = ContentStart,
   ContentEnd = 2,
   Stride = 3,
@@ -168,6 +167,8 @@ function emitTableRow(
       BlockKind.InlineChunk,
       cells[cell + CellSlot.ContentStart],
       cells[cell + CellSlot.ContentEnd],
+      void 0,
+      BlockTokenRole.Close,
     );
   }
   const lineEnd = lines.end(index);
@@ -292,8 +293,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.TableCell,
         syntax: {
           kind: "frame",
-          open: BlockKind.TableCellStart,
-          close: BlockKind.InlineChunk,
+          token: BlockKind.TableCellStart,
         },
         inlineContent: true,
         build: buildTableCell,
@@ -302,8 +302,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.TableRow,
         syntax: {
           kind: "frame",
-          open: BlockKind.TableRowOpen,
-          close: BlockKind.TableRowClose,
+          token: BlockKind.TableRowOpen,
         },
         build: buildTableRow,
       },
@@ -311,7 +310,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.TableDelimiter,
         syntax: {
           kind: "group",
-          tokens: [
+          token: [
             BlockKind.TableAlignNone,
             BlockKind.TableAlignLeft,
             BlockKind.TableAlignRight,
@@ -323,8 +322,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.Table,
         syntax: {
           kind: "block",
-          open: BlockKind.TableOpen,
-          close: BlockKind.TableClose,
+          token: BlockKind.TableOpen,
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;

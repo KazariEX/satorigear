@@ -1,5 +1,5 @@
 // Block features compile into the immutable scanner, structure, and node builders shared by a parser.
-import { BlockKind, type BlockRule } from "../constants/block.ts";
+import type { BlockKind, BlockRule } from "../constants/block.ts";
 import type { BlockNodeBuilder } from "../fragment/block.ts";
 import type { BlockLines } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
@@ -7,7 +7,6 @@ import type { BlockTokenStream } from "./tokens.ts";
 
 export interface BlockSyntaxRule {
   block: boolean;
-  close: BlockKind;
   inlineContent: boolean;
   build?: BlockNodeBuilder;
 }
@@ -54,19 +53,10 @@ interface BlockStartRegistration {
 }
 
 type BlockSyntaxRegistration =
-  | {
-    kind: "block" | "frame";
-    close: BlockKind;
-    open: BlockKind | readonly BlockKind[];
-  }
-  | {
-    kind: "group";
-    tokens: readonly BlockKind[];
-  }
-  | {
-    kind: "leaf";
-    token: BlockKind;
-  };
+  | { kind: "block"; token: BlockKind | readonly BlockKind[] }
+  | { kind: "frame"; token: BlockKind | readonly BlockKind[] }
+  | { kind: "group"; token: readonly BlockKind[] }
+  | { kind: "leaf"; token: BlockKind };
 
 interface BlockRuleRegistration {
   rule: BlockRule;
@@ -129,26 +119,15 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     if (feature.rules) {
       for (const registration of feature.rules) {
         const syntax = registration.syntax;
+        const tokens = typeof syntax.token === "number" ? [syntax.token] : syntax.token;
         const rule: BlockSyntaxRule = {
           block: syntax.kind === "block" || syntax.kind === "leaf",
-          close: syntax.kind === "block" || syntax.kind === "frame" ? syntax.close : BlockKind.None,
           inlineContent: registration.inlineContent === true,
           build: registration.build,
         };
         ruleByBlockRule[registration.rule] = rule;
-        if (syntax.kind === "block" || syntax.kind === "frame") {
-          const opens = typeof syntax.open === "number" ? [syntax.open] : syntax.open;
-          for (const open of opens) {
-            rules[open] = rule;
-          }
-        }
-        else if (syntax.kind === "group") {
-          for (const token of syntax.tokens) {
-            rules[token] = rule;
-          }
-        }
-        else if (syntax.kind === "leaf") {
-          rules[syntax.token] = rule;
+        for (const token of tokens) {
+          rules[token] = rule;
         }
       }
     }

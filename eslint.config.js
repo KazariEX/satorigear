@@ -12,15 +12,8 @@ export default zin(
         "ts/explicit-function-return-type": ["warn", {
           allowExpressions: true,
         }],
+        "ts/prefer-literal-enum-member": "off",
       },
-    },
-  },
-  {
-    files: [
-      "README.md",
-    ],
-    rules: {
-      "markdown/heading-increment": "off",
     },
   },
 );

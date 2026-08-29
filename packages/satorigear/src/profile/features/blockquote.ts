@@ -37,8 +37,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.BlockQuote,
         syntax: {
           kind: "block",
-          open: BlockKind.BlockQuoteOpen,
-          close: BlockKind.BlockQuoteClose,
+          token: BlockKind.BlockQuoteOpen,
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;

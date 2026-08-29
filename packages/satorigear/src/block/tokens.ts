@@ -1,8 +1,7 @@
-import { BlockKind } from "../constants/block.ts";
+import { type BlockKind, BlockTokenRole } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
 import { type BlockLines, logicalLine } from "./lines.ts";
-import type { BlockSyntaxRule } from "./profile.ts";
 
 const enum BlockTokenField {
   Kind,
@@ -11,8 +10,6 @@ const enum BlockTokenField {
   Length,
   Stride,
 }
-
-// The fourth slot stores the token length of a semantic node beginning here. Raw tokens use zero.
 
 interface BlockTokenMeta {
   definitionKey?: string;
@@ -33,7 +30,9 @@ export class BlockTokenStream {
   #definitionMembershipChanges: Set<string> | undefined;
   #fieldLength: number;
   #fields: Int32Array;
+  #groupField = -1;
   #metadata: Map<number, BlockTokenMeta> | undefined;
+  #opens: number[] = [];
   #relativeStart: number;
   #sourceLength: number;
 
@@ -48,7 +47,9 @@ export class BlockTokenStream {
     this.#definitionCounts?.clear();
     this.#definitionMembershipChanges?.clear();
     this.#fieldLength = 0;
+    this.#groupField = -1;
     this.#metadata = void 0;
+    this.#opens.length = 0;
     this.#relativeStart = Number.POSITIVE_INFINITY;
     this.#sourceLength = sourceLength;
   }
@@ -65,7 +66,14 @@ export class BlockTokenStream {
     return this.#definitionCounts?.has(key) === true;
   }
 
-  push(kind: BlockKind, start: number, end: number, meta?: BlockTokenMeta): void {
+  /** Appends a token, with an optional role override for context-dependent syntax. */
+  push(
+    kind: BlockKind,
+    start: number,
+    end: number,
+    meta?: BlockTokenMeta,
+    role?: BlockTokenRole,
+  ): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
     this.#fields[field + BlockTokenField.Kind] = kind;
@@ -81,48 +89,39 @@ export class BlockTokenStream {
         this.#updateDefinitionCount(definitionKey, 1, false);
       }
     }
+    const encodedRole = role ?? kind;
+    if (encodedRole >= BlockTokenRole.BlockOpen) {
+      this.#indexToken(field, encodedRole);
+    }
   }
 
-  indexStructure(rules: readonly (BlockSyntaxRule | undefined)[]): void {
-    const fields = this.#fields;
-    const fieldLength = this.#fieldLength;
-    const opens: number[] = [];
-    let close = BlockKind.None;
-    // Open nodes temporarily retain their parent's close kind in the empty length slot;
-    // closing replaces that workspace value with the final node length.
-    for (let field = 0; field < fieldLength; field += BlockTokenField.Stride) {
-      const kind = fields[field];
-      const rule = rules[kind];
-      if (rule && rule.close !== BlockKind.None) {
-        opens.push(field);
-        fields[field + BlockTokenField.Length] = close;
-        close = rule.close;
-        continue;
-      }
-      if (rule && !rule.block) {
-        const start = field;
-        do {
-          field += BlockTokenField.Stride;
-        } while (
-          field < fieldLength && rules[fields[field]] === rule
-        );
-        fields[start + BlockTokenField.Length] = (field - start) / BlockTokenField.Stride;
-        field -= BlockTokenField.Stride;
-        continue;
-      }
-      if (close === kind) {
-        const open = opens.pop()!;
-        close = fields[open + BlockTokenField.Length];
-        fields[open + BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
-        continue;
-      }
-      if (rule) {
-        fields[field + BlockTokenField.Length] = 1;
-      }
+  #indexToken(field: number, encodedRole: number): void {
+    if (encodedRole < BlockTokenRole.Close) {
+      this.#opens.push(field);
+      return;
     }
-    // `close` is nonzero exactly while `opens` is nonempty, avoiding a cold `opens.length` read after OSR.
-    if (close) {
-      throw new Error(`Block token stream did not close token ${fields[opens.at(-1)!]}`);
+    if (encodedRole < BlockTokenRole.Leaf) {
+      const open = this.#opens.pop()!;
+      this.#fields[open + BlockTokenField.Length] = (
+        (field - open) / BlockTokenField.Stride + 1
+      );
+      return;
+    }
+    if (encodedRole < BlockTokenRole.Group) {
+      this.#fields[field + BlockTokenField.Length] = 1;
+      return;
+    }
+    const group = this.#groupField;
+    const previous = field - BlockTokenField.Stride;
+    if (
+      group < 0 || previous < 0 ||
+      this.#fields[previous + BlockTokenField.Kind] < BlockTokenRole.Group
+    ) {
+      this.#groupField = field;
+      this.#fields[field + BlockTokenField.Length] = 1;
+    }
+    else {
+      this.#fields[group + BlockTokenField.Length]++;
     }
   }
 
@@ -331,6 +330,8 @@ export class BlockTokenStream {
   }
 
   truncate(length: number): void {
+    // A later append must not extend a group removed by truncation.
+    this.#groupField = -1;
     this.#fieldLength = length * BlockTokenField.Stride;
     if (this.#metadata) {
       for (const [index, value] of this.#metadata) {

@@ -64,8 +64,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.Paragraph,
         syntax: {
           kind: "block",
-          open: BlockKind.ParagraphOpen,
-          close: BlockKind.ParagraphClose,
+          token: BlockKind.ParagraphOpen,
         },
         inlineContent: true,
         build(tokenStart, context) {

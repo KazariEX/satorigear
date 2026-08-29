@@ -57,8 +57,7 @@ export const blockRules: BlockFeature["rules"] = [
     rule: BlockRule.FootnoteDefinition,
     syntax: {
       kind: "block",
-      open: BlockKind.FootnoteDefinitionOpen,
-      close: BlockKind.FootnoteDefinitionClose,
+      token: BlockKind.FootnoteDefinitionOpen,
     },
     build(tokenStart, context) {
       const tokens = context.structure.tokens;

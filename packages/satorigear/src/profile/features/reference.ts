@@ -249,8 +249,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.LinkDefinition,
         syntax: {
           kind: "block",
-          open: BlockKind.LinkDefinitionOpen,
-          close: BlockKind.LinkDefinitionClose,
+          token: BlockKind.LinkDefinitionOpen,
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;

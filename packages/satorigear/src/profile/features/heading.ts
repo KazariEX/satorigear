@@ -81,8 +81,7 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.AtxHeading,
         syntax: {
           kind: "block",
-          open: BlockKind.AtxHeadingOpen,
-          close: BlockKind.HeadingClose,
+          token: BlockKind.AtxHeadingOpen,
         },
         inlineContent: true,
         build(tokenStart, context) {
@@ -112,11 +111,10 @@ export const feature: SyntaxFeature = {
         rule: BlockRule.SetextHeading,
         syntax: {
           kind: "block",
-          open: [
+          token: [
             BlockKind.SetextHeading1Open,
             BlockKind.SetextHeading2Open,
           ],
-          close: BlockKind.HeadingClose,
         },
         inlineContent: true,
         build(tokenStart, context) {

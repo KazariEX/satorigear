@@ -358,7 +358,7 @@ const taskListStart: BlockStart = (source, lines, start, contentOffset, out, con
   if (nextLine === void 0) {
     return;
   }
-  // The list window is complete but not indexed yet, so task semantics can refine it in place.
+  // Task variants share the list-item frame role, so the indexed kind can be refined in place.
   for (let item = listTokenStart + 1; item < out.length; item++) {
     if (out.kind(item) !== BlockKind.ListItemOpen) {
       continue;
@@ -403,12 +403,11 @@ export function feature(taskList = false): SyntaxFeature {
           rule: BlockRule.ListItem,
           syntax: {
             kind: "frame",
-            open: [
+            token: [
               BlockKind.ListItemOpen,
               BlockKind.UncheckedTaskItemOpen,
               BlockKind.CheckedTaskItemOpen,
             ],
-            close: BlockKind.ListItemClose,
           },
           build: buildListItem,
         },
@@ -416,8 +415,7 @@ export function feature(taskList = false): SyntaxFeature {
           rule: BlockRule.UnorderedList,
           syntax: {
             kind: "block",
-            open: BlockKind.UnorderedListOpen,
-            close: BlockKind.UnorderedListClose,
+            token: BlockKind.UnorderedListOpen,
           },
           build: createBuildList(false),
         },
@@ -425,8 +423,7 @@ export function feature(taskList = false): SyntaxFeature {
           rule: BlockRule.OrderedList,
           syntax: {
             kind: "block",
-            open: BlockKind.OrderedListOpen,
-            close: BlockKind.OrderedListClose,
+            token: BlockKind.OrderedListOpen,
           },
           build: createBuildList(true),
         },

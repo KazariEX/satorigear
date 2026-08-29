@@ -252,7 +252,6 @@ export class BlockScanner {
         });
       }
     });
-    tokens.indexStructure(this.#profile.rules);
     records.length = recordIndex;
 
     this.#lines = lines;
@@ -382,7 +381,6 @@ export class BlockScanner {
       const expandedEnd = Math.min(nextSource.length, restartOffset + (scanEnd - restartOffset) * 2);
       scanLineEnd = nextLines.indexAtOrAfter(expandedEnd);
     }
-    replacement.indexStructure(this.#profile.rules);
 
     // 3. Replace the rescanned token window, then map the narrowed token damage to record ranges.
     const oldTokenLength = this.#tokens.length;

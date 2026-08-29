@@ -57,7 +57,6 @@ interface DelimiterReplacement {
 const enum DelimiterRunState {
   CanOpen = 1,
   CanClose = 2,
-  // eslint-disable-next-line ts/prefer-literal-enum-member
   FlankingMask = CanOpen | CanClose,
   LengthModuloMask = 12,
 }
