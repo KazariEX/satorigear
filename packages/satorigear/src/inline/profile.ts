@@ -1,4 +1,5 @@
 import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./lexer.ts";
+import type { DefinitionLookup } from "../block/tokens.ts";
 import type { InlineKind } from "../constants/inline.ts";
 import type {
   InlineBuilder,
@@ -11,15 +12,10 @@ import type { DelimiterConfig } from "./delimiter.ts";
 // Inline features compile into one token pipeline and the projection tables that consume it.
 import type { InlineTokenStream } from "./tokens.ts";
 
-export interface InlineResolutionContext {
-  hasDefinition: (key: string) => boolean;
-  hasDefinitions: () => boolean;
-}
-
 type InlineResolver = (
   source: string,
   tokens: InlineTokenStream,
-  context: InlineResolutionContext,
+  definitions: DefinitionLookup,
 ) => InlineTokenStream;
 
 export type InlineResolverFactory = (

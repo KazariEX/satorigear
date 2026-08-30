@@ -20,7 +20,8 @@ import {
 import { attributesEnd } from "./features/attributes/syntax.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
 import { normalizeAssociationLabel } from "./utils.ts";
-import type { InlineResolutionContext, InlineResolverFactory } from "../inline/profile.ts";
+import type { DefinitionLookup } from "../block/tokens.ts";
+import type { InlineResolverFactory } from "../inline/profile.ts";
 
 interface InlineResolverOptions {
   component: boolean;
@@ -202,7 +203,7 @@ function analyzeBrackets(
   source: string,
   tokens: InlineTokenStream,
   delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
-  context: InlineResolutionContext,
+  definitions: DefinitionLookup,
   options: InlineResolverOptions,
 ): readonly number[] {
   let hasDelimiter = false;
@@ -245,7 +246,7 @@ function analyzeBrackets(
       if (
         label &&
         label.end === inlineTokenEnd(tokens, tokenIndex) &&
-        context.hasDefinition(label.definitionKey)
+        definitions.hasDefinition(label.definitionKey)
       ) {
         setFrameState(arena, frame, FrameClaim.Footnote);
         if (candidates) {
@@ -304,10 +305,10 @@ function resolveReferences(
   source: string,
   tokens: InlineTokenStream,
   frames: number[],
-  context: InlineResolutionContext,
+  definitions: DefinitionLookup,
 ): void {
   // An empty definition table makes every non-resource bracket candidate literal.
-  const hasDefinitions = context.hasDefinitions();
+  const hasDefinitions = definitions.hasDefinitions();
   let rawTop = -1;
   let logicalTop = -1;
   let frameCursor = frameHeaderSize;
@@ -405,7 +406,7 @@ function resolveReferences(
             if (labelEnd > 0) {
               const explicit = source.slice(closeEnd + 1, labelEnd - 1);
               const label = explicit || source.slice(contentStart, contentEnd);
-              matched = context.hasDefinition(normalizeAssociationLabel(label));
+              matched = definitions.hasDefinition(normalizeAssociationLabel(label));
               if (matched) {
                 closeEnd = labelEnd;
                 reference = true;
@@ -414,7 +415,7 @@ function resolveReferences(
             else if (
               lastVisibleOpener <= openToken &&
               acceptsShortcutLabel(source, contentStart, contentEnd) &&
-              context.hasDefinition(normalizeAssociationLabel(source.slice(contentStart, contentEnd)))
+              definitions.hasDefinition(normalizeAssociationLabel(source.slice(contentStart, contentEnd)))
             ) {
               matched = true;
               reference = true;
@@ -697,17 +698,17 @@ function emitResolvedTokens(
 export function compileInlineResolver(options: InlineResolverOptions): InlineResolverFactory {
   return (delimiterConfigs) => {
     const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
-    return (source, tokens, context) => {
+    return (source, tokens, definitions) => {
       const frames = analyzeBrackets(
         source,
         tokens,
         delimiterByKind,
-        context,
+        definitions,
         options,
       );
       const flags = frames[0];
       if (flags & ResolutionFlag.Bracket) {
-        resolveReferences(source, tokens, frames as number[], context);
+        resolveReferences(source, tokens, frames as number[], definitions);
       }
       let replacements = noDelimiterReplacements;
       if (flags & ResolutionFlag.Delimiter) {

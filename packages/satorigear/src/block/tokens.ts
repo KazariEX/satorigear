@@ -25,7 +25,12 @@ export interface BlockTokenChange {
   oldStart: number;
 }
 
-export class BlockTokenStream {
+export interface DefinitionLookup {
+  hasDefinition: (key: string) => boolean;
+  hasDefinitions: () => boolean;
+}
+
+export class BlockTokenStream implements DefinitionLookup {
   #definitionCounts: Map<string, number> | undefined;
   #definitionMembershipChanges: Set<string> | undefined;
   #fieldLength: number;
