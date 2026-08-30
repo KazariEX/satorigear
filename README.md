@@ -58,7 +58,7 @@ const mdast = parser.parse("...");
 const document = parser.createDocument("...");
 document.edit([
   { start: 66, end: 66, text: ":" },
-  { start: 67, end: 67, text: "nuxt-img" },
+  { start: 66, end: 66, text: "nuxt-img" },
 ]);
 const mdast = document.tree;
 ```
