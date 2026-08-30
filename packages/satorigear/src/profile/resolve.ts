@@ -306,6 +306,8 @@ function resolveReferences(
   frames: number[],
   context: InlineResolutionContext,
 ): void {
+  // An empty definition table makes every non-resource bracket candidate literal.
+  const hasDefinitions = context.hasDefinitions();
   let rawTop = -1;
   let logicalTop = -1;
   let frameCursor = frameHeaderSize;
@@ -386,12 +388,12 @@ function resolveReferences(
       const frame = logicalTop;
       if (frame >= 0) {
         logicalTop = frames[frame + FrameSlot.WorkspaceB];
+      }
+      if (frame >= 0 && (kind === InlineKind.LinkTail || hasDefinitions)) {
         const openToken = frames[frame + FrameSlot.OpenToken];
         const image = isImageFrame(tokens, frames, frame);
-        if (!image && openToken + 1 < inactiveBefore) {
-          // A successful inner ordinary link deactivates this earlier opener.
-        }
-        else {
+        // A successful inner ordinary link deactivates each earlier non-image opener.
+        if (image || openToken + 1 >= inactiveBefore) {
           const contentStart = inlineTokenEnd(tokens, openToken);
           const contentEnd = tokenStart;
           let closeEnd = inlineTokenEnd(tokens, tokenIndex);

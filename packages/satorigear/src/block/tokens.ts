@@ -66,6 +66,10 @@ export class BlockTokenStream {
     return this.#definitionCounts?.has(key) === true;
   }
 
+  hasDefinitions(): boolean {
+    return !!this.#definitionCounts?.size;
+  }
+
   /** Appends a token, with an optional role override for context-dependent syntax. */
   push(
     kind: BlockKind,

@@ -13,6 +13,7 @@ import type { InlineTokenStream } from "./tokens.ts";
 
 export interface InlineResolutionContext {
   hasDefinition: (key: string) => boolean;
+  hasDefinitions: () => boolean;
 }
 
 type InlineResolver = (

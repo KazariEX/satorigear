@@ -5,14 +5,25 @@ import type { BlockTokenStream } from "../block/tokens.ts";
 import type { InlineProfile, InlineResolutionContext } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
+const definitionAny = Symbol();
+
 interface TrackedResolutionContext extends InlineResolutionContext {
   definitionContext: InlineResolutionContext;
-  dependencies?: Set<string>;
+  dependencies?: Set<string | typeof definitionAny>;
 }
 
 function hasDefinition(this: TrackedResolutionContext, key: string): boolean {
   (this.dependencies ??= new Set()).add(key);
   return this.definitionContext.hasDefinition(key);
+}
+
+function hasDefinitions(this: TrackedResolutionContext): boolean {
+  const hasAny = this.definitionContext.hasDefinitions();
+  if (!hasAny) {
+    // Without keys to consult, any later definition can change a bracket candidate.
+    (this.dependencies ??= new Set()).add(definitionAny);
+  }
+  return hasAny;
 }
 
 export interface InlineRegionBinding {
@@ -27,8 +38,8 @@ export interface ResolvedInlineRegion {
 }
 
 export class InlineRegion implements ResolvedInlineRegion {
-  // Track only definitions consulted by this region so unrelated definitions do not invalidate it.
-  #definitionDependencies!: ReadonlySet<string>;
+  // Track consulted definitions, or all future definitions when no concrete key can be consulted.
+  #definitionDependencies!: ReadonlySet<string | typeof definitionAny>;
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
   #profile: InlineProfile;
@@ -76,9 +87,14 @@ export class InlineRegion implements ResolvedInlineRegion {
 
   #dependenciesChanged(definitionMembershipChanges: ReadonlySet<string>): boolean {
     const dependencies = this.#definitionDependencies;
+    if (dependencies.has(definitionAny)) {
+      return definitionMembershipChanges.size > 0;
+    }
+    // The sentinel case returned above, so all remaining dependencies are labels.
+    const labels = dependencies as ReadonlySet<string>;
     // Definition-heavy edits stay linear in the smaller side of the intersection.
-    if (dependencies.size < definitionMembershipChanges.size) {
-      for (const key of dependencies) {
+    if (labels.size < definitionMembershipChanges.size) {
+      for (const key of labels) {
         if (definitionMembershipChanges.has(key)) {
           return true;
         }
@@ -109,6 +125,7 @@ export class InlineRegion implements ResolvedInlineRegion {
     const context: TrackedResolutionContext = {
       definitionContext,
       hasDefinition,
+      hasDefinitions,
     };
     const rawTokens = sourceUnchanged
       ? previousTokens
