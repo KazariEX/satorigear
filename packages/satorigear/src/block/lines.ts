@@ -18,6 +18,12 @@ const enum BlockLineCapacity {
   DoublingLimit = 16,
 }
 
+export const enum IndentedLine {
+  Underindented = -1,
+  Blank,
+  Appended,
+}
+
 export class BlockLines implements SourceLocator {
   #fieldLength = 0;
   #fields: Int32Array;
@@ -232,6 +238,43 @@ export class BlockLines implements SourceLocator {
     lazy = lines.lazy(index),
   ): void {
     this.push(start, lines.end(index), lines.next(index), prefixColumns, lazy);
+  }
+
+  /** Appends projected content, or reports why the source line was not appended. */
+  pushAfterColumns(source: string, lines: BlockLines, index: number, columns: number): IndentedLine {
+    let offset = lines.start(index);
+    let consumed = lines.prefixColumns(index);
+    const end = lines.end(index);
+    while (offset < end && consumed < columns) {
+      const code = source.charCodeAt(offset);
+      if (code === Character.Space) {
+        consumed++;
+      }
+      else if (code === Character.CharacterTabulation) {
+        consumed += 4 - (consumed % 4);
+      }
+      else {
+        break;
+      }
+      offset++;
+    }
+    if (offset === end) {
+      return IndentedLine.Blank;
+    }
+    if (consumed < columns) {
+      return IndentedLine.Underindented;
+    }
+    const contentOffset = offset;
+    const prefixColumns = consumed - columns;
+    while (offset < end) {
+      const code = source.charCodeAt(offset);
+      if (code !== Character.Space && code !== Character.CharacterTabulation) {
+        this.pushFrom(lines, index, contentOffset, prefixColumns);
+        return IndentedLine.Appended;
+      }
+      offset++;
+    }
+    return IndentedLine.Blank;
   }
 
   pushLazy(lines: BlockLines, index: number): void {
@@ -488,32 +531,6 @@ export function logicalLine(source: string, lines: BlockLines, index: number): s
     offset++;
   }
   return result + source.slice(offset, lines.next(index));
-}
-
-export function contentAfterColumns(
-  source: string,
-  lines: BlockLines,
-  index: number,
-  columns: number,
-): { offset: number; prefixColumns: number } | undefined {
-  let offset = lines.start(index);
-  let consumed = lines.prefixColumns(index);
-  const end = lines.end(index);
-  while (offset < end && consumed < columns) {
-    if (source[offset] === " ") {
-      consumed++;
-    }
-    else if (source[offset] === "\t") {
-      consumed += 4 - (consumed % 4);
-    }
-    else {
-      break;
-    }
-    offset++;
-  }
-  if (consumed >= columns) {
-    return { offset, prefixColumns: consumed - columns };
-  }
 }
 
 export function removeIndent(value: string, columns: number): string {

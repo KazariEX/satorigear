@@ -1,5 +1,5 @@
 import type { List, ListItem } from "mdast";
-import { BlockLines, contentAfterColumns, isBlank, lineIndentOffset } from "../../block/lines.ts";
+import { BlockLines, IndentedLine, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren, buildBlockNode } from "../../fragment/block.ts";
@@ -14,11 +14,19 @@ interface ListMarker {
   indent: number;
   offset: number;
   end: number;
+  hasContent: boolean;
   contentOffset: number;
   contentIndent: number;
   contentPrefixColumns: number;
   delimiter: string;
   startNumber?: number;
+}
+
+interface ListMarkerPadding {
+  offset: number;
+  columns: number;
+  hasContent: boolean;
+  prefixColumns: number;
 }
 
 const enum ParagraphLeafState {
@@ -33,10 +41,10 @@ function listMarkerPadding(
   index: number,
   markerEnd: number,
   markerColumn: number,
-): { offset: number; columns: number; prefixColumns: number } {
+): ListMarkerPadding {
   const lineEnd = lines.end(index);
   if (markerEnd === lineEnd) {
-    return { offset: markerEnd, columns: 1, prefixColumns: 0 };
+    return { offset: markerEnd, columns: 1, hasContent: false, prefixColumns: 0 };
   }
   let offset = markerEnd;
   let column = markerColumn;
@@ -53,21 +61,32 @@ function listMarkerPadding(
     }
     offset++;
   }
+  const hasContent = offset < lineEnd;
   const whitespaceColumns = column - markerColumn;
-  if (offset < lineEnd && whitespaceColumns <= 4) {
-    return { offset, columns: whitespaceColumns, prefixColumns: 0 };
+  if (hasContent && whitespaceColumns <= 4) {
+    return {
+      offset,
+      columns: whitespaceColumns,
+      hasContent: true,
+      prefixColumns: 0,
+    };
   }
   const firstPaddingColumns = source.charCodeAt(markerEnd) === Character.CharacterTabulation
     ? 4 - (markerColumn % 4)
     : 1;
-  return { offset: markerEnd + 1, columns: 1, prefixColumns: firstPaddingColumns - 1 };
+  return {
+    offset: markerEnd + 1,
+    columns: 1,
+    hasContent,
+    prefixColumns: firstPaddingColumns - 1,
+  };
 }
 
 function listMarkerAt(
   source: string,
   lines: BlockLines,
   index: number,
-  contentOffset = lineIndentOffset(source, lines, index),
+  contentOffset: number,
 ): ListMarker | undefined {
   if (contentOffset < 0) {
     return;
@@ -98,6 +117,7 @@ function listMarkerAt(
       indent,
       offset: contentOffset,
       end: markerEnd,
+      hasContent: padding.hasContent,
       contentOffset: padding.offset,
       contentIndent: indent + 1 + padding.columns,
       contentPrefixColumns: padding.prefixColumns,
@@ -136,6 +156,7 @@ function listMarkerAt(
     indent,
     offset: contentOffset,
     end: orderedEnd,
+    hasContent: padding.hasContent,
     contentOffset: padding.offset,
     contentIndent: indent + markerWidth + padding.columns,
     contentPrefixColumns: padding.prefixColumns,
@@ -146,15 +167,6 @@ function listMarkerAt(
 
 function sameList(a: ListMarker, b: ListMarker): boolean {
   return a.kind === b.kind && a.delimiter === b.delimiter;
-}
-
-function hasListContent(
-  source: string,
-  lines: BlockLines,
-  index: number,
-  marker: ListMarker | undefined,
-): boolean {
-  return !!marker && /\S/.test(source.slice(marker.contentOffset, lines.end(index)));
 }
 
 interface TaskListMarker {
@@ -291,21 +303,19 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
     out.push(BlockKind.ListItemOpen, marker.offset, marker.end);
     const itemLines = new BlockLines();
     itemLines.pushFrom(lines, index, marker.contentOffset, marker.contentPrefixColumns);
-    let hasContent = !isBlank(source, itemLines, 0);
+    let hasContent = marker.hasContent;
     // Probe the paragraph leaf only when an underindented line needs lazy continuation.
     let paragraphLeaf = hasContent ? ParagraphLeafState.Unknown : ParagraphLeafState.No;
     index++;
     while (index < lines.length) {
-      const candidate = listMarkerAt(source, lines, index);
-      if (candidate && candidate.indent < marker.contentIndent) {
-        sibling = candidate;
-        break;
-      }
-      if (isBlank(source, lines, index)) {
+      const line = itemLines.pushAfterColumns(source, lines, index, marker.contentIndent);
+      if (line === IndentedLine.Blank) {
         if (!hasContent) {
           trailingBlank = true;
           index++;
-          sibling = index < lines.length ? listMarkerAt(source, lines, index) : void 0;
+          sibling = index < lines.length
+            ? listMarkerAt(source, lines, index, lineIndentOffset(source, lines, index))
+            : void 0;
           break;
         }
         itemLines.pushFrom(lines, index);
@@ -314,14 +324,23 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
         index++;
         continue;
       }
-      const content = contentAfterColumns(source, lines, index, marker.contentIndent);
-      if (content) {
-        itemLines.pushFrom(lines, index, content.offset, content.prefixColumns);
+      if (line === IndentedLine.Appended) {
         trailingBlank = false;
         hasContent = true;
         paragraphLeaf = ParagraphLeafState.Unknown;
         index++;
         continue;
+      }
+      // Only underindented content reaches here, so any marker starts a sibling item.
+      const candidate = listMarkerAt(
+        source,
+        lines,
+        index,
+        lineIndentOffset(source, lines, index),
+      );
+      if (candidate) {
+        sibling = candidate;
+        break;
       }
       if (paragraphLeaf === ParagraphLeafState.Unknown) {
         paragraphLeaf = context.endsWithParagraphLeaf(source, itemLines, itemLines.length - 1)
@@ -452,9 +471,9 @@ export function feature(taskList = false): SyntaxFeature {
           },
           interrupt(source, lines, index, contentOffset) {
             const marker = listMarkerAt(source, lines, index, contentOffset);
-            return hasListContent(source, lines, index, marker) && (
-              marker?.kind === "unordered" ||
-              marker?.kind === "ordered" && marker.startNumber === 1
+            return marker?.hasContent === true && (
+              marker.kind === "unordered" ||
+              marker.kind === "ordered" && marker.startNumber === 1
             );
           },
           start: taskList ? taskListStart : listStart,

@@ -1,4 +1,4 @@
-import { BlockLines, contentAfterColumns, isBlank } from "../../../block/lines.ts";
+import { BlockLines, IndentedLine, isBlank } from "../../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
@@ -104,15 +104,14 @@ export const blockStarts: BlockFeature["starts"] = [
       let index = start + 1;
       let lazyParagraph = context.endsWithParagraphLeaf(source, definitionLines, 0);
       while (index < lines.length) {
-        if (isBlank(source, lines, index)) {
+        const line = definitionLines.pushAfterColumns(source, lines, index, 4);
+        if (line === IndentedLine.Blank) {
           definitionLines.pushFrom(lines, index);
           lazyParagraph = false;
           index++;
           continue;
         }
-        const content = contentAfterColumns(source, lines, index, 4);
-        if (content) {
-          definitionLines.pushFrom(lines, index, content.offset, content.prefixColumns);
+        if (line === IndentedLine.Appended) {
           lazyParagraph = context.endsWithParagraphLeaf(
             source,
             definitionLines,
