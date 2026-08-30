@@ -10,8 +10,7 @@ import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface ListMarker {
-  kind: "ordered" | "unordered";
-  indent: number;
+  ordered: boolean;
   offset: number;
   end: number;
   hasContent: boolean;
@@ -113,8 +112,7 @@ function listMarkerAt(
     }
     const padding = listMarkerPadding(source, lines, index, markerEnd, indent + 1);
     return {
-      kind: "unordered",
-      indent,
+      ordered: false,
       offset: contentOffset,
       end: markerEnd,
       hasContent: padding.hasContent,
@@ -152,8 +150,7 @@ function listMarkerAt(
   const markerWidth = orderedEnd - contentOffset;
   const padding = listMarkerPadding(source, lines, index, orderedEnd, indent + markerWidth);
   return {
-    kind: "ordered",
-    indent,
+    ordered: true,
     offset: contentOffset,
     end: orderedEnd,
     hasContent: padding.hasContent,
@@ -163,10 +160,6 @@ function listMarkerAt(
     delimiter,
     startNumber,
   };
-}
-
-function sameList(a: ListMarker, b: ListMarker): boolean {
-  return a.kind === b.kind && a.delimiter === b.delimiter;
 }
 
 interface TaskListMarker {
@@ -282,20 +275,24 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
     return;
   }
   const listMarker = marker;
-  const kind = listMarker.kind;
-  const listOpen = kind === "ordered" ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
-  const listClose = kind === "ordered" ? BlockKind.OrderedListClose : BlockKind.UnorderedListClose;
+  const ordered = listMarker.ordered;
+  const listOpen = ordered ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
+  const listClose = ordered ? BlockKind.OrderedListClose : BlockKind.UnorderedListClose;
   out.push(
     listOpen,
     listMarker.offset,
     listMarker.end,
-    kind === "ordered" ? { value: listMarker.startNumber } : void 0,
+    ordered ? { value: listMarker.startNumber } : void 0,
   );
   let index = start;
   let listEnd = listMarker.end;
   let listSpread = false;
   let trailingBlank = false;
-  while (marker && sameList(marker, listMarker)) {
+  while (
+    marker &&
+    marker.ordered === ordered &&
+    marker.delimiter === listMarker.delimiter
+  ) {
     let sibling: ListMarker | undefined;
     // A trailing blank affects the list only when another sibling follows it.
     listSpread ||= trailingBlank;
@@ -476,8 +473,7 @@ export function feature(taskList = false): SyntaxFeature {
           interrupt(source, lines, index, contentOffset) {
             const marker = listMarkerAt(source, lines, index, contentOffset);
             return marker?.hasContent === true && (
-              marker.kind === "unordered" ||
-              marker.kind === "ordered" && marker.startNumber === 1
+              !marker.ordered || marker.startNumber === 1
             );
           },
           start: taskList ? taskListStart : listStart,
