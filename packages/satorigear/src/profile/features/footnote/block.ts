@@ -1,4 +1,4 @@
-import { BlockLines, IndentedLine, isBlank } from "../../../block/lines.ts";
+import { type BlockLines, IndentedLine, isBlank } from "../../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
@@ -99,8 +99,7 @@ export const blockStarts: BlockFeature["starts"] = [
       if (!match) {
         return;
       }
-      const definitionLines = new BlockLines();
-      definitionLines.pushFrom(lines, start, match.contentOffset, 0);
+      const definitionLines = context.createLineView(lines, start, match.contentOffset, 0);
       let index = start + 1;
       let lazyParagraph = context.endsWithParagraphLeaf(source, definitionLines, 0);
       while (index < lines.length) {

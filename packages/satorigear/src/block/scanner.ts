@@ -120,6 +120,8 @@ function sameShiftedBlock(
 }
 
 export class BlockScanContext {
+  #lineViewDepth = 0;
+  #lineViews: BlockLines[] = [];
   #lookaheadEnd = 0;
   #profile: BlockProfile;
   #unwrappedLine = new BlockLines();
@@ -166,6 +168,19 @@ export class BlockScanContext {
     return end;
   }
 
+  /** Starts a depth-owned projected view; {@link scanLines} releases it after recursive scanning. */
+  createLineView(
+    lines: BlockLines,
+    index: number,
+    start: number,
+    prefixColumns: number,
+  ): BlockLines {
+    const depth = this.#lineViewDepth++;
+    const view = this.#lineViews[depth] ??= new BlockLines();
+    view.resetFrom(lines, index, start, prefixColumns);
+    return view;
+  }
+
   // Returns whether blank lines separate direct blocks in this line view.
   scanLines(source: string, lines: BlockLines, out: BlockTokenStream): boolean {
     let blankSeparated = false;
@@ -178,6 +193,9 @@ export class BlockScanContext {
         previousContentEnd--;
       }
     });
+    if (lines === this.#lineViews[this.#lineViewDepth - 1]) {
+      this.#lineViewDepth--;
+    }
     return blankSeparated;
   }
 

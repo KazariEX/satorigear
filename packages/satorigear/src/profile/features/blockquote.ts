@@ -1,4 +1,4 @@
-import { BlockLines, isBlank, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
+import { type BlockLines, isBlank, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../fragment/block.ts";
@@ -71,13 +71,18 @@ export const feature: SyntaxFeature = {
           return true;
         },
         start(source, lines, start, contentOffset, out, context) {
-          const quoteLines = new BlockLines();
-          let index = start;
-          let lazyParagraph = false;
+          // Dispatch on `>` proves the opening marker before this container starts.
+          const firstMarker = blockQuoteOffset(source, lines, start, contentOffset)!;
+          const quoteLines = context.createLineView(
+            lines,
+            start,
+            firstMarker.offset,
+            firstMarker.prefixColumns,
+          );
+          let index = start + 1;
+          let lazyParagraph = context.endsWithParagraphLeaf(source, quoteLines, 0);
           for (; index < lines.length; index++) {
-            const markerOffset = index === start
-              ? contentOffset
-              : lineIndentOffset(source, lines, index);
+            const markerOffset = lineIndentOffset(source, lines, index);
             const marker = blockQuoteOffset(source, lines, index, markerOffset);
             if (marker) {
               quoteLines.pushFrom(lines, index, marker.offset, marker.prefixColumns);

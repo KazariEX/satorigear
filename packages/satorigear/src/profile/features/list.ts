@@ -1,5 +1,5 @@
 import type { List, ListItem } from "mdast";
-import { BlockLines, IndentedLine, lineIndentOffset } from "../../block/lines.ts";
+import { type BlockLines, IndentedLine, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren, buildBlockNode } from "../../fragment/block.ts";
@@ -301,8 +301,12 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
     listSpread ||= trailingBlank;
     trailingBlank = false;
     out.push(BlockKind.ListItemOpen, marker.offset, marker.end);
-    const itemLines = new BlockLines();
-    itemLines.pushFrom(lines, index, marker.contentOffset, marker.contentPrefixColumns);
+    const itemLines = context.createLineView(
+      lines,
+      index,
+      marker.contentOffset,
+      marker.contentPrefixColumns,
+    );
     let hasContent = marker.hasContent;
     // Probe the paragraph leaf only when an underindented line needs lazy continuation.
     let paragraphLeaf = hasContent ? ParagraphLeafState.Unknown : ParagraphLeafState.No;
