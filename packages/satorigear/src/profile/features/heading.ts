@@ -56,9 +56,6 @@ export function setextMarkerAt(
   index: number,
   markerOffset: number,
 ): "=" | "-" | undefined {
-  if (markerOffset < 0) {
-    return;
-  }
   const marker = source[markerOffset];
   if (marker !== "=" && marker !== "-") {
     return;

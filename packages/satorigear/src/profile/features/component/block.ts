@@ -274,13 +274,6 @@ function nextSlot(
   }
 }
 
-function emitSlotOpening(opening: SlotOpening, out: BlockTokenStream): void {
-  out.push(BlockKind.BlockComponentSlotOpen, opening.offset, opening.nameEnd);
-  if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
-    out.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
-  }
-}
-
 function emitComponentBody(
   source: string,
   lines: BlockLines,
@@ -307,7 +300,11 @@ function emitComponentBody(
   while (slot) {
     const following = nextSlot(source, lines, slot.index + 1, end);
     const next = following?.index ?? end;
-    emitSlotOpening(slot.opening, out);
+    const opening = slot.opening;
+    out.push(BlockKind.BlockComponentSlotOpen, opening.offset, opening.nameEnd);
+    if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
+      out.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
+    }
     context.scanLines(source, lines.slice(slot.index + 1, next), out);
     const slotEnd = following ? following.opening.offset : closingOffset;
     out.push(BlockKind.BlockComponentSlotClose, slotEnd, slotEnd);

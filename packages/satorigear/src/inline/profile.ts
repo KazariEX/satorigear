@@ -84,14 +84,8 @@ export function compileInlineProfile(
           buildByKind[rule.token] = rule.apply;
           break;
         }
-        case "leaf": {
-          buildByKind[rule.token] = rule.build;
-          break;
-        }
-        case "text": {
-          buildByKind[rule.token] = rule.build;
-          break;
-        }
+        case "leaf":
+        case "text":
         case "pair": {
           buildByKind[rule.token] = rule.build;
           break;
