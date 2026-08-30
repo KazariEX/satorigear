@@ -17,6 +17,22 @@ interface BlockTokenMeta {
   value?: unknown;
 }
 
+function copyMetadata(
+  target: (BlockTokenMeta | undefined)[],
+  source: Readonly<typeof target>,
+  start: number,
+  end: number,
+  targetStart: number,
+): void {
+  end = Math.min(end, source.length);
+  for (let read = start, write = targetStart; read < end; read++, write++) {
+    const value = source[read];
+    if (value) {
+      target[write] = value;
+    }
+  }
+}
+
 export interface BlockTokenChange {
   // Borrowed until reset() or the next replace(); contains exactly the keys whose membership changed.
   definitionMembershipChanges: ReadonlySet<string>;
@@ -36,7 +52,7 @@ export class BlockTokenStream implements DefinitionLookup {
   #fieldLength: number;
   #fields: Int32Array;
   #groupField = -1;
-  #metadata: Map<number, BlockTokenMeta> | undefined;
+  #metadata?: (BlockTokenMeta | undefined)[];
   #opens: number[] = [];
   #relativeStart: number;
   #sourceLength: number;
@@ -91,8 +107,8 @@ export class BlockTokenStream implements DefinitionLookup {
     this.#fields[field + BlockTokenField.Length] = 0;
     this.#fieldLength += BlockTokenField.Stride;
     if (meta) {
-      this.#metadata ??= new Map();
-      this.#metadata.set(this.length - 1, meta);
+      this.#metadata ??= [];
+      this.#metadata[this.length - 1] = meta;
       const definitionKey = meta.definitionKey;
       if (definitionKey !== void 0) {
         this.#updateDefinitionCount(definitionKey, 1, false);
@@ -157,8 +173,8 @@ export class BlockTokenStream implements DefinitionLookup {
     ) {
       return false;
     }
-    const metadata = this.#metadata?.get(index);
-    const nextMetadata = next.#metadata?.get(nextIndex);
+    const metadata = this.#metadata?.[index];
+    const nextMetadata = next.#metadata?.[nextIndex];
     if (metadata !== nextMetadata) {
       if (metadata?.definitionKey !== nextMetadata?.definitionKey) {
         return false;
@@ -234,10 +250,10 @@ export class BlockTokenStream implements DefinitionLookup {
     // Stable prefix and suffix keys matched above, so only the narrowed ranges can change membership.
     this.#definitionMembershipChanges?.clear();
     for (let index = oldStart; index < oldEnd; index++) {
-      this.#updateDefinitionCount(this.#metadata?.get(index)?.definitionKey, -1, true);
+      this.#updateDefinitionCount(this.#metadata?.[index]?.definitionKey, -1, true);
     }
     for (let index = stablePrefixLength; index < replacementLength - stableSuffixLength; index++) {
-      this.#updateDefinitionCount(replacement.#metadata?.get(index)?.definitionKey, 1, true);
+      this.#updateDefinitionCount(replacement.#metadata?.[index]?.definitionKey, 1, true);
     }
     const change: BlockTokenChange = {
       definitionMembershipChanges: this.#definitionMembershipChanges ?? emptySet,
@@ -289,47 +305,40 @@ export class BlockTokenStream implements DefinitionLookup {
     }
 
     // 4. Splice sparse metadata. Stable indexes update in place; a size-changing
-    // middle replacement shifts suffix keys into a new map.
+    // middle replacement shifts suffix slots into a new array.
     const indexDelta = replacementLength - replacedLength;
     if (end === previousLength || indexDelta === 0) {
-      if (this.#metadata) {
-        if (replacedLength < this.#metadata.size) {
-          for (let index = start; index < end; index++) {
-            this.#metadata.delete(index);
-          }
-        }
-        else {
-          for (const index of this.#metadata.keys()) {
-            if (index >= start && index < end) {
-              this.#metadata.delete(index);
-            }
-          }
-        }
+      const metadata = this.#metadata;
+      if (metadata) {
+        metadata.fill(void 0, start, end);
       }
-      if (replacement.#metadata) {
-        const metadata = this.#metadata ??= new Map();
-        for (const [index, value] of replacement.#metadata) {
-          metadata.set(start + index, value);
-        }
+      const replacementMetadata = replacement.#metadata;
+      if (replacementMetadata) {
+        const target = this.#metadata ??= [];
+        copyMetadata(target, replacementMetadata, 0, replacementMetadata.length, start);
       }
-      if (this.#metadata?.size === 0) {
-        this.#metadata = void 0;
+      if (end === previousLength && this.#metadata) {
+        this.#metadata.length = Math.min(this.#metadata.length, start + replacementLength);
       }
     }
     else {
-      const metadata = new Map<number, BlockTokenMeta>();
-      for (const [index, value] of this.#metadata ?? []) {
-        if (index < start) {
-          metadata.set(index, value);
-        }
-        else if (index >= end) {
-          metadata.set(index + indexDelta, value);
-        }
+      const metadata: (BlockTokenMeta | undefined)[] = [];
+      const previousMetadata = this.#metadata;
+      if (previousMetadata) {
+        copyMetadata(metadata, previousMetadata, 0, start, 0);
+        copyMetadata(
+          metadata,
+          previousMetadata,
+          end,
+          previousMetadata.length,
+          end + indexDelta,
+        );
       }
-      for (const [index, value] of replacement.#metadata ?? []) {
-        metadata.set(start + index, value);
+      const replacementMetadata = replacement.#metadata;
+      if (replacementMetadata) {
+        copyMetadata(metadata, replacementMetadata, 0, replacementMetadata.length, start);
       }
-      this.#metadata = metadata.size > 0 ? metadata : void 0;
+      this.#metadata = metadata.length > 0 ? metadata : void 0;
     }
 
     const newSuffixStart = start + replacementLength;
@@ -342,16 +351,15 @@ export class BlockTokenStream implements DefinitionLookup {
     // A later append must not extend a group removed by truncation.
     this.#groupField = -1;
     this.#fieldLength = length * BlockTokenField.Stride;
-    if (this.#metadata) {
-      for (const [index, value] of this.#metadata) {
-        if (index >= length) {
+    const metadata = this.#metadata;
+    if (metadata) {
+      for (let index = length; index < metadata.length; index++) {
+        const value = metadata[index];
+        if (value) {
           this.#updateDefinitionCount(value.definitionKey, -1, false);
-          this.#metadata.delete(index);
         }
       }
-      if (this.#metadata.size === 0) {
-        this.#metadata = void 0;
-      }
+      metadata.length = Math.min(metadata.length, length);
     }
   }
 
@@ -389,15 +397,15 @@ export class BlockTokenStream implements DefinitionLookup {
   }
 
   text(source: string, index: number): string {
-    return this.#metadata?.get(index)?.text ?? source.slice(this.start(index), this.end(index));
+    return this.#metadata?.[index]?.text ?? source.slice(this.start(index), this.end(index));
   }
 
   value<T>(index: number): T | undefined {
-    return this.#metadata?.get(index)?.value as T | undefined;
+    return this.#metadata?.[index]?.value as T | undefined;
   }
 
   definitionKey(index: number): string | undefined {
-    return this.#metadata?.get(index)?.definitionKey;
+    return this.#metadata?.[index]?.definitionKey;
   }
 
   #updateDefinitionCount(
