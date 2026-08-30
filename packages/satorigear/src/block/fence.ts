@@ -18,6 +18,8 @@ export interface FenceRule {
 // Scanning owns fence recognition; projection consumes this payload without recognizing it again.
 export interface FencedBlock {
   closed: boolean;
+  // Physical views retain the raw body; projected views reconstruct it from token text.
+  content?: string;
   indent: number;
   info: string;
   markerOffset: number;
@@ -92,6 +94,7 @@ export function fencedBlock(
   source: string,
   lines: BlockLines,
   index: number,
+  end: number,
   fence: Fence,
   closed: boolean,
 ): FencedBlock {
@@ -100,8 +103,18 @@ export function fencedBlock(
   while (infoStart < lineEnd && (source[infoStart] === " " || source[infoStart] === "\t")) {
     infoStart++;
   }
+  let content: string | undefined;
+  if (lines.physicallyContiguous()) {
+    const contentStart = lines.next(index);
+    const lastContentLine = end - (closed ? 2 : 1);
+    content = source.slice(
+      contentStart,
+      lastContentLine > index ? lines.end(lastContentLine) : contentStart,
+    );
+  }
   return {
     closed,
+    content,
     indent: fence.indent,
     info: source.slice(infoStart, lineEnd),
     markerOffset: fence.offset - lines.start(index),
@@ -122,16 +135,18 @@ const sourceColumnFenceTabIndent = [
 
 /** Extracts content from LF-normalized input, removing up to `block.indent` spaces per line. */
 export function normalizedFenceContent(source: string, block: FencedBlock): string {
-  const contentStart = source.indexOf("\n") + 1;
-  if (!contentStart) {
-    return "";
+  let content = source;
+  if (block.content === void 0) {
+    const contentStart = source.indexOf("\n") + 1;
+    if (!contentStart) {
+      return "";
+    }
+    // Search before the closing line, whether or not its final LF is retained.
+    const limit = block.closed
+      ? source.lastIndexOf("\n", source.length - 2) + 1
+      : source.length;
+    content = source.slice(contentStart, lineContentEnd(source, contentStart, limit));
   }
-  // Search before the closing line, whether or not its final LF is retained.
-  const limit = block.closed
-    ? source.lastIndexOf("\n", source.length - 2) + 1
-    : source.length;
-  const end = lineContentEnd(source, contentStart, limit);
-  const content = source.slice(contentStart, end);
   return block.indent
     ? content.replace(fenceSpaceIndent[block.indent - 1], "")
     : content;
@@ -139,24 +154,25 @@ export function normalizedFenceContent(source: string, block: FencedBlock): stri
 
 /** Extracts original source content, removing up to `block.indent` columns per line. */
 export function sourceColumnFenceContent(source: string, block: FencedBlock): string {
-  let contentStart = 0;
-  while (contentStart < source.length && source[contentStart] !== "\n" && source[contentStart] !== "\r") {
-    contentStart++;
-  }
-  if (contentStart < source.length) {
-    contentStart += source[contentStart] === "\r" && source[contentStart + 1] === "\n" ? 2 : 1;
-  }
-  let limit = source.length;
-  if (block.closed) {
-    limit = lineContentEnd(source, contentStart, limit);
-    // Walk from the closing fence back to the preceding source line ending.
-    while (limit > contentStart && source[limit - 1] !== "\n" && source[limit - 1] !== "\r") {
-      limit--;
+  let content = block.content;
+  if (content === void 0) {
+    let contentStart = 0;
+    while (contentStart < source.length && source[contentStart] !== "\n" && source[contentStart] !== "\r") {
+      contentStart++;
     }
+    if (contentStart < source.length) {
+      contentStart += source[contentStart] === "\r" && source[contentStart + 1] === "\n" ? 2 : 1;
+    }
+    let limit = source.length;
+    if (block.closed) {
+      limit = lineContentEnd(source, contentStart, limit);
+      // Walk from the closing fence back to the preceding source line ending.
+      while (limit > contentStart && source[limit - 1] !== "\n" && source[limit - 1] !== "\r") {
+        limit--;
+      }
+    }
+    content = source.slice(contentStart, lineContentEnd(source, contentStart, limit));
   }
-
-  const end = lineContentEnd(source, contentStart, limit);
-  let content = source.slice(contentStart, end);
   if (block.indent) {
     if (content.includes("\t")) {
       // Expand the first indentation tab to its stop so space removal retains its overshoot.

@@ -45,13 +45,13 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const source = context.locator.normalizeLineEndings(
-            tokens.text(context.source, tokenStart),
-          );
           const block = tokens.value<FencedBlock>(tokenStart);
           if (!block) {
             throw new Error("FencedCodeBlock token has no fence metadata");
           }
+          const source = context.locator.normalizeLineEndings(
+            block.content ?? tokens.text(context.source, tokenStart),
+          );
           const rawInfo = semanticText(block.info);
           const langEnd = rawInfo.search(/[ \t]/);
           const lang = rawInfo ? langEnd < 0 ? rawInfo : rawInfo.slice(0, langEnd) : null;
@@ -152,7 +152,7 @@ export const feature: SyntaxFeature = {
             lines,
             start,
             end,
-            fencedBlock(source, lines, start, fence, closed),
+            fencedBlock(source, lines, start, end, fence, closed),
           );
           return end;
         },

@@ -28,11 +28,11 @@ export const blockRules: BlockFeature["rules"] = [
     },
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
-      const value = tokens.text(context.source, tokenStart);
       const block = tokens.value<FencedBlock>(tokenStart);
       if (!block) {
         throw new Error("Math block lacks fence metadata");
       }
+      const value = block.content ?? tokens.text(context.source, tokenStart);
       const meta = semanticText(block.info);
       return {
         type: "math",
@@ -72,7 +72,7 @@ export const blockStarts: BlockFeature["starts"] = [
         lines,
         start,
         end,
-        fencedBlock(source, lines, start, fence, closed),
+        fencedBlock(source, lines, start, end, fence, closed),
       );
       return end;
     },
