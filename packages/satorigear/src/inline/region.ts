@@ -8,26 +8,30 @@ import type { InlineTokenStream } from "./tokens.ts";
 
 const definitionAny = Symbol();
 
-interface TrackedDefinitionLookup extends DefinitionLookup {
-  definitions: DefinitionLookup;
+class TrackedDefinitionLookup implements DefinitionLookup {
+  readonly definitions: DefinitionLookup;
   dependencies?: Set<string | typeof definitionAny>;
-}
 
-function hasDefinition(this: TrackedDefinitionLookup, key: string): boolean {
-  (this.dependencies ??= new Set()).add(key);
-  return this.definitions.hasDefinition(key);
-}
-
-function hasDefinitions(this: TrackedDefinitionLookup): boolean {
-  const hasAny = this.definitions.hasDefinitions();
-  if (!hasAny) {
-    // Without keys to consult, any later definition can change a bracket candidate.
-    (this.dependencies ??= new Set()).add(definitionAny);
+  constructor(definitions: DefinitionLookup) {
+    this.definitions = definitions;
   }
-  return hasAny;
+
+  hasDefinition(key: string): boolean {
+    (this.dependencies ??= new Set()).add(key);
+    return this.definitions.hasDefinition(key);
+  }
+
+  hasDefinitions(): boolean {
+    const hasAny = this.definitions.hasDefinitions();
+    if (!hasAny) {
+      // Without keys to consult, any later definition can change a bracket candidate.
+      (this.dependencies ??= new Set()).add(definitionAny);
+    }
+    return hasAny;
+  }
 }
 
-export interface InlineRegionBinding {
+interface InlineRegionBinding {
   tokenStart: number;
   view: SourceView;
 }
@@ -51,7 +55,7 @@ class InlineRegion implements ResolvedInlineRegion {
   constructor(
     profile: InlineProfile,
     binding: InlineRegionBinding,
-    definitions: DefinitionLookup,
+    definitions: TrackedDefinitionLookup,
   ) {
     this.#profile = profile;
     this.tokenStart = binding.tokenStart;
@@ -61,7 +65,7 @@ class InlineRegion implements ResolvedInlineRegion {
 
   update(
     binding: InlineRegionBinding,
-    definitions: DefinitionLookup,
+    definitions: TrackedDefinitionLookup,
     definitionMembershipChanges: ReadonlySet<string>,
   ): this {
     this.#updateTokens(binding.view.text, definitions, definitionMembershipChanges);
@@ -71,7 +75,7 @@ class InlineRegion implements ResolvedInlineRegion {
   }
 
   updateDefinitions(
-    definitions: DefinitionLookup,
+    definitions: TrackedDefinitionLookup,
     definitionMembershipChanges: ReadonlySet<string>,
   ): boolean {
     return this.#updateTokens(this.view.text, definitions, definitionMembershipChanges);
@@ -109,7 +113,7 @@ class InlineRegion implements ResolvedInlineRegion {
 
   #updateTokens(
     source: string,
-    definitions: DefinitionLookup,
+    definitions: TrackedDefinitionLookup,
     definitionMembershipChanges: ReadonlySet<string>,
   ): boolean {
     const previousTokens = this.#rawTokens;
@@ -119,17 +123,11 @@ class InlineRegion implements ResolvedInlineRegion {
     }
 
     // Incremental regions retain exactly the definition lookups that can invalidate them.
-    const context: TrackedDefinitionLookup = {
-      definitions,
-      hasDefinition,
-      hasDefinitions,
-    };
-    const rawTokens = sourceUnchanged
-      ? previousTokens
-      : this.#profile.tokenize(source);
-    const tokens = this.#profile.resolve(source, rawTokens, context);
+    definitions.dependencies = void 0;
+    const rawTokens = sourceUnchanged ? previousTokens : this.#profile.tokenize(source);
+    const tokens = this.#profile.resolve(source, rawTokens, definitions);
 
-    this.#definitionDependencies = context.dependencies ?? emptySet;
+    this.#definitionDependencies = definitions.dependencies ?? emptySet;
     this.#rawTokens = rawTokens;
     this.tokens = tokens;
     return true;
@@ -137,11 +135,14 @@ class InlineRegion implements ResolvedInlineRegion {
 }
 
 export class InlineRegionState {
+  // Inline regions resolve serially, so one tracker can serve every update.
+  #lookup: TrackedDefinitionLookup;
   #profile: InlineProfile;
   #regionsByBlock: (readonly InlineRegion[])[] = [];
   #structure: BlockStructure;
 
   constructor(profile: InlineProfile, structure: BlockStructure) {
+    this.#lookup = new TrackedDefinitionLookup(structure.tokens);
     this.#profile = profile;
     this.#structure = structure;
   }
@@ -253,10 +254,11 @@ export class InlineRegionState {
             candidate = displacedRegions[displacedIndex++];
           }
         }
-        const region = candidate
-          ? candidate.update(binding, tokens, definitionMembershipChanges)
-          : new InlineRegion(this.#profile, binding, tokens);
-        regions[regionIndex] = region;
+        regions[regionIndex] = candidate?.update(
+          binding,
+          this.#lookup,
+          definitionMembershipChanges,
+        ) ?? new InlineRegion(this.#profile, binding, this.#lookup);
       }
 
       // Token-equivalent records before the narrowed damage can reuse region caches,
@@ -266,16 +268,13 @@ export class InlineRegionState {
 
     // 4. Propagate changed definition visibility to retained blocks outside the rebuilt range.
     // Regions track consulted labels, so unrelated definitions preserve block identity.
-    if (
-      previousRegionsByBlock.length > 0 &&
-      definitionMembershipChanges.size > 0
-    ) {
+    if (previousRegionsByBlock.length > 0 && definitionMembershipChanges.size > 0) {
       const refreshDefinitions = (start: number, end: number): void => {
         for (let index = start; index < end; index++) {
           const regions = regionsByBlock[index];
           let changed = false;
           for (const region of regions) {
-            if (region.updateDefinitions(tokens, definitionMembershipChanges)) {
+            if (region.updateDefinitions(this.#lookup, definitionMembershipChanges)) {
               changed = true;
             }
           }
