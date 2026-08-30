@@ -105,31 +105,8 @@ function rewriteLinkCandidates(
   candidates.length = write;
 }
 
-function allocateFrame(
-  frames: number[],
-  openToken: number,
-  parent: number,
-  candidateStart: number,
-): number {
-  const frame = frames.length;
-  frames.push(openToken, -1, candidateStart, -1, parent, FrameClaim.Raw, 0);
-  return frame;
-}
-
 function isImageFrame(tokens: InlineTokenStream, frames: readonly number[], frame: number): boolean {
   return inlineTokenKind(tokens, frames[frame + FrameSlot.OpenToken]) === InlineKind.ImageOpen;
-}
-
-function hasAdjacentComponent(
-  tokens: InlineTokenStream,
-  frames: readonly number[],
-  frame: number,
-): boolean {
-  const openToken = frames[frame + FrameSlot.OpenToken];
-  const componentToken = openToken - 1;
-  return componentToken >= 0 &&
-    inlineTokenKind(tokens, componentToken) === InlineKind.InlineComponent &&
-    inlineTokenEnd(tokens, componentToken) === inlineTokenStart(tokens, openToken);
 }
 
 function referenceLabelEnd(source: string, start: number): number {
@@ -217,13 +194,11 @@ function analyzeBrackets(
       hasDelimiter = true;
     }
     if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
-      frames ??= [ResolutionFlag.Bracket];
-      stackTop = allocateFrame(
-        frames,
-        tokenIndex,
-        stackTop,
-        candidates?.length ?? 0,
-      );
+      const arena = frames ??= [ResolutionFlag.Bracket];
+      const frame = arena.length;
+      // Append one complete frame in `FrameSlot` order before advancing the stack top.
+      arena.push(tokenIndex, -1, candidates?.length ?? 0, -1, stackTop, FrameClaim.Raw, 0);
+      stackTop = frame;
       continue;
     }
     if (kind !== InlineKind.BracketClose && kind !== InlineKind.LinkTail) {
@@ -268,7 +243,13 @@ function analyzeBrackets(
         );
       }
     }
-    if (hasAdjacentComponent(tokens, arena, frame)) {
+    const openToken = arena[frame + FrameSlot.OpenToken];
+    const componentToken = openToken - 1;
+    if (
+      componentToken >= 0 &&
+      inlineTokenKind(tokens, componentToken) === InlineKind.InlineComponent &&
+      inlineTokenEnd(tokens, componentToken) === inlineTokenStart(tokens, openToken)
+    ) {
       setFrameState(arena, frame, FrameClaim.Component);
       (candidates ??= []).push(frame);
       continue;
@@ -659,20 +640,10 @@ function emitResolvedTokens(
           else if (claim === FrameClaim.Span) {
             appendInlineToken(result, InlineKind.InlineSpanClose, tokenStart, tokenStart + 1);
           }
-          else if (
-            claim === FrameClaim.Raw ||
-            claim === FrameClaim.Link ||
-            claim === FrameClaim.Reference
-          ) {
+          // Of the remaining claims, only a footnote replaces its entire source.
+          else if (claim !== FrameClaim.Footnote) {
             const image = isImageFrame(tokens, frames, rawFrame);
             if (literalDepth === 0 || image) {
-              appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
-            }
-          }
-          else if (claim === FrameClaim.Consumed) {
-            // A closer beyond the consumed tail becomes raw again, while an enclosing
-            // component link label still suppresses its matched normal bracket.
-            if (literalDepth === 0 || isImageFrame(tokens, frames, rawFrame)) {
               appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
             }
           }
