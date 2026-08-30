@@ -222,7 +222,7 @@ export class BlockScanner {
   }
 
   scan(source: string): void {
-    const lines = BlockLines.from(source);
+    const lines = this.#lines.scan(source);
     const tokens = this.#tokens;
     tokens.reset(source.length);
     const records = this.#records;
@@ -250,8 +250,6 @@ export class BlockScanner {
       }
     });
     records.length = recordIndex;
-
-    this.#lines = lines;
   }
 
   get tokens(): BlockTokenStream {

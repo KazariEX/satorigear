@@ -59,6 +59,17 @@ export class BlockLines implements SourceLocator {
     return lines;
   }
 
+  /** Rebuilds the physical line index while retaining its backing store. */
+  scan(source: string): this {
+    this.#sourceLength = source.length;
+    this.#locatorField = 0;
+    this.#relativeStart = Infinity;
+    const lineCapacity = Math.min((source.length + 15) >>> 4, 16384);
+    this.#ensureCapacity(lineCapacity * BlockLineField.Stride);
+    this.#fieldLength = BlockLines.#scan(source, this);
+    return this;
+  }
+
   /**
    * Fills packed physical lines from a zero-based source segment.
    * Range setup and coordinate rebasing remain in {@link BlockLines.from}, outside this hot loop.
@@ -69,7 +80,7 @@ export class BlockLines implements SourceLocator {
     let lineFeed = source.indexOf("\n");
     let carriageReturn = source.indexOf("\r");
     lines.#lineEndingsNormalized = carriageReturn < 0;
-    // Physical lines have zero state, so write only their three position fields.
+    // Physical lines initialize all packed fields in one sequential write run.
     let field = 0;
     let fields = lines.#fields;
     while (start < limit) {
@@ -94,10 +105,10 @@ export class BlockLines implements SourceLocator {
         lines.#ensureCapacity(field + BlockLineField.Stride);
         fields = lines.#fields;
       }
-      fields[field + BlockLineField.Start] = start;
-      fields[field + BlockLineField.End] = end;
-      fields[field + BlockLineField.Next] = next;
-      field += BlockLineField.Stride;
+      fields[field++] = start;
+      fields[field++] = end;
+      fields[field++] = next;
+      fields[field++] = 0;
       start = next;
     }
     return field;
