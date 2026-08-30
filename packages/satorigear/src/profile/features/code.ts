@@ -99,11 +99,7 @@ export const feature: SyntaxFeature = {
         ],
         start(source, lines, start, _contentOffset, out) {
           let end = start + 1;
-          while (
-            end < lines.length && (
-              isBlank(source, lines, end) || lineIndentOffset(source, lines, end) < 0
-            )
-          ) {
+          while (end < lines.length && lineIndentOffset(source, lines, end) < 0) {
             end++;
           }
           // The block consumes trailing blank lines, but its code value and position do not include them.

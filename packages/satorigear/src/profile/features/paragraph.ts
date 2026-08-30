@@ -29,9 +29,6 @@ export const feature: SyntaxFeature = {
             }
           }
           else {
-            if (lineOffset === lines.end(index)) {
-              break;
-            }
             const setext = setextMarkerAt(source, lines, index, lineOffset);
             if (setext) {
               out.setKind(

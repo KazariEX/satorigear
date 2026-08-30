@@ -148,10 +148,7 @@ export class BlockScanContext {
         contentIndex = 0;
         continue;
       }
-      return (
-        !isBlank(source, contentLines, contentIndex) &&
-        !this.startsInterruptingBlock(source, contentLines, contentIndex, contentOffset)
-      );
+      return !this.startsInterruptingBlock(source, contentLines, contentIndex, contentOffset);
     }
   }
 

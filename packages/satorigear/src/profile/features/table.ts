@@ -1,5 +1,5 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
-import { type BlockLines, isBlank, lineIndentOffset } from "../../block/lines.ts";
+import { type BlockLines, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule, BlockTokenRole } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockBuildContext, type BlockNodeBuilder, buildBlockNode } from "../../fragment/block.ts";
@@ -266,9 +266,6 @@ export const feature: SyntaxFeature = {
 
         let end = start + 2;
         while (end < lines.length) {
-          if (isBlank(source, lines, end)) {
-            break;
-          }
           const contentOffset = lineIndentOffset(source, lines, end);
           if (
             contentOffset < 0 ||

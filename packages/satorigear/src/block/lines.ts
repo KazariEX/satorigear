@@ -466,7 +466,7 @@ export function indentOffset(source: string, lines: BlockLines, index: number): 
 /**
  * Returns the first content offset after consuming up to three indent columns.
  *
- * Unlike {@link indentOffset}, returns -1 when the logical indent exceeds three columns.
+ * Unlike {@link indentOffset}, returns -1 for blank lines or indent beyond three columns.
  * Inlining the scan improves repeated large-document block-dispatch throughput.
  */
 export function lineIndentOffset(source: string, lines: BlockLines, index: number): number {
@@ -476,7 +476,7 @@ export function lineIndentOffset(source: string, lines: BlockLines, index: numbe
   while (offset < end && offset < limit && source.charCodeAt(offset) === Character.Space) {
     offset++;
   }
-  if (offset > limit) {
+  if (offset > limit || offset === end) {
     return -1;
   }
   const code = source.charCodeAt(offset);
