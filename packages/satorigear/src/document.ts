@@ -6,8 +6,7 @@ import {
   type SourceChange,
 } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
-import { InlineRegionCursor, type ResolvedInlineRegion } from "./inline/region.ts";
-import { SyntaxState } from "./syntax-state.ts";
+import { InlineRegionCursor, InlineRegionState, type ResolvedInlineRegion } from "./inline/region.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan } from "./source-view.ts";
 
@@ -90,7 +89,7 @@ export class DocumentImpl implements Document {
   #blockScanner: BlockScanner;
   #profile: SyntaxProfile;
   #source: string;
-  #syntaxState: SyntaxState;
+  #regionState: InlineRegionState;
   #tree: Root = { type: "root", children: [] };
 
   constructor(source: string, profile: SyntaxProfile) {
@@ -98,8 +97,8 @@ export class DocumentImpl implements Document {
     this.#source = source;
     this.#blockScanner = new BlockScanner(profile.block);
     this.#blockScanner.scan(source);
-    this.#syntaxState = new SyntaxState(profile.inline, this.#blockScanner);
-    this.#updateTree(this.#syntaxState.update(source));
+    this.#regionState = new InlineRegionState(profile.inline, this.#blockScanner);
+    this.#updateTree(this.#regionState.update(source));
   }
 
   get source(): string {
@@ -117,7 +116,7 @@ export class DocumentImpl implements Document {
     const change = applyEdits(this.source, edits);
 
     const blockChange = this.#blockScanner.edit(change);
-    const invalidatedBlocks = this.#syntaxState.update(change.nextSource, blockChange);
+    const invalidatedBlocks = this.#regionState.update(change.nextSource, blockChange);
     this.#source = change.nextSource;
     this.#updateTree(invalidatedBlocks, blockChange);
 
@@ -126,7 +125,7 @@ export class DocumentImpl implements Document {
 
   #updateTree(invalidatedBlocks: readonly number[], change?: BlockScanChange): void {
     const records = this.#blockScanner.records;
-    const regionsByBlock = this.#syntaxState.regionsByBlock();
+    const regionsByBlock = this.#regionState.regionsByBlock();
     const locator = this.#blockScanner.locator();
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.
