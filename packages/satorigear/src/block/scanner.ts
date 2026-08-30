@@ -226,17 +226,14 @@ export type BlockStructure = Pick<BlockScanner, "records" | "ruleOf" | "tokens">
 
 export class BlockScanner {
   #context: BlockScanContext;
-  #lines: BlockLines;
+  #lines = new BlockLines();
   #profile: BlockProfile;
-  #records: BlockRecord[];
-  #tokens: BlockTokenStream;
+  #records: BlockRecord[] = [];
+  #tokens = new BlockTokenStream();
 
   constructor(profile: BlockProfile) {
     this.#context = new BlockScanContext(profile);
     this.#profile = profile;
-    this.#lines = new BlockLines();
-    this.#records = [];
-    this.#tokens = new BlockTokenStream();
   }
 
   scan(source: string): void {

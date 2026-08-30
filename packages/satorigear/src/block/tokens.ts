@@ -49,18 +49,15 @@ export interface DefinitionLookup {
 export class BlockTokenStream implements DefinitionLookup {
   #definitionCounts: Map<string, number> | undefined;
   #definitionMembershipChanges: Set<string> | undefined;
-  #fieldLength: number;
-  #fields: Int32Array;
+  #fieldLength = 0;
+  #fields = new Int32Array();
   #groupField = -1;
   #metadata?: (BlockTokenMeta | undefined)[];
   #opens: number[] = [];
-  #relativeStart: number;
+  #relativeStart = Infinity;
   #sourceLength: number;
 
   constructor(sourceLength = 0) {
-    this.#fieldLength = 0;
-    this.#fields = new Int32Array();
-    this.#relativeStart = Number.POSITIVE_INFINITY;
     this.#sourceLength = sourceLength;
   }
 
@@ -71,7 +68,7 @@ export class BlockTokenStream implements DefinitionLookup {
     this.#groupField = -1;
     this.#metadata = void 0;
     this.#opens.length = 0;
-    this.#relativeStart = Number.POSITIVE_INFINITY;
+    this.#relativeStart = Infinity;
     this.#sourceLength = sourceLength;
   }
 
@@ -342,7 +339,7 @@ export class BlockTokenStream implements DefinitionLookup {
     }
 
     const newSuffixStart = start + replacementLength;
-    this.#relativeStart = newSuffixStart < this.length ? newSuffixStart : Number.POSITIVE_INFINITY;
+    this.#relativeStart = newSuffixStart < this.length ? newSuffixStart : Infinity;
     this.#sourceLength = replacement.#sourceLength;
     return change;
   }
