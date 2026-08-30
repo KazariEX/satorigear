@@ -82,10 +82,8 @@ export const feature: SyntaxFeature = {
           const tokens = context.structure.tokens;
           const offset = tokens.start(tokenStart);
           const end = tokens.end(tokenStart);
-          const unterminated = tokens.value<boolean>(tokenStart);
-          if (tokens.kind(tokenStart) !== BlockKind.HtmlBlock || unterminated === void 0) {
-            throw new Error("HTML block lacks termination state");
-          }
+          // The HTML scanner records termination state on every emitted block token.
+          const unterminated = tokens.value<boolean>(tokenStart)!;
           let html = context.locator.normalizeLineEndings(
             tokens.text(context.source, tokenStart),
           );

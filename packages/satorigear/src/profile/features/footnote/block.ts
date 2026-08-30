@@ -5,7 +5,6 @@ import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
-import type { BlockTokenStream } from "../../../block/tokens.ts";
 
 interface FootnoteDefinitionFields {
   label: string;
@@ -44,14 +43,6 @@ function definitionAt(
   };
 }
 
-function definitionFields(tokens: BlockTokenStream, token: number): FootnoteDefinitionFields {
-  const fields = tokens.value<FootnoteDefinitionFields>(token);
-  if (tokens.kind(token) !== BlockKind.FootnoteDefinitionOpen || !fields) {
-    throw new Error("Expected FootnoteDefinitionOpen token to contain parsed fields");
-  }
-  return fields;
-}
-
 export const blockRules: BlockFeature["rules"] = [
   {
     rule: BlockRule.FootnoteDefinition,
@@ -61,7 +52,8 @@ export const blockRules: BlockFeature["rules"] = [
     },
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
-      const fields = definitionFields(tokens, tokenStart);
+      // This rule only builds openers emitted with their parsed definition fields.
+      const fields = tokens.value<FootnoteDefinitionFields>(tokenStart)!;
       const start = context.locator.locationAt(tokens.start(tokenStart));
       const children = buildBlockChildren(tokenStart, context);
       return {

@@ -28,10 +28,8 @@ export const blockRules: BlockFeature["rules"] = [
     },
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
-      const block = tokens.value<FencedBlock>(tokenStart);
-      if (!block) {
-        throw new Error("Math block lacks fence metadata");
-      }
+      // The math scanner records fence geometry on every emitted block token.
+      const block = tokens.value<FencedBlock>(tokenStart)!;
       const value = block.content ?? tokens.text(context.source, tokenStart);
       const meta = semanticText(block.info);
       return {

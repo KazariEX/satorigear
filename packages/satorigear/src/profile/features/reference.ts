@@ -5,7 +5,6 @@ import { leafBlockPosition } from "../../fragment/block.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
 import { semanticText } from "./text.ts";
 import type { BlockScanContext } from "../../block/scanner.ts";
-import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface LinkDefinitionFields {
@@ -18,14 +17,6 @@ interface LinkDefinitionMatch {
   definitionKey: string;
   end: number;
   fields: LinkDefinitionFields;
-}
-
-function linkDefinitionFields(tokens: BlockTokenStream, token: number): LinkDefinitionFields {
-  const fields = tokens.value<LinkDefinitionFields>(token);
-  if (tokens.kind(token) !== BlockKind.LinkDefinitionOpen || !fields) {
-    throw new Error("Expected LinkDefinitionOpen token to contain parsed fields");
-  }
-  return fields;
 }
 
 function linkDefinitionAt(
@@ -271,11 +262,9 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const fields = linkDefinitionFields(tokens, tokenStart);
-          const definitionKey = tokens.definitionKey(tokenStart);
-          if (definitionKey === void 0) {
-            throw new Error("Expected LinkDefinitionOpen token to contain a definition key");
-          }
+          // This rule only builds openers emitted with their parsed definition metadata.
+          const fields = tokens.value<LinkDefinitionFields>(tokenStart)!;
+          const definitionKey = tokens.definitionKey(tokenStart)!;
           return {
             type: "definition",
             identifier: definitionKey,

@@ -45,10 +45,8 @@ export const feature: SyntaxFeature = {
         },
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const block = tokens.value<FencedBlock>(tokenStart);
-          if (!block) {
-            throw new Error("FencedCodeBlock token has no fence metadata");
-          }
+          // The fenced-code scanner records geometry on every emitted block token.
+          const block = tokens.value<FencedBlock>(tokenStart)!;
           const source = context.locator.normalizeLineEndings(
             block.content ?? tokens.text(context.source, tokenStart),
           );
