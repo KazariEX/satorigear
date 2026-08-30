@@ -47,9 +47,7 @@ function tokenize(
   const tokens: number[] = [];
   const end = source.length;
   // A non-negative offset means the scanner is at the start of that physical line.
-  let lineStart = 0;
-  let offset = 0;
-  while (offset < end) {
+  for (let offset = 0, lineStart = 0; offset < end;) {
     if (lineStart >= 0) {
       // Block scanning excludes blank physical lines from inline regions.
       let content = offset;
@@ -65,6 +63,11 @@ function tokenize(
       }
       lineStart = -1;
     }
+    textBoundary.lastIndex = offset;
+    if (!textBoundary.test(source)) {
+      break;
+    }
+    offset = textBoundary.lastIndex - 1;
 
     const code = source.charCodeAt(offset);
     if (code === Character.LineFeed || code === Character.CarriageReturn) {
@@ -89,8 +92,6 @@ function tokenize(
     const scannedEnd = scannerByCode[code]?.(source, offset, tokens) ?? offset;
     // Rejected markers and ordinary characters remain implicit source text.
     offset = scannedEnd > offset ? scannedEnd : offset + 1;
-    textBoundary.lastIndex = offset;
-    offset = textBoundary.test(source) ? textBoundary.lastIndex - 1 : end;
   }
   return tokens;
 }
@@ -110,11 +111,11 @@ function generateInlineTokenizer(
     /** Mirrors {@link tokenize}, embedding only its profile-specific scanner switch. */
     const source = [
       `return source=>{`,
-      `const tokens=[],end=source.length;let lineStart=0,offset=0;`,
-      `while(offset<end){`,
+      `const tokens=[],end=source.length;for(let offset=0,lineStart=0;offset<end;){`,
       `if(lineStart>=0){let content=offset;while(source.charCodeAt(content)===${Character.Space})content++;`,
       `if(content===end)break;offset=content;`,
       `if(lineStart>0)tokens.push(${InlineKind.Newline},offset,offset,lineStart);lineStart=-1}`,
+      `textBoundary.lastIndex=offset;if(!textBoundary.test(source))break;offset=textBoundary.lastIndex-1;`,
       `const code=source.charCodeAt(offset);`,
       `if(code===${Character.LineFeed}||code===${Character.CarriageReturn}){`,
       `if(source.charCodeAt(offset-1)===${Character.Space}&&source.charCodeAt(offset-2)===${Character.Space}){`,
@@ -123,8 +124,7 @@ function generateInlineTokenizer(
       `offset++;if(code===${Character.CarriageReturn}&&source.charCodeAt(offset)===${Character.LineFeed})offset++;`,
       `lineStart=offset;continue}`,
       `let scannedEnd;switch(code){${cases}default:scannedEnd=offset}`,
-      `offset=scannedEnd>offset?scannedEnd:offset+1;textBoundary.lastIndex=offset;`,
-      `offset=textBoundary.test(source)?textBoundary.lastIndex-1:end}`,
+      `offset=scannedEnd>offset?scannedEnd:offset+1}`,
       `return tokens}`,
     ].join("");
     tokenizerFactories.set(
