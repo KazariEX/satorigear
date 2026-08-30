@@ -1,7 +1,7 @@
 {
   "name": "satorigear",
   "type": "module",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Blazing fast Markdown parser with full incremental support that outputs MDAST",
   "author": "KazariEX",
   "license": "MIT",
