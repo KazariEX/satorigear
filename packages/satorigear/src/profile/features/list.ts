@@ -10,75 +10,20 @@ import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface ListMarker {
-  ordered: boolean;
   offset: number;
   end: number;
   hasContent: boolean;
   contentOffset: number;
   contentIndent: number;
   contentPrefixColumns: number;
-  delimiter: string;
-  startNumber?: number;
-}
-
-interface ListMarkerPadding {
-  offset: number;
-  columns: number;
-  hasContent: boolean;
-  prefixColumns: number;
+  delimiter: number;
+  startNumber: number;
 }
 
 const enum ParagraphLeafState {
   No,
   Yes,
   Unknown,
-}
-
-function listMarkerPadding(
-  source: string,
-  lines: BlockLines,
-  index: number,
-  markerEnd: number,
-  markerColumn: number,
-): ListMarkerPadding {
-  const lineEnd = lines.end(index);
-  if (markerEnd === lineEnd) {
-    return { offset: markerEnd, columns: 1, hasContent: false, prefixColumns: 0 };
-  }
-  let offset = markerEnd;
-  let column = markerColumn;
-  while (offset < lineEnd) {
-    const code = source.charCodeAt(offset);
-    if (code === Character.Space) {
-      column++;
-    }
-    else if (code === Character.CharacterTabulation) {
-      column += 4 - (column % 4);
-    }
-    else {
-      break;
-    }
-    offset++;
-  }
-  const hasContent = offset < lineEnd;
-  const whitespaceColumns = column - markerColumn;
-  if (hasContent && whitespaceColumns <= 4) {
-    return {
-      offset,
-      columns: whitespaceColumns,
-      hasContent: true,
-      prefixColumns: 0,
-    };
-  }
-  const firstPaddingColumns = source.charCodeAt(markerEnd) === Character.CharacterTabulation
-    ? 4 - (markerColumn % 4)
-    : 1;
-  return {
-    offset: markerEnd + 1,
-    columns: 1,
-    hasContent,
-    prefixColumns: firstPaddingColumns - 1,
-  };
 }
 
 function listMarkerAt(
@@ -92,8 +37,10 @@ function listMarkerAt(
   }
   const indent = lines.prefixColumns(index) + contentOffset - lines.start(index);
   const marker = source.charCodeAt(contentOffset);
-  const markerEnd = contentOffset + 1;
   const lineEnd = lines.end(index);
+  let delimiter: number;
+  let markerEnd = contentOffset + 1;
+  let startNumber = 0;
   if (
     marker === Character.HyphenMinus ||
     marker === Character.PlusSign ||
@@ -110,53 +57,74 @@ function listMarkerAt(
     ) {
       return;
     }
-    const padding = listMarkerPadding(source, lines, index, markerEnd, indent + 1);
-    return {
-      ordered: false,
-      offset: contentOffset,
-      end: markerEnd,
-      hasContent: padding.hasContent,
-      contentOffset: padding.offset,
-      contentIndent: indent + 1 + padding.columns,
-      contentPrefixColumns: padding.prefixColumns,
-      delimiter: String.fromCharCode(marker),
-    };
+    delimiter = marker;
   }
-  if (marker < Character.DigitZero || marker > Character.DigitNine) {
-    return;
-  }
-  let startNumber = 0;
-  let orderedEnd = contentOffset;
-  // CommonMark caps ordered markers at nine digits, so the prefix is cheaper to scan than to slice and match.
-  while (orderedEnd < lineEnd && orderedEnd - contentOffset < 9) {
-    const digit = source.charCodeAt(orderedEnd) - Character.DigitZero;
-    if (digit < 0 || digit > 9) {
-      break;
-    }
-    startNumber = startNumber * 10 + digit;
-    orderedEnd++;
-  }
-  const delimiter = source[orderedEnd];
-  if (delimiter !== "." && delimiter !== ")") {
-    return;
-  }
-  if (orderedEnd + 1 < lineEnd) {
-    const code = source.charCodeAt(orderedEnd + 1);
-    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+  else {
+    if (marker < Character.DigitZero || marker > Character.DigitNine) {
       return;
     }
+    let orderedEnd = contentOffset;
+    // CommonMark caps ordered markers at nine digits, so the prefix is cheaper to scan than to slice and match.
+    while (orderedEnd < lineEnd && orderedEnd - contentOffset < 9) {
+      const digit = source.charCodeAt(orderedEnd) - Character.DigitZero;
+      if (digit < 0 || digit > 9) {
+        break;
+      }
+      startNumber = startNumber * 10 + digit;
+      orderedEnd++;
+    }
+    delimiter = source.charCodeAt(orderedEnd);
+    if (delimiter !== Character.FullStop && delimiter !== Character.RightParenthesis) {
+      return;
+    }
+    if (orderedEnd + 1 < lineEnd) {
+      const code = source.charCodeAt(orderedEnd + 1);
+      if (code !== Character.Space && code !== Character.CharacterTabulation) {
+        return;
+      }
+    }
+    markerEnd = orderedEnd + 1;
   }
-  orderedEnd++;
-  const markerWidth = orderedEnd - contentOffset;
-  const padding = listMarkerPadding(source, lines, index, orderedEnd, indent + markerWidth);
+
+  const markerColumn = indent + markerEnd - contentOffset;
+  let contentIndent = markerColumn + 1;
+  let contentStart = markerEnd;
+  let hasContent = false;
+  let prefixColumns = 0;
+  if (markerEnd < lineEnd) {
+    let column = markerColumn;
+    while (contentStart < lineEnd) {
+      const code = source.charCodeAt(contentStart);
+      if (code === Character.Space) {
+        column++;
+      }
+      else if (code === Character.CharacterTabulation) {
+        column += 4 - (column % 4);
+      }
+      else {
+        break;
+      }
+      contentStart++;
+    }
+    hasContent = contentStart < lineEnd;
+    if (hasContent && column - markerColumn <= 4) {
+      contentIndent = column;
+    }
+    else {
+      const firstPaddingColumns = source.charCodeAt(markerEnd) === Character.CharacterTabulation
+        ? 4 - (markerColumn % 4)
+        : 1;
+      contentStart = markerEnd + 1;
+      prefixColumns = firstPaddingColumns - 1;
+    }
+  }
   return {
-    ordered: true,
     offset: contentOffset,
-    end: orderedEnd,
-    hasContent: padding.hasContent,
-    contentOffset: padding.offset,
-    contentIndent: indent + markerWidth + padding.columns,
-    contentPrefixColumns: padding.prefixColumns,
+    end: markerEnd,
+    hasContent,
+    contentOffset: contentStart,
+    contentIndent,
+    contentPrefixColumns: prefixColumns,
     delimiter,
     startNumber,
   };
@@ -274,25 +242,21 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
   if (!marker) {
     return;
   }
-  const listMarker = marker;
-  const ordered = listMarker.ordered;
+  const delimiter = marker.delimiter;
+  const ordered = delimiter === Character.FullStop || delimiter === Character.RightParenthesis;
   const listOpen = ordered ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
   const listClose = ordered ? BlockKind.OrderedListClose : BlockKind.UnorderedListClose;
   out.push(
     listOpen,
-    listMarker.offset,
-    listMarker.end,
-    ordered ? { value: listMarker.startNumber } : void 0,
+    marker.offset,
+    marker.end,
+    ordered ? { value: marker.startNumber } : void 0,
   );
   let index = start;
-  let listEnd = listMarker.end;
+  let listEnd = marker.end;
   let listSpread = false;
   let trailingBlank = false;
-  while (
-    marker &&
-    marker.ordered === ordered &&
-    marker.delimiter === listMarker.delimiter
-  ) {
+  while (marker?.delimiter === delimiter) {
     let sibling: ListMarker | undefined;
     // A trailing blank affects the list only when another sibling follows it.
     listSpread ||= trailingBlank;
@@ -473,7 +437,10 @@ export function feature(taskList = false): SyntaxFeature {
           interrupt(source, lines, index, contentOffset) {
             const marker = listMarkerAt(source, lines, index, contentOffset);
             return marker?.hasContent === true && (
-              !marker.ordered || marker.startNumber === 1
+              marker.startNumber === 1 || (
+                marker.delimiter !== Character.FullStop &&
+                marker.delimiter !== Character.RightParenthesis
+              )
             );
           },
           start: taskList ? taskListStart : listStart,
