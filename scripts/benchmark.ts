@@ -5,8 +5,11 @@ import { type BenchmarkCorpus, load } from "../test/benchmark/helpers/corpus.ts"
 import { corpusLabel } from "../test/benchmark/helpers/utils.ts";
 
 const engines = ["satorigear", "satteri", "remark"] as const;
-const comparedEngines = ["satorigear", "satteri"] as const;
-const rounds = 5;
+const forwarded = ["satorigear", "satteri"] as const;
+const backwarded = forwarded.toReversed();
+const paired = [forwarded, backwarded, backwarded, forwarded];
+const rounds = paired.length;
+const maximumRelativeSpread = 0.03;
 
 type Engine = typeof engines[number];
 
@@ -63,7 +66,8 @@ function runSuite(file: string, engine: Engine): MitataOutput {
 
 function median(values: readonly number[]): number {
   const sorted = values.toSorted((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
+  const middle = sorted.length / 2;
+  return (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 function addOutput(times: Map<string, number>, output: MitataOutput): void {
@@ -79,24 +83,33 @@ function addOutput(times: Map<string, number>, output: MitataOutput): void {
 }
 
 function benchmarkResult(
-  rounds: readonly BenchmarkRound[],
+  roundResults: readonly BenchmarkRound[],
   name: string,
   baselineName: string,
 ): { relativeTime: number; time: number } | undefined {
-  const times: number[] = [];
+  const baselineTimes: number[] = [];
   const relativeTimes: number[] = [];
-  for (const round of rounds) {
+  const times: number[] = [];
+  for (const round of roundResults) {
     const time = round.get(name);
     const baseline = round.get(baselineName);
     if (time === void 0 || baseline === void 0) {
       return;
     }
-    times.push(time);
+    baselineTimes.push(baseline);
     relativeTimes.push(time / baseline);
+    times.push(time);
   }
+  const sortedRelativeTimes = relativeTimes.toSorted((a, b) => a - b);
+  const middle = sortedRelativeTimes.length / 2;
+  const spread = sortedRelativeTimes[middle] / sortedRelativeTimes[middle - 1] - 1;
+  if (spread > maximumRelativeSpread) {
+    throw new Error(`${name}: ${(spread * 100).toFixed(1)}% central relative spread`);
+  }
+  const time = median(times);
   return {
-    relativeTime: median(relativeTimes),
-    time: median(times),
+    relativeTime: time / median(baselineTimes),
+    time,
   };
 }
 
@@ -201,8 +214,7 @@ const suites = [
 let context: BenchmarkContext | undefined;
 for (const suite of suites) {
   console.log(`Benchmarking ${suite.file}`);
-  for (let round = 0; round < rounds; round++) {
-    const order = round % 2 === 0 ? comparedEngines : comparedEngines.toReversed();
+  for (const [round, order] of paired.entries()) {
     console.log(`  paired round ${round + 1}/${rounds}`);
     for (const engine of order) {
       const output = runSuite(suite.file, engine);

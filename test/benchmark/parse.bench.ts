@@ -7,7 +7,7 @@ import { corpusLabel, parseCorpus } from "./helpers/utils.ts";
 const engines = createCommonmarkEngines();
 const corpora = load().filter((corpus) => corpus.profile === "commonmark");
 
-if (process.env.BENCHMARK_ENGINE === void 0 || process.env.BENCHMARK_ENGINE === "satorigear") {
+if (process.env.BENCHMARK_ENGINE === void 0) {
   // Parser (profile) construction is intentionally separate from steady-state document parsing.
   summary(() => {
     bench("satorigear, create parser", () => {
