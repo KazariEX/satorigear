@@ -26,35 +26,6 @@ export interface BlockRecord extends SourceSpan {
   tokenStart: number;
 }
 
-function scanBlock(
-  profile: BlockProfile,
-  context: BlockScanContext,
-  source: string,
-  lines: BlockLines,
-  start: number,
-  contentOffset: number,
-  out: BlockTokenStream,
-): number {
-  const starts = profile.starts[
-    contentOffset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(contentOffset)
-  ];
-  if (starts) {
-    for (const resolve of starts) {
-      const end = resolve(source, lines, start, contentOffset, out, context);
-      if (end !== void 0) {
-        return end;
-      }
-    }
-  }
-  for (const fallback of profile.fallbacks) {
-    const fallbackEnd = fallback(source, lines, start, contentOffset, out, context);
-    if (fallbackEnd !== void 0) {
-      return fallbackEnd;
-    }
-  }
-  throw new Error("Syntax profile did not provide a block fallback");
-}
-
 function scanBlockLines(
   profile: BlockProfile,
   context: BlockScanContext,
@@ -85,7 +56,7 @@ function scanBlockLines(
     }
     const lineStart = index;
     const tokenStart = out.length;
-    index = scanBlock(profile, context, source, lines, index, contentOffset, out);
+    index = profile.dispatch(source, lines, index, contentOffset, out, context);
     if (visit(lineStart, index, tokenStart, out.length)) {
       return;
     }
