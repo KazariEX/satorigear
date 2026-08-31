@@ -46,23 +46,11 @@ function tokenize(
   // Ordinary source text stays implicit between semantic tokens; the builder reads those gaps.
   const tokens: number[] = [];
   const end = source.length;
-  // A non-negative offset means the scanner is at the start of that physical line.
-  for (let offset = 0, lineStart = 0; offset < end;) {
-    if (lineStart >= 0) {
-      // Block scanning excludes blank physical lines from inline regions.
-      let content = offset;
-      while (source.charCodeAt(content) === Character.Space) {
-        content++;
-      }
-      if (content === end) {
-        break;
-      }
-      offset = content;
-      if (lineStart > 0) {
-        tokens.push(InlineKind.Newline, offset, offset, lineStart);
-      }
-      lineStart = -1;
-    }
+  let offset = 0;
+  while (source.charCodeAt(offset) === Character.Space) {
+    offset++;
+  }
+  for (; offset < end;) {
     textBoundary.lastIndex = offset;
     if (!textBoundary.test(source)) {
       break;
@@ -85,7 +73,12 @@ function tokenize(
       if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
         offset++;
       }
-      lineStart = offset;
+      // Block scanning excludes blank lines; continuation indentation is omitted from inline text.
+      const lineStart = offset;
+      while (source.charCodeAt(offset) === Character.Space) {
+        offset++;
+      }
+      tokens.push(InlineKind.Newline, offset, offset, lineStart);
       continue;
     }
 
@@ -111,10 +104,8 @@ function generateInlineTokenizer(
     /** Mirrors {@link tokenize}, embedding only its profile-specific scanner switch. */
     const source = [
       `return source=>{`,
-      `const tokens=[],end=source.length;for(let offset=0,lineStart=0;offset<end;){`,
-      `if(lineStart>=0){let content=offset;while(source.charCodeAt(content)===${Character.Space})content++;`,
-      `if(content===end)break;offset=content;`,
-      `if(lineStart>0)tokens.push(${InlineKind.Newline},offset,offset,lineStart);lineStart=-1}`,
+      `const tokens=[],end=source.length;let offset=0;`,
+      `while(source.charCodeAt(offset)===${Character.Space})offset++;for(;offset<end;){`,
       `textBoundary.lastIndex=offset;if(!textBoundary.test(source))break;offset=textBoundary.lastIndex-1;`,
       `const code=source.charCodeAt(offset);`,
       `if(code===${Character.LineFeed}||code===${Character.CarriageReturn}){`,
@@ -122,7 +113,8 @@ function generateInlineTokenizer(
       `let spaces=offset-2;while(source.charCodeAt(spaces-1)===${Character.Space})spaces--;`,
       `tokens.push(${InlineKind.HardBreak},spaces,offset,0)}`,
       `offset++;if(code===${Character.CarriageReturn}&&source.charCodeAt(offset)===${Character.LineFeed})offset++;`,
-      `lineStart=offset;continue}`,
+      `const lineStart=offset;while(source.charCodeAt(offset)===${Character.Space})offset++;`,
+      `tokens.push(${InlineKind.Newline},offset,offset,lineStart);continue}`,
       `let scannedEnd;switch(code){${cases}default:scannedEnd=offset}`,
       `offset=scannedEnd>offset?scannedEnd:offset+1}`,
       `return tokens}`,
