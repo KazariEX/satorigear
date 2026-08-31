@@ -1,7 +1,7 @@
 import type { PhrasingContent, Text } from "mdast";
 import { Character } from "../constants/character.ts";
 import { InlineKind, InlineTokenRole } from "../constants/inline.ts";
-import { resolveInlineRegion } from "../inline/region.ts";
+import { inlineViewOf } from "../inline/region.ts";
 import {
   inlineTokenCount,
   inlineTokenData,
@@ -344,15 +344,30 @@ export function buildInlineFragment(
   blockRule: BlockRule,
   context: BlockBuildContext,
 ): InlineFragment {
-  const region = context.cursor
-    ? context.cursor.take(tokenStart)
-    : resolveInlineRegion(context.source, context.profile, context.structure.tokens, tokenStart);
-  if (!region) {
-    return {
-      children: [],
-    };
+  let tokens: InlineTokenStream;
+  let view: SourceView;
+  if (context.cursor) {
+    const region = context.cursor.take(tokenStart);
+    if (!region) {
+      return { children: [] };
+    }
+    tokens = region.tokens;
+    view = region.view;
   }
-  const { tokens, view } = region;
+  else {
+    const blockTokens = context.structure.tokens;
+    const inlineView = inlineViewOf(
+      context.source,
+      blockTokens,
+      tokenStart,
+      blockTokens.nodeLength(tokenStart),
+    );
+    if (!inlineView) {
+      return { children: [] };
+    }
+    view = inlineView;
+    tokens = context.profile.resolve(view.text, context.profile.tokenize(view.text), blockTokens);
+  }
   const inlineContext = context.inlineContext ??= {
     blockRule,
     locator: context.locator,

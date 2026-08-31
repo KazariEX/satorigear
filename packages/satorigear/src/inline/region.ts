@@ -312,29 +312,6 @@ export class InlineRegionCursor {
   }
 }
 
-export function resolveInlineRegion(
-  source: string,
-  profile: InlineProfile,
-  tokens: BlockTokenStream,
-  tokenStart: number,
-): ResolvedInlineRegion | undefined {
-  const view = inlineViewOf(
-    source,
-    tokens,
-    tokenStart,
-    tokens.nodeLength(tokenStart),
-  );
-  if (!view) {
-    return;
-  }
-  const text = view.text;
-  return {
-    tokenStart,
-    tokens: profile.resolve(text, profile.tokenize(text), tokens),
-    view,
-  };
-}
-
 export function inlineViewOf(
   source: string,
   tokens: BlockTokenStream,
