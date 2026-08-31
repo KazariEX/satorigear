@@ -197,7 +197,7 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
   const start = context.locator.locationAt(tokens.start(tokenStart));
   const children: TableCell[] = [];
   for (let cell = tokenStart + 1; cell < close; cell += tokens.nodeLength(cell)) {
-    children.push(buildBlockNode<TableCell>(cell, context));
+    children.push(buildBlockNode(cell, context));
   }
   return {
     type: "tableRow",
@@ -334,7 +334,7 @@ export const feature: SyntaxFeature = {
             row < close;
             row += tokens.nodeLength(row)
           ) {
-            rows.push(buildBlockNode<TableRow>(row, context));
+            rows.push(buildBlockNode(row, context));
           }
           return {
             type: "table",

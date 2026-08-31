@@ -1,3 +1,4 @@
+import type { Blockquote } from "mdast";
 import { type BlockLines, isBlank, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -42,7 +43,7 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const start = context.locator.locationAt(tokens.start(tokenStart));
-          const children = buildBlockChildren(tokenStart, context);
+          const children = buildBlockChildren<Blockquote["children"][number]>(tokenStart, context);
           return {
             type: "blockquote",
             children,

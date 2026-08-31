@@ -427,7 +427,7 @@ export const blockRules: BlockFeature["rules"] = [
       const start = context.locator.locationAt(tokens.start(tokenStart));
       const children: RootContent[] = [];
       if (label) {
-        children.push(buildBlockNode<Paragraph>(label, context));
+        children.push(buildBlockNode(label, context));
       }
       children.push(...buildBlockChildren(tokenStart, context));
       const opening = tokens.text(context.source, tokenStart);

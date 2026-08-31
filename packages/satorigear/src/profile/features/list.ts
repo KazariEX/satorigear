@@ -229,7 +229,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const markerKind = tokens.kind(tokenStart);
   const start = context.locator.locationAt(tokens.start(tokenStart));
-  const children = buildBlockChildren(tokenStart, context);
+  const children = buildBlockChildren<ListItem["children"][number]>(tokenStart, context);
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return {
     type: "listItem",

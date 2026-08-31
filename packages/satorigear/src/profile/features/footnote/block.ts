@@ -1,3 +1,4 @@
+import type { FootnoteDefinition } from "mdast";
 import { type BlockLines, IndentedLine, isBlank } from "../../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
@@ -55,7 +56,7 @@ export const blockRules: BlockFeature["rules"] = [
       // This rule only builds openers emitted with their parsed definition fields.
       const fields = tokens.value<FootnoteDefinitionFields>(tokenStart)!;
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      const children = buildBlockChildren(tokenStart, context);
+      const children = buildBlockChildren<FootnoteDefinition["children"][number]>(tokenStart, context);
       return {
         type: "footnoteDefinition",
         identifier: fields.normalizedLabel,
