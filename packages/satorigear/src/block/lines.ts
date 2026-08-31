@@ -25,8 +25,8 @@ export const enum IndentedLine {
 }
 
 export class BlockLines implements SourceLocator {
-  #fieldLength = 0;
   #fields: Int32Array;
+  #length = 0;
   #locatorField = 0;
   // Positions in the retained edit suffix are stored relative to source EOF. Changing
   // source length then shifts the whole suffix without rewriting every line coordinate.
@@ -52,7 +52,7 @@ export class BlockLines implements SourceLocator {
       sourceLength,
       Math.min((source.length + 15) >>> 4, 16384),
     );
-    lines.#fieldLength = BlockLines.#scan(source, lines);
+    lines.#length = BlockLines.#scan(source, lines);
     if (start !== 0) {
       lines.#shiftPositions(0, start);
     }
@@ -66,7 +66,7 @@ export class BlockLines implements SourceLocator {
     this.#relativeStart = Infinity;
     const lineCapacity = Math.min((source.length + 15) >>> 4, 16384);
     this.#ensureCapacity(lineCapacity * BlockLineField.Stride);
-    this.#fieldLength = BlockLines.#scan(source, this);
+    this.#length = BlockLines.#scan(source, this);
     return this;
   }
 
@@ -111,11 +111,11 @@ export class BlockLines implements SourceLocator {
       fields[field++] = 0;
       start = next;
     }
-    return field;
+    return field / BlockLineField.Stride;
   }
 
   get length(): number {
-    return this.#fieldLength / BlockLineField.Stride;
+    return this.#length;
   }
 
   start(index: number): number {
@@ -171,7 +171,7 @@ export class BlockLines implements SourceLocator {
    * monomorphic across documents; per-parse closures would invalidate its optimized call target.
    */
   locationAt(offset: number): SourceLocation {
-    const fieldLength = this.#fieldLength;
+    const fieldLength = this.#length * BlockLineField.Stride;
     if (fieldLength === 0) {
       return { line: 1, column: 1, offset };
     }
@@ -227,7 +227,7 @@ export class BlockLines implements SourceLocator {
     prefixColumns = 0,
     lazy = false,
   ): void {
-    const field = this.#fieldLength;
+    const field = this.#length * BlockLineField.Stride;
     let fields = this.#fields;
     if (field >= fields.length) {
       this.#ensureCapacity(field + BlockLineField.Stride);
@@ -238,7 +238,7 @@ export class BlockLines implements SourceLocator {
     fields[field + BlockLineField.End] = end;
     fields[field + BlockLineField.Next] = next;
     fields[field + BlockLineField.State] = state;
-    this.#fieldLength += BlockLineField.Stride;
+    this.#length++;
   }
 
   pushFrom(
@@ -301,7 +301,7 @@ export class BlockLines implements SourceLocator {
   ): void {
     const end = lines.end(index);
     const next = lines.next(index);
-    this.#fieldLength = 0;
+    this.#length = 0;
     this.#relativeStart = Infinity;
     this.push(start, end, next, prefixColumns, lazy);
   }
@@ -312,7 +312,7 @@ export class BlockLines implements SourceLocator {
     const fieldStart = start * BlockLineField.Stride;
     const fieldEnd = end * BlockLineField.Stride;
     result.#fields = this.#fields.slice(fieldStart, fieldEnd);
-    result.#fieldLength = fieldEnd - fieldStart;
+    result.#length = end - start;
     result.#lineEndingsNormalized = this.#lineEndingsNormalized;
     if (this.#relativeStart < end) {
       result.#relativeStart = Math.max(0, this.#relativeStart - start);
@@ -363,8 +363,8 @@ export class BlockLines implements SourceLocator {
   }
 
   pop(): void {
-    if (this.#fieldLength > 0) {
-      this.#fieldLength -= BlockLineField.Stride;
+    if (this.#length > 0) {
+      this.#length--;
       // A boundary at or beyond the new end means no EOF-relative lines remain.
       if (this.#relativeStart >= this.length) {
         this.#relativeStart = Infinity;
@@ -409,11 +409,11 @@ export class BlockLines implements SourceLocator {
     }
     const sourceStart = start * BlockLineField.Stride;
     const sourceEnd = end * BlockLineField.Stride;
-    const targetStart = this.#fieldLength;
+    const targetStart = this.#length * BlockLineField.Stride;
     const targetEnd = targetStart + sourceEnd - sourceStart;
     this.#ensureCapacity(targetEnd);
     this.#fields.set(lines.#fields.subarray(sourceStart, sourceEnd), targetStart);
-    this.#fieldLength = targetEnd;
+    this.#length += end - start;
   }
 
   #ensureCapacity(fieldLength: number): void {
@@ -440,7 +440,7 @@ export class BlockLines implements SourceLocator {
 
   #shiftPositions(start: number, delta: number): void {
     const fields = this.#fields;
-    const fieldLength = this.#fieldLength;
+    const fieldLength = this.#length * BlockLineField.Stride;
     for (let field = start * BlockLineField.Stride; field < fieldLength; field += BlockLineField.Stride) {
       fields[field + BlockLineField.Start] += delta;
       fields[field + BlockLineField.End] += delta;
