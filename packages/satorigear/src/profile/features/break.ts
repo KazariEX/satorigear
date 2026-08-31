@@ -81,13 +81,6 @@ export const feature: SyntaxFeature = {
           };
         },
       },
-      {
-        kind: "text",
-        token: InlineKind.Newline,
-        build() {
-          return "\n";
-        },
-      },
     ],
   },
 };

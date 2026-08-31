@@ -155,66 +155,26 @@ function appendGap(
   appendText(output, value, sourceStart, context.view.mapEnd(end), context);
 }
 
-function appendToken(
+function appendLeafToken(
   output: InlineOutput,
   context: InlineBuildContext,
-  tokenIndex: number,
-  viewStart: number,
-  viewEnd: number,
-  build: InlineLeafBuilder | InlineTextBuilder,
-  textToken: boolean,
-  syntaxNewline: boolean,
+  token: number,
+  start: number,
+  end: number,
+  build: InlineLeafBuilder,
 ): void {
-  const cursor = output.cursor;
-  // Most tokens only flush the preceding source gap and append their node.
-  if (!syntaxNewline) {
-    if (viewStart > cursor) {
-      appendGap(output, context, cursor, viewStart);
-    }
+  if (start > output.cursor) {
+    appendGap(output, context, output.cursor, start);
   }
-  else {
-    // Syntax newlines additionally trim line suffixes and repair mapped boundaries.
-    const viewLineStart = inlineTokenData(context.tokens, tokenIndex);
-    const viewLineEndingStart = lineEndingStart(context.view.text, viewLineStart);
-    if (viewStart > cursor) {
-      if (viewLineEndingStart > cursor) {
-        appendGap(output, context, cursor, viewLineEndingStart);
-      }
-    }
-    // Markdown syntax newlines point past stripped container prefixes,
-    // while mdast spans include the physical line ending.
-    const previous = output.children.at(-1);
-    if (previous?.type === "break") {
-      // At a stripped container boundary, the left side maps before the prefix while
-      // the right side maps after it. A hard break must span to the former.
-      previous.position!.end = context.locator.locationAt(
-        context.view.mapOffset(viewLineStart - 1) + 1,
-      );
-      return;
-    }
-    viewStart = viewLineEndingStart;
-    trimTrailingText(output);
-  }
-  const sourceStart = context.view.mapOffset(viewStart);
-  const sourceEnd = viewStart === viewEnd ? sourceStart : context.view.mapEnd(viewEnd);
-  if (textToken) {
-    appendText(
-      output,
-      (build as InlineTextBuilder)(tokenIndex, context),
-      sourceStart,
-      sourceEnd,
-      context,
-    );
-  }
-  else {
-    finishText(output, context);
-    output.children.push((build as InlineLeafBuilder)(
-      tokenIndex,
-      context.locator.positionAt(sourceStart, sourceEnd),
-      context,
-    ));
-    output.lastText = void 0;
-  }
+  const sourceStart = context.view.mapOffset(start);
+  const sourceEnd = start === end ? sourceStart : context.view.mapEnd(end);
+  finishText(output, context);
+  output.children.push(build(
+    token,
+    context.locator.positionAt(sourceStart, sourceEnd),
+    context,
+  ));
+  output.lastText = void 0;
 }
 
 // Resolution has already made semantic pairs unambiguous, so projection can consume that stream
@@ -230,6 +190,39 @@ function appendRange(
   let index = startToken;
   while (index < endToken) {
     const kind = inlineTokenKind(context.tokens, index);
+    // Newline has fixed semantic text, so it does not enter profile builder dispatch.
+    if (kind === InlineKind.Newline) {
+      const childEnd = inlineTokenEnd(context.tokens, index);
+      const lineStart = inlineTokenData(context.tokens, index);
+      const endingStart = lineEndingStart(context.view.text, lineStart);
+      if (endingStart > output.cursor) {
+        appendGap(output, context, output.cursor, endingStart);
+      }
+      // Markdown syntax newlines point past stripped container prefixes,
+      // while mdast spans include the physical line ending.
+      const previous = output.children.at(-1);
+      if (previous?.type === "break") {
+        // At a stripped container boundary, the left side maps before the prefix while
+        // the right side maps after it. A hard break must span to the former.
+        previous.position!.end = context.locator.locationAt(
+          context.view.mapOffset(lineStart - 1) + 1,
+        );
+      }
+      else {
+        trimTrailingText(output);
+        const sourceStart = context.view.mapOffset(endingStart);
+        appendText(
+          output,
+          "\n",
+          sourceStart,
+          context.view.mapEnd(childEnd),
+          context,
+        );
+      }
+      output.cursor = childEnd;
+      index++;
+      continue;
+    }
     if (kind === closeKind) {
       break;
     }
@@ -237,17 +230,29 @@ function appendRange(
     const childStart = inlineTokenStart(context.tokens, index);
     if (kind < InlineTokenRole.Pair) {
       const childEnd = inlineTokenEnd(context.tokens, index);
-      appendToken(
-        output,
-        context,
-        index,
-        childStart,
-        childEnd,
-        build as InlineLeafBuilder | InlineTextBuilder,
-        kind < InlineTokenRole.Leaf,
-        // Distinguishes lexer-emitted newlines from text that merely decodes to "\n".
-        kind === InlineKind.Newline,
-      );
+      if (kind < InlineTokenRole.Leaf) {
+        if (childStart > output.cursor) {
+          appendGap(output, context, output.cursor, childStart);
+        }
+        const sourceStart = context.view.mapOffset(childStart);
+        appendText(
+          output,
+          (build as InlineTextBuilder)(index, context),
+          sourceStart,
+          childStart === childEnd ? sourceStart : context.view.mapEnd(childEnd),
+          context,
+        );
+      }
+      else {
+        appendLeafToken(
+          output,
+          context,
+          index,
+          childStart,
+          childEnd,
+          build as InlineLeafBuilder,
+        );
+      }
       output.cursor = childEnd;
       index++;
       continue;
