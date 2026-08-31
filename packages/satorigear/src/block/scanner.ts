@@ -26,43 +26,6 @@ export interface BlockRecord extends SourceSpan {
   tokenStart: number;
 }
 
-function scanBlockLines(
-  profile: BlockProfile,
-  context: BlockScanContext,
-  source: string,
-  lines: BlockLines,
-  out: BlockTokenStream,
-  visit: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
-): void {
-  for (let index = 0; index < lines.length;) {
-    // Scan leading whitespace once to distinguish blank lines from block indent.
-    let contentOffset = lines.start(index);
-    const lineEnd = lines.end(index);
-    let columns = lines.prefixColumns(index);
-    while (contentOffset < lineEnd) {
-      const code = source.charCodeAt(contentOffset);
-      if (code !== Character.Space && code !== Character.CharacterTabulation) {
-        break;
-      }
-      columns += code === Character.Space ? 1 : 4 - columns % 4;
-      contentOffset++;
-    }
-    if (contentOffset === lineEnd) {
-      index++;
-      continue;
-    }
-    if (columns > 3) {
-      contentOffset = -1;
-    }
-    const lineStart = index;
-    const tokenStart = out.length;
-    index = profile.dispatch(source, lines, index, contentOffset, out, context);
-    if (visit(lineStart, index, tokenStart, out.length)) {
-      return;
-    }
-  }
-}
-
 function sameShiftedBlock(
   previous: BlockTokenStream,
   record: BlockRecord,
@@ -152,11 +115,51 @@ export class BlockScanContext {
     return view;
   }
 
-  // Returns whether blank lines separate direct blocks in this line view.
+  /** Scans direct blocks in a line view and visits their line and token ranges. */
+  scanBlockLines(
+    source: string,
+    lines: BlockLines,
+    out: BlockTokenStream,
+    visit: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
+  ): void {
+    const profile = this.#profile;
+    for (let index = 0; index < lines.length;) {
+      // Scan leading whitespace once to distinguish blank lines from block indent.
+      let contentOffset = lines.start(index);
+      const lineEnd = lines.end(index);
+      let columns = lines.prefixColumns(index);
+      while (contentOffset < lineEnd) {
+        const code = source.charCodeAt(contentOffset);
+        if (code !== Character.Space && code !== Character.CharacterTabulation) {
+          break;
+        }
+        columns += code === Character.Space ? 1 : 4 - columns % 4;
+        contentOffset++;
+      }
+      if (contentOffset === lineEnd) {
+        index++;
+        continue;
+      }
+      if (columns > 3) {
+        contentOffset = -1;
+      }
+      const lineStart = index;
+      const tokenStart = out.length;
+      index = profile.dispatch(source, lines, index, contentOffset, out, this);
+      if (visit(lineStart, index, tokenStart, out.length)) {
+        return;
+      }
+    }
+  }
+
+  /**
+   * Wraps {@link scanBlockLines} to report blank separation between direct blocks.
+   * Releases the line view after scanning when it is owned by this context.
+   */
   scanLines(source: string, lines: BlockLines, out: BlockTokenStream): boolean {
     let blankSeparated = false;
     let previousContentEnd = -1;
-    scanBlockLines(this.#profile, this, source, lines, out, (lineStart, lineEnd) => {
+    this.scanBlockLines(source, lines, out, (lineStart, lineEnd) => {
       blankSeparated ||= previousContentEnd >= 0 && lineStart > previousContentEnd;
       previousContentEnd = lineEnd;
       // A child may consume trailing blank lines that still separate the following direct block.
@@ -215,7 +218,7 @@ export class BlockScanner {
     const context = this.#context;
     let recordIndex = 0;
     context.resetLookahead();
-    scanBlockLines(this.#profile, context, source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
+    context.scanBlockLines(source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
       const end = lines.next(lineEnd - 1);
       const dependencyEnd = Math.max(end, context.consumeLookahead());
       const record = records[recordIndex++];
@@ -301,7 +304,7 @@ export class BlockScanner {
       context.resetLookahead();
       // The visitor is consumed synchronously before this window can be expanded.
       // eslint-disable-next-line no-loop-func
-      scanBlockLines(this.#profile, context, nextSource, scanLines, replacement, (
+      context.scanBlockLines(nextSource, scanLines, replacement, (
         lineStart,
         lineEnd,
         tokenStart,
