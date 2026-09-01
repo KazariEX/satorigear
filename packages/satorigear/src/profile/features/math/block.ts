@@ -7,7 +7,7 @@ import {
   sourceColumnFenceContent,
 } from "../../../block/fence.ts";
 import { appendLogicalToken } from "../../../block/tokens.ts";
-import { BlockKind, BlockRule } from "../../../constants/block.ts";
+import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { fencedBlockPosition } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
@@ -19,13 +19,9 @@ const mathFenceRule: FenceRule = {
   minimumLength: 2,
 };
 
-export const blockRules: BlockFeature["rules"] = [
+export const blockBuilds: BlockFeature["builds"] = [
   {
-    rule: BlockRule.MathBlock,
-    syntax: {
-      kind: "leaf",
-      token: BlockKind.MathBlock,
-    },
+    token: BlockKind.MathBlock,
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
       // The math scanner records fence geometry on every emitted block token.

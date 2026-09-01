@@ -9,7 +9,7 @@ import {
 } from "../../block/fence.ts";
 import { type BlockLines, isBlank, lineIndentOffset, removeIndent } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { fencedBlockPosition } from "../../fragment/block.ts";
@@ -36,13 +36,9 @@ export function codeFenceAt(
 
 export const feature: SyntaxFeature = {
   block: {
-    rules: [
+    builds: [
       {
-        rule: BlockRule.FencedCode,
-        syntax: {
-          kind: "leaf",
-          token: BlockKind.FencedCodeBlock,
-        },
+        token: BlockKind.FencedCodeBlock,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           // The fenced-code scanner records geometry on every emitted block token.
@@ -64,11 +60,7 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        rule: BlockRule.IndentedCodeBlock,
-        syntax: {
-          kind: "leaf",
-          token: BlockKind.IndentedCodeBlock,
-        },
+        token: BlockKind.IndentedCodeBlock,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const offset = tokens.start(tokenStart);
@@ -195,9 +187,7 @@ export const feature: SyntaxFeature = {
           }
           return {
             type: "inlineCode",
-            value: context.blockRule === BlockRule.TableCell
-              ? value.replace(/\\\|/g, "|")
-              : value,
+            value: context.tableCell ? value.replace(/\\\|/g, "|") : value,
             position: sourceSpan,
           };
         },

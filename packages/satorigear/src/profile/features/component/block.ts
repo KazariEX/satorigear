@@ -2,7 +2,7 @@ import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLines, lineIndentOffset } from "../../../block/lines.ts";
 import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
-import { BlockKind, BlockRule } from "../../../constants/block.ts";
+import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../../fragment/block.ts";
 import { buildInlineFragment } from "../../../fragment/inline.ts";
@@ -330,11 +330,7 @@ const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   const start = context.locator.locationAt(tokens.start(tokenStart));
-  const children = buildInlineFragment(
-    tokenStart,
-    BlockRule.BlockComponentLabel,
-    context,
-  ).children;
+  const children = buildInlineFragment(tokenStart, false, context).children;
   return {
     type: "paragraph",
     children,
@@ -377,32 +373,15 @@ function createBlockStart(shorthand: boolean): BlockStart {
   };
 }
 
-export const blockRules: BlockFeature["rules"] = [
+export const blockBuilds: BlockFeature["builds"] = [
   {
     // The YAML props fence becomes a child yaml node, matching frontmatter's shape;
     // interpreting the mapping itself is the consumer's job.
-    rule: BlockRule.BlockComponentYamlProps,
-    syntax: {
-      kind: "leaf",
-      token: BlockKind.BlockComponentYamlProps,
-    },
+    token: BlockKind.BlockComponentYamlProps,
     build: buildFrontmatter,
   },
   {
-    rule: BlockRule.BlockComponentLabel,
-    syntax: {
-      kind: "frame",
-      token: BlockKind.BlockComponentLabelOpen,
-    },
-    inlineContent: true,
-    build: buildBlockLabel,
-  },
-  {
-    rule: BlockRule.BlockComponent,
-    syntax: {
-      kind: "block",
-      token: BlockKind.BlockComponentOpen,
-    },
+    token: BlockKind.BlockComponentOpen,
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
       const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
@@ -440,11 +419,7 @@ export const blockRules: BlockFeature["rules"] = [
     },
   },
   {
-    rule: BlockRule.BlockComponentSlot,
-    syntax: {
-      kind: "block",
-      token: BlockKind.BlockComponentSlotOpen,
-    },
+    token: BlockKind.BlockComponentSlotOpen,
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
       const close = tokenStart + tokens.nodeLength(tokenStart) - 1;

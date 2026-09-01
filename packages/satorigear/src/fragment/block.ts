@@ -1,4 +1,5 @@
 import type { RootContent, TopLevelContent } from "mdast";
+import { BlockRole } from "../constants/block.ts";
 import type { FencedBlock } from "../block/fence.ts";
 import type { BlockStructure } from "../block/scanner.ts";
 import type { InlineProfile } from "../inline/profile.ts";
@@ -63,23 +64,25 @@ export function buildBlockNode<T extends object = TopLevelContent>(
   tokenStart: number,
   context: BlockBuildContext,
 ): T {
-  return context.structure.ruleOf(tokenStart).build!(tokenStart, context) as T;
+  const kind = context.structure.tokens.kind(tokenStart);
+  return context.structure.builds[kind]!(tokenStart, context) as T;
 }
 
 export function buildBlockChildren<T extends object = RootContent>(
   tokenStart: number,
   context: BlockBuildContext,
 ): T[] {
-  const structure = context.structure;
-  const tokens = structure.tokens;
+  const builds = context.structure.builds;
+  const tokens = context.structure.tokens;
   const children: T[] = [];
   const tokenEnd = tokenStart + tokens.nodeLength(tokenStart) - 1;
   for (let child = tokenStart + 1; child < tokenEnd;) {
     const length = tokens.nodeLength(child);
     if (length > 0) {
-      const rule = structure.ruleOf(child);
-      if (rule.block) {
-        children.push(rule.build!(child, context) as T);
+      const kind = tokens.kind(child);
+      const role = kind & BlockRole.Mask;
+      if (role === BlockRole.BlockOpen || role === BlockRole.Leaf) {
+        children.push(builds[kind]!(child, context) as T);
       }
     }
     child += length || 1;

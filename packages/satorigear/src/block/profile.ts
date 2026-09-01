@@ -1,16 +1,10 @@
 // Block features compile into the immutable scanner, structure, and node builders shared by a parser.
 import { Character } from "../constants/character.ts";
-import type { BlockKind, BlockRule } from "../constants/block.ts";
+import type { BlockKind } from "../constants/block.ts";
 import type { BlockNodeBuilder } from "../fragment/block.ts";
 import type { BlockLines } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
 import type { BlockTokenStream } from "./tokens.ts";
-
-export interface BlockSyntaxRule {
-  block: boolean;
-  inlineContent: boolean;
-  build?: BlockNodeBuilder;
-}
 
 export type BlockStart = (
   source: string,
@@ -46,38 +40,28 @@ interface BlockStartRegistration {
   start: BlockStart;
 }
 
-type BlockSyntaxRegistration =
-  | { kind: "block"; token: BlockKind | readonly BlockKind[] }
-  | { kind: "frame"; token: BlockKind | readonly BlockKind[] }
-  | { kind: "group"; token: readonly BlockKind[] }
-  | { kind: "leaf"; token: BlockKind };
-
-interface BlockRuleRegistration {
-  rule: BlockRule;
-  syntax: BlockSyntaxRegistration;
-  build?: BlockNodeBuilder;
-  inlineContent?: true;
+interface BlockBuildRegistration {
+  token: BlockKind | readonly BlockKind[];
+  build: BlockNodeBuilder;
 }
 
-export type BlockNodeBuilderDecorator = (build: BlockNodeBuilder) => BlockNodeBuilder;
-
 interface BlockDecoratorRegistration {
-  rule: BlockRule;
-  decorate: BlockNodeBuilderDecorator;
+  token: BlockKind | readonly BlockKind[];
+  decorate: (build: BlockNodeBuilder) => BlockNodeBuilder;
 }
 
 export interface BlockFeature {
+  builds?: readonly BlockBuildRegistration[];
   decorators?: readonly BlockDecoratorRegistration[];
   fallbacks?: readonly BlockStart[];
-  rules?: readonly BlockRuleRegistration[];
   starts?: readonly BlockStartRegistration[];
 }
 
 export interface BlockProfile {
+  builds: readonly (BlockNodeBuilder | undefined)[];
   dispatch: BlockDispatch;
   interrupts: readonly (readonly BlockInterrupt[] | undefined)[];
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
-  rules: readonly (BlockSyntaxRule | undefined)[];
 }
 
 function generateBlockDispatch(
@@ -131,15 +115,23 @@ function generateBlockDispatch(
 }
 
 export function compileBlockProfile(features: readonly BlockFeature[]): BlockProfile {
+  const builds: (BlockNodeBuilder | undefined)[] = [];
   const decorators: BlockDecoratorRegistration[] = [];
   const fallbacks: BlockStart[] = [];
   const interrupts: BlockInterrupt[][] = [];
   const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
-  const ruleByBlockRule: (BlockSyntaxRule | undefined)[] = [];
-  const rules: (BlockSyntaxRule | undefined)[] = [];
   const starts: BlockStart[][] = [];
 
   for (const feature of features) {
+    if (feature.builds) {
+      for (const registration of feature.builds) {
+        const token = registration.token;
+        const tokens = typeof token === "number" ? [token] : token;
+        for (const token of tokens) {
+          builds[token] = registration.build;
+        }
+      }
+    }
     if (feature.decorators) {
       decorators.push(...feature.decorators);
     }
@@ -159,36 +151,24 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
         }
       }
     }
-    if (feature.rules) {
-      for (const registration of feature.rules) {
-        const syntax = registration.syntax;
-        const tokens = typeof syntax.token === "number" ? [syntax.token] : syntax.token;
-        const rule: BlockSyntaxRule = {
-          block: syntax.kind === "block" || syntax.kind === "leaf",
-          inlineContent: registration.inlineContent === true,
-          build: registration.build,
-        };
-        ruleByBlockRule[registration.rule] = rule;
-        for (const token of tokens) {
-          rules[token] = rule;
-        }
-      }
-    }
   }
 
   for (const registration of decorators) {
-    const rule = ruleByBlockRule[registration.rule];
-    const build = rule?.build;
-    if (!build) {
-      throw new Error(`Cannot decorate unknown block rule ${registration.rule}`);
+    const token = registration.token;
+    const tokens = typeof token === "number" ? [token] : token;
+    for (const token of tokens) {
+      const build = builds[token];
+      if (!build) {
+        throw new Error(`Cannot decorate unknown block token ${token}`);
+      }
+      builds[token] = registration.decorate(build);
     }
-    rule.build = registration.decorate(build);
   }
 
   return {
+    builds,
     dispatch: generateBlockDispatch(starts, fallbacks),
     interrupts,
     lazyContinuationUnwrappers,
-    rules,
   };
 }

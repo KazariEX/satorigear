@@ -1,11 +1,17 @@
-// Structural roles occupy the high bits so token emission never has to consult the profile.
-export const enum BlockTokenRole {
+// Syntax flags occupy the low bits while structural roles occupy the high bits, so token
+// traversal can recover both without consulting the profile.
+export const enum BlockFlag {
+  InlineContent = 1 << 5,
+}
+
+export const enum BlockRole {
   Raw,
   BlockOpen = 1 << 6,
   FrameOpen = 2 << 6,
   Close = 3 << 6,
   Leaf = 4 << 6,
   Group = 5 << 6,
+  Mask = 7 << 6,
 }
 
 export const enum BlockKind {
@@ -14,11 +20,7 @@ export const enum BlockKind {
   LinkDefinitionChunk,
   BlockComponentAttributes,
 
-  BlockQuoteOpen = BlockTokenRole.BlockOpen,
-  AtxHeadingOpen,
-  SetextHeading1Open,
-  SetextHeading2Open,
-  ParagraphOpen,
+  BlockQuoteOpen = BlockRole.BlockOpen,
   UnorderedListOpen,
   OrderedListOpen,
   LinkDefinitionOpen,
@@ -27,14 +29,20 @@ export const enum BlockKind {
   BlockComponentOpen,
   BlockComponentSlotOpen,
 
-  ListItemOpen = BlockTokenRole.FrameOpen,
+  AtxHeadingOpen = BlockRole.BlockOpen | BlockFlag.InlineContent,
+  SetextHeading1Open,
+  SetextHeading2Open,
+  ParagraphOpen,
+
+  ListItemOpen = BlockRole.FrameOpen,
   UncheckedTaskItemOpen,
   CheckedTaskItemOpen,
   TableRowOpen,
-  TableCellStart,
+
+  TableCellStart = BlockRole.FrameOpen | BlockFlag.InlineContent,
   BlockComponentLabelOpen,
 
-  BlockQuoteClose = BlockTokenRole.Close,
+  BlockQuoteClose = BlockRole.Close,
   HeadingClose,
   ParagraphClose,
   UnorderedListClose,
@@ -48,7 +56,7 @@ export const enum BlockKind {
   BlockComponentLabelClose,
   BlockComponentSlotClose,
 
-  ThematicBreak = BlockTokenRole.Leaf,
+  ThematicBreak = BlockRole.Leaf,
   FencedCodeBlock,
   IndentedCodeBlock,
   HtmlBlock,
@@ -56,34 +64,8 @@ export const enum BlockKind {
   MathBlock,
   BlockComponentYamlProps,
 
-  TableAlignNone = BlockTokenRole.Group,
+  TableAlignNone = BlockRole.Group,
   TableAlignLeft,
   TableAlignRight,
   TableAlignCenter,
-}
-
-export const enum BlockRule {
-  ThematicBreak,
-  BlockQuote,
-  AtxHeading,
-  SetextHeading,
-  Paragraph,
-  ListItem,
-  UnorderedList,
-  OrderedList,
-  FencedCode,
-  IndentedCodeBlock,
-  HtmlBlock,
-  LinkDefinition,
-  FootnoteDefinition,
-  Frontmatter,
-  MathBlock,
-  Table,
-  TableRow,
-  TableCell,
-  TableDelimiter,
-  BlockComponent,
-  BlockComponentLabel,
-  BlockComponentYamlProps,
-  BlockComponentSlot,
 }

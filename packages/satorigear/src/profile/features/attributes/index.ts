@@ -1,5 +1,5 @@
 import type { Blockquote, List } from "mdast";
-import { BlockRule } from "../../../constants/block.ts";
+import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
 import {
@@ -12,9 +12,11 @@ import {
   setInlineTokenData,
 } from "../../../inline/tokens.ts";
 import { attributesEnd, mergeAttributes, parseAttributes } from "./syntax.ts";
-import type { BlockNodeBuilderDecorator } from "../../../block/profile.ts";
+import type { BlockNodeBuilder } from "../../../fragment/block.ts";
 import type { SyntaxFeature } from "../../types.ts";
 import type { Attributes } from "./types.ts";
+
+type BlockNodeBuilderDecorator = (build: BlockNodeBuilder) => BlockNodeBuilder;
 
 const enum AttributeFlag {
   Detached = 1,
@@ -161,9 +163,14 @@ function scanAttribute(source: string, start: number, tokens: number[]): number 
 export const feature: SyntaxFeature = {
   block: {
     decorators: [
-      { rule: BlockRule.UnorderedList, decorate: decorateList },
-      { rule: BlockRule.OrderedList, decorate: decorateList },
-      { rule: BlockRule.BlockQuote, decorate: decorateBlockquote },
+      {
+        token: [
+          BlockKind.UnorderedListOpen,
+          BlockKind.OrderedListOpen,
+        ],
+        decorate: decorateList,
+      },
+      { token: BlockKind.BlockQuoteOpen, decorate: decorateBlockquote },
     ],
   },
   inline: {

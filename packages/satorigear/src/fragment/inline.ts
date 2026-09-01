@@ -10,7 +10,6 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
 } from "../inline/tokens.ts";
-import type { BlockRule } from "../constants/block.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { SourceLocator, SourcePosition, SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
@@ -18,8 +17,9 @@ import type { BlockBuildContext } from "./block.ts";
 type InlineNonText = Exclude<PhrasingContent, Text>;
 
 export interface InlineBuildContext {
-  blockRule: BlockRule;
   locator: SourceLocator;
+  // Table splitting preserves `\|`; inline code removes that structural escape.
+  tableCell: boolean;
   tokens: InlineTokenStream;
   view: SourceView;
 }
@@ -346,7 +346,7 @@ function appendSemantic(
 
 export function buildInlineFragment(
   tokenStart: number,
-  blockRule: BlockRule,
+  tableCell: boolean,
   context: BlockBuildContext,
 ): InlineFragment {
   let tokens: InlineTokenStream;
@@ -374,12 +374,12 @@ export function buildInlineFragment(
     tokens = context.profile.resolve(view.text, context.profile.tokenize(view.text), blockTokens);
   }
   const inlineContext = context.inlineContext ??= {
-    blockRule,
     locator: context.locator,
+    tableCell,
     tokens,
     view,
   };
-  inlineContext.blockRule = blockRule;
+  inlineContext.tableCell = tableCell;
   inlineContext.tokens = tokens;
   inlineContext.view = view;
   const result = createInlineOutput([], 0);

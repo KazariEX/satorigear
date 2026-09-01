@@ -1,5 +1,5 @@
 import { type BlockLines, isBlank } from "../../block/lines.ts";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { leafBlockPosition } from "../../fragment/block.ts";
 import { normalizeAssociationLabel } from "../utils.ts";
@@ -253,13 +253,9 @@ function linkDefinitionAt(
 
 export const feature: SyntaxFeature = {
   block: {
-    rules: [
+    builds: [
       {
-        rule: BlockRule.LinkDefinition,
-        syntax: {
-          kind: "block",
-          token: BlockKind.LinkDefinitionOpen,
-        },
+        token: BlockKind.LinkDefinitionOpen,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           // This rule only builds openers emitted with their parsed definition metadata.

@@ -1,4 +1,4 @@
-import { type BlockKind, BlockTokenRole } from "../constants/block.ts";
+import { type BlockKind, BlockRole } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
 import { type BlockLines, logicalLine } from "./lines.ts";
@@ -94,7 +94,7 @@ export class BlockTokenStream implements DefinitionLookup {
     start: number,
     end: number,
     meta?: BlockTokenMeta,
-    role?: BlockTokenRole,
+    role?: BlockRole,
   ): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
@@ -112,24 +112,24 @@ export class BlockTokenStream implements DefinitionLookup {
       }
     }
     const encodedRole = role ?? kind;
-    if (encodedRole >= BlockTokenRole.BlockOpen) {
+    if (encodedRole >= BlockRole.BlockOpen) {
       this.#indexToken(field, encodedRole);
     }
   }
 
   #indexToken(field: number, encodedRole: number): void {
-    if (encodedRole < BlockTokenRole.Close) {
+    if (encodedRole < BlockRole.Close) {
       this.#opens.push(field);
       return;
     }
-    if (encodedRole < BlockTokenRole.Leaf) {
+    if (encodedRole < BlockRole.Leaf) {
       const open = this.#opens.pop()!;
       this.#fields[open + BlockTokenField.Length] = (
         (field - open) / BlockTokenField.Stride + 1
       );
       return;
     }
-    if (encodedRole < BlockTokenRole.Group) {
+    if (encodedRole < BlockRole.Group) {
       this.#fields[field + BlockTokenField.Length] = 1;
       return;
     }
@@ -137,7 +137,7 @@ export class BlockTokenStream implements DefinitionLookup {
     const previous = field - BlockTokenField.Stride;
     if (
       group < 0 || previous < 0 ||
-      this.#fields[previous + BlockTokenField.Kind] < BlockTokenRole.Group
+      this.#fields[previous + BlockTokenField.Kind] < BlockRole.Group
     ) {
       this.#groupField = field;
       this.#fields[field + BlockTokenField.Length] = 1;

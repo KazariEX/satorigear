@@ -1,6 +1,6 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
 import { type BlockLines, lineIndentOffset } from "../../block/lines.ts";
-import { BlockKind, BlockRule, BlockTokenRole } from "../../constants/block.ts";
+import { BlockKind, BlockRole } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -168,7 +168,7 @@ function emitTableRow(
       cells[cell + CellSlot.ContentStart],
       cells[cell + CellSlot.ContentEnd],
       void 0,
-      BlockTokenRole.Close,
+      BlockRole.Close,
     );
   }
   const lineEnd = lines.end(index);
@@ -178,7 +178,7 @@ function emitTableRow(
 const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const start = context.locator.locationAt(tokens.start(tokenStart));
-  const children = buildInlineFragment(tokenStart, BlockRule.TableCell, context).children;
+  const children = buildInlineFragment(tokenStart, true, context).children;
   return {
     type: "tableCell",
     children,
@@ -285,42 +285,9 @@ export const feature: SyntaxFeature = {
         return end;
       },
     ],
-    rules: [
+    builds: [
       {
-        rule: BlockRule.TableCell,
-        syntax: {
-          kind: "frame",
-          token: BlockKind.TableCellStart,
-        },
-        inlineContent: true,
-        build: buildTableCell,
-      },
-      {
-        rule: BlockRule.TableRow,
-        syntax: {
-          kind: "frame",
-          token: BlockKind.TableRowOpen,
-        },
-        build: buildTableRow,
-      },
-      {
-        rule: BlockRule.TableDelimiter,
-        syntax: {
-          kind: "group",
-          token: [
-            BlockKind.TableAlignNone,
-            BlockKind.TableAlignLeft,
-            BlockKind.TableAlignRight,
-            BlockKind.TableAlignCenter,
-          ],
-        },
-      },
-      {
-        rule: BlockRule.Table,
-        syntax: {
-          kind: "block",
-          token: BlockKind.TableOpen,
-        },
+        token: BlockKind.TableOpen,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const close = tokenStart + tokens.nodeLength(tokenStart) - 1;

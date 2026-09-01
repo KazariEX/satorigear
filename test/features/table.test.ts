@@ -5,7 +5,7 @@ const parser = createParser({ features: { table: true } });
 
 describe("table", () => {
   it("builds aligned GFM tables with inline cell content", () => {
-    const source = "| **name** | value\\|unit |\n| :--- | ---: |\n| alpha | `1` |\n";
+    const source = "| **name** | value\\|unit |\n| :--- | ---: |\n| alpha | `1\\|2` |\n";
     expect(parser.parse(source).children[0]).toEqual({
       type: "table",
       align: ["left", "right"],
@@ -49,7 +49,7 @@ describe("table", () => {
             },
             {
               type: "tableCell",
-              children: [{ type: "inlineCode", value: "1", position: expect.any(Object) }],
+              children: [{ type: "inlineCode", value: "1|2", position: expect.any(Object) }],
               position: expect.any(Object),
             },
           ],
@@ -58,7 +58,7 @@ describe("table", () => {
       ],
       position: {
         start: { line: 1, column: 1, offset: 0 },
-        end: { line: 3, column: 16, offset: source.length - 1 },
+        end: { line: 3, column: 19, offset: source.length - 1 },
       },
     });
   });

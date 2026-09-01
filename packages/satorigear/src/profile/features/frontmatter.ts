@@ -1,6 +1,6 @@
 import type { Yaml } from "mdast";
 import { appendLogicalToken } from "../../block/tokens.ts";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { type BlockNodeBuilder, leafBlockPosition } from "../../fragment/block.ts";
 import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -55,13 +55,9 @@ export const buildFrontmatter: BlockNodeBuilder<Yaml> = (tokenStart, context) =>
 export function feature(marker: FrontmatterMarker): SyntaxFeature {
   return {
     block: {
-      rules: [
+      builds: [
         {
-          rule: BlockRule.Frontmatter,
-          syntax: {
-            kind: "leaf",
-            token: BlockKind.Frontmatter,
-          },
+          token: BlockKind.Frontmatter,
           build: buildFrontmatter,
         },
       ],

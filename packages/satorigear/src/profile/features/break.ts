@@ -1,4 +1,4 @@
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { leafBlockPosition } from "../../fragment/block.ts";
@@ -34,13 +34,9 @@ export function isThematicBreak(
 
 export const feature: SyntaxFeature = {
   block: {
-    rules: [
+    builds: [
       {
-        rule: BlockRule.ThematicBreak,
-        syntax: {
-          kind: "leaf",
-          token: BlockKind.ThematicBreak,
-        },
+        token: BlockKind.ThematicBreak,
         build(tokenStart, context) {
           return {
             type: "thematicBreak",

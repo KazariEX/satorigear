@@ -1,6 +1,6 @@
 import type { Paragraph } from "mdast";
 import { indentOffset, isBlank, lineIndentOffset } from "../../block/lines.ts";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
@@ -56,20 +56,11 @@ export const feature: SyntaxFeature = {
         return index;
       },
     ],
-    rules: [
+    builds: [
       {
-        rule: BlockRule.Paragraph,
-        syntax: {
-          kind: "block",
-          token: BlockKind.ParagraphOpen,
-        },
-        inlineContent: true,
+        token: BlockKind.ParagraphOpen,
         build(tokenStart, context) {
-          const inline = buildInlineFragment(
-            tokenStart,
-            BlockRule.Paragraph,
-            context,
-          );
+          const inline = buildInlineFragment(tokenStart, false, context);
           const result: Paragraph = {
             type: "paragraph",
             children: inline.children,

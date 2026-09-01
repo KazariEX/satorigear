@@ -1,7 +1,7 @@
 import { htmlBlockNames, htmlRawNames } from "micromark-util-html-tag-name";
 import { type BlockLines, isBlank } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { blockEnd } from "../../fragment/block.ts";
@@ -71,13 +71,9 @@ const buildInlineHtml: InlineLeafBuilder = (tokenIndex, sourceSpan, context) => 
 
 export const feature: SyntaxFeature = {
   block: {
-    rules: [
+    builds: [
       {
-        rule: BlockRule.HtmlBlock,
-        syntax: {
-          kind: "leaf",
-          token: BlockKind.HtmlBlock,
-        },
+        token: BlockKind.HtmlBlock,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const offset = tokens.start(tokenStart);

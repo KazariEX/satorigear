@@ -1,5 +1,5 @@
 import type { Heading } from "mdast";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -73,22 +73,13 @@ export function setextMarkerAt(
 
 export const feature: SyntaxFeature = {
   block: {
-    rules: [
+    builds: [
       {
-        rule: BlockRule.AtxHeading,
-        syntax: {
-          kind: "block",
-          token: BlockKind.AtxHeadingOpen,
-        },
-        inlineContent: true,
+        token: BlockKind.AtxHeadingOpen,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const start = context.locator.locationAt(tokens.start(tokenStart));
-          const inline = buildInlineFragment(
-            tokenStart,
-            BlockRule.AtxHeading,
-            context,
-          );
+          const inline = buildInlineFragment(tokenStart, false, context);
           const result: Heading = {
             type: "heading",
             depth: tokens.end(tokenStart) - tokens.start(tokenStart) as Heading["depth"],
@@ -105,22 +96,13 @@ export const feature: SyntaxFeature = {
         },
       },
       {
-        rule: BlockRule.SetextHeading,
-        syntax: {
-          kind: "block",
-          token: [
-            BlockKind.SetextHeading1Open,
-            BlockKind.SetextHeading2Open,
-          ],
-        },
-        inlineContent: true,
+        token: [
+          BlockKind.SetextHeading1Open,
+          BlockKind.SetextHeading2Open,
+        ],
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const inline = buildInlineFragment(
-            tokenStart,
-            BlockRule.SetextHeading,
-            context,
-          );
+          const inline = buildInlineFragment(tokenStart, false, context);
           const children = inline.children;
           const result: Heading = {
             type: "heading",

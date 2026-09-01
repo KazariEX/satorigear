@@ -1,4 +1,4 @@
-import { BlockKind } from "../constants/block.ts";
+import { BlockFlag, BlockKind } from "../constants/block.ts";
 import { emptyArray, emptySet } from "../primitives.ts";
 import { SourceView } from "../source-view.ts";
 import type { BlockScanChange, BlockStructure } from "../block/scanner.ts";
@@ -181,8 +181,7 @@ export class InlineRegionState {
         if (nodeLength === 0) {
           continue;
         }
-        const rule = structure.ruleOf(token);
-        if (rule.inlineContent) {
+        if (tokens.kind(token) & BlockFlag.InlineContent) {
           const inlineView = inlineViewOf(source, tokens, token, nodeLength);
           if (inlineView) {
             bindings.push({

@@ -1,6 +1,6 @@
 import type { Blockquote } from "mdast";
 import { type BlockLines, isBlank, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -33,13 +33,9 @@ function blockQuoteOffset(
 
 export const feature: SyntaxFeature = {
   block: {
-    rules: [
+    builds: [
       {
-        rule: BlockRule.BlockQuote,
-        syntax: {
-          kind: "block",
-          token: BlockKind.BlockQuoteOpen,
-        },
+        token: BlockKind.BlockQuoteOpen,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const start = context.locator.locationAt(tokens.start(tokenStart));

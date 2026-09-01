@@ -1,6 +1,6 @@
 import type { List, ListItem } from "mdast";
 import { type BlockLines, IndentedLine, lineIndentOffset } from "../../block/lines.ts";
-import { BlockKind, BlockRule } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
 import { firstChildStart, lastChildEnd } from "../../fragment/node.ts";
@@ -378,33 +378,13 @@ const taskListStart: BlockStart = (source, lines, start, contentOffset, out, con
 export function feature(taskList = false): SyntaxFeature {
   return {
     block: {
-      rules: [
+      builds: [
         {
-          rule: BlockRule.ListItem,
-          syntax: {
-            kind: "frame",
-            token: [
-              BlockKind.ListItemOpen,
-              BlockKind.UncheckedTaskItemOpen,
-              BlockKind.CheckedTaskItemOpen,
-            ],
-          },
-          build: buildListItem,
-        },
-        {
-          rule: BlockRule.UnorderedList,
-          syntax: {
-            kind: "block",
-            token: BlockKind.UnorderedListOpen,
-          },
+          token: BlockKind.UnorderedListOpen,
           build: createBuildList(false),
         },
         {
-          rule: BlockRule.OrderedList,
-          syntax: {
-            kind: "block",
-            token: BlockKind.OrderedListOpen,
-          },
+          token: BlockKind.OrderedListOpen,
           build: createBuildList(true),
         },
       ],

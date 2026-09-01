@@ -1,6 +1,6 @@
 import type { FootnoteDefinition } from "mdast";
 import { type BlockLines, IndentedLine, isBlank } from "../../../block/lines.ts";
-import { BlockKind, BlockRule } from "../../../constants/block.ts";
+import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
 import { semanticText } from "../text.ts";
@@ -44,13 +44,9 @@ function definitionAt(
   };
 }
 
-export const blockRules: BlockFeature["rules"] = [
+export const blockBuilds: BlockFeature["builds"] = [
   {
-    rule: BlockRule.FootnoteDefinition,
-    syntax: {
-      kind: "block",
-      token: BlockKind.FootnoteDefinitionOpen,
-    },
+    token: BlockKind.FootnoteDefinitionOpen,
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
       // This rule only builds openers emitted with their parsed definition fields.

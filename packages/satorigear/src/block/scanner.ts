@@ -2,7 +2,7 @@ import { Character } from "../constants/character.ts";
 import { BlockLines, isBlank, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocator, SourceSpan } from "../source-view.ts";
-import type { BlockProfile, BlockSyntaxRule } from "./profile.ts";
+import type { BlockProfile } from "./profile.ts";
 
 export interface BlockScanChange {
   newRecordEnd: number;
@@ -196,18 +196,18 @@ export class BlockScanContext {
 }
 
 // Projection and inline resolution borrow only the scanner's indexed semantic view.
-export type BlockStructure = Pick<BlockScanner, "records" | "ruleOf" | "tokens">;
+export type BlockStructure = Pick<BlockScanner, "builds" | "records" | "tokens">;
 
 export class BlockScanner {
   #context: BlockScanContext;
   #lines = new BlockLines();
-  #profile: BlockProfile;
   #records: BlockRecord[] = [];
   #tokens = new BlockTokenStream();
+  readonly builds: BlockProfile["builds"];
 
   constructor(profile: BlockProfile) {
     this.#context = new BlockScanContext(profile);
-    this.#profile = profile;
+    this.builds = profile.builds;
   }
 
   scan(source: string): void {
@@ -247,11 +247,6 @@ export class BlockScanner {
 
   get records(): readonly BlockRecord[] {
     return this.#records;
-  }
-
-  ruleOf(tokenStart: number): BlockSyntaxRule {
-    const kind = this.#tokens.kind(tokenStart);
-    return this.#profile.rules[kind]!;
   }
 
   locator(): SourceLocator {
