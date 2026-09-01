@@ -66,7 +66,7 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    build: [
+    builds: [
       {
         kind: "leaf",
         token: InlineKind.HardBreak,

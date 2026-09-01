@@ -174,10 +174,10 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    scan: [
+    scans: [
       { marker: Character.LeftCurlyBracket, scan: scanAttribute },
     ],
-    build: [
+    builds: [
       {
         kind: "decorate",
         token: InlineKind.Attributes,

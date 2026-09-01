@@ -11,7 +11,7 @@ import type { Attributes } from "./attributes/types.ts";
 
 export const feature: SyntaxFeature = {
   inline: {
-    scan: [
+    scans: [
       {
         marker: Character.LeftCurlyBracket,
         scan(source, start, tokens) {
@@ -39,7 +39,7 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    build: [
+    builds: [
       {
         kind: "leaf",
         token: InlineKind.Binding,

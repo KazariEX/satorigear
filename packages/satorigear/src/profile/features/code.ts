@@ -146,7 +146,7 @@ export const feature: SyntaxFeature = {
     ],
   },
   inline: {
-    scan: [
+    scans: [
       {
         marker: Character.GraveAccent,
         scan(source, start, tokens) {
@@ -172,7 +172,7 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    build: [
+    builds: [
       {
         kind: "leaf",
         token: InlineKind.CodeSpan,

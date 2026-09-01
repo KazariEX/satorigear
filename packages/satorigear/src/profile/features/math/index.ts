@@ -11,10 +11,10 @@ export function feature(options: true | MathOptions): SyntaxFeature {
       starts: blockStarts,
     },
     inline: {
-      scan: [
+      scans: [
         createMathScanRule(singleDollarTextMath),
       ],
-      build: inlineBuilds,
+      builds: inlineBuilds,
     },
   };
 }

@@ -1,5 +1,5 @@
 // Projection roles occupy the high bits so resolved tokens carry their build path.
-export const enum InlineTokenRole {
+export const enum InlineRole {
   Raw,
   Text = 1 << 6,
   Leaf = 2 << 6,
@@ -10,7 +10,7 @@ export const enum InlineTokenRole {
 export const enum InlineKind {
   None,
 
-  LiteralText = InlineTokenRole.Text,
+  LiteralText = InlineRole.Text,
   Escape,
   Entity,
   Newline,
@@ -22,7 +22,7 @@ export const enum InlineKind {
   LinkTail,
   BracketClose,
 
-  HardBreak = InlineTokenRole.Leaf,
+  HardBreak = InlineRole.Leaf,
   CodeSpan,
   HtmlComment,
   InlineHtml,
@@ -34,7 +34,7 @@ export const enum InlineKind {
   InlineComponent,
 
   // Pair kinds alternate open/close so projection can derive the matching boundary.
-  EmphasisOpen = InlineTokenRole.Pair,
+  EmphasisOpen = InlineRole.Pair,
   EmphasisClose,
   StrongOpen,
   StrongClose,
@@ -53,5 +53,5 @@ export const enum InlineKind {
   InlineComponentOpen,
   InlineComponentClose,
 
-  Attributes = InlineTokenRole.Decorate,
+  Attributes = InlineRole.Decorate,
 }

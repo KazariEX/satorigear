@@ -8,7 +8,7 @@ export const feature: SyntaxFeature = {
     starts: blockStarts,
   },
   inline: {
-    scan: inlineScans,
-    build: inlineBuilds,
+    scans: inlineScans,
+    builds: inlineBuilds,
   },
 };

@@ -32,7 +32,7 @@ export const buildDecodedInlineText: InlineTextBuilder = (tokenIndex, context) =
 
 export const feature: SyntaxFeature = {
   inline: {
-    scan: [
+    scans: [
       {
         marker: Character.Ampersand,
         scan(source, start, tokens) {
@@ -65,7 +65,7 @@ export const feature: SyntaxFeature = {
         },
       },
     ],
-    build: [
+    builds: [
       { kind: "text", token: InlineKind.LiteralText, build: buildInlineText },
       { kind: "text", token: InlineKind.Escape, build: buildDecodedInlineText },
       { kind: "text", token: InlineKind.Entity, build: buildDecodedInlineText },

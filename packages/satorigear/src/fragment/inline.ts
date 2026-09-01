@@ -1,6 +1,6 @@
 import type { PhrasingContent, Text } from "mdast";
 import { Character } from "../constants/character.ts";
-import { InlineKind, InlineTokenRole } from "../constants/inline.ts";
+import { InlineKind, InlineRole } from "../constants/inline.ts";
 import { inlineViewOf } from "../inline/region.ts";
 import {
   inlineTokenCount,
@@ -228,9 +228,9 @@ function appendRange(
     }
     const build = profile.buildByKind[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
-    if (kind < InlineTokenRole.Pair) {
+    if (kind < InlineRole.Pair) {
       const childEnd = inlineTokenEnd(context.tokens, index);
-      if (kind < InlineTokenRole.Leaf) {
+      if (kind < InlineRole.Leaf) {
         if (childStart > output.cursor) {
           appendGap(output, context, output.cursor, childStart);
         }
@@ -257,7 +257,7 @@ function appendRange(
       index++;
       continue;
     }
-    if (kind < InlineTokenRole.Decorate) {
+    if (kind < InlineRole.Decorate) {
       if (childStart > output.cursor) {
         appendGap(output, context, output.cursor, childStart);
       }

@@ -8,6 +8,6 @@ export const feature: SyntaxFeature = {
     starts: blockStarts,
   },
   inline: {
-    build: inlineBuilds,
+    builds: inlineBuilds,
   },
 };

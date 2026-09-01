@@ -46,11 +46,11 @@ export type InlineBuildRule =
 
 export interface InlineFeature {
   /** Recognize source ranges and append raw inline tokens. */
-  scan?: readonly InlineScanRule[];
+  scans?: readonly InlineScanRule[];
   /** Participate in compiled delimiter pairing. */
   delimiters?: readonly DelimiterConfig[];
   /** Build semantic nodes from the resolved token stream. */
-  build?: readonly InlineBuildRule[];
+  builds?: readonly InlineBuildRule[];
 }
 
 export interface InlineProfile {
@@ -68,13 +68,13 @@ export function compileInlineProfile(
   const scanRules: InlineScanRule[] = [];
 
   for (const feature of features) {
-    if (feature.scan) {
-      scanRules.push(...feature.scan);
+    if (feature.scans) {
+      scanRules.push(...feature.scans);
     }
     if (feature.delimiters) {
       delimiters.push(...feature.delimiters);
     }
-    const build = feature.build;
+    const build = feature.builds;
     if (!build) {
       continue;
     }
