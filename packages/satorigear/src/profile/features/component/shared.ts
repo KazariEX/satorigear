@@ -26,40 +26,38 @@ export function componentNameEnd(source: string, start: number, block: boolean):
 }
 
 export function normalizeComponentName(value: string): string {
-  const parts: string[] = [];
-  let part = "";
+  let result = "";
+  let partLength = 0;
   let previousUpper: boolean | undefined;
-  for (const character of value) {
-    const code = character.charCodeAt(0);
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index];
+    const code = value.charCodeAt(index);
     if (
       code === Character.HyphenMinus ||
       code === Character.LowLine ||
       code === Character.Solidus ||
       code === Character.FullStop
     ) {
-      if (part) {
-        parts.push(part);
-        part = "";
-      }
+      partLength = 0;
       previousUpper = void 0;
       continue;
     }
     const upper = isAsciiLetter(code) ? code <= Character.LatinCapitalLetterZ : void 0;
-    if (previousUpper === false && upper === true) {
-      parts.push(part);
-      part = character;
+    const next = value.charCodeAt(index + 1);
+    // Start a part after separators, at camel humps, or before the last capital in `HTMLParser`.
+    if (
+      result && (
+        partLength === 0 || upper === true && (
+          previousUpper === false ||
+          next >= Character.LatinSmallLetterA && next <= Character.LatinSmallLetterZ
+        )
+      )
+    ) {
+      result += "-";
     }
-    else if (previousUpper === true && upper === false && part.length > 1) {
-      parts.push(part.slice(0, -1));
-      part = part.at(-1)! + character;
-    }
-    else {
-      part += character;
-    }
+    result += character;
+    partLength++;
     previousUpper = upper;
   }
-  if (part) {
-    parts.push(part);
-  }
-  return parts.map((value) => value.toLowerCase()).join("-");
+  return result.toLowerCase();
 }

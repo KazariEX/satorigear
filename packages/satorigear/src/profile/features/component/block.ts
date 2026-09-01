@@ -1,4 +1,4 @@
-import type { Paragraph, RootContent } from "mdast";
+import type { Paragraph } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLines, lineIndentOffset, skipLineWhitespace } from "../../../block/lines.ts";
 import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
@@ -406,11 +406,10 @@ export const blockBuilds: BlockFeature["builds"] = [
         ? parseAttributes(context.source, tokens.start(attributesToken))
         : void 0;
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      const children: RootContent[] = [];
+      let children = buildBlockChildren(tokenStart, context);
       if (label) {
-        children.push(buildBlockLabel(label, context));
+        children = [buildBlockLabel(label, context), ...children];
       }
-      children.push(...buildBlockChildren(tokenStart, context));
       const opening = tokens.text(context.source, tokenStart);
       return {
         type: "blockComponent",

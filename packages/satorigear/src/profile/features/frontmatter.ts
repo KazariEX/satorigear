@@ -41,13 +41,9 @@ export const buildYamlBlock: BlockNodeBuilder<Yaml> = (tokenStart, context) => {
   const contentStart = text.indexOf("\n") + 1;
   const closingEnd = text.endsWith("\n") ? text.length - 1 : text.length;
   const closingStart = text.lastIndexOf("\n", closingEnd - 1) + 1;
-  let value = text.slice(contentStart, closingStart);
-  if (value.endsWith("\n")) {
-    value = value.slice(0, -1);
-  }
   return {
     type: "yaml",
-    value,
+    value: text.slice(contentStart, Math.max(contentStart, closingStart - 1)),
     position: leafBlockPosition(tokenStart, context),
   };
 };
