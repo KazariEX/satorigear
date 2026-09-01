@@ -2,8 +2,8 @@ import type { List, ListItem } from "mdast";
 import { type BlockLines, IndentedLine, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import { type BlockNodeBuilder, buildBlockChildren, buildBlockNode } from "../../fragment/block.ts";
-import { lastChildEnd } from "../../fragment/node.ts";
+import { type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
+import { firstChildStart, lastChildEnd } from "../../fragment/node.ts";
 import { isThematicBreak } from "./break.ts";
 import type { BlockStart } from "../../block/profile.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -216,12 +216,11 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context) => {
     const tokens = context.structure.tokens;
-    const start = context.locator.locationAt(tokens.start(tokenStart));
     const items: ListItem[] = [];
     const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
     // Indexed list roots contain only direct item frames, so node lengths jump between siblings.
     for (let child = tokenStart + 1; child < close; child += tokens.nodeLength(child)) {
-      items.push(buildBlockNode(child, context));
+      items.push(buildListItem(child, context));
     }
     return {
       type: "list",
@@ -230,8 +229,8 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
       spread: tokens.value<boolean>(close) === true,
       children: items,
       position: {
-        start,
-        end: lastChildEnd(items) ?? context.locator.locationAt(tokens.end(tokenStart)),
+        start: firstChildStart(items),
+        end: lastChildEnd(items)!,
       },
     };
   };

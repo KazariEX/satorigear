@@ -4,11 +4,7 @@ import { type BlockLines, lineIndentOffset } from "../../../block/lines.ts";
 import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
 import { BlockKind, BlockRule } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
-import {
-  type BlockNodeBuilder,
-  buildBlockChildren,
-  buildBlockNode,
-} from "../../../fragment/block.ts";
+import { type BlockNodeBuilder, buildBlockChildren } from "../../../fragment/block.ts";
 import { buildInlineFragment } from "../../../fragment/inline.ts";
 import {
   attributesEnd,
@@ -427,7 +423,7 @@ export const blockRules: BlockFeature["rules"] = [
       const start = context.locator.locationAt(tokens.start(tokenStart));
       const children: RootContent[] = [];
       if (label) {
-        children.push(buildBlockNode(label, context));
+        children.push(buildBlockLabel(label, context));
       }
       children.push(...buildBlockChildren(tokenStart, context));
       const opening = tokens.text(context.source, tokenStart);

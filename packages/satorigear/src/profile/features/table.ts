@@ -2,9 +2,9 @@ import type { AlignType, TableCell, TableRow } from "mdast";
 import { type BlockLines, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind, BlockRule, BlockTokenRole } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import { type BlockBuildContext, type BlockNodeBuilder, buildBlockNode } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
+import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 // Cell records start as [frame start, trimmed content start, trimmed content end].
@@ -197,7 +197,7 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
   const start = context.locator.locationAt(tokens.start(tokenStart));
   const children: TableCell[] = [];
   for (let cell = tokenStart + 1; cell < close; cell += tokens.nodeLength(cell)) {
-    children.push(buildBlockNode(cell, context));
+    children.push(buildTableCell(cell, context));
   }
   return {
     type: "tableRow",
@@ -328,13 +328,13 @@ export const feature: SyntaxFeature = {
           // Tables are emitted as a header row, delimiter group, then body rows.
           const header = tokenStart + 1;
           const delimiter = header + tokens.nodeLength(header);
-          const rows = [buildBlockNode<TableRow>(header, context)];
+          const rows = [buildTableRow(header, context)];
           for (
             let row = delimiter + tokens.nodeLength(delimiter);
             row < close;
             row += tokens.nodeLength(row)
           ) {
-            rows.push(buildBlockNode(row, context));
+            rows.push(buildTableRow(row, context));
           }
           return {
             type: "table",
