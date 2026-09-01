@@ -6,27 +6,17 @@ import {
   inlineTokenKind,
   inlineTokenStart,
 } from "../../../inline/tokens.ts";
-import { componentNameEnd, normalizeComponentName } from "../attributes/syntax.ts";
+import { hasInlineColonBoundary } from "../../utils.ts";
+import { componentNameEnd, normalizeComponentName } from "./shared.ts";
 import type { InlineNodeBuilder } from "../../../fragment/inline.ts";
 import type { InlineScanRule } from "../../../inline/lexer.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
-
-const allowedPrevious = /[ \t\n\r\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}\p{P}]/u;
-
-/** Whether a colon has the left boundary required by an inline component. */
-export function canStartInlineColon(source: string, start: number): boolean {
-  if (start <= 0) {
-    return true;
-  }
-  const previous = source[start - 1];
-  return previous !== ":" && allowedPrevious.test(previous);
-}
 
 export const inlineScans: readonly InlineScanRule[] = [
   {
     marker: Character.Colon,
     scan(source, start, tokens) {
-      const end = canStartInlineColon(source, start)
+      const end = hasInlineColonBoundary(source, start)
         ? componentNameEnd(source, start + 1, false)
         : void 0;
       if (end === void 0) {

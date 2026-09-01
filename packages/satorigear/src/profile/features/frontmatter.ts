@@ -33,7 +33,7 @@ function frontmatterFenceAt(
   return true;
 }
 
-export const buildFrontmatter: BlockNodeBuilder<Yaml> = (tokenStart, context) => {
+export const buildYamlBlock: BlockNodeBuilder<Yaml> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const text = context.locator.normalizeLineEndings(
     tokens.text(context.source, tokenStart),
@@ -58,7 +58,7 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
       builds: [
         {
           token: BlockKind.Frontmatter,
-          build: buildFrontmatter,
+          build: buildYamlBlock,
         },
       ],
       starts: [

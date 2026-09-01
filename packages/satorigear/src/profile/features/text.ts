@@ -1,8 +1,8 @@
-import { decodeString } from "micromark-util-decode-string";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
+import { semanticText } from "../utils.ts";
 import type { InlineTextBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -15,10 +15,6 @@ function isAsciiPunctuation(code: number): boolean {
     code >= Character.LeftSquareBracket && code <= Character.GraveAccent ||
     code >= Character.LeftCurlyBracket && code <= Character.Tilde
   );
-}
-
-export function semanticText(value: string): string {
-  return value.includes("\\") || value.includes("&") ? decodeString(value) : value;
 }
 
 export const buildInlineText: InlineTextBuilder = (tokenIndex, context) => {

@@ -1,85 +1,11 @@
 import { Character } from "../../../constants/character.ts";
+import { isAsciiDigit, isAsciiLetter } from "../../utils.ts";
 import type { Attributes, AttributeValue } from "./types.ts";
 
 const brackets: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
 
-function isAsciiLetter(character: string): boolean {
-  if (!character) {
-    return false;
-  }
-  const code = character.charCodeAt(0);
-  return (
-    code >= Character.LatinCapitalLetterA && code <= Character.LatinCapitalLetterZ ||
-    code >= Character.LatinSmallLetterA && code <= Character.LatinSmallLetterZ
-  );
-}
-
-function isAsciiDigit(character: string): boolean {
-  if (!character) {
-    return false;
-  }
-  const code = character.charCodeAt(0);
-  return code >= Character.DigitZero && code <= Character.DigitNine;
-}
-
 function isHorizontalWhitespace(character: string): boolean {
   return character === " " || character === "\t";
-}
-
-export function componentNameEnd(source: string, start: number, block: boolean): number | undefined {
-  if (!isAsciiLetter(source[start]) && source[start] !== "$") {
-    return;
-  }
-  let end = start + 1;
-  while (end < source.length) {
-    const character = source[end];
-    if (
-      !isAsciiLetter(character) &&
-      !isAsciiDigit(character) &&
-      character !== "$" &&
-      character !== "_" &&
-      character !== "-" && (
-        !block || character !== "."
-      )
-    ) {
-      break;
-    }
-    end++;
-  }
-  return end;
-}
-
-export function normalizeComponentName(value: string): string {
-  const parts: string[] = [];
-  let part = "";
-  let previousUpper: boolean | undefined;
-  for (const character of value) {
-    if (character === "-" || character === "_" || character === "/" || character === ".") {
-      if (part) {
-        parts.push(part);
-        part = "";
-      }
-      previousUpper = void 0;
-      continue;
-    }
-    const upper = isAsciiLetter(character) ? character === character.toUpperCase() : void 0;
-    if (previousUpper === false && upper === true) {
-      parts.push(part);
-      part = character;
-    }
-    else if (previousUpper === true && upper === false && part.length > 1) {
-      parts.push(part.slice(0, -1));
-      part = part.at(-1)! + character;
-    }
-    else {
-      part += character;
-    }
-    previousUpper = upper;
-  }
-  if (part) {
-    parts.push(part);
-  }
-  return parts.map((value) => value.toLowerCase()).join("-");
 }
 
 function assignAttribute(attributes: Attributes, name: string, value: AttributeValue): void {
@@ -100,27 +26,6 @@ export function mergeAttributes(target: Attributes, source: Attributes): void {
 interface ParsedAttributes {
   attributes: Attributes;
   end: number;
-}
-
-export function closingBracket(source: string, start: number, limit = source.length): number | undefined {
-  if (source[start] !== "[") {
-    return;
-  }
-  let depth = 0;
-  for (let offset = start + 1; offset < limit; offset++) {
-    if (source[offset] === "\\" && offset + 1 < limit) {
-      offset++;
-    }
-    else if (source[offset] === "[") {
-      depth++;
-    }
-    else if (source[offset] === "]") {
-      if (depth === 0) {
-        return offset;
-      }
-      depth--;
-    }
-  }
 }
 
 function scanAttributes(
@@ -222,19 +127,24 @@ function scanAttributes(
     }
 
     const nameStart = offset;
-    if (source[offset] === ":") {
+    if (source.charCodeAt(offset) === Character.Colon) {
       offset++;
     }
-    if (!isAsciiLetter(source[offset]) && source[offset] !== "_") {
+    let code = source.charCodeAt(offset);
+    if (!isAsciiLetter(code) && code !== Character.LowLine) {
       return;
     }
     offset++;
-    while (
-      isAsciiLetter(source[offset]) ||
-      isAsciiDigit(source[offset]) ||
-      source[offset] === "_" ||
-      source[offset] === "-"
-    ) {
+    while (true) {
+      code = source.charCodeAt(offset);
+      if (
+        !isAsciiLetter(code) &&
+        !isAsciiDigit(code) &&
+        code !== Character.LowLine &&
+        code !== Character.HyphenMinus
+      ) {
+        break;
+      }
       offset++;
     }
     const rawName = source.slice(nameStart, offset);

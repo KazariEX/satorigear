@@ -15,7 +15,7 @@ import { InlineKind } from "../../constants/inline.ts";
 import { fencedBlockPosition } from "../../fragment/block.ts";
 import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
-import { semanticText } from "./text.ts";
+import { semanticText } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const codeFenceRule: FenceRule = {

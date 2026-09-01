@@ -1,16 +1,7 @@
 import { Character } from "../../../constants/character.ts";
-import { normalizeAssociationLabel } from "../../utils.ts";
+import { isMarkdownWhitespace, normalizeAssociationLabel } from "../../utils.ts";
 
 const footnoteDefinitionPrefix = "footnote\0";
-
-function isLabelWhitespace(code: number): boolean {
-  return (
-    code === Character.Space ||
-    code === Character.CharacterTabulation ||
-    code === Character.LineFeed ||
-    code === Character.CarriageReturn
-  );
-}
 
 export interface FootnoteLabel {
   definitionKey: string;
@@ -31,11 +22,11 @@ export function footnoteLabelAt(source: string, start: number, limit: number): F
   let length = 0;
   while (offset < limit) {
     const code = source.charCodeAt(offset);
-    if (isLabelWhitespace(code)) {
+    if (isMarkdownWhitespace(code)) {
       return;
     }
     if (code === Character.ReverseSolidus && offset + 1 < limit) {
-      if (isLabelWhitespace(source.charCodeAt(offset + 1))) {
+      if (isMarkdownWhitespace(source.charCodeAt(offset + 1))) {
         return;
       }
       offset += 2;

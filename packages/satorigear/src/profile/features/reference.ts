@@ -2,8 +2,7 @@ import { type BlockLines, isBlank } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { leafBlockPosition } from "../../fragment/block.ts";
-import { normalizeAssociationLabel } from "../utils.ts";
-import { semanticText } from "./text.ts";
+import { normalizeAssociationLabel, semanticText } from "../utils.ts";
 import type { BlockScanContext } from "../../block/scanner.ts";
 import type { SyntaxFeature } from "../types.ts";
 

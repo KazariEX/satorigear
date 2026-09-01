@@ -9,8 +9,8 @@ import {
   type InlineTokenStream,
   inlineTokenText,
 } from "../../inline/tokens.ts";
-import { normalizeAssociationLabel } from "../utils.ts";
-import { buildDecodedInlineText, buildInlineText, semanticText } from "./text.ts";
+import { isMarkdownWhitespace, normalizeAssociationLabel, semanticText } from "../utils.ts";
+import { buildDecodedInlineText, buildInlineText } from "./text.ts";
 import type { InlineBuildContext, InlineNodeBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -29,12 +29,7 @@ function skipWhitespace(source: string, start: number): number {
   let end = start;
   while (end < source.length) {
     const code = source.charCodeAt(end);
-    if (
-      code !== Character.CharacterTabulation &&
-      code !== Character.LineFeed &&
-      code !== Character.CarriageReturn &&
-      code !== Character.Space
-    ) {
+    if (!isMarkdownWhitespace(code)) {
       break;
     }
     end++;
@@ -93,7 +88,7 @@ function linkDestinationEnd(source: string, start: number): number {
       end++;
       continue;
     }
-    if (isLinkWhitespace(code)) {
+    if (isMarkdownWhitespace(code)) {
       break;
     }
     consumed = true;
@@ -173,25 +168,16 @@ function scanLinkTail(source: string, start: number, tokens: number[]): number {
   return end;
 }
 
-function isLinkWhitespace(code: number): boolean {
-  return (
-    code === Character.CharacterTabulation ||
-    code === Character.LineFeed ||
-    code === Character.CarriageReturn ||
-    code === Character.Space
-  );
-}
-
 // LinkTail is already validated by the lexer; projection only separates its output fields.
 function resourceAt(source: string, tokens: InlineTokenStream, tokenIndex: number): Resource {
   const tokenStart = inlineTokenStart(tokens, tokenIndex);
   const tokenEnd = inlineTokenEnd(tokens, tokenIndex);
   let start = tokenStart + 2;
   let end = tokenEnd - 1;
-  while (start < end && isLinkWhitespace(source.charCodeAt(start))) {
+  while (start < end && isMarkdownWhitespace(source.charCodeAt(start))) {
     start++;
   }
-  while (end > start && isLinkWhitespace(source.charCodeAt(end - 1))) {
+  while (end > start && isMarkdownWhitespace(source.charCodeAt(end - 1))) {
     end--;
   }
   if (start === end) {
@@ -207,7 +193,7 @@ function resourceAt(source: string, tokens: InlineTokenStream, tokenIndex: numbe
   }
   start = resourceEnd;
 
-  while (start < end && isLinkWhitespace(source.charCodeAt(start))) {
+  while (start < end && isMarkdownWhitespace(source.charCodeAt(start))) {
     start++;
   }
   return {

@@ -6,15 +6,10 @@ import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../../fragment/block.ts";
 import { buildInlineFragment } from "../../../fragment/inline.ts";
-import {
-  attributesEnd,
-  closingBracket,
-  componentNameEnd,
-  normalizeComponentName,
-  parseAttributes,
-} from "../attributes/syntax.ts";
+import { attributesEnd, parseAttributes } from "../attributes/shared.ts";
 import { codeFenceAt } from "../code.ts";
-import { buildFrontmatter } from "../frontmatter.ts";
+import { buildYamlBlock } from "../frontmatter.ts";
+import { componentNameEnd, normalizeComponentName } from "./shared.ts";
 import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
 import type { BlockScanContext } from "../../../block/scanner.ts";
 
@@ -44,6 +39,24 @@ function skipSpaces(source: string, offset: number, end: number): number {
     offset++;
   }
   return offset;
+}
+
+function closingBracket(source: string, start: number, limit: number): number | undefined {
+  let depth = 0;
+  for (let offset = start + 1; offset < limit; offset++) {
+    if (source[offset] === "\\" && offset + 1 < limit) {
+      offset++;
+    }
+    else if (source[offset] === "[") {
+      depth++;
+    }
+    else if (source[offset] === "]") {
+      if (depth === 0) {
+        return offset;
+      }
+      depth--;
+    }
+  }
 }
 
 function lineValue(source: string, lines: BlockLines, index: number): string | undefined {
@@ -378,7 +391,7 @@ export const blockBuilds: BlockFeature["builds"] = [
     // The YAML props fence becomes a child yaml node, matching frontmatter's shape;
     // interpreting the mapping itself is the consumer's job.
     token: BlockKind.BlockComponentYamlProps,
-    build: buildFrontmatter,
+    build: buildYamlBlock,
   },
   {
     token: BlockKind.BlockComponentOpen,

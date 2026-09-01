@@ -1,15 +1,14 @@
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
 import { appendInlineToken, inlineTokenText } from "../../../inline/tokens.ts";
-import { canStartInlineColon } from "../component/inline.ts";
+import { hasInlineColonBoundary, isAsciiDigit, isAsciiLetter } from "../../utils.ts";
 import type { SyntaxFeature } from "../../types.ts";
 
 function isShortcodeCharacter(code: number): boolean {
   // Permits ASCII letters, digits, `_`, `+`, and `-` anywhere in the name.
   return (
-    code >= Character.LatinCapitalLetterA && code <= Character.LatinCapitalLetterZ ||
-    code >= Character.LatinSmallLetterA && code <= Character.LatinSmallLetterZ ||
-    code >= Character.DigitZero && code <= Character.DigitNine ||
+    isAsciiLetter(code) ||
+    isAsciiDigit(code) ||
     code === Character.PlusSign ||
     code === Character.HyphenMinus ||
     code === Character.LowLine
@@ -22,7 +21,7 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.Colon,
         scan(source, start, tokens) {
-          if (!canStartInlineColon(source, start)) {
+          if (!hasInlineColonBoundary(source, start)) {
             return -1;
           }
           let end = start + 1;

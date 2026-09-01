@@ -10,7 +10,7 @@ import { appendLogicalToken } from "../../../block/tokens.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { fencedBlockPosition } from "../../../fragment/block.ts";
-import { semanticText } from "../text.ts";
+import { semanticText } from "../../utils.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 
 const mathFenceRule: FenceRule = {

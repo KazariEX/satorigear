@@ -3,7 +3,7 @@ import { type BlockLines, IndentedLine, isBlank } from "../../../block/lines.ts"
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
-import { semanticText } from "../text.ts";
+import { semanticText } from "../../utils.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 

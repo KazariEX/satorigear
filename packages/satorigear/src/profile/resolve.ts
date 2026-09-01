@@ -17,7 +17,7 @@ import {
   type InlineTokenStream,
   rewriteInlineTokenTail,
 } from "../inline/tokens.ts";
-import { attributesEnd } from "./features/attributes/syntax.ts";
+import { attributesEnd } from "./features/attributes/shared.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
 import { normalizeAssociationLabel } from "./utils.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
