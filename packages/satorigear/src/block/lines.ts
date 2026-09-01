@@ -554,21 +554,3 @@ export function logicalLine(source: string, lines: BlockLines, index: number): s
   }
   return result + source.slice(offset, lines.next(index));
 }
-
-export function removeIndent(value: string, columns: number): string {
-  let offset = 0;
-  let consumed = 0;
-  while (offset < value.length && consumed < columns) {
-    if (value[offset] === " ") {
-      consumed++;
-    }
-    else if (value[offset] === "\t") {
-      consumed += 4 - (consumed % 4);
-    }
-    else {
-      break;
-    }
-    offset++;
-  }
-  return " ".repeat(Math.max(0, consumed - columns)) + value.slice(offset);
-}

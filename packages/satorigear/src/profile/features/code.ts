@@ -7,7 +7,7 @@ import {
   type FenceRule,
   normalizedFenceContent,
 } from "../../block/fence.ts";
-import { type BlockLines, isBlankLine, lineIndentOffset, removeIndent } from "../../block/lines.ts";
+import { type BlockLines, isBlankLine, lineIndentOffset } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -65,18 +65,16 @@ export const feature: SyntaxFeature = {
           const tokens = context.structure.tokens;
           const offset = tokens.start(tokenStart);
           const contentLength = tokens.value<number>(tokenStart)!;
-          const lines = context.locator
+          // Remove one four-column indent from every line, then trailing blank code lines.
+          const value = context.locator
             .normalizeLineEndings(tokens.text(context.source, tokenStart))
-            .split("\n")
-            .map((line) => removeIndent(line, 4));
-          while (lines.length && /^[ \t]*$/.test(lines[lines.length - 1])) {
-            lines.pop();
-          }
+            .replace(/^(?: {0,3}\t| {4}| {1,3}$)/gm, "")
+            .replace(/\n(?:[ \t]*\n)*[ \t]*$/, "");
           return {
             type: "code",
             lang: null,
             meta: null,
-            value: lines.join("\n"),
+            value,
             position: context.locator.positionAt(offset, offset + contentLength),
           };
         },
