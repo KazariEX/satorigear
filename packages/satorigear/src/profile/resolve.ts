@@ -670,6 +670,17 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
   return (delimiterConfigs) => {
     const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
     return (source, tokens, definitions) => {
+      // Paired syntax is usually recognized sooner from its closing token.
+      let tokenIndex = inlineTokenCount(tokens) - 1;
+      for (; tokenIndex >= 0; tokenIndex--) {
+        const kind = inlineTokenKind(tokens, tokenIndex);
+        if (kind >= InlineKind.AsteriskRun && kind <= InlineKind.BracketClose) {
+          break;
+        }
+      }
+      if (tokenIndex < 0) {
+        return tokens;
+      }
       const frames = analyzeBrackets(
         source,
         tokens,
