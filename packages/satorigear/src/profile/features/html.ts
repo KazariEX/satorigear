@@ -33,23 +33,28 @@ function htmlStartAt(
   contentOffset: number,
 ): HtmlStart | undefined {
   const body = source.slice(contentOffset, lines.end(index));
+  switch (body.charCodeAt(1)) {
+    case Character.QuestionMark: {
+      return { interruptParagraph: true, terminator: "?>" };
+    }
+    case Character.ExclamationMark: {
+      if (body.startsWith("<!--")) {
+        return { interruptParagraph: true, terminator: "-->" };
+      }
+      if (body.startsWith("<![CDATA[")) {
+        return { interruptParagraph: true, terminator: "]]>" };
+      }
+      if (/[A-Z]/.test(body[2] ?? "")) {
+        return { interruptParagraph: true, terminator: ">" };
+      }
+      break;
+    }
+  }
   const lower = body.toLowerCase();
   for (const tag of htmlRawNames) {
     if (lower.startsWith(`<${tag}`) && (lower.length === tag.length + 1 || /[ \t>]/.test(lower[tag.length + 1]))) {
       return { interruptParagraph: true, terminator: `</${tag}>` };
     }
-  }
-  if (body.startsWith("<!--")) {
-    return { interruptParagraph: true, terminator: "-->" };
-  }
-  if (body.startsWith("<?")) {
-    return { interruptParagraph: true, terminator: "?>" };
-  }
-  if (body.startsWith("<![CDATA[")) {
-    return { interruptParagraph: true, terminator: "]]>" };
-  }
-  if (body.startsWith("<!") && /[A-Z]/.test(body[2] ?? "")) {
-    return { interruptParagraph: true, terminator: ">" };
   }
   const tag = /^<\/?([a-z][a-z0-9-]*)(?=[ \t\n\r/>]|$)/i.exec(body)?.[1].toLowerCase();
   if (tag && htmlBlockTags.has(tag)) {
@@ -110,26 +115,24 @@ export const feature: SyntaxFeature = {
           if (!htmlStart) {
             return;
           }
-          let end = start + 1;
+          let end = start;
           let unterminated = false;
-          if (
-            htmlStart.terminator &&
-            !source.slice(lines.start(start), lines.end(start)).toLowerCase().includes(htmlStart.terminator)
-          ) {
+          if (htmlStart.terminator) {
             while (
               end < lines.length &&
               !source.slice(lines.start(end), lines.end(end)).toLowerCase().includes(htmlStart.terminator)
             ) {
               end++;
             }
-            if (end < lines.length) {
-              end++;
-            }
-            else {
+            if (end === lines.length) {
               unterminated = true;
             }
+            else {
+              end++;
+            }
           }
-          else if (!htmlStart.terminator) {
+          else {
+            end++;
             while (end < lines.length && !isBlankLine(source, lines, end)) {
               end++;
             }
