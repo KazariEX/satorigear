@@ -177,10 +177,9 @@ export const feature: SyntaxFeature = {
         kind: "leaf",
         token: InlineKind.CodeSpan,
         build: (tokenIndex, sourceSpan, context) => {
-          const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
           const markerLength = inlineTokenData(context.tokens, tokenIndex);
           let value = context.locator.normalizeLineEndings(
-            text.slice(markerLength, -markerLength),
+            inlineTokenText(context.view.text, context.tokens, tokenIndex, markerLength),
           );
           if (/^[ \n]/.test(value) && /[ \n]$/.test(value) && /[^ \n]/.test(value)) {
             value = value.slice(1, -1);

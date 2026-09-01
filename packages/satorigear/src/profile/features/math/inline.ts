@@ -47,7 +47,7 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
     token: InlineKind.MathText,
     build(tokenIndex, sourceSpan, context) {
       const markerLength = inlineTokenData(context.tokens, tokenIndex);
-      let value = inlineTokenText(context.view.text, context.tokens, tokenIndex).slice(markerLength, -markerLength);
+      let value = inlineTokenText(context.view.text, context.tokens, tokenIndex, markerLength);
       const startPadding = value.startsWith("\r\n") ? 2 : /^[ \r\n]/.test(value) ? 1 : 0;
       const endPadding = value.endsWith("\r\n") ? 2 : /[ \r\n]$/.test(value) ? 1 : 0;
       if (startPadding > 0 && endPadding > 0 && /[^ \r\n]/.test(value)) {

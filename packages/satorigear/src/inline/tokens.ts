@@ -48,10 +48,16 @@ export function rewriteInlineTokenTail(
   tokens[offset + InlineTokenField.End] = end;
 }
 
-export function inlineTokenText(source: string, tokens: InlineTokenStream, index: number): string {
+export function inlineTokenText(
+  source: string,
+  tokens: InlineTokenStream,
+  index: number,
+  startPadding = 0,
+  endPadding = startPadding,
+): string {
   return source.slice(
-    inlineTokenStart(tokens, index),
-    inlineTokenEnd(tokens, index),
+    inlineTokenStart(tokens, index) + startPadding,
+    inlineTokenEnd(tokens, index) - endPadding,
   );
 }
 

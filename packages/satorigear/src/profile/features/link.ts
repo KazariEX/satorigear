@@ -210,10 +210,10 @@ function reference(
   image: boolean,
 ): Reference {
   const closeText = inlineTokenText(context.view.text, context.tokens, close);
-  const text = context.view.text.slice(syntaxStart, syntaxEnd);
-  const content = text.slice(image ? 2 : 1, text.length - closeText.length);
   const full = closeText.startsWith("][") && closeText !== "][]";
-  const labelSource = full ? closeText.slice(2, -1) : content;
+  const labelSource = full
+    ? closeText.slice(2, -1)
+    : context.view.text.slice(syntaxStart + (image ? 2 : 1), syntaxEnd - closeText.length);
   return {
     identifier: normalizeAssociationLabel(labelSource),
     label: semanticText(labelSource),
@@ -348,8 +348,7 @@ export const feature: SyntaxFeature = {
         kind: "leaf",
         token: InlineKind.Autolink,
         build(tokenIndex, sourceSpan, context) {
-          const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-          const label = text.slice(1, -1);
+          const label = inlineTokenText(context.view.text, context.tokens, tokenIndex, 1);
           return {
             type: "link",
             url: label.includes(":") ? label : `mailto:${label}`,

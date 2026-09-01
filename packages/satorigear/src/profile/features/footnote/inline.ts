@@ -8,8 +8,7 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
     kind: "leaf",
     token: InlineKind.FootnoteReference,
     build(tokenIndex, sourceSpan, context) {
-      const source = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-      const label = source.slice(2, -1);
+      const label = inlineTokenText(context.view.text, context.tokens, tokenIndex, 2, 1);
       return {
         type: "footnoteReference",
         identifier: normalizeAssociationLabel(label),
