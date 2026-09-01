@@ -23,11 +23,6 @@ export function mergeAttributes(target: Attributes, source: Attributes): void {
   }
 }
 
-interface ParsedAttributes {
-  attributes: Attributes;
-  end: number;
-}
-
 function scanAttributes(
   source: string,
   start: number,
@@ -39,58 +34,48 @@ function scanAttributes(
   }
   let offset = start + 1;
 
-  const readUntil = (stops: string): string => {
-    const valueStart = offset;
-    while (
-      offset < limit &&
-      source[offset] !== "\n" &&
-      source[offset] !== "\r" &&
-      !stops.includes(source[offset])
-    ) {
-      if (source[offset] === "\\" && offset + 1 < limit) {
-        offset += 2;
+  // Scans only advance ranges; validation never materializes attribute strings.
+  const scanUntil = (stops: string): void => {
+    while (offset < limit) {
+      const character = source[offset];
+      if (character === "\n" || character === "\r" || stops.includes(character)) {
+        break;
       }
-      else {
-        offset++;
-      }
+      offset += character === "\\" && offset + 1 < limit ? 2 : 1;
     }
-    return source.slice(valueStart, offset);
   };
 
-  const readQuoted = (quote: string): string | undefined => {
-    const valueStart = ++offset;
-    while (
-      offset < limit &&
-      source[offset] !== "\n" &&
-      source[offset] !== "\r" &&
-      source[offset] !== quote
-    ) {
-      offset += source[offset] === "\\" && offset + 1 < limit ? 2 : 1;
+  const scanQuoted = (quote: string): boolean => {
+    offset++;
+    while (offset < limit) {
+      const character = source[offset];
+      if (character === "\n" || character === "\r" || character === quote) {
+        break;
+      }
+      offset += character === "\\" && offset + 1 < limit ? 2 : 1;
     }
     if (source[offset] !== quote) {
-      return;
+      return false;
     }
-    const value = source.slice(valueStart, offset);
     offset++;
-    return value;
+    return true;
   };
 
-  const readBracketed = (close: string): string | undefined => {
-    const valueStart = offset;
+  const scanBracketed = (close: string): boolean => {
     const stack = [close];
     offset++;
     while (offset < limit && stack.length > 0) {
       const character = source[offset];
       if (character === "\n" || character === "\r") {
-        return;
+        return false;
       }
       if (character === "\\" && offset + 1 < limit) {
         offset += 2;
         continue;
       }
       if (character === "\"" || character === "'" || character === "`") {
-        if (readQuoted(character) === void 0) {
-          return;
+        if (!scanQuoted(character)) {
+          return false;
         }
         continue;
       }
@@ -103,7 +88,7 @@ function scanAttributes(
       }
       offset++;
     }
-    return stack.length === 0 ? source.slice(valueStart, offset) : void 0;
+    return stack.length === 0;
   };
 
   while (offset < limit) {
@@ -116,12 +101,17 @@ function scanAttributes(
     const marker = source[offset];
     if (marker === "." || marker === "#") {
       offset++;
-      const value = readUntil(" #.}");
-      if (!value) {
+      const valueStart = offset;
+      scanUntil(" #.}");
+      if (offset === valueStart) {
         return;
       }
       if (attributes) {
-        assignAttribute(attributes, marker === "." ? "class" : "id", value);
+        assignAttribute(
+          attributes,
+          marker === "." ? "class" : "id",
+          source.slice(valueStart, offset),
+        );
       }
       continue;
     }
@@ -147,13 +137,18 @@ function scanAttributes(
       }
       offset++;
     }
-    const rawName = source.slice(nameStart, offset);
+    const nameEnd = offset;
     while (isHorizontalWhitespace(source[offset])) {
       offset++;
     }
     if (source[offset] !== "=") {
       if (attributes) {
-        assignAttribute(attributes, rawName.startsWith(":") ? rawName : `:${rawName}`, "true");
+        const name = source.slice(nameStart, nameEnd);
+        assignAttribute(
+          attributes,
+          source.charCodeAt(nameStart) === Character.Colon ? name : `:${name}`,
+          "true",
+        );
       }
       continue;
     }
@@ -162,21 +157,34 @@ function scanAttributes(
       offset++;
     }
     const character = source[offset];
-    let value: string | undefined;
+    let valueStart = offset;
+    let valueEnd: number;
     if (character === "\"" || character === "'" || character === "`") {
-      value = readQuoted(character);
+      if (!scanQuoted(character)) {
+        return;
+      }
+      valueStart++;
+      valueEnd = offset - 1;
     }
     else if (brackets[character]) {
-      value = readBracketed(brackets[character]);
+      if (!scanBracketed(brackets[character])) {
+        return;
+      }
+      valueEnd = offset;
     }
     else {
-      value = readUntil(" }");
-    }
-    if (value === void 0 || value === "" && character !== "\"" && character !== "'" && character !== "`") {
-      return;
+      scanUntil(" }");
+      valueEnd = offset;
+      if (valueEnd === valueStart) {
+        return;
+      }
     }
     if (attributes) {
-      assignAttribute(attributes, rawName, value);
+      assignAttribute(
+        attributes,
+        source.slice(nameStart, nameEnd),
+        source.slice(valueStart, valueEnd),
+      );
     }
   }
 }
@@ -185,8 +193,9 @@ export function attributesEnd(source: string, start: number, limit = source.leng
   return scanAttributes(source, start, void 0, limit);
 }
 
-export function parseAttributes(source: string, start: number): ParsedAttributes | undefined {
+/** Materializes syntax previously accepted by {@link attributesEnd}. */
+export function parseAttributes(source: string, start: number): Attributes {
   const attributes: Attributes = {};
-  const end = scanAttributes(source, start, attributes);
-  return end === void 0 ? void 0 : { attributes, end };
+  scanAttributes(source, start, attributes);
+  return attributes;
 }

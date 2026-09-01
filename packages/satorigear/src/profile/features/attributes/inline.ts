@@ -129,15 +129,14 @@ export const inlineBuilds: InlineFeature["builds"] = [
     kind: "decorate",
     token: InlineKind.Attributes,
     apply(tokenIndex, sourceSpan, context, target) {
-      // mdast extensions may declare unrelated `attributes` shapes; this parser only emits ours.
       const previous = target.children.at(-1);
+      if (!previous) {
+        return false;
+      }
       const parsed = parseAttributes(
         context.view.text,
         inlineTokenStart(context.tokens, tokenIndex),
       );
-      if (!previous || !parsed) {
-        return false;
-      }
       const flags = inlineTokenData(context.tokens, tokenIndex);
       const terminal = Boolean(flags & AttributeFlag.Terminal);
       const detached = Boolean(flags & AttributeFlag.Detached);
@@ -149,19 +148,20 @@ export const inlineBuilds: InlineFeature["builds"] = [
         )
       ) {
         if (target.attributes) {
-          mergeAttributes(target.attributes, parsed.attributes);
+          mergeAttributes(target.attributes, parsed);
         }
         else {
-          target.attributes = parsed.attributes;
+          target.attributes = parsed;
         }
         return true;
       }
+      // mdast extensions may declare unrelated `attributes` shapes; this parser only emits ours.
       const attributes = previous.attributes as Attributes | undefined;
       if (attributes) {
-        mergeAttributes(attributes, parsed.attributes);
+        mergeAttributes(attributes, parsed);
       }
       else {
-        previous.attributes = parsed.attributes;
+        previous.attributes = parsed;
       }
       previous.position!.end = context.locator.locationAt(sourceSpan.end);
       return true;

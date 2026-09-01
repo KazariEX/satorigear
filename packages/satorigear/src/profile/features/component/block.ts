@@ -414,7 +414,7 @@ export const blockBuilds: BlockFeature["builds"] = [
       return {
         type: "blockComponent",
         name: normalizeComponentName(opening.slice(opening.lastIndexOf(":") + 1).trim()),
-        attributes: parsed?.attributes ?? {},
+        attributes: parsed ?? {},
         position: {
           start,
           end: context.locator.locationAt(tokens.end(close)),
@@ -440,7 +440,7 @@ export const blockBuilds: BlockFeature["builds"] = [
         type: "blockComponent",
         name: "template",
         attributes: {
-          ...parsed?.attributes,
+          ...parsed,
           name: normalizeComponentName(tokens.text(context.source, tokenStart).slice(1).trim()),
         },
         children,
