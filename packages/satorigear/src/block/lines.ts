@@ -496,7 +496,7 @@ export function lineIndentOffset(source: string, lines: BlockLines, index: numbe
     : offset;
 }
 
-export function isBlank(source: string, lines: BlockLines, index: number): boolean {
+export function isBlankLine(source: string, lines: BlockLines, index: number): boolean {
   for (let offset = lines.start(index), end = lines.end(index); offset < end; offset++) {
     const code = source.charCodeAt(offset);
     if (code !== Character.Space && code !== Character.CharacterTabulation) {
@@ -504,6 +504,17 @@ export function isBlank(source: string, lines: BlockLines, index: number): boole
     }
   }
   return true;
+}
+
+export function skipLineWhitespace(source: string, start: number, end: number): number {
+  while (start < end) {
+    const code = source.charCodeAt(start);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+      break;
+    }
+    start++;
+  }
+  return start;
 }
 
 export function physicalColumnAt(source: string, offset: number): number {

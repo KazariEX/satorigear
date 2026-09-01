@@ -1,5 +1,5 @@
 import { htmlBlockNames, htmlRawNames } from "micromark-util-html-tag-name";
-import { type BlockLines, isBlank } from "../../block/lines.ts";
+import { type BlockLines, isBlankLine } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -130,7 +130,7 @@ export const feature: SyntaxFeature = {
             }
           }
           else if (!htmlStart.terminator) {
-            while (end < lines.length && !isBlank(source, lines, end)) {
+            while (end < lines.length && !isBlankLine(source, lines, end)) {
               end++;
             }
           }

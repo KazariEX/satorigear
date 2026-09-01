@@ -7,7 +7,7 @@ import {
   type FenceRule,
   normalizedFenceContent,
 } from "../../block/fence.ts";
-import { type BlockLines, isBlank, lineIndentOffset, removeIndent } from "../../block/lines.ts";
+import { type BlockLines, isBlankLine, lineIndentOffset, removeIndent } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -94,7 +94,7 @@ export const feature: SyntaxFeature = {
           }
           // The block consumes trailing blank lines, but its code value and position do not include them.
           let contentEnd = end;
-          while (contentEnd > start && isBlank(source, lines, contentEnd - 1)) {
+          while (contentEnd > start && isBlankLine(source, lines, contentEnd - 1)) {
             contentEnd--;
           }
           const contentLength = lines.end(contentEnd - 1) - lines.start(start);

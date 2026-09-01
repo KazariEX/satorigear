@@ -1,5 +1,5 @@
 import type { Paragraph } from "mdast";
-import { indentOffset, isBlank, lineIndentOffset } from "../../block/lines.ts";
+import { indentOffset, isBlankLine, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -24,7 +24,7 @@ export const feature: SyntaxFeature = {
             : lineIndentOffset(source, lines, index);
           // Only lazy or deeply indented lines need a separate blank-line scan.
           if (lineOffset < 0) {
-            if (isBlank(source, lines, index)) {
+            if (isBlankLine(source, lines, index)) {
               break;
             }
           }

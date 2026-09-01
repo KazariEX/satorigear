@@ -1,5 +1,5 @@
 import type { FootnoteDefinition } from "mdast";
-import { type BlockLines, IndentedLine, isBlank } from "../../../block/lines.ts";
+import { type BlockLines, IndentedLine, isBlankLine } from "../../../block/lines.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
@@ -114,7 +114,10 @@ export const blockStarts: BlockFeature["starts"] = [
         definitionLines.pushLazy(lines, index);
         index++;
       }
-      while (definitionLines.length > 0 && isBlank(source, definitionLines, definitionLines.length - 1)) {
+      while (
+        definitionLines.length > 0 &&
+        isBlankLine(source, definitionLines, definitionLines.length - 1)
+      ) {
         definitionLines.pop();
       }
       out.push(

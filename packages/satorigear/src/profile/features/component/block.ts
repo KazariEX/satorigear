@@ -1,6 +1,6 @@
 import type { Paragraph, RootContent } from "mdast";
 import { closesFence, type Fence } from "../../../block/fence.ts";
-import { type BlockLines, lineIndentOffset } from "../../../block/lines.ts";
+import { type BlockLines, lineIndentOffset, skipLineWhitespace } from "../../../block/lines.ts";
 import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
@@ -32,13 +32,6 @@ interface SlotOpening {
   attributesStart?: number;
   nameEnd: number;
   offset: number;
-}
-
-function skipSpaces(source: string, offset: number, end: number): number {
-  while (offset < end && (source[offset] === " " || source[offset] === "\t")) {
-    offset++;
-  }
-  return offset;
 }
 
 function closingBracket(source: string, start: number, limit: number): number | undefined {
@@ -112,7 +105,7 @@ function slotOpeningAt(
   if (nameEnd === void 0 || nameEnd > lineEnd) {
     return;
   }
-  let offset = skipSpaces(source, nameEnd, lineEnd);
+  let offset = skipLineWhitespace(source, nameEnd, lineEnd);
   let attributesStart: number | undefined;
   let parsedAttributesEnd: number | undefined;
   if (source[offset] === "{") {
@@ -123,7 +116,7 @@ function slotOpeningAt(
     attributesStart = offset;
     offset = parsedAttributesEnd;
   }
-  if (skipSpaces(source, offset, lineEnd) !== lineEnd) {
+  if (skipLineWhitespace(source, offset, lineEnd) !== lineEnd) {
     return;
   }
   return {
@@ -151,14 +144,14 @@ function blockOpeningAt(
   }
   const lineEnd = lines.end(index);
   if (!shorthand) {
-    offset = skipSpaces(source, offset, lineEnd);
+    offset = skipLineWhitespace(source, offset, lineEnd);
   }
   const nameStart = offset;
   const nameEnd = componentNameEnd(source, nameStart, true);
   if (nameEnd === void 0 || nameEnd > lineEnd) {
     return;
   }
-  offset = skipSpaces(source, nameEnd, lineEnd);
+  offset = skipLineWhitespace(source, nameEnd, lineEnd);
   let labelStart: number | undefined;
   let labelEnd: number | undefined;
   if (source[offset] === "[") {
@@ -168,7 +161,7 @@ function blockOpeningAt(
     }
     labelStart = offset;
     labelEnd = close + 1;
-    offset = skipSpaces(source, labelEnd, lineEnd);
+    offset = skipLineWhitespace(source, labelEnd, lineEnd);
   }
   let attributesStart: number | undefined;
   let parsedAttributesEnd: number | undefined;
@@ -180,7 +173,7 @@ function blockOpeningAt(
     attributesStart = offset;
     offset = parsedAttributesEnd;
   }
-  if (skipSpaces(source, offset, lineEnd) !== lineEnd) {
+  if (skipLineWhitespace(source, offset, lineEnd) !== lineEnd) {
     return;
   }
   return {
@@ -205,7 +198,7 @@ function fenceAt(
     offset++;
   }
   const lineEnd = lines.end(index);
-  if (offset - contentOffset !== size || skipSpaces(source, offset, lineEnd) !== lineEnd) {
+  if (offset - contentOffset !== size || skipLineWhitespace(source, offset, lineEnd) !== lineEnd) {
     return;
   }
   return contentOffset;

@@ -1,5 +1,10 @@
 import type { Blockquote } from "mdast";
-import { type BlockLines, isBlank, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
+import {
+  type BlockLines,
+  isBlankLine,
+  lineIndentOffset,
+  physicalColumnAt,
+} from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../fragment/block.ts";
@@ -88,7 +93,7 @@ export const feature: SyntaxFeature = {
             }
             if (
               !lazyParagraph ||
-              isBlank(source, lines, index) ||
+              isBlankLine(source, lines, index) ||
               !lines.lazy(index) && context.startsInterruptingBlock(source, lines, index, markerOffset)
             ) {
               break;

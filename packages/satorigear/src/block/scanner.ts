@@ -1,5 +1,5 @@
 import { Character } from "../constants/character.ts";
-import { BlockLines, isBlank, lineIndentOffset } from "./lines.ts";
+import { BlockLines, isBlankLine, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocator, SourceSpan } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
@@ -163,7 +163,7 @@ export class BlockScanContext {
       blankSeparated ||= previousContentEnd >= 0 && lineStart > previousContentEnd;
       previousContentEnd = lineEnd;
       // A child may consume trailing blank lines that still separate the following direct block.
-      while (previousContentEnd > lineStart && isBlank(source, lines, previousContentEnd - 1)) {
+      while (previousContentEnd > lineStart && isBlankLine(source, lines, previousContentEnd - 1)) {
         previousContentEnd--;
       }
     });

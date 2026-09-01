@@ -1,4 +1,4 @@
-import { type BlockLines, isBlank } from "../../block/lines.ts";
+import { type BlockLines, isBlankLine, skipLineWhitespace } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { leafBlockPosition } from "../../fragment/block.ts";
@@ -84,7 +84,7 @@ function linkDefinitionAt(
       }
       const nextLine = lineIndex + 1;
       lookaheadEnd = nextLine < lines.length ? lines.end(nextLine) : lines.next(lineIndex);
-      if (nextLine >= lines.length || isBlank(source, lines, nextLine)) {
+      if (nextLine >= lines.length || isBlankLine(source, lines, nextLine)) {
         break parseDefinition;
       }
       if (++labelLength > 999) {
@@ -101,23 +101,18 @@ function linkDefinitionAt(
     }
     offset += 2;
 
-    const skipSpaces = (lineEnd: number): void => {
-      while (offset < lineEnd && (source[offset] === " " || source[offset] === "\t")) {
-        offset++;
-      }
-    };
     let lineEnd = lines.end(lineIndex);
-    skipSpaces(lineEnd);
+    offset = skipLineWhitespace(source, offset, lineEnd);
     if (offset === lineEnd) {
       const nextLine = lineIndex + 1;
       lookaheadEnd = nextLine < lines.length ? lines.end(nextLine) : lines.next(lineIndex);
-      if (nextLine >= lines.length || isBlank(source, lines, nextLine)) {
+      if (nextLine >= lines.length || isBlankLine(source, lines, nextLine)) {
         break parseDefinition;
       }
       lineIndex++;
       offset = lines.start(lineIndex);
       lineEnd = lines.end(lineIndex);
-      skipSpaces(lineEnd);
+      offset = skipLineWhitespace(source, offset, lineEnd);
     }
 
     let destination: string;
@@ -173,14 +168,14 @@ function linkDefinitionAt(
     if (offset < lineEnd && source[offset] !== " " && source[offset] !== "\t") {
       break parseDefinition;
     }
-    skipSpaces(lineEnd);
+    offset = skipLineWhitespace(source, offset, lineEnd);
     let titleOnNextLine = false;
     if (offset === lineEnd && lineIndex + 1 < lines.length) {
       lookaheadEnd = lines.end(lineIndex + 1);
       lineIndex++;
       offset = lines.start(lineIndex);
       lineEnd = lines.end(lineIndex);
-      skipSpaces(lineEnd);
+      offset = skipLineWhitespace(source, offset, lineEnd);
       titleOnNextLine = true;
     }
 
@@ -222,7 +217,7 @@ function linkDefinitionAt(
       }
       const nextLine = lineIndex + 1;
       lookaheadEnd = nextLine < lines.length ? lines.end(nextLine) : lines.next(lineIndex);
-      if (nextLine >= lines.length || isBlank(source, lines, nextLine)) {
+      if (nextLine >= lines.length || isBlankLine(source, lines, nextLine)) {
         break;
       }
       title += source.slice(titleStart, lines.next(lineIndex));
@@ -231,7 +226,7 @@ function linkDefinitionAt(
       titleStart = offset;
     }
     if (closed) {
-      skipSpaces(lineEnd);
+      offset = skipLineWhitespace(source, offset, lineEnd);
       if (offset === lineEnd) {
         fields.title = title;
         return { definitionKey, end: lineIndex + 1, fields };
