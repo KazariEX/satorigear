@@ -1,3 +1,6 @@
+import { BlockKind } from "./constants/block.ts";
+import type { BlockTokenStream } from "./block/tokens.ts";
+
 export interface SourceLocation {
   line: number;
   column: number;
@@ -42,34 +45,41 @@ export class SourceView {
   readonly #segments: number[] | undefined;
   readonly text: string;
 
-  constructor(source: string, start: number, end: number);
-  constructor(source: string, ranges: number[]);
-  constructor(source: string, startOrRanges: number | number[], end?: number) {
-    if (typeof startOrRanges === "number") {
-      this.#offset = startOrRanges;
-      this.text = source.slice(startOrRanges, end);
+  /** Projects the consecutive inline chunks owned by a block token. */
+  constructor(
+    source: string,
+    tokens: BlockTokenStream,
+    tokenStart: number,
+    nodeLength: number,
+  ) {
+    let token = tokenStart + 1;
+    const firstStart = tokens.start(token);
+    const tokenEnd = tokenStart + nodeLength;
+    let segmentStart = firstStart;
+    let end = tokens.end(token++);
+    let parts: string[] | undefined;
+    let segments: number[] | undefined;
+    let viewEnd = 0;
+    while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk) {
+      const start = tokens.start(token);
+      // Physically adjacent chunks still form one source slice; only stripped container gaps need segments.
+      if (start !== end) {
+        (parts ??= []).push(source.slice(segmentStart, end));
+        (segments ??= []).push(segmentStart - viewEnd, viewEnd += end - segmentStart);
+        segmentStart = start;
+      }
+      end = tokens.end(token);
+      token++;
+    }
+    if (parts && segments) {
+      parts.push(source.slice(segmentStart, end));
+      segments.push(segmentStart - viewEnd, viewEnd + end - segmentStart);
+      this.#segments = segments;
+      this.text = parts.join("");
       return;
     }
-    const ranges = startOrRanges;
-    const parts: string[] = [];
-    let viewOffset = 0;
-    let segmentCount = 0;
-    for (let read = 0; read < ranges.length; read += 2) {
-      const start = ranges[read];
-      const end = ranges[read + 1];
-      if (start === end) {
-        continue;
-      }
-      const write = segmentCount * 2;
-      ranges[write] = start - viewOffset;
-      viewOffset += end - start;
-      parts.push(source.slice(start, end));
-      ranges[write + 1] = viewOffset;
-      segmentCount++;
-    }
-    ranges.length = segmentCount * 2;
-    this.#segments = ranges;
-    this.text = parts.join("");
+    this.#offset = firstStart;
+    this.text = source.slice(firstStart, end);
   }
 
   /** Maps an offset at an internal gap to the following source segment. */

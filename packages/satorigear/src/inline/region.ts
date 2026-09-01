@@ -2,7 +2,7 @@ import { BlockFlag, BlockKind } from "../constants/block.ts";
 import { emptyArray, emptySet } from "../primitives.ts";
 import { SourceView } from "../source-view.ts";
 import type { BlockScanChange, BlockStructure } from "../block/scanner.ts";
-import type { BlockTokenStream, DefinitionLookup } from "../block/tokens.ts";
+import type { DefinitionLookup } from "../block/tokens.ts";
 import type { InlineProfile } from "./profile.ts";
 import type { InlineTokenStream } from "./tokens.ts";
 
@@ -182,11 +182,10 @@ export class InlineRegionState {
           continue;
         }
         if (tokens.kind(token) & BlockFlag.InlineContent) {
-          const inlineView = inlineViewOf(source, tokens, token, nodeLength);
-          if (inlineView) {
+          if (tokens.kind(token + 1) === BlockKind.InlineChunk) {
             bindings.push({
               tokenStart: token,
-              view: inlineView,
+              view: new SourceView(source, tokens, token, nodeLength),
             });
           }
           token += nodeLength - 1;
@@ -308,46 +307,5 @@ export class InlineRegionCursor {
     }
     this.#index++;
     return region;
-  }
-}
-
-export function inlineViewOf(
-  source: string,
-  tokens: BlockTokenStream,
-  tokenStart: number,
-  nodeLength: number,
-): SourceView | undefined {
-  let firstStart = -1;
-  let firstEnd = -1;
-  let ranges: number[] | undefined;
-  const tokenEnd = tokenStart + nodeLength;
-  for (let token = tokenStart + 1; token < tokenEnd; token++) {
-    if (tokens.kind(token) !== BlockKind.InlineChunk) {
-      continue;
-    }
-    const start = tokens.start(token);
-    const end = tokens.end(token);
-    if (firstStart < 0) {
-      firstStart = start;
-      firstEnd = end;
-    }
-    // Physically adjacent chunks still form one source slice; only stripped container gaps need segments.
-    else if (start === firstEnd) {
-      firstEnd = end;
-      if (ranges) {
-        ranges[ranges.length - 1] = end;
-      }
-    }
-    else {
-      ranges ??= [firstStart, firstEnd];
-      ranges.push(start, end);
-      firstEnd = end;
-    }
-  }
-  if (ranges) {
-    return new SourceView(source, ranges);
-  }
-  if (firstStart >= 0) {
-    return new SourceView(source, firstStart, firstEnd);
   }
 }

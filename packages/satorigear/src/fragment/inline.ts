@@ -1,7 +1,7 @@
 import type { PhrasingContent, Text } from "mdast";
+import { BlockKind } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
-import { inlineViewOf } from "../inline/region.ts";
 import {
   inlineTokenCount,
   inlineTokenData,
@@ -10,8 +10,13 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
 } from "../inline/tokens.ts";
+import {
+  type SourceLocator,
+  type SourcePosition,
+  type SourceSpan,
+  SourceView,
+} from "../source-view.ts";
 import type { InlineProfile } from "../inline/profile.ts";
-import type { SourceLocator, SourcePosition, SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
 
 type InlineNonText = Exclude<PhrasingContent, Text>;
@@ -354,16 +359,15 @@ export function buildInlineFragment(
   }
   else {
     const blockTokens = context.structure.tokens;
-    const inlineView = inlineViewOf(
+    if (blockTokens.kind(tokenStart + 1) !== BlockKind.InlineChunk) {
+      return { children: [] };
+    }
+    view = new SourceView(
       context.source,
       blockTokens,
       tokenStart,
       blockTokens.nodeLength(tokenStart),
     );
-    if (!inlineView) {
-      return { children: [] };
-    }
-    view = inlineView;
     tokens = context.profile.resolve(view.text, context.profile.tokenize(view.text), blockTokens);
   }
   const inlineContext = context.inlineContext ??= {
