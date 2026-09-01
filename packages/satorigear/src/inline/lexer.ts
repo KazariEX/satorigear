@@ -69,7 +69,7 @@ function tokenize(
         }
         tokens.push(InlineKind.HardBreak, spaces, offset, 0);
       }
-      offset++;
+      const endingStart = offset++;
       if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
         offset++;
       }
@@ -78,7 +78,7 @@ function tokenize(
       while (source.charCodeAt(offset) === Character.Space) {
         offset++;
       }
-      tokens.push(InlineKind.Newline, offset, offset, lineStart);
+      tokens.push(InlineKind.Newline, endingStart, offset, lineStart);
       continue;
     }
 
@@ -112,9 +112,9 @@ function generateInlineTokenizer(
       `if(source.charCodeAt(offset-1)===${Character.Space}&&source.charCodeAt(offset-2)===${Character.Space}){`,
       `let spaces=offset-2;while(source.charCodeAt(spaces-1)===${Character.Space})spaces--;`,
       `tokens.push(${InlineKind.HardBreak},spaces,offset,0)}`,
-      `offset++;if(code===${Character.CarriageReturn}&&source.charCodeAt(offset)===${Character.LineFeed})offset++;`,
+      `const endingStart=offset++;if(code===${Character.CarriageReturn}&&source.charCodeAt(offset)===${Character.LineFeed})offset++;`,
       `const lineStart=offset;while(source.charCodeAt(offset)===${Character.Space})offset++;`,
-      `tokens.push(${InlineKind.Newline},offset,offset,lineStart);continue}`,
+      `tokens.push(${InlineKind.Newline},endingStart,offset,lineStart);continue}`,
       `let scannedEnd;switch(code){${cases}default:scannedEnd=offset}`,
       `offset=scannedEnd>offset?scannedEnd:offset+1}`,
       `return tokens}`,

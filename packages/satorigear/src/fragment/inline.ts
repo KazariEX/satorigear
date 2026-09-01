@@ -82,13 +82,6 @@ export type InlineBuilder =
   | InlineTextBuilder
   | InlineTokenDecorator;
 
-function lineEndingStart(source: string, lineStart: number): number {
-  return source.charCodeAt(lineStart - 1) === Character.LineFeed &&
-    source.charCodeAt(lineStart - 2) === Character.CarriageReturn
-    ? lineStart - 2
-    : lineStart - 1;
-}
-
 function trimTrailingText(output: InlineOutput): number {
   const text = output.lastText;
   const removed = text ? output.trailingSpaces : 0;
@@ -192,9 +185,9 @@ function appendRange(
     const kind = inlineTokenKind(context.tokens, index);
     // Newline has fixed semantic text, so it does not enter profile builder dispatch.
     if (kind === InlineKind.Newline) {
-      const childEnd = inlineTokenEnd(context.tokens, index);
+      const endingStart = inlineTokenStart(context.tokens, index);
       const lineStart = inlineTokenData(context.tokens, index);
-      const endingStart = lineEndingStart(context.view.text, lineStart);
+      const contentStart = inlineTokenEnd(context.tokens, index);
       if (endingStart > output.cursor) {
         appendGap(output, context, output.cursor, endingStart);
       }
@@ -215,11 +208,11 @@ function appendRange(
           output,
           "\n",
           sourceStart,
-          context.view.mapEnd(childEnd),
+          context.view.mapEnd(contentStart),
           context,
         );
       }
-      output.cursor = childEnd;
+      output.cursor = contentStart;
       index++;
       continue;
     }

@@ -10,7 +10,7 @@ const enum InlineTokenField {
   Stride,
 }
 
-// The token kind owns the fourth slot's meaning; Newline stores the following view-line start.
+// Newline spans its physical line ending and stripped indentation; Data stores the next line start.
 // Token copies preserve this slot as opaque data.
 // Zero means that the token carries no additional fact.
 
