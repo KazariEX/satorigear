@@ -91,9 +91,10 @@ export const feature: SyntaxFeature = {
               lazyParagraph = context.endsWithParagraphLeaf(source, quoteLines, quoteLines.length - 1);
               continue;
             }
+            // A recognized content offset already proves that the line is nonblank.
             if (
               !lazyParagraph ||
-              isBlankLine(source, lines, index) ||
+              markerOffset < 0 && isBlankLine(source, lines, index) ||
               !lines.lazy(index) && context.startsInterruptingBlock(source, lines, index, markerOffset)
             ) {
               break;
