@@ -26,10 +26,10 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-  // Structural close tokens include their boundary; semantic content drops its line ending.
-  return tokens.nodeLength(close) === 0
-    ? tokens.end(close)
-    : tokens.contentEnd(context.source, close);
+  // Structural close tokens include their boundary; a single leaf drops its line ending.
+  return close === tokenStart
+    ? tokens.contentEnd(context.source, close)
+    : tokens.end(close);
 }
 
 export function leafBlockPosition(
