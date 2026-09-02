@@ -1,5 +1,5 @@
 import type { Paragraph } from "mdast";
-import { indentOffset, isBlankLine, lineIndentOffset } from "../../block/lines.ts";
+import { indentOffset, skipLineWhitespace } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -19,35 +19,30 @@ export const feature: SyntaxFeature = {
         let chunkOffset = contentOffset;
         let index = start + 1;
         while (index < lines.length) {
-          const lineOffset = lines.lazy(index)
-            ? -1
-            : lineIndentOffset(source, lines, index);
-          // Only lazy or deeply indented lines need a separate blank-line scan.
-          if (lineOffset < 0) {
-            if (isBlankLine(source, lines, index)) {
-              break;
-            }
+          const lineEnd = lines.end(index);
+          const contentStart = skipLineWhitespace(source, lines.start(index), lineEnd);
+          if (contentStart === lineEnd) {
+            break;
           }
-          else {
-            const setext = setextMarkerAt(source, lines, index, lineOffset);
+          const chunkStart = indentOffset(source, lines, index);
+          const canInterrupt = !lines.lazy(index) && chunkStart === contentStart;
+          if (canInterrupt) {
+            const setext = setextMarkerAt(source, lines, index, contentStart);
             if (setext) {
               out.setKind(
                 openToken,
                 setext === "=" ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
               );
               out.push(BlockKind.InlineChunk, chunkOffset, lines.end(index - 1));
-              const lineEnd = lines.end(index);
               out.push(BlockKind.HeadingClose, lineEnd, lineEnd);
               return index + 1;
             }
-            if (context.startsInterruptingBlock(source, lines, index, lineOffset)) {
+            if (context.startsInterruptingBlock(source, lines, index, contentStart)) {
               break;
             }
           }
           out.push(BlockKind.InlineChunk, chunkOffset, lines.next(index - 1));
-          chunkOffset = lineOffset < 0
-            ? indentOffset(source, lines, index)
-            : lineOffset;
+          chunkOffset = chunkStart;
           index++;
         }
         const close = lines.end(index - 1);
