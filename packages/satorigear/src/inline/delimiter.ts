@@ -31,7 +31,7 @@ export type DelimiterConfig = BaseDelimiterConfig & (
   }
 );
 
-interface CompiledDelimiterConfig {
+export interface CompiledDelimiterConfig {
   single?: DelimiterPair;
   double?: DelimiterPair;
   bits: number;
@@ -47,7 +47,7 @@ export interface DelimiterRun {
   state: number;
 }
 
-interface DelimiterReplacement {
+export interface DelimiterReplacement {
   offset: number;
   end: number;
   kind: number;
@@ -57,7 +57,6 @@ interface DelimiterReplacement {
 const enum DelimiterRunState {
   CanOpen = 1,
   CanClose = 2,
-  FlankingMask = CanOpen | CanClose,
   LengthModuloMask = 12,
 }
 
@@ -183,25 +182,11 @@ function unlinkRun(runs: DelimiterRun[], runIndex: number): void {
   }
 }
 
-function addReplacement(
-  replacements: DelimiterReplacement[][],
-  tokenIndex: number,
-  replacement: DelimiterReplacement,
-): void {
-  const tokenReplacements = replacements[tokenIndex];
-  if (tokenReplacements) {
-    tokenReplacements.push(replacement);
-  }
-  else {
-    replacements[tokenIndex] = [replacement];
-  }
-}
-
-function matchDelimiterRuns(
+export function resolveDelimiterScope(
   runs: DelimiterRun[],
   first: number,
-  replacements: DelimiterReplacement[][],
-): void {
+  replacements: DelimiterReplacement[][] = [],
+): DelimiterReplacement[][] {
   const openersBottom: number[] = [];
   let current = first;
   // Matching unlinks exhausted runs, so every active run has remaining source.
@@ -209,10 +194,6 @@ function matchDelimiterRuns(
     const closer = runs[current];
     const next = closer.next;
     if (!(closer.state & DelimiterRunState.CanClose)) {
-      if ((closer.state & DelimiterRunState.FlankingMask) === 0) {
-        // Inert runs cannot pair and only lengthen later opener searches.
-        unlinkRun(runs, current);
-      }
       current = next;
       continue;
     }
@@ -247,8 +228,8 @@ function matchDelimiterRuns(
     const closeEnd = closeStart + use;
     // Partial delimiters always define a single replacement; unsupported whole runs were filtered before matching.
     const pair = use === 2 ? closer.config.double! : closer.config.single!;
-    addReplacement(replacements, opener.tokenIndex, { offset: openStart, end: openEnd, kind: pair.open });
-    addReplacement(replacements, closer.tokenIndex, { offset: closeStart, end: closeEnd, kind: pair.close });
+    (replacements[opener.tokenIndex] ??= []).push({ offset: openStart, end: openEnd, kind: pair.open });
+    (replacements[closer.tokenIndex] ??= []).push({ offset: closeStart, end: closeEnd, kind: pair.close });
     opener.remaining -= use;
     closer.start += use;
     closer.remaining -= use;
@@ -262,19 +243,15 @@ function matchDelimiterRuns(
       current = next;
     }
   }
+  return replacements;
 }
 
 export function delimiterRunAt(
   source: string,
   tokens: InlineTokenStream,
   tokenIndex: number,
-  configByKind: readonly (CompiledDelimiterConfig | undefined)[],
+  config: CompiledDelimiterConfig,
 ): DelimiterRun | undefined {
-  const kind = inlineTokenKind(tokens, tokenIndex);
-  const config = configByKind[kind];
-  if (!config) {
-    return;
-  }
   const offset = inlineTokenStart(tokens, tokenIndex);
   const end = inlineTokenEnd(tokens, tokenIndex);
   const length = end - offset;
@@ -286,8 +263,7 @@ export function delimiterRunAt(
     return;
   }
   const delimiterFlanking = flanking(source, offset, end, config);
-  // Retain inert runs only for intraword configs; matching unlinks them before opener search.
-  if (config.bits & DelimiterConfigFlag.AllowIntraword || delimiterFlanking !== 0) {
+  if (delimiterFlanking !== 0) {
     return {
       tokenIndex,
       config,
@@ -300,17 +276,6 @@ export function delimiterRunAt(
       ),
     };
   }
-}
-
-export function resolveDelimiterMatches(runs: DelimiterRun[]): DelimiterReplacement[][] {
-  const replacements: DelimiterReplacement[][] = [];
-  // Walk backwards so unlinking a head cannot make its successor look like a new scope head later.
-  for (let runIndex = runs.length - 1; runIndex >= 0; runIndex--) {
-    if (runs[runIndex].previous < 0) {
-      matchDelimiterRuns(runs, runIndex, replacements);
-    }
-  }
-  return replacements;
 }
 
 export function appendResolvedDelimiterToken(

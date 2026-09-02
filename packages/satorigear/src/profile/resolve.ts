@@ -3,9 +3,10 @@ import { InlineKind } from "../constants/inline.ts";
 import {
   appendResolvedDelimiterToken,
   compileDelimiterConfigs,
+  type DelimiterReplacement,
   type DelimiterRun,
   delimiterRunAt,
-  resolveDelimiterMatches,
+  resolveDelimiterScope,
 } from "../inline/delimiter.ts";
 import {
   appendInlineToken,
@@ -19,7 +20,7 @@ import {
 } from "../inline/tokens.ts";
 import { attributesEnd } from "./features/attributes/shared.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
-import { normalizeAssociationLabel } from "./utils.ts";
+import { isMarkdownWhitespace, normalizeAssociationLabel } from "./utils.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
 import type { InlineResolverFactory } from "../inline/profile.ts";
 
@@ -35,15 +36,16 @@ const enum FrameSlot {
   WorkspaceB,
   Parent,
   State,
-  ResolvedEnd,
   Stride,
 }
 
 const enum FrameClaim {
   Raw,
+  // Feature boundaries stay contiguous for close-path range checks.
   Footnote,
   Component,
   Span,
+  AttributedSpan,
   Link,
   Reference,
   Consumed,
@@ -52,61 +54,50 @@ const enum FrameClaim {
 }
 
 const enum FrameFlag {
-  Attributed = 8,
+  Image = 8,
   InLinkLabel = 16,
+  LiteralBracket = 32,
 }
 
 const enum ResolutionFlag {
-  Bracket = 1,
-  Delimiter = 2,
-  Rewrite = 4,
+  Rewrite = 1,
 }
 
 const frameHeaderSize = 1;
-const noBracketFrames = Object.freeze([0]);
-const delimiterOnlyFrames = Object.freeze([ResolutionFlag.Delimiter]);
-const noDelimiterReplacements: ReturnType<typeof resolveDelimiterMatches> = [];
+// Without an opener, no downstream frame write can reach this shared header.
+const noBracketFrames = [0];
+const noDelimiterReplacements: DelimiterReplacement[][] = [];
 
-// Analysis stores each candidate suffix start in A. Later passes overwrite both
-// workspace slots before reading them; Parent stays stable so token-order passes
-// can leave a closed frame in O(1).
-
-function frameClaim(frames: readonly number[], frame: number): FrameClaim {
-  return frames[frame + FrameSlot.State] & FrameClaim.Mask;
-}
+// Analysis uses A for candidate bottoms and B for candidate links. Resolution reuses
+// A for delimiter checkpoints then resolved ends, and B for logical then resolved parents.
 
 function setFrameState(frames: number[], frame: number, state: number): void {
   frames[frame + FrameSlot.State] = state;
-  frames[0] |= ResolutionFlag.Rewrite;
+  frames[0] = ResolutionFlag.Rewrite;
 }
 
 function rewriteLinkCandidates(
   frames: number[],
-  candidates: number[],
-  start: number,
-): void {
-  // Candidates append in close order. The length saved when a frame opens
-  // therefore bounds its descendant suffix, which this pass compacts in place.
-  let write = start;
-  for (let read = start; read < candidates.length; read++) {
-    const candidate = candidates[read];
+  top: number,
+  bottom: number,
+): number {
+  // Only suffix membership matters, so retained links can be rebuilt in either order.
+  let candidate = top;
+  top = bottom;
+  while (candidate !== bottom) {
+    const next = frames[candidate + FrameSlot.WorkspaceB];
     const state = frames[candidate + FrameSlot.State];
-    if (
-      (state & FrameClaim.Mask) === FrameClaim.Span &&
-      !(state & FrameFlag.Attributed)
-    ) {
+    if (state === FrameClaim.Span) {
       frames[candidate + FrameSlot.State] = FrameClaim.Raw;
     }
     else {
       frames[candidate + FrameSlot.State] = state | FrameFlag.InLinkLabel;
-      candidates[write++] = candidate;
+      frames[candidate + FrameSlot.WorkspaceB] = top;
+      top = candidate;
     }
+    candidate = next;
   }
-  candidates.length = write;
-}
-
-function isImageFrame(tokens: InlineTokenStream, frames: readonly number[], frame: number): boolean {
-  return inlineTokenKind(tokens, frames[frame + FrameSlot.OpenToken]) === InlineKind.ImageOpen;
+  return top;
 }
 
 function referenceLabelEnd(source: string, start: number): number {
@@ -135,12 +126,7 @@ function referenceLabelEnd(source: string, start: number): number {
       offset += 2;
     }
     else {
-      hasContent ||= (
-        code !== Character.CharacterTabulation &&
-        code !== Character.LineFeed &&
-        code !== Character.CarriageReturn &&
-        code !== Character.Space
-      );
+      hasContent ||= !isMarkdownWhitespace(code);
       offset++;
     }
     characters++;
@@ -153,12 +139,7 @@ function acceptsShortcutLabel(source: string, start: number, end: number): boole
   let characters = 0;
   for (let offset = start; offset < end; offset++) {
     const code = source.charCodeAt(offset);
-    hasContent ||= (
-      code !== Character.CharacterTabulation &&
-      code !== Character.LineFeed &&
-      code !== Character.CarriageReturn &&
-      code !== Character.Space
-    );
+    hasContent ||= !isMarkdownWhitespace(code);
     if (
       code >= Character.HighSurrogateStart &&
       code <= Character.HighSurrogateEnd &&
@@ -179,29 +160,31 @@ function acceptsShortcutLabel(source: string, start: number, end: number): boole
 function analyzeBrackets(
   source: string,
   tokens: InlineTokenStream,
-  delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
   definitions: DefinitionLookup,
   options: InlineResolverOptions,
-): readonly number[] {
-  let hasDelimiter = false;
+): number[] {
   let frames: number[] | undefined;
-  let candidates: number[] | undefined;
+  let candidateTop = -1;
   let stackTop = -1;
   const count = inlineTokenCount(tokens);
   for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
     const kind = inlineTokenKind(tokens, tokenIndex);
-    if (delimiterByKind[kind]) {
-      hasDelimiter = true;
-    }
-    if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
-      const arena = frames ??= [ResolutionFlag.Bracket];
+    if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
+      const arena = frames ??= [0];
       const frame = arena.length;
       // Append one complete frame in `FrameSlot` order before advancing the stack top.
-      arena.push(tokenIndex, -1, candidates?.length ?? 0, -1, stackTop, FrameClaim.Raw, 0);
+      arena.push(
+        tokenIndex,
+        -1,
+        candidateTop,
+        -1,
+        stackTop,
+        kind === InlineKind.ImageOpen ? FrameFlag.Image : FrameClaim.Raw,
+      );
       stackTop = frame;
       continue;
     }
-    if (kind !== InlineKind.BracketClose && kind !== InlineKind.LinkTail) {
+    if (kind < InlineKind.LinkTail || kind > InlineKind.BracketClose) {
       continue;
     }
 
@@ -212,7 +195,7 @@ function analyzeBrackets(
     const arena = frames!;
     stackTop = arena[frame + FrameSlot.Parent];
     arena[frame + FrameSlot.CloseToken] = tokenIndex;
-    const image = isImageFrame(tokens, arena, frame);
+    const image = (arena[frame + FrameSlot.State] & FrameFlag.Image) !== 0;
 
     if (options.footnote && kind === InlineKind.BracketClose) {
       const openToken = arena[frame + FrameSlot.OpenToken];
@@ -224,9 +207,7 @@ function analyzeBrackets(
         definitions.hasDefinition(label.definitionKey)
       ) {
         setFrameState(arena, frame, FrameClaim.Footnote);
-        if (candidates) {
-          candidates.length = arena[frame + FrameSlot.WorkspaceA];
-        }
+        candidateTop = arena[frame + FrameSlot.WorkspaceA];
         continue;
       }
     }
@@ -235,13 +216,11 @@ function analyzeBrackets(
       continue;
     }
     if (kind === InlineKind.LinkTail) {
-      if (candidates) {
-        rewriteLinkCandidates(
-          arena,
-          candidates,
-          arena[frame + FrameSlot.WorkspaceA],
-        );
-      }
+      candidateTop = rewriteLinkCandidates(
+        arena,
+        candidateTop,
+        arena[frame + FrameSlot.WorkspaceA],
+      );
     }
     const openToken = arena[frame + FrameSlot.OpenToken];
     const componentToken = openToken - 1;
@@ -251,45 +230,48 @@ function analyzeBrackets(
       inlineTokenEnd(tokens, componentToken) === inlineTokenStart(tokens, openToken)
     ) {
       setFrameState(arena, frame, FrameClaim.Component);
-      (candidates ??= []).push(frame);
+      arena[frame + FrameSlot.WorkspaceB] = candidateTop;
+      candidateTop = frame;
       continue;
     }
 
     const close = inlineTokenStart(tokens, tokenIndex);
-    const trailing = source.charCodeAt(close + 1);
+    const suffixStart = close + 1;
+    const trailing = source.charCodeAt(suffixStart);
     if (
       trailing === Character.LeftParenthesis ||
       trailing === Character.LeftSquareBracket
     ) {
       continue;
     }
-    const attributesStart = close + 1;
     const attributed = (
-      source.charCodeAt(attributesStart) === Character.LeftCurlyBracket &&
-      attributesEnd(source, attributesStart) !== void 0
+      trailing === Character.LeftCurlyBracket &&
+      attributesEnd(source, suffixStart) !== void 0
     );
     setFrameState(
       arena,
       frame,
-      FrameClaim.Span | (attributed ? FrameFlag.Attributed : 0),
+      attributed ? FrameClaim.AttributedSpan : FrameClaim.Span,
     );
-    (candidates ??= []).push(frame);
+    arena[frame + FrameSlot.WorkspaceB] = candidateTop;
+    candidateTop = frame;
   }
-  if (frames) {
-    frames[0] |= hasDelimiter ? ResolutionFlag.Delimiter : 0;
-    return frames;
-  }
-  return hasDelimiter ? delimiterOnlyFrames : noBracketFrames;
+  return frames ?? noBracketFrames;
 }
 
-function resolveReferences(
+function resolvePairedSyntax(
   source: string,
   tokens: InlineTokenStream,
   frames: number[],
   definitions: DefinitionLookup,
-): void {
+  delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
+): DelimiterReplacement[][] | undefined {
   // An empty definition table makes every non-resource bracket candidate literal.
-  const hasDefinitions = definitions.hasDefinitions();
+  const hasDefinitions = frames.length > frameHeaderSize && definitions.hasDefinitions();
+  // Delimiter scopes share a reusable run prefix; frames checkpoint its logical length.
+  let runs: DelimiterRun[] | undefined;
+  let runCount = 0;
+  let replacements: DelimiterReplacement[][] | undefined;
   let rawTop = -1;
   let logicalTop = -1;
   let frameCursor = frameHeaderSize;
@@ -309,7 +291,21 @@ function resolveReferences(
     }
     const consuming = consumedEnd >= 0;
 
-    if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
+    const delimiter = delimiterByKind[kind];
+    if (!consuming && delimiter) {
+      const run = delimiterRunAt(source, tokens, tokenIndex, delimiter);
+      if (run) {
+        const arena = runs ??= [];
+        const runIndex = runCount++;
+        if (runIndex > 0) {
+          run.previous = runIndex - 1;
+          arena[runIndex - 1].next = runIndex;
+        }
+        arena[runIndex] = run;
+      }
+    }
+
+    if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
       const frame = frameCursor;
       frameCursor += FrameSlot.Stride;
       rawTop = frame;
@@ -319,21 +315,24 @@ function resolveReferences(
         }
         continue;
       }
+      frames[frame + FrameSlot.WorkspaceA] = runCount;
 
-      const claim = frameClaim(frames, frame);
+      const state = frames[frame + FrameSlot.State];
+      const claim = state & FrameClaim.Mask;
       if (claim === FrameClaim.Footnote) {
         const closeToken = frames[frame + FrameSlot.CloseToken];
         consumedEnd = inlineTokenEnd(tokens, closeToken);
         continue;
       }
-      if (claim === FrameClaim.Component || claim === FrameClaim.Span) {
-        if (frames[frame + FrameSlot.State] & FrameFlag.InLinkLabel) {
+      if (claim >= FrameClaim.Component && claim <= FrameClaim.AttributedSpan) {
+        if (state & FrameFlag.InLinkLabel) {
           literalDepth++;
         }
         continue;
       }
       const image = kind === InlineKind.ImageOpen;
       if (literalDepth > 0 && !image) {
+        frames[frame + FrameSlot.State] = state | FrameFlag.LiteralBracket;
         continue;
       }
       frames[frame + FrameSlot.WorkspaceB] = logicalTop;
@@ -342,7 +341,7 @@ function resolveReferences(
       continue;
     }
 
-    if (kind !== InlineKind.BracketClose && kind !== InlineKind.LinkTail) {
+    if (kind < InlineKind.LinkTail || kind > InlineKind.BracketClose) {
       continue;
     }
     const rawFrame = rawTop;
@@ -356,14 +355,13 @@ function resolveReferences(
       continue;
     }
 
-    const rawClaim = rawFrame < 0 ? FrameClaim.Raw : frameClaim(frames, rawFrame);
-    const featureBoundary = (
-      rawClaim === FrameClaim.Footnote ||
-      rawClaim === FrameClaim.Component ||
-      rawClaim === FrameClaim.Span
-    );
-    const visible = !featureBoundary && (
-      literalDepth <= 0 || rawFrame < 0 || isImageFrame(tokens, frames, rawFrame)
+    const rawState = rawFrame < 0 ? FrameClaim.Raw : frames[rawFrame + FrameSlot.State];
+    const rawClaim = rawState & FrameClaim.Mask;
+    let runStart = rawClaim >= FrameClaim.Footnote && rawClaim <= FrameClaim.AttributedSpan
+      ? frames[rawFrame + FrameSlot.WorkspaceA]
+      : -1;
+    const visible = runStart < 0 && (
+      literalDepth <= 0 || rawFrame < 0 || (rawState & FrameFlag.Image) !== 0
     );
 
     if (visible) {
@@ -373,12 +371,13 @@ function resolveReferences(
       }
       if (frame >= 0 && (kind === InlineKind.LinkTail || hasDefinitions)) {
         const openToken = frames[frame + FrameSlot.OpenToken];
-        const image = isImageFrame(tokens, frames, frame);
+        const image = (frames[frame + FrameSlot.State] & FrameFlag.Image) !== 0;
         // A successful inner ordinary link deactivates each earlier non-image opener.
         if (image || openToken + 1 >= inactiveBefore) {
           const contentStart = inlineTokenEnd(tokens, openToken);
           const contentEnd = tokenStart;
-          let closeEnd = inlineTokenEnd(tokens, tokenIndex);
+          const tokenEnd = inlineTokenEnd(tokens, tokenIndex);
+          let closeEnd = tokenEnd;
           let reference = false;
           let matched = kind === InlineKind.LinkTail;
 
@@ -407,14 +406,16 @@ function resolveReferences(
             setFrameState(
               frames,
               frame,
-              reference ? FrameClaim.Reference : FrameClaim.Link,
+              (reference ? FrameClaim.Reference : FrameClaim.Link) |
+                (image ? FrameFlag.Image : 0),
             );
             frames[frame + FrameSlot.CloseToken] = tokenIndex;
-            frames[frame + FrameSlot.ResolvedEnd] = closeEnd;
+            runStart = frames[frame + FrameSlot.WorkspaceA];
+            frames[frame + FrameSlot.WorkspaceA] = closeEnd;
             if (!image) {
-              inactiveBefore = Math.max(inactiveBefore, openToken + 1);
+              inactiveBefore = openToken + 1;
             }
-            if (closeEnd > inlineTokenEnd(tokens, tokenIndex)) {
+            if (closeEnd > tokenEnd) {
               consumedEnd = closeEnd;
               consumeFrames = true;
             }
@@ -423,98 +424,23 @@ function resolveReferences(
       }
     }
 
-    if (rawFrame >= 0 && frames[rawFrame + FrameSlot.State] & FrameFlag.InLinkLabel) {
+    if (rawState & FrameFlag.InLinkLabel) {
       literalDepth--;
     }
-  }
-}
-
-function assignDelimiterScopes(
-  source: string,
-  tokens: InlineTokenStream,
-  frames: readonly number[],
-  delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
-): DelimiterRun[] | undefined {
-  // Bracket openers imply a mutable arena; delimiter-only sentinels never enter these writes.
-  const workspace = frames as number[];
-  let runs: DelimiterRun[] | undefined;
-  let activeTop = -1;
-  let rootLastRun = -1;
-  let frameCursor = frameHeaderSize;
-  let skipEnd = -1;
-
-  const count = inlineTokenCount(tokens);
-  for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
-    while (
-      activeTop >= 0 &&
-      frames[activeTop + FrameSlot.CloseToken] === tokenIndex
-    ) {
-      const frame = activeTop;
-      activeTop = frames[frame + FrameSlot.WorkspaceA];
-      const resolvedEnd = frames[frame + FrameSlot.ResolvedEnd];
-      if (resolvedEnd > inlineTokenEnd(tokens, tokenIndex)) {
-        skipEnd = resolvedEnd;
+    if (runStart >= 0 && runCount > runStart) {
+      // Replacements retain the resolved suffix, so its run slots can be reused.
+      if (runStart > 0) {
+        runs![runStart].previous = -1;
+        runs![runStart - 1].next = -1;
       }
-    }
-
-    const kind = inlineTokenKind(tokens, tokenIndex);
-    const tokenStart = inlineTokenStart(tokens, tokenIndex);
-    if (skipEnd >= 0 && tokenStart >= skipEnd) {
-      skipEnd = -1;
-    }
-    if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
-      const frame = frameCursor;
-      frameCursor += FrameSlot.Stride;
-      const claim = frameClaim(frames, frame);
-      if (claim === FrameClaim.Footnote) {
-        // Footnotes have no raw bracket children, so skipping preserves the enclosing scope.
-        skipEnd = inlineTokenEnd(tokens, frames[frame + FrameSlot.CloseToken]);
-        continue;
-      }
-      // Resolved bracket frames own delimiter scopes; an empty component has no content scope.
-      const isolates = (
-        claim === FrameClaim.Span ||
-        claim === FrameClaim.Link ||
-        claim === FrameClaim.Reference || (
-          claim === FrameClaim.Component &&
-          inlineTokenEnd(tokens, frames[frame + FrameSlot.OpenToken]) <
-          inlineTokenStart(tokens, frames[frame + FrameSlot.CloseToken])
-        )
-      );
-      if (isolates) {
-        workspace[frame + FrameSlot.WorkspaceA] = activeTop;
-        activeTop = frame;
-        workspace[frame + FrameSlot.WorkspaceB] = -1;
-      }
-    }
-
-    if (skipEnd < 0) {
-      const run = delimiterRunAt(
-        source,
-        tokens,
-        tokenIndex,
-        delimiterByKind,
-      );
-      if (run) {
-        const runIndex = runs?.length ?? 0;
-        const previous = activeTop < 0
-          ? rootLastRun
-          : frames[activeTop + FrameSlot.WorkspaceB];
-        if (previous >= 0) {
-          run.previous = previous;
-          runs![previous].next = runIndex;
-        }
-        if (activeTop < 0) {
-          rootLastRun = runIndex;
-        }
-        else {
-          workspace[activeTop + FrameSlot.WorkspaceB] = runIndex;
-        }
-        (runs ??= []).push(run);
-      }
+      replacements = resolveDelimiterScope(runs!, runStart, replacements);
+      runCount = runStart;
     }
   }
-  return runs;
+  if (runCount > 0) {
+    replacements = resolveDelimiterScope(runs!, 0, replacements);
+  }
+  return replacements;
 }
 
 function appendReferenceBoundary(
@@ -525,12 +451,13 @@ function appendReferenceBoundary(
   close: boolean,
 ): number {
   const token = frames[frame + (close ? FrameSlot.CloseToken : FrameSlot.OpenToken)];
-  const claim = frameClaim(frames, frame);
+  const state = frames[frame + FrameSlot.State];
+  const claim = state & FrameClaim.Mask;
   const kind = (claim === FrameClaim.Reference ? InlineKind.ReferenceOpen : InlineKind.LinkOpen) +
-    (isImageFrame(tokens, frames, frame) ? 2 : 0) +
+    (state & FrameFlag.Image ? 2 : 0) +
     (close ? 1 : 0);
   const end = close
-    ? frames[frame + FrameSlot.ResolvedEnd]
+    ? frames[frame + FrameSlot.WorkspaceA]
     : inlineTokenEnd(tokens, token);
   appendInlineToken(
     result,
@@ -544,17 +471,14 @@ function appendReferenceBoundary(
 
 function emitResolvedTokens(
   tokens: InlineTokenStream,
-  frames: readonly number[],
-  replacements: ReturnType<typeof resolveDelimiterMatches>,
+  frames: number[],
+  replacements: DelimiterReplacement[][],
 ): InlineTokenStream {
-  // Bracket openers imply a mutable arena; delimiter-only sentinels never enter these writes.
-  const workspace = frames as number[];
   const result: number[] = [];
   let rawTop = -1;
   let referenceTop = -1;
   let frameCursor = frameHeaderSize;
   let skipEnd = -1;
-  let literalDepth = 0;
 
   const count = inlineTokenCount(tokens);
   for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
@@ -565,11 +489,12 @@ function emitResolvedTokens(
     }
     const skipping = skipEnd >= 0;
 
-    if (kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen) {
+    if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
       const frame = frameCursor;
       frameCursor += FrameSlot.Stride;
       rawTop = frame;
-      const claim = frameClaim(frames, frame);
+      const state = frames[frame + FrameSlot.State];
+      const claim = state & FrameClaim.Mask;
       if (!skipping) {
         if (claim === FrameClaim.Footnote) {
           const closeToken = frames[frame + FrameSlot.CloseToken];
@@ -579,16 +504,17 @@ function emitResolvedTokens(
         }
         else if (claim === FrameClaim.Component) {
           const closeToken = frames[frame + FrameSlot.CloseToken];
+          const openEnd = inlineTokenEnd(tokens, tokenIndex);
           // Nonempty labels promote the adjacent leaf and include `[` in the pair opener.
-          if (inlineTokenEnd(tokens, tokenIndex) < inlineTokenStart(tokens, closeToken)) {
+          if (openEnd < inlineTokenStart(tokens, closeToken)) {
             rewriteInlineTokenTail(
               result,
               InlineKind.InlineComponentOpen,
-              inlineTokenEnd(tokens, tokenIndex),
+              openEnd,
             );
           }
         }
-        else if (claim === FrameClaim.Span) {
+        else if (claim >= FrameClaim.Span && claim <= FrameClaim.AttributedSpan) {
           appendInlineToken(
             result,
             InlineKind.InlineSpanOpen,
@@ -598,24 +524,20 @@ function emitResolvedTokens(
         }
         else if (claim === FrameClaim.Link || claim === FrameClaim.Reference) {
           appendReferenceBoundary(result, tokens, frames, frame, false);
-          workspace[frame + FrameSlot.WorkspaceB] = referenceTop;
+          frames[frame + FrameSlot.WorkspaceB] = referenceTop;
           referenceTop = frame;
         }
         else if (claim === FrameClaim.Consumed) {
           skipEnd = inlineTokenEnd(tokens, frames[frame + FrameSlot.CloseToken]);
         }
-        else if (!(literalDepth > 0 && kind !== InlineKind.ImageOpen)) {
+        else if (!(state & FrameFlag.LiteralBracket)) {
           appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
         }
-      }
-
-      if (frames[frame + FrameSlot.State] & FrameFlag.InLinkLabel) {
-        literalDepth++;
       }
       continue;
     }
 
-    if (kind === InlineKind.BracketClose || kind === InlineKind.LinkTail) {
+    if (kind >= InlineKind.LinkTail && kind <= InlineKind.BracketClose) {
       const rawFrame = rawTop;
       if (rawFrame >= 0) {
         rawTop = frames[rawFrame + FrameSlot.Parent];
@@ -630,22 +552,20 @@ function emitResolvedTokens(
           skipEnd = appendReferenceBoundary(result, tokens, frames, referenceFrame, true);
         }
         else if (rawFrame >= 0) {
-          const claim = frameClaim(frames, rawFrame);
+          const state = frames[rawFrame + FrameSlot.State];
+          const claim = state & FrameClaim.Mask;
           if (claim === FrameClaim.Component) {
             const openToken = frames[rawFrame + FrameSlot.OpenToken];
             if (inlineTokenEnd(tokens, openToken) < tokenStart) {
               appendInlineToken(result, InlineKind.InlineComponentClose, tokenStart, tokenStart + 1);
             }
           }
-          else if (claim === FrameClaim.Span) {
+          else if (claim >= FrameClaim.Span && claim <= FrameClaim.AttributedSpan) {
             appendInlineToken(result, InlineKind.InlineSpanClose, tokenStart, tokenStart + 1);
           }
           // Of the remaining claims, only a footnote replaces its entire source.
-          else if (claim !== FrameClaim.Footnote) {
-            const image = isImageFrame(tokens, frames, rawFrame);
-            if (literalDepth === 0 || image) {
-              appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
-            }
+          else if (claim !== FrameClaim.Footnote && !(state & FrameFlag.LiteralBracket)) {
+            appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
           }
         }
         else {
@@ -653,9 +573,6 @@ function emitResolvedTokens(
         }
       }
 
-      if (rawFrame >= 0 && frames[rawFrame + FrameSlot.State] & FrameFlag.InLinkLabel) {
-        literalDepth--;
-      }
       continue;
     }
 
@@ -684,26 +601,16 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
       const frames = analyzeBrackets(
         source,
         tokens,
-        delimiterByKind,
         definitions,
         options,
       );
-      const flags = frames[0];
-      if (flags & ResolutionFlag.Bracket) {
-        resolveReferences(source, tokens, frames as number[], definitions);
-      }
-      let replacements = noDelimiterReplacements;
-      if (flags & ResolutionFlag.Delimiter) {
-        const runs = assignDelimiterScopes(
-          source,
-          tokens,
-          frames,
-          delimiterByKind,
-        );
-        if (runs) {
-          replacements = resolveDelimiterMatches(runs);
-        }
-      }
+      const replacements = resolvePairedSyntax(
+        source,
+        tokens,
+        frames,
+        definitions,
+        delimiterByKind,
+      ) ?? noDelimiterReplacements;
       return frames[0] & ResolutionFlag.Rewrite || replacements.length > 0
         ? emitResolvedTokens(tokens, frames, replacements)
         : tokens;
