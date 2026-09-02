@@ -1,5 +1,5 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
-import { type BlockLines, lineIndentOffset } from "../../block/lines.ts";
+import { type BlockLines, lineIndentOffset, skipLineWhitespace } from "../../block/lines.ts";
 import { BlockKind, BlockRole } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -23,13 +23,7 @@ function appendTableCell(
   contentStart: number,
   contentEnd: number,
 ): void {
-  while (contentStart < contentEnd) {
-    const code = source.charCodeAt(contentStart);
-    if (code !== Character.Space && code !== Character.CharacterTabulation) {
-      break;
-    }
-    contentStart++;
-  }
+  contentStart = skipLineWhitespace(source, contentStart, contentEnd);
   while (contentEnd > contentStart) {
     const code = source.charCodeAt(contentEnd - 1);
     if (code !== Character.Space && code !== Character.CharacterTabulation) {

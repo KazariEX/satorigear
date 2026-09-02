@@ -296,11 +296,12 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
         continue;
       }
       // Only underindented content reaches here, so any marker starts a sibling item.
+      const contentOffset = lineIndentOffset(source, lines, index);
       const candidate = listMarkerAt(
         source,
         lines,
         index,
-        lineIndentOffset(source, lines, index),
+        contentOffset,
       );
       if (candidate) {
         sibling = candidate;
@@ -313,7 +314,7 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
       }
       if (
         paragraphLeaf === ParagraphLeafState.No ||
-        context.startsInterruptingBlock(source, lines, index)
+        context.startsInterruptingBlock(source, lines, index, contentOffset)
       ) {
         break;
       }

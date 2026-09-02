@@ -1,5 +1,10 @@
 import type { FootnoteDefinition } from "mdast";
-import { type BlockLines, IndentedLine, isBlankLine } from "../../../block/lines.ts";
+import {
+  type BlockLines,
+  IndentedLine,
+  isBlankLine,
+  skipLineWhitespace,
+} from "../../../block/lines.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
@@ -29,14 +34,7 @@ function definitionAt(
     return;
   }
   const markerEnd = label.end + 1;
-  let contentOffset = markerEnd;
-  while (contentOffset < lineEnd) {
-    const code = source.charCodeAt(contentOffset);
-    if (code !== Character.Space && code !== Character.CharacterTabulation) {
-      break;
-    }
-    contentOffset++;
-  }
+  const contentOffset = skipLineWhitespace(source, markerEnd, lineEnd);
   return {
     ...label,
     contentOffset,

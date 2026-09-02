@@ -277,13 +277,9 @@ export class BlockLines implements SourceLocator {
     }
     const contentOffset = offset;
     const prefixColumns = consumed - columns;
-    while (offset < end) {
-      const code = source.charCodeAt(offset);
-      if (code !== Character.Space && code !== Character.CharacterTabulation) {
-        this.pushFrom(lines, index, contentOffset, prefixColumns);
-        return IndentedLine.Appended;
-      }
-      offset++;
+    if (skipLineWhitespace(source, offset, end) < end) {
+      this.pushFrom(lines, index, contentOffset, prefixColumns);
+      return IndentedLine.Appended;
     }
     return IndentedLine.Blank;
   }
@@ -497,13 +493,8 @@ export function lineIndentOffset(source: string, lines: BlockLines, index: numbe
 }
 
 export function isBlankLine(source: string, lines: BlockLines, index: number): boolean {
-  for (let offset = lines.start(index), end = lines.end(index); offset < end; offset++) {
-    const code = source.charCodeAt(offset);
-    if (code !== Character.Space && code !== Character.CharacterTabulation) {
-      return false;
-    }
-  }
-  return true;
+  const end = lines.end(index);
+  return skipLineWhitespace(source, lines.start(index), end) === end;
 }
 
 export function skipLineWhitespace(source: string, start: number, end: number): number {

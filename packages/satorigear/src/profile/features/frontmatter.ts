@@ -1,8 +1,8 @@
 import type { Yaml } from "mdast";
+import { type BlockLines, skipLineWhitespace } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { type BlockNodeBuilder, leafBlockPosition } from "../../fragment/block.ts";
-import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export type FrontmatterMarker = "+" | "-";
@@ -25,12 +25,8 @@ function frontmatterFenceAt(
   ) {
     return false;
   }
-  for (let offset = start + 3, end = lines.end(index); offset < end; offset++) {
-    if (source[offset] !== " " && source[offset] !== "\t") {
-      return false;
-    }
-  }
-  return true;
+  const end = lines.end(index);
+  return skipLineWhitespace(source, start + 3, end) === end;
 }
 
 export const buildYamlBlock: BlockNodeBuilder<Yaml> = (tokenStart, context) => {

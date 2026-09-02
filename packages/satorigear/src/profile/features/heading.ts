@@ -1,10 +1,10 @@
 import type { Heading } from "mdast";
+import { type BlockLines, skipLineWhitespace } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
-import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 function atxAt(
@@ -25,10 +25,7 @@ function atxAt(
   if (markerEnd < lineEnd && source[markerEnd] !== " " && source[markerEnd] !== "\t") {
     return;
   }
-  let contentOffset = markerEnd;
-  while (contentOffset < lineEnd && (source[contentOffset] === " " || source[contentOffset] === "\t")) {
-    contentOffset++;
-  }
+  const contentOffset = skipLineWhitespace(source, markerEnd, lineEnd);
   let contentEnd = lineEnd;
   while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
     contentEnd--;
@@ -65,9 +62,7 @@ export function setextMarkerAt(
   while (offset < lineEnd && source[offset] === marker) {
     offset++;
   }
-  while (offset < lineEnd && (source[offset] === " " || source[offset] === "\t")) {
-    offset++;
-  }
+  offset = skipLineWhitespace(source, offset, lineEnd);
   return offset === lineEnd ? marker : void 0;
 }
 
