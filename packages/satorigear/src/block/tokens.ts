@@ -96,55 +96,52 @@ export class BlockTokenStream implements DefinitionLookup {
     meta?: BlockTokenMeta,
     role?: BlockRole,
   ): void {
+    const encodedRole = role ?? kind;
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
     this.#fields[field + BlockTokenField.Kind] = kind;
     this.#fields[field + BlockTokenField.Start] = start;
     this.#fields[field + BlockTokenField.End] = end;
-    this.#fields[field + BlockTokenField.Length] = 0;
+    this.#fields[field + BlockTokenField.Length] = encodedRole < BlockRole.BlockOpen
+      ? 0
+      : this.#indexToken(field, encodedRole);
     this.#fieldLength += BlockTokenField.Stride;
     if (meta) {
       this.#metadata ??= [];
-      this.#metadata[this.length - 1] = meta;
+      this.#metadata[field / BlockTokenField.Stride] = meta;
       const definitionKey = meta.definitionKey;
       if (definitionKey !== void 0) {
         this.#updateDefinitionCount(definitionKey, 1, false);
       }
     }
-    const encodedRole = role ?? kind;
-    if (encodedRole >= BlockRole.BlockOpen) {
-      this.#indexToken(field, encodedRole);
-    }
   }
 
-  #indexToken(field: number, encodedRole: number): void {
+  /** Updates structural indexes and returns the current token's traversal length. */
+  #indexToken(field: number, encodedRole: number): number {
     if (encodedRole < BlockRole.Close) {
       this.#opens.push(field);
-      return;
+      return 0;
     }
     if (encodedRole < BlockRole.Leaf) {
       const open = this.#opens.pop()!;
       this.#fields[open + BlockTokenField.Length] = (
         (field - open) / BlockTokenField.Stride + 1
       );
-      return;
+      return 0;
     }
     if (encodedRole < BlockRole.Group) {
-      this.#fields[field + BlockTokenField.Length] = 1;
-      return;
+      return 1;
     }
-    const group = this.#groupField;
     const previous = field - BlockTokenField.Stride;
     if (
-      group < 0 || previous < 0 ||
-      this.#fields[previous + BlockTokenField.Kind] < BlockRole.Group
+      this.#groupField >= 0 &&
+      this.#fields[previous + BlockTokenField.Kind] >= BlockRole.Group
     ) {
-      this.#groupField = field;
-      this.#fields[field + BlockTokenField.Length] = 1;
+      this.#fields[this.#groupField + BlockTokenField.Length]++;
+      return 0;
     }
-    else {
-      this.#fields[group + BlockTokenField.Length]++;
-    }
+    this.#groupField = field;
+    return 1;
   }
 
   nodeLength(index: number): number {
