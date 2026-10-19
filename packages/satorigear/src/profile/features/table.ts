@@ -45,19 +45,17 @@ function tableCellsAt(
     return;
   }
 
-  const pipes: number[] = [];
-  let backslashes = 0;
   const lineEnd = lines.end(index);
-  for (let offset = contentOffset; offset < lineEnd; offset++) {
-    const code = source.charCodeAt(offset);
-    if (code === Character.ReverseSolidus) {
-      backslashes++;
-      continue;
+  const row = source.slice(contentOffset, lineEnd);
+  const pipes: number[] = [];
+  for (let pipe = row.indexOf("|"); pipe >= 0; pipe = row.indexOf("|", pipe + 1)) {
+    let escapeStart = pipe;
+    while (escapeStart > 0 && row.charCodeAt(escapeStart - 1) === Character.ReverseSolidus) {
+      escapeStart--;
     }
-    if (code === Character.VerticalLine && backslashes % 2 === 0) {
-      pipes.push(offset);
+    if ((pipe - escapeStart) % 2 === 0) {
+      pipes.push(contentOffset + pipe);
     }
-    backslashes = 0;
   }
   if (requirePipe && pipes.length === 0) {
     return;
