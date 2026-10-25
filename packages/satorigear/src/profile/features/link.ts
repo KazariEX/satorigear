@@ -11,7 +11,7 @@ import {
 } from "../../inline/tokens.ts";
 import { isMarkdownWhitespace, normalizeAssociationLabel, semanticText } from "../utils.ts";
 import { buildDecodedInlineText, buildInlineText } from "./text.ts";
-import type { InlineBuildContext, InlineNodeBuilder } from "../../fragment/inline.ts";
+import type { InlineBuildContext, InlinePairBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface Reference {
@@ -240,7 +240,7 @@ function phrasingText(children: readonly PhrasingContent[]): string {
   return result;
 }
 
-function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlineNodeBuilder {
+function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlinePairBuilder {
   const image = media === "image";
   const referenceNode = resourceKind === "reference";
 

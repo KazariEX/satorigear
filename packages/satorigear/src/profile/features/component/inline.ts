@@ -8,7 +8,7 @@ import {
 } from "../../../inline/tokens.ts";
 import { hasInlineColonBoundary } from "../../utils.ts";
 import { componentNameEnd, normalizeComponentName } from "./shared.ts";
-import type { InlineNodeBuilder } from "../../../fragment/inline.ts";
+import type { InlinePairBuilder } from "../../../fragment/inline.ts";
 import type { InlineScanRule } from "../../../inline/lexer.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
 
@@ -29,7 +29,7 @@ export const inlineScans: readonly InlineScanRule[] = [
 ];
 
 // Pair openers include `[`, while leaf tokens end at the component name.
-const buildInlineComponent: InlineNodeBuilder = (
+const buildInlineComponent: InlinePairBuilder = (
   open,
   close,
   sourceSpan,

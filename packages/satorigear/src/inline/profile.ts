@@ -4,7 +4,7 @@ import type { InlineKind } from "../constants/inline.ts";
 import type {
   InlineBuilder,
   InlineLeafBuilder,
-  InlineNodeBuilder,
+  InlinePairBuilder,
   InlineTextBuilder,
   InlineTokenDecorator,
 } from "../fragment/inline.ts";
@@ -41,7 +41,7 @@ export type InlineBuildRule =
   | {
     kind: "pair";
     token: InlineKind;
-    build: InlineNodeBuilder;
+    build: InlinePairBuilder;
   };
 
 export interface InlineFeature {
@@ -54,7 +54,7 @@ export interface InlineFeature {
 }
 
 export interface InlineProfile {
-  buildByKind: readonly (InlineBuilder | undefined)[];
+  builders: readonly (InlineBuilder | undefined)[];
   resolve: InlineResolver;
   tokenize: InlineTokenizer;
 }
@@ -63,7 +63,7 @@ export function compileInlineProfile(
   features: readonly InlineFeature[],
   compileInlineResolver: InlineResolverFactory,
 ): InlineProfile {
-  const buildByKind: (InlineBuilder | undefined)[] = [];
+  const builders: (InlineBuilder | undefined)[] = [];
   const delimiters: DelimiterConfig[] = [];
   const scanRules: InlineScanRule[] = [];
 
@@ -81,13 +81,13 @@ export function compileInlineProfile(
     for (const rule of build) {
       switch (rule.kind) {
         case "decorate": {
-          buildByKind[rule.token] = rule.apply;
+          builders[rule.token] = rule.apply;
           break;
         }
         case "leaf":
         case "text":
         case "pair": {
-          buildByKind[rule.token] = rule.build;
+          builders[rule.token] = rule.build;
           break;
         }
       }
@@ -95,7 +95,7 @@ export function compileInlineProfile(
   }
 
   return {
-    buildByKind,
+    builders,
     resolve: compileInlineResolver(delimiters),
     tokenize: compileInlineTokenizer(scanRules),
   };

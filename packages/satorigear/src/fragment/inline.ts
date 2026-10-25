@@ -66,7 +66,7 @@ export type InlineTextBuilder = (
   context: InlineBuildContext,
 ) => string;
 
-export type InlineNodeBuilder = (
+export type InlinePairBuilder = (
   openToken: number,
   closeToken: number,
   position: SourcePosition,
@@ -83,7 +83,7 @@ export type InlineTokenDecorator = (
 
 export type InlineBuilder =
   | InlineLeafBuilder
-  | InlineNodeBuilder
+  | InlinePairBuilder
   | InlineTextBuilder
   | InlineTokenDecorator;
 
@@ -153,7 +153,7 @@ function appendGap(
   appendText(output, value, sourceStart, context.view.mapEnd(end), context);
 }
 
-function appendLeafToken(
+function appendLeaf(
   output: InlineOutput,
   context: InlineBuildContext,
   token: number,
@@ -198,7 +198,7 @@ function appendRange(
       }
       // Markdown syntax newlines point past stripped container prefixes,
       // while mdast spans include the physical line ending.
-      const previous = output.children.at(-1);
+      const previous = output.lastText === void 0 ? output.children.at(-1) : void 0;
       if (previous?.type === "break") {
         // At a stripped container boundary, the left side maps before the prefix while
         // the right side maps after it. A hard break must span to the former.
@@ -224,7 +224,7 @@ function appendRange(
     if (kind === closeKind) {
       break;
     }
-    const build = profile.buildByKind[kind]!;
+    const build = profile.builders[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
     if (kind < InlineRole.Pair) {
       const childEnd = inlineTokenEnd(context.tokens, index);
@@ -242,7 +242,7 @@ function appendRange(
         );
       }
       else {
-        appendLeafToken(
+        appendLeaf(
           output,
           context,
           index,
@@ -260,13 +260,13 @@ function appendRange(
         appendGap(output, context, output.cursor, childStart);
       }
       finishText(output, context);
-      index = appendSemantic(
+      index = appendPair(
         index,
         endToken,
         profile,
         context,
         output,
-        build as InlineNodeBuilder,
+        build as InlinePairBuilder,
         kind + 1,
       );
       continue;
@@ -288,26 +288,21 @@ function appendRange(
     }
     index++;
   }
-  if (index < endToken) {
-    const contentEnd = inlineTokenStart(context.tokens, index);
-    if (contentEnd > output.cursor) {
-      appendGap(output, context, output.cursor, contentEnd);
-    }
-  }
-  else if (context.view.text.length > output.cursor) {
-    appendGap(output, context, output.cursor, context.view.text.length);
+  const contentEnd = index < endToken ? inlineTokenStart(context.tokens, index) : context.view.text.length;
+  if (contentEnd > output.cursor) {
+    appendGap(output, context, output.cursor, contentEnd);
   }
   finishText(output, context);
   return index;
 }
 
-function appendSemantic(
+function appendPair(
   openToken: number,
   endToken: number,
   profile: InlineProfile,
   context: InlineBuildContext,
   output: InlineOutput,
-  build: InlineNodeBuilder,
+  build: InlinePairBuilder,
   closeKind: number,
 ): number {
   const childStart = inlineTokenStart(context.tokens, openToken);
