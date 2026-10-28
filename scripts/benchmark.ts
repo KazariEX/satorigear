@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type BenchmarkCorpus, load } from "../test/benchmark/helpers/corpus.ts";
 import { corpusLabel } from "../test/benchmark/helpers/utils.ts";
 
-const engines = ["satorigear", "satteri", "remark"] as const;
+const engines = ["satorigear", "satteri", "remark", "very-small-parser"] as const;
 const forwarded = ["satorigear", "satteri"] as const;
 const backwarded = forwarded.toReversed();
 const paired = [forwarded, backwarded, backwarded, forwarded];
@@ -41,6 +41,7 @@ const engineNames: Record<Engine, string> = {
   remark: "Remark",
   satorigear: "SatoriGear",
   satteri: "Sätteri",
+  "very-small-parser": "very-small-parser",
 };
 
 function runSuite(file: string, engine: Engine): MitataOutput {
@@ -207,7 +208,7 @@ function replaceSection(source: string, name: string, content: string): string {
 
 const times = Array.from({ length: rounds }, () => new Map<string, number>());
 const suites = [
-  { file: "test/benchmark/parse.bench.ts", references: ["remark"] },
+  { file: "test/benchmark/parse.bench.ts", references: ["remark", "very-small-parser"] },
   { file: "test/benchmark/features.bench.ts", references: [] },
 ] as const;
 

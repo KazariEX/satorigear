@@ -1,6 +1,7 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { createParser } from "satorigear";
 import { markdownToMdast, type TreeOptions } from "satteri";
+import verySmallParser from "very-small-parser";
 
 export interface Engine {
   name: string;
@@ -22,10 +23,12 @@ export function createCommonmarkEngines(): readonly Engine[] {
       gfm: false,
     },
   } as const;
+  const { markdown } = verySmallParser;
   return selectEngines([
     { name: "satorigear", parse: satorigear.parse },
     { name: "satteri", parse: (source) => markdownToMdast(source, satteriOptions) },
     { name: "remark", parse: fromMarkdown },
+    { name: "very-small-parser", parse: (source) => markdown.block.parsef(source) },
   ]);
 }
 

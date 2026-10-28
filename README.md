@@ -65,7 +65,7 @@ const mdast = document.tree;
 
 ## Performance
 
-Benchmarked against Sätteri <sup>0.10.5</sup> and Remark (`mdast-util-from-markdown@2.0.3`), which also produce MDAST, with feature sets kept as equivalent as possible for each profile.
+Benchmarked against Sätteri <sup>0.10.5</sup>, Remark (`mdast-util-from-markdown@2.0.3`) and very-small-parser <sup>1.15.0</sup>, which also produce MDAST, with feature sets kept as equivalent as possible for each profile.
 
 <!-- benchmark:start environment -->
 

@@ -168,6 +168,9 @@ catalogs:
     tsdown:
       specifier: ^0.22.14
       version: 0.22.14
+    very-small-parser:
+      specifier: 1.15.0
+      version: 1.15.0
     vitest:
       specifier: ^4.1.11
       version: 4.1.11
@@ -209,6 +212,9 @@ importers:
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(typescript@6.0.3)
+      very-small-parser:
+        specifier: 'catalog:'
+        version: 1.15.0
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
@@ -1976,6 +1982,9 @@ packages:
   verkit@0.3.2:
     resolution: {integrity: sha512-zj/ob3UsvJGN0whEAKFp53REA5X66hvffVqoCtVQAakJKnKlH+/PcOfMoFwIG/o4rElqLv/ycAFlx8ZlXUorCg==}
     engines: {node: '>=18.12.0'}
+
+  very-small-parser@1.15.0:
+    resolution: {integrity: sha512-KGmFbbVlMLKVLt0cnyNrTwt2WCNzSntTXK1y9yxvxxJm9hA64EJEtmke3xw1PAH70OeHJN7Os7DDz5Fxl75ehQ==}
 
   vite@8.2.2:
     resolution: {integrity: sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q==}
@@ -3944,6 +3953,8 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   verkit@0.3.2: {}
+
+  very-small-parser@1.15.0: {}
 
   vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0):
     dependencies:
