@@ -1,0 +1,35 @@
+name: benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  benchmark:
+    if: "github.event.pull_request.title == 'docs: refresh benchmark results'"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/setup@v3
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Refresh Benchmark
+        run: pnpm run benchmark:docs
+
+      - name: Commit
+        uses: EndBug/add-and-commit@v9
+        with:
+          message: "docs: refresh benchmark results"
+          default_author: github_actions
