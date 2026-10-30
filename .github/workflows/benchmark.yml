@@ -25,6 +25,9 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Prepare Corpus
+        run: pnpm run prepare:corpus
+
       - name: Refresh Benchmark
         run: pnpm run benchmark:docs
 
