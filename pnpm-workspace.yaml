@@ -1,24 +1,24 @@
 minimumReleaseAge: 0
+trustPolicy: no-downgrade
 shamefullyHoist: true
 shellEmulator: true
-trustPolicy: no-downgrade
 
 packages:
   - packages/*
 
 catalog:
   "@types/mdast": ^4.0.4
-  "@types/node": ^26.4.0
-  "@zinkawaii/eslint-config": ^0.5.3
-  "@zinkawaii/scripts": ^0.0.5
+  "@types/node": ^26.6.6
+  "@zinkawaii/eslint-config": ^0.5.5
+  "@zinkawaii/scripts": ^0.0.6
   "@zinkawaii/tsconfig": ^0.1.0
-  bumpp: ^12.2.2
+  bumpp: ^12.3.0
   commonmark-spec: ^0.31.2
-  eslint: ^10.9.1
-  mdast-util-from-markdown: ^2.0.3
+  eslint: ^10.13.0
+  mdast-util-from-markdown: ^2.1.0
   micromark-util-decode-string: ^2.0.1
   micromark-util-html-tag-name: ^2.0.1
   mitata: ^1.0.34
-  satteri: ^0.10.5
-  tsdown: ^0.22.14
-  vitest: ^4.1.11
+  satteri: ^0.11.6
+  tsdown: ^0.23.4
+  vitest: ^5.0.5
