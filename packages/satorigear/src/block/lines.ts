@@ -41,7 +41,7 @@ export class BlockLines implements SourceLocator {
     this.#fields = new Int32Array(lineCapacity * BlockLineField.Stride);
   }
 
-  static from(source: string, start = 0, limit = source.length): BlockLines {
+  static from(source: string, start: number, limit: number): BlockLines {
     const sourceLength = source.length;
     // Scan partial ranges in isolation because String#indexOf cannot take an end bound.
     if (start > 0 || limit < sourceLength) {
@@ -224,8 +224,8 @@ export class BlockLines implements SourceLocator {
     start: number,
     end: number,
     next: number,
-    prefixColumns = 0,
-    lazy = false,
+    prefixColumns: number,
+    lazy: boolean,
   ): void {
     const field = this.#length * BlockLineField.Stride;
     let fields = this.#fields;
