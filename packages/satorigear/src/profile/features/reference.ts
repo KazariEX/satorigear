@@ -2,7 +2,7 @@ import { type BlockLines, isBlankLine, skipLineWhitespace } from "../../block/li
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { leafBlockPosition } from "../../fragment/block.ts";
-import { normalizeAssociationLabel, semanticText } from "../utils.ts";
+import { normalizeIdentifier, semanticText } from "../utils.ts";
 import type { BlockScanContext } from "../../block/scanner.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -184,7 +184,7 @@ function linkDefinitionAt(
       : source[offset] === "\"" || source[offset] === "'"
         ? source[offset]
         : void 0;
-    const definitionKey = normalizeAssociationLabel(label);
+    const definitionKey = normalizeIdentifier(label);
     const fields: LinkDefinitionFields = {
       destination,
       label,

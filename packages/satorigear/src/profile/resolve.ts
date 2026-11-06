@@ -21,7 +21,7 @@ import {
 import { emptyArray } from "../primitives.ts";
 import { attributesEnd } from "./features/attributes/shared.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
-import { isMarkdownWhitespace, normalizeAssociationLabel } from "./utils.ts";
+import { isMarkdownWhitespace, normalizeIdentifier } from "./utils.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
 import type { InlineResolverFactory } from "../inline/profile.ts";
 
@@ -386,7 +386,7 @@ function resolvePairedSyntax(
             if (labelEnd > 0) {
               const explicit = source.slice(closeEnd + 1, labelEnd - 1);
               const label = explicit || source.slice(contentStart, contentEnd);
-              matched = definitions.hasDefinition(normalizeAssociationLabel(label));
+              matched = definitions.hasDefinition(normalizeIdentifier(label));
               if (matched) {
                 closeEnd = labelEnd;
                 reference = true;
@@ -395,7 +395,7 @@ function resolvePairedSyntax(
             else if (
               lastVisibleOpener <= openToken &&
               acceptsShortcutLabel(source, contentStart, contentEnd) &&
-              definitions.hasDefinition(normalizeAssociationLabel(source.slice(contentStart, contentEnd)))
+              definitions.hasDefinition(normalizeIdentifier(source.slice(contentStart, contentEnd)))
             ) {
               matched = true;
               reference = true;

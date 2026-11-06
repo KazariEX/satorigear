@@ -3,15 +3,15 @@ import { Character } from "../constants/character.ts";
 
 const inlineColonBoundary = /[ \t\n\r\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}\p{P}]/u;
 
+export function isAsciiDigit(code: number): boolean {
+  return code >= Character.DigitZero && code <= Character.DigitNine;
+}
+
 export function isAsciiLetter(code: number): boolean {
   return (
     code >= Character.LatinCapitalLetterA && code <= Character.LatinCapitalLetterZ ||
     code >= Character.LatinSmallLetterA && code <= Character.LatinSmallLetterZ
   );
-}
-
-export function isAsciiDigit(code: number): boolean {
-  return code >= Character.DigitZero && code <= Character.DigitNine;
 }
 
 export function isAsciiPunctuation(code: number): boolean {
@@ -44,29 +44,38 @@ export function semanticText(value: string): string {
   return value.includes("\\") || value.includes("&") ? decodeString(value) : value;
 }
 
-export function normalizeAssociationLabel(label: string): string {
-  // Already-clean labels skip the pipeline: nothing to trim, and over pure ASCII
+/**
+ * Fast replacement of [`micromark-util-normalize-identifier`](
+ *   https://github.com/micromark/micromark/tree/main/packages/micromark-util-normalize-identifier
+ * ).
+ */
+export function normalizeIdentifier(identifier: string): string {
+  // Already-clean identifiers skip the pipeline: nothing to trim, and over pure ASCII
   // lowercase is the final folded form expected by mdast identifiers.
   scan: {
     let hasUppercase = false;
-    for (let index = 0; index < label.length; index++) {
-      const code = label.charCodeAt(index);
-      if (code === 32) {
+    for (let index = 0; index < identifier.length; index++) {
+      const code = identifier.charCodeAt(index);
+      if (code === Character.Space) {
         // Leading, trailing, or doubled spaces need the full pipeline.
-        if (index === 0 || index + 1 === label.length || label.charCodeAt(index + 1) === 32) {
+        if (
+          index === 0 ||
+          index + 1 === identifier.length ||
+          identifier.charCodeAt(index + 1) === Character.Space
+        ) {
           break scan;
         }
         continue;
       }
       // Non-printable or non-ASCII characters need the full pipeline.
-      if (code < 32 || code > 126) {
+      if (code < Character.Space || code > Character.Tilde) {
         break scan;
       }
-      if (code >= 65 && code <= 90) {
+      if (code >= Character.LatinCapitalLetterA && code <= Character.LatinCapitalLetterZ) {
         hasUppercase = true;
       }
     }
-    return hasUppercase ? label.toLowerCase() : label;
+    return hasUppercase ? identifier.toLowerCase() : identifier;
   }
-  return label.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase().toLowerCase();
+  return identifier.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase().toLowerCase();
 }

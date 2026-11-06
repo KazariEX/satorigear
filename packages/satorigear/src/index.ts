@@ -7,3 +7,4 @@ export type { StrikethroughOptions } from "./profile/features/formatting.ts";
 export type { FrontmatterMarker, FrontmatterOptions } from "./profile/features/frontmatter.ts";
 export type { InlineMath, Math, MathOptions } from "./profile/features/math/types.ts";
 export type { FeatureOptions } from "./profile/index.ts";
+export { normalizeIdentifier } from "./profile/utils.ts";

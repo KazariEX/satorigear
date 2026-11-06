@@ -9,7 +9,7 @@ import {
   type InlineTokenStream,
   inlineTokenText,
 } from "../../inline/tokens.ts";
-import { isMarkdownWhitespace, normalizeAssociationLabel, semanticText } from "../utils.ts";
+import { isMarkdownWhitespace, normalizeIdentifier, semanticText } from "../utils.ts";
 import { buildDecodedInlineText, buildInlineText } from "./text.ts";
 import type { InlineBuildContext, InlinePairBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -215,7 +215,7 @@ function reference(
     ? closeText.slice(2, -1)
     : context.view.text.slice(syntaxStart + (image ? 2 : 1), syntaxEnd - closeText.length);
   return {
-    identifier: normalizeAssociationLabel(labelSource),
+    identifier: normalizeIdentifier(labelSource),
     label: semanticText(labelSource),
     referenceType: full ? "full" : closeText === "][]" ? "collapsed" : "shortcut",
   };

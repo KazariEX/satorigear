@@ -1,5 +1,5 @@
 import { Character } from "../../../constants/character.ts";
-import { isMarkdownWhitespace, normalizeAssociationLabel } from "../../utils.ts";
+import { isMarkdownWhitespace, normalizeIdentifier } from "../../utils.ts";
 
 const footnoteDefinitionPrefix = "footnote\0";
 
@@ -37,7 +37,7 @@ export function footnoteLabelAt(source: string, start: number, limit: number): F
         return;
       }
       const label = source.slice(labelStart, offset);
-      const normalizedLabel = normalizeAssociationLabel(label);
+      const normalizedLabel = normalizeIdentifier(label);
       return {
         definitionKey: footnoteDefinitionPrefix + normalizedLabel,
         end: offset + 1,
