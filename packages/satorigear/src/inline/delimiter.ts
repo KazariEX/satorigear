@@ -276,7 +276,7 @@ export function appendResolvedDelimiterToken(
   result: number[],
   tokens: InlineTokenStream,
   tokenIndex: number,
-  replacements: DelimiterReplacement[][],
+  replacements: readonly DelimiterReplacement[][],
 ): void {
   const matched = replacements[tokenIndex];
   if (!matched) {

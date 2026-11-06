@@ -18,6 +18,7 @@ import {
   type InlineTokenStream,
   rewriteInlineTokenTail,
 } from "../inline/tokens.ts";
+import { emptyArray } from "../primitives.ts";
 import { attributesEnd } from "./features/attributes/shared.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
 import { isMarkdownWhitespace, normalizeAssociationLabel } from "./utils.ts";
@@ -66,7 +67,6 @@ const enum ResolutionFlag {
 const frameHeaderSize = 1;
 // Without an opener, no downstream frame write can reach this shared header.
 const noBracketFrames = [0];
-const noDelimiterReplacements: DelimiterReplacement[][] = [];
 
 // Analysis uses A for candidate bottoms and B for candidate links. Resolution reuses
 // A for delimiter checkpoints then resolved ends, and B for logical then resolved parents.
@@ -265,7 +265,7 @@ function resolvePairedSyntax(
   frames: number[],
   definitions: DefinitionLookup,
   delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
-): DelimiterReplacement[][] | undefined {
+): readonly DelimiterReplacement[][] {
   // An empty definition table makes every non-resource bracket candidate literal.
   const hasDefinitions = frames.length > frameHeaderSize && definitions.hasDefinitions();
   // Delimiter scopes share a reusable run prefix; frames checkpoint its logical length.
@@ -440,7 +440,7 @@ function resolvePairedSyntax(
   if (runCount > 0) {
     replacements = resolveDelimiterScope(runs!, 0, replacements);
   }
-  return replacements;
+  return replacements ?? emptyArray;
 }
 
 function appendReferenceBoundary(
@@ -472,7 +472,7 @@ function appendReferenceBoundary(
 function emitResolvedTokens(
   tokens: InlineTokenStream,
   frames: number[],
-  replacements: DelimiterReplacement[][],
+  replacements: readonly DelimiterReplacement[][],
 ): InlineTokenStream {
   const result: number[] = [];
   let rawTop = -1;
@@ -610,7 +610,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
         frames,
         definitions,
         delimiterByKind,
-      ) ?? noDelimiterReplacements;
+      );
       return frames[0] & ResolutionFlag.Rewrite || replacements.length > 0
         ? emitResolvedTokens(tokens, frames, replacements)
         : tokens;
