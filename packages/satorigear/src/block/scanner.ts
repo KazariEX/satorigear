@@ -120,7 +120,7 @@ export class BlockScanContext {
     source: string,
     lines: BlockLines,
     out: BlockTokenStream,
-    visit: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
+    visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
   ): void {
     const profile = this.#profile;
     for (let index = 0; index < lines.length;) {
@@ -146,7 +146,7 @@ export class BlockScanContext {
       const lineStart = index;
       const tokenStart = out.length;
       index = profile.dispatch(source, lines, index, contentOffset, out, this);
-      if (visit(lineStart, index, tokenStart, out.length)) {
+      if (visit?.(lineStart, index, tokenStart, out.length)) {
         return;
       }
     }
@@ -210,19 +210,26 @@ export class BlockScanner {
     this.builds = profile.builds;
   }
 
-  scan(source: string): void {
+  scan(source: string, indexed?: boolean): void {
     const lines = this.#lines.scan(source);
-    const tokens = this.#tokens;
-    tokens.reset(source.length);
-    const records = this.#records;
     const context = this.#context;
-    let recordIndex = 0;
+    const tokens = this.#tokens;
     context.resetLookahead();
+    tokens.reset(source.length);
+
+    if (!indexed) {
+      context.scanBlockLines(source, lines, tokens);
+      return;
+    }
+
+    const records = this.#records;
+    let recordIndex = 0;
+
     context.scanBlockLines(source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
       const end = lines.next(lineEnd - 1);
       const dependencyEnd = Math.max(end, context.consumeLookahead());
       const record = records[recordIndex++];
-      // Reuse top-level records across one-shot parses instead of allocating one per block.
+      // Reuse top-level records across indexed scans instead of allocating one per block.
       if (record) {
         record.start = lines.start(lineStart);
         record.end = end;

@@ -96,7 +96,7 @@ export class DocumentImpl implements Document {
     this.#profile = profile;
     this.#source = source;
     this.#blockScanner = new BlockScanner(profile.block);
-    this.#blockScanner.scan(source);
+    this.#blockScanner.scan(source, true);
     this.#regionState = new InlineRegionState(profile.inline, this.#blockScanner);
     this.#updateTree(this.#regionState.update(source));
   }
@@ -232,10 +232,10 @@ export class DocumentImpl implements Document {
     };
 
     const start = locator.locationAt(0);
-    const records = blockScanner.records;
-    const children = new Array<TopLevelContent>(records.length);
-    for (let index = 0; index < records.length; index++) {
-      children[index] = buildBlockNode(records[index].tokenStart, context);
+    const tokens = blockScanner.tokens;
+    const children: TopLevelContent[] = [];
+    for (let token = 0; token < tokens.length; token += tokens.nodeLength(token)) {
+      children.push(buildBlockNode(token, context));
     }
 
     return {
