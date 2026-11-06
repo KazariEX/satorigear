@@ -186,24 +186,6 @@ function blockOpeningAt(
   };
 }
 
-function fenceAt(
-  source: string,
-  lines: BlockLines,
-  index: number,
-  size: number,
-  contentOffset: number,
-): number | undefined {
-  let offset = contentOffset;
-  while (source[offset] === ":") {
-    offset++;
-  }
-  const lineEnd = lines.end(index);
-  if (offset - contentOffset !== size || skipLineWhitespace(source, offset, lineEnd) !== lineEnd) {
-    return;
-  }
-  return contentOffset;
-}
-
 function blockClose(
   source: string,
   lines: BlockLines,
@@ -227,10 +209,16 @@ function blockClose(
     if (codeFence) {
       continue;
     }
-    const closeOffset = fenceAt(source, lines, index, opening.fenceSize, contentOffset);
-    if (closeOffset !== void 0) {
+    let markerEnd = contentOffset;
+    while (source[markerEnd] === ":") {
+      markerEnd++;
+    }
+    if (
+      markerEnd - contentOffset === opening.fenceSize &&
+      skipLineWhitespace(source, markerEnd, lines.end(index)) === lines.end(index)
+    ) {
       if (depth === 0) {
-        return { index, offset: closeOffset };
+        return { index, offset: contentOffset };
       }
       depth--;
       continue;
