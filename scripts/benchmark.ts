@@ -242,7 +242,8 @@ const { arch, cpu, runtime, version } = context;
 readme = replaceSection(
   readme,
   "environment",
-  `> Median of ${rounds} isolated mean-time runs at commit [\`${commit.slice(0, 7)}\`](https://github.com/KazariEX/satorigear/commit/${commit}) on ${cpu.name}, ${runtime} ${version}, ${arch}. SatoriGear and Sätteri run in paired AB/BA order; comparisons are normalized to SatoriGear (↑ faster, ↓ slower). Lower time and higher throughput are better.`,
+  `> Median of ${rounds} isolated mean-time runs at commit [\`${commit.slice(0, 7)}\`](https://github.com/KazariEX/satorigear/commit/${commit}) on ${cpu.name}, ${runtime} ${version}, ${arch}.\n` +
+  `> SatoriGear and Sätteri run in paired AB/BA order; comparisons are normalized to SatoriGear (↑ faster, ↓ slower). Lower time and higher throughput are better.`,
 );
 readme = replaceSection(readme, "parse", section(times));
 writeFileSync(readmePath, readme);
