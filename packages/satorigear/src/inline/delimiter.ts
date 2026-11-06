@@ -1,4 +1,5 @@
 import { Character } from "../constants/character.ts";
+import { isAsciiPunctuation } from "../profile/utils.ts";
 import {
   appendInlineToken,
   copyInlineToken,
@@ -110,14 +111,7 @@ function delimiterCharacterClass(code: number): number {
     ) {
       return DelimiterCharacterClass.Whitespace;
     }
-    return (
-      code >= Character.ExclamationMark && code <= Character.Solidus ||
-      code >= Character.Colon && code <= Character.CommercialAt ||
-      code >= Character.LeftSquareBracket && code <= Character.GraveAccent ||
-      code >= Character.LeftCurlyBracket && code <= Character.Tilde
-    )
-      ? DelimiterCharacterClass.Punctuation
-      : 0;
+    return isAsciiPunctuation(code) ? DelimiterCharacterClass.Punctuation : 0;
   }
   const character = String.fromCodePoint(code);
   return (

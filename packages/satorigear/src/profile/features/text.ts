@@ -2,20 +2,11 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/lexer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
-import { semanticText } from "../utils.ts";
+import { isAsciiPunctuation, semanticText } from "../utils.ts";
 import type { InlineTextBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const entity = /&(?:#x[0-9A-F]{1,6}|#\d{1,7}|[A-Z][A-Z0-9]{0,30});/iy;
-
-function isAsciiPunctuation(code: number): boolean {
-  return (
-    code >= Character.ExclamationMark && code <= Character.Solidus ||
-    code >= Character.Colon && code <= Character.CommercialAt ||
-    code >= Character.LeftSquareBracket && code <= Character.GraveAccent ||
-    code >= Character.LeftCurlyBracket && code <= Character.Tilde
-  );
-}
 
 export const buildInlineText: InlineTextBuilder = (tokenIndex, context) => {
   return inlineTokenText(context.view.text, context.tokens, tokenIndex);

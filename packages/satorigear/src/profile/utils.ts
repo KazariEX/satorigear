@@ -14,6 +14,15 @@ export function isAsciiDigit(code: number): boolean {
   return code >= Character.DigitZero && code <= Character.DigitNine;
 }
 
+export function isAsciiPunctuation(code: number): boolean {
+  return (
+    code >= Character.ExclamationMark && code <= Character.Solidus ||
+    code >= Character.Colon && code <= Character.CommercialAt ||
+    code >= Character.LeftSquareBracket && code <= Character.GraveAccent ||
+    code >= Character.LeftCurlyBracket && code <= Character.Tilde
+  );
+}
+
 export function isMarkdownWhitespace(code: number): boolean {
   return (
     code === Character.CharacterTabulation ||
