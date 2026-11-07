@@ -13,7 +13,8 @@ const parser = createParser({
     taskList: true,
   },
 });
-const scenarios = createEditScenarios(load());
+const corpora = load();
+const scenarios = createEditScenarios(corpora);
 
 describe("incremental", () => {
   for (const scenario of scenarios) {

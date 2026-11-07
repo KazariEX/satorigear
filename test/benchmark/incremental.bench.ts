@@ -4,8 +4,6 @@ import { createParser } from "satorigear";
 import { load } from "./helpers/corpus.ts";
 import { createEditScenarios, editBetween } from "./helpers/scenarios.ts";
 
-const corpora = load();
-
 const parser = createParser({
   features: {
     footnote: true,
@@ -16,6 +14,7 @@ const parser = createParser({
     taskList: true,
   },
 });
+const corpora = load();
 const scenarios = createEditScenarios(corpora);
 
 for (const scenario of scenarios) {
