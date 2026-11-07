@@ -1,5 +1,5 @@
-import { describe, test } from "vitest";
 import { createParser } from "satorigear";
+import { describe, it } from "vitest";
 
 const delimiterStress = `${"a**a ".repeat(1_000)}${"a* ".repeat(1_000)}`;
 
@@ -41,14 +41,14 @@ const mdcParser = createParser({
 });
 
 describe("syntax", () => {
-  test("delimiter stress", async ({ bench }) => {
-    await bench("commonmark", () => {
+  it("delimiter stress", async ({ bench }) => {
+    await bench("delimiter stress", () => {
       defaultParser.parse(delimiterStress);
     }).run();
   });
 
-  test("mdc document", async ({ bench }) => {
-    await bench("all features", () => {
+  it("mdc document", async ({ bench }) => {
+    await bench("mdc document", () => {
       mdcParser.parse(mdcDocument);
     }).run();
   });

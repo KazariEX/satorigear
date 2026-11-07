@@ -1,5 +1,5 @@
-import { describe, test } from "vitest";
 import { createParser } from "satorigear";
+import { describe, it } from "vitest";
 import { load } from "../helpers/corpus.ts";
 import { createEditScenarios, editBetween } from "../helpers/scenarios.ts";
 
@@ -17,7 +17,7 @@ const scenarios = createEditScenarios(load());
 
 describe("incremental", () => {
   for (const scenario of scenarios) {
-    test(scenario.name, async ({ bench }) => {
+    it(scenario.name, async ({ bench }) => {
       const sources = [scenario.before, scenario.after] as const;
       const edits = [
         editBetween(sources[0], sources[1]),
@@ -27,16 +27,14 @@ describe("incremental", () => {
       let freshIndex = 1;
       const editDocument = parser.createDocument(sources[0]);
 
-      await bench.compare(
-        bench("edit only", () => {
-          editDocument.edit([edits[editIndex]]);
-          editIndex ^= 1;
-        }),
-        bench("fresh tree", () => {
-          void parser.createDocument(sources[freshIndex]).tree;
-          freshIndex ^= 1;
-        }),
-      );
+      await bench(`edit only (${scenario.name})`, () => {
+        editDocument.edit([edits[editIndex]]);
+        editIndex ^= 1;
+      }).run();
+      await bench(`fresh tree (${scenario.name})`, () => {
+        void parser.createDocument(sources[freshIndex]).tree;
+        freshIndex ^= 1;
+      }).run();
     });
   }
 });

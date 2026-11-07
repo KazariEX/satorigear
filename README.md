@@ -19,6 +19,7 @@
     src="https://img.shields.io/github/license/KazariEX/satorigear?color=EA7FA0&labelColor=232122"
     alt="[license]"
   ></a>
+  <a href="https://app.codspeed.io/KazariEX/satorigear?utm_source=badge"><img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed"/></a>
 </p>
 
 SatoriGear is a blazing fast markdown parser with full incremental support that outputs MDAST.
