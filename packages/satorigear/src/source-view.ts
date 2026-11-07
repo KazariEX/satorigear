@@ -55,25 +55,18 @@ export class SourceView {
     let token = tokenStart + 1;
     const firstStart = tokens.start(token);
     const tokenEnd = tokenStart + nodeLength;
-    let segmentStart = firstStart;
     let end = tokens.end(token++);
-    let parts: string[] | undefined;
-    let segments: number[] | undefined;
-    let viewEnd = 0;
-    while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk) {
-      const start = tokens.start(token);
-      // Physically adjacent chunks still form one source slice; only stripped container gaps need segments.
-      if (start !== end) {
-        (parts ??= []).push(source.slice(segmentStart, end));
-        (segments ??= []).push(segmentStart - viewEnd, viewEnd += end - segmentStart);
-        segmentStart = start;
+    if (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk) {
+      const parts = [source.slice(firstStart, end)];
+      let viewEnd = end - firstStart;
+      const segments = [firstStart, viewEnd];
+      do {
+        const start = tokens.start(token);
+        end = tokens.end(token++);
+        parts.push(source.slice(start, end));
+        segments.push(start - viewEnd, viewEnd += end - start);
       }
-      end = tokens.end(token);
-      token++;
-    }
-    if (parts && segments) {
-      parts.push(source.slice(segmentStart, end));
-      segments.push(segmentStart - viewEnd, viewEnd + end - segmentStart);
+      while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk);
       this.#segments = segments;
       this.text = parts.join("");
       return;
