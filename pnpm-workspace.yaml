@@ -7,6 +7,7 @@ packages:
   - packages/*
 
 catalog:
+  "@codspeed/vitest-plugin": ^6.1.1
   "@types/mdast": ^4.0.4
   "@types/node": ^26.6.6
   "@zinkawaii/eslint-config": ^0.5.5

@@ -15,6 +15,7 @@
     "release": "bumpp -r --no-push -c \"release: v%s\"",
     "test": "vitest",
     "typecheck": "tsc -b",
+    "bench": "vitest bench --run",
     "benchmark:docs": "node scripts/benchmark.ts",
     "benchmark:features": "node --expose-gc test/benchmark/features.bench.ts",
     "benchmark:incremental": "node --expose-gc test/benchmark/incremental.bench.ts",
@@ -22,6 +23,7 @@
     "benchmark:stress": "node --expose-gc test/benchmark/stress.bench.ts"
   },
   "devDependencies": {
+    "@codspeed/vitest-plugin": "catalog:",
     "@types/node": "catalog:",
     "@zinkawaii/eslint-config": "catalog:",
     "@zinkawaii/scripts": "catalog:default",
