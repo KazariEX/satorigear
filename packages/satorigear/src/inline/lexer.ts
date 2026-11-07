@@ -1,6 +1,6 @@
 import { Character } from "../constants/character.ts";
 import { InlineKind } from "../constants/inline.ts";
-import type { InlineTokenStream } from "./tokens.ts";
+import { inlineTokenCount, inlineTokenEnd, type InlineTokenStream } from "./tokens.ts";
 
 type InlineScanner = (
   source: string,
@@ -10,6 +10,7 @@ type InlineScanner = (
 
 type InlineTokenizerFactory = (
   textBoundary: RegExp,
+  isImplicitSoftBreak: typeof implicitSoftBreak,
   ...scanners: InlineScanner[]
 ) => InlineTokenizer;
 
@@ -36,6 +37,16 @@ export function inlineMarkerRunEnd(source: string, start: number): number {
     end++;
   }
   return end;
+}
+
+function implicitSoftBreak(source: string, start: number, tokens: InlineTokenStream): boolean {
+  // A nonempty literal gap proves the text before LF needs no semantic trimming.
+  // A token ending at LF may have decoded whitespace or attached attributes.
+  if (start <= (tokens.length ? inlineTokenEnd(tokens, inlineTokenCount(tokens) - 1) : 0)) {
+    return false;
+  }
+  const previous = source.charCodeAt(start - 1);
+  return previous !== Character.Space && previous !== Character.CharacterTabulation;
 }
 
 function tokenize(
@@ -78,7 +89,9 @@ function tokenize(
       while (source.charCodeAt(offset) === Character.Space) {
         offset++;
       }
-      tokens.push(InlineKind.Newline, endingStart, offset, lineStart);
+      if (code !== Character.LineFeed || lineStart !== offset || !implicitSoftBreak(source, endingStart, tokens)) {
+        tokens.push(InlineKind.Newline, endingStart, offset, lineStart);
+      }
       continue;
     }
 
@@ -114,7 +127,7 @@ function generateInlineTokenizer(
       `t.push(${InlineKind.HardBreak},n,o,0)}`,
       `const r=o++;if(c===${Character.CarriageReturn}&&s.charCodeAt(o)===${Character.LineFeed})o++;`,
       `const l=o;while(s.charCodeAt(o)===${Character.Space})o++;`,
-      `t.push(${InlineKind.Newline},r,o,l);continue}`,
+      `if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,l);continue}`,
       `let d;switch(c){${cases}default:d=o}`,
       `o=d>o?d:o+1}`,
       `return t}`,
@@ -122,10 +135,10 @@ function generateInlineTokenizer(
     tokenizerFactories.set(
       key,
       // eslint-disable-next-line no-new-func
-      factory = Function("b", ...names, source) as InlineTokenizerFactory,
+      factory = Function("b", "i", ...names, source) as InlineTokenizerFactory,
     );
   }
-  return factory(textBoundary, ...boundaryCodes.map((code) => scannerByCode[code]!));
+  return factory(textBoundary, implicitSoftBreak, ...boundaryCodes.map((code) => scannerByCode[code]!));
 }
 
 export function compileInlineTokenizer(rules: readonly InlineScanRule[]): InlineTokenizer {
