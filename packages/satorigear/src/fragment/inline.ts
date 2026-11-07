@@ -183,7 +183,6 @@ function appendRange(
   profile: InlineProfile,
   context: InlineBuildContext,
   output: InlineOutput,
-  closeKind = InlineKind.None,
 ): number {
   let index = startToken;
   while (index < endToken) {
@@ -221,9 +220,6 @@ function appendRange(
       index++;
       continue;
     }
-    if (kind === closeKind) {
-      break;
-    }
     const build = profile.builders[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
     if (kind < InlineRole.Pair) {
@@ -256,6 +252,10 @@ function appendRange(
       continue;
     }
     if (kind < InlineRole.Decorate) {
+      // Resolved pairs are properly nested; every close ends the current range.
+      if (kind & 1) {
+        break;
+      }
       if (childStart > output.cursor) {
         appendGap(output, context, output.cursor, childStart);
       }
@@ -267,7 +267,6 @@ function appendRange(
         context,
         output,
         build as InlinePairBuilder,
-        kind + 1,
       );
       continue;
     }
@@ -303,7 +302,6 @@ function appendPair(
   context: InlineBuildContext,
   output: InlineOutput,
   build: InlinePairBuilder,
-  closeKind: number,
 ): number {
   const childStart = inlineTokenStart(context.tokens, openToken);
   const positionStart = context.locator.locationAt(context.view.mapOffset(childStart));
@@ -318,7 +316,6 @@ function appendPair(
     profile,
     context,
     childOutput,
-    closeKind,
   );
   const childEnd = inlineTokenEnd(context.tokens, closeToken);
   const value = build(

@@ -33,7 +33,7 @@ export const enum InlineKind {
   Emoji,
   InlineComponent,
 
-  // Pair kinds alternate open/close so projection can derive the matching boundary.
+  // Pair kinds alternate even opens and odd closes; resolution keeps them properly nested.
   EmphasisOpen = InlineRole.Pair,
   EmphasisClose,
   StrongOpen,
