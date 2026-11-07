@@ -86,11 +86,9 @@ function generateBlockDispatch(
       `throw new Error("No block fallback")}`,
     ].join("");
     const names = resolvers.map((resolver, index) => `r${index}`);
-    // eslint-disable-next-line no-new-func
-    return Function(...names, source)(...resolvers) as BlockDispatch;
+    return Function(...names, source)(...resolvers);
   }
   catch {
-    // Dynamic function construction may be unavailable under a content security policy.
     return (source, lines, start, contentOffset, out, context) => {
       const resolvers = starts[
         contentOffset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(contentOffset)

@@ -5,6 +5,7 @@ export default zin(
     javascript: {
       overrides: {
         curly: ["warn", "all"],
+        "no-new-func": "off",
       },
     },
     typescript: {

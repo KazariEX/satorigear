@@ -8,15 +8,6 @@ type InlineScanner = (
   tokens: number[],
 ) => number;
 
-type InlineTokenizerFactory = (
-  textBoundary: RegExp,
-  isImplicitSoftBreak: typeof implicitSoftBreak,
-  ...scanners: InlineScanner[]
-) => InlineTokenizer;
-
-// Cache generated control flow; scanner closures remain profile-specific.
-const tokenizerFactories = new Map<string, InlineTokenizerFactory>();
-
 // Features own marker recognition; the compiled lexer only dispatches scanners.
 export interface InlineScanRule {
   marker: number;
@@ -107,38 +98,33 @@ function generateInlineTokenizer(
   textBoundary: RegExp,
   scannerByCode: readonly (InlineScanner | undefined)[],
 ): InlineTokenizer {
-  const key = String.fromCharCode(...boundaryCodes);
-  let factory = tokenizerFactories.get(key);
-  if (factory === void 0) {
-    const names = boundaryCodes.map((code, index) => `s${index}`);
-    const cases = boundaryCodes
-      .map((code, index) => `case ${code}:d=s${index}(s,o,t);break;`)
-      .join("");
-    /** Mirrors {@link tokenize} with short aliases for its generated hot loop. */
-    const source = [
-      `return s=>{`,
-      `const t=[],e=s.length;let o=0;`,
-      `while(s.charCodeAt(o)===${Character.Space})o++;for(;o<e;){`,
-      `b.lastIndex=o;if(!b.test(s))break;o=b.lastIndex-1;`,
-      `const c=s.charCodeAt(o);`,
-      `if(c===${Character.LineFeed}||c===${Character.CarriageReturn}){`,
-      `if(s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space}){`,
-      `let n=o-2;while(s.charCodeAt(n-1)===${Character.Space})n--;`,
-      `t.push(${InlineKind.HardBreak},n,o,0)}`,
-      `const r=o++;if(c===${Character.CarriageReturn}&&s.charCodeAt(o)===${Character.LineFeed})o++;`,
-      `const l=o;while(s.charCodeAt(o)===${Character.Space})o++;`,
-      `if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,l);continue}`,
-      `let d;switch(c){${cases}default:d=o}`,
-      `o=d>o?d:o+1}`,
-      `return t}`,
-    ].join("");
-    tokenizerFactories.set(
-      key,
-      // eslint-disable-next-line no-new-func
-      factory = Function("b", "i", ...names, source) as InlineTokenizerFactory,
-    );
-  }
-  return factory(textBoundary, implicitSoftBreak, ...boundaryCodes.map((code) => scannerByCode[code]!));
+  const names = boundaryCodes.map((code, index) => `s${index}`);
+  const cases = boundaryCodes
+    .map((code, index) => `case ${code}:d=s${index}(s,o,t);break;`)
+    .join("");
+
+  /** Mirrors {@link tokenize} with short aliases for its generated hot loop. */
+  return Function("b", "i", ...names, [
+    `return s=>{`,
+    `const t=[],e=s.length;let o=0;`,
+    `while(s.charCodeAt(o)===${Character.Space})o++;for(;o<e;){`,
+    `b.lastIndex=o;if(!b.test(s))break;o=b.lastIndex-1;`,
+    `const c=s.charCodeAt(o);`,
+    `if(c===${Character.LineFeed}||c===${Character.CarriageReturn}){`,
+    `if(s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space}){`,
+    `let n=o-2;while(s.charCodeAt(n-1)===${Character.Space})n--;`,
+    `t.push(${InlineKind.HardBreak},n,o,0)}`,
+    `const r=o++;if(c===${Character.CarriageReturn}&&s.charCodeAt(o)===${Character.LineFeed})o++;`,
+    `const l=o;while(s.charCodeAt(o)===${Character.Space})o++;`,
+    `if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,l);continue}`,
+    `let d;switch(c){${cases}default:d=o}`,
+    `o=d>o?d:o+1}`,
+    `return t}`,
+  ].join(""))(
+    textBoundary,
+    implicitSoftBreak,
+    ...boundaryCodes.map((code) => scannerByCode[code]!),
+  );
 }
 
 export function compileInlineTokenizer(rules: readonly InlineScanRule[]): InlineTokenizer {
