@@ -83,7 +83,7 @@ function generateBlockDispatch(
       `return(s,l,i,o,t,c)=>{`,
       `let e;switch(o<0?${Character.VirtualBlockIndent}:s.charCodeAt(o)){${cases}}`,
       ...fallbacks.map(call),
-      `throw new Error("Syntax profile did not provide a block fallback")}`,
+      `throw new Error("No block fallback")}`,
     ].join("");
     const names = resolvers.map((resolver, index) => `r${index}`);
     // eslint-disable-next-line no-new-func
@@ -109,7 +109,7 @@ function generateBlockDispatch(
           return end;
         }
       }
-      throw new Error("Syntax profile did not provide a block fallback");
+      throw new Error("No block fallback");
     };
   }
 }

@@ -97,32 +97,32 @@ function generateInlineTokenizer(
   const key = String.fromCharCode(...boundaryCodes);
   let factory = tokenizerFactories.get(key);
   if (factory === void 0) {
-    const names = boundaryCodes.map((code, index) => `scan${index}`);
+    const names = boundaryCodes.map((code, index) => `s${index}`);
     const cases = boundaryCodes
-      .map((code, index) => `case ${code}:scannedEnd=scan${index}(source,offset,tokens);break;`)
+      .map((code, index) => `case ${code}:d=s${index}(s,o,t);break;`)
       .join("");
-    /** Mirrors {@link tokenize}, embedding only its profile-specific scanner switch. */
+    /** Mirrors {@link tokenize} with short aliases for its generated hot loop. */
     const source = [
-      `return source=>{`,
-      `const tokens=[],end=source.length;let offset=0;`,
-      `while(source.charCodeAt(offset)===${Character.Space})offset++;for(;offset<end;){`,
-      `textBoundary.lastIndex=offset;if(!textBoundary.test(source))break;offset=textBoundary.lastIndex-1;`,
-      `const code=source.charCodeAt(offset);`,
-      `if(code===${Character.LineFeed}||code===${Character.CarriageReturn}){`,
-      `if(source.charCodeAt(offset-1)===${Character.Space}&&source.charCodeAt(offset-2)===${Character.Space}){`,
-      `let spaces=offset-2;while(source.charCodeAt(spaces-1)===${Character.Space})spaces--;`,
-      `tokens.push(${InlineKind.HardBreak},spaces,offset,0)}`,
-      `const endingStart=offset++;if(code===${Character.CarriageReturn}&&source.charCodeAt(offset)===${Character.LineFeed})offset++;`,
-      `const lineStart=offset;while(source.charCodeAt(offset)===${Character.Space})offset++;`,
-      `tokens.push(${InlineKind.Newline},endingStart,offset,lineStart);continue}`,
-      `let scannedEnd;switch(code){${cases}default:scannedEnd=offset}`,
-      `offset=scannedEnd>offset?scannedEnd:offset+1}`,
-      `return tokens}`,
+      `return s=>{`,
+      `const t=[],e=s.length;let o=0;`,
+      `while(s.charCodeAt(o)===${Character.Space})o++;for(;o<e;){`,
+      `b.lastIndex=o;if(!b.test(s))break;o=b.lastIndex-1;`,
+      `const c=s.charCodeAt(o);`,
+      `if(c===${Character.LineFeed}||c===${Character.CarriageReturn}){`,
+      `if(s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space}){`,
+      `let n=o-2;while(s.charCodeAt(n-1)===${Character.Space})n--;`,
+      `t.push(${InlineKind.HardBreak},n,o,0)}`,
+      `const r=o++;if(c===${Character.CarriageReturn}&&s.charCodeAt(o)===${Character.LineFeed})o++;`,
+      `const l=o;while(s.charCodeAt(o)===${Character.Space})o++;`,
+      `t.push(${InlineKind.Newline},r,o,l);continue}`,
+      `let d;switch(c){${cases}default:d=o}`,
+      `o=d>o?d:o+1}`,
+      `return t}`,
     ].join("");
     tokenizerFactories.set(
       key,
       // eslint-disable-next-line no-new-func
-      factory = Function("textBoundary", ...names, source) as InlineTokenizerFactory,
+      factory = Function("b", ...names, source) as InlineTokenizerFactory,
     );
   }
   return factory(textBoundary, ...boundaryCodes.map((code) => scannerByCode[code]!));
