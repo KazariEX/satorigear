@@ -3,7 +3,7 @@ import {
   type BlockLines,
   IndentedLine,
   isBlankLine,
-  skipLineWhitespace,
+  trimLineWhitespaceStart,
 } from "../../../block/lines.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
@@ -34,7 +34,7 @@ function definitionAt(
     return;
   }
   const markerEnd = label.end + 1;
-  const contentOffset = skipLineWhitespace(source, markerEnd, lineEnd);
+  const contentOffset = trimLineWhitespaceStart(source, markerEnd, lineEnd);
   return {
     ...label,
     contentOffset,

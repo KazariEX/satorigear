@@ -25,16 +25,15 @@ interface Resource {
   url: string;
 }
 
-function skipWhitespace(source: string, start: number): number {
-  let end = start;
-  while (end < source.length) {
-    const code = source.charCodeAt(end);
+function skipWhitespace(source: string, start: number, end = source.length): number {
+  while (start < end) {
+    const code = source.charCodeAt(start);
     if (!isMarkdownWhitespace(code)) {
       break;
     }
-    end++;
+    start++;
   }
-  return end;
+  return start;
 }
 
 function linkDestinationEnd(source: string, start: number): number {
@@ -174,9 +173,7 @@ function resourceAt(source: string, tokens: InlineTokenStream, tokenIndex: numbe
   const tokenEnd = inlineTokenEnd(tokens, tokenIndex);
   let start = tokenStart + 2;
   let end = tokenEnd - 1;
-  while (start < end && isMarkdownWhitespace(source.charCodeAt(start))) {
-    start++;
-  }
+  start = skipWhitespace(source, start, end);
   while (end > start && isMarkdownWhitespace(source.charCodeAt(end - 1))) {
     end--;
   }
@@ -191,11 +188,7 @@ function resourceAt(source: string, tokens: InlineTokenStream, tokenIndex: numbe
     destinationStart++;
     destinationEnd--;
   }
-  start = resourceEnd;
-
-  while (start < end && isMarkdownWhitespace(source.charCodeAt(start))) {
-    start++;
-  }
+  start = skipWhitespace(source, resourceEnd, end);
   return {
     url: semanticText(source.slice(destinationStart, destinationEnd)),
     title: start < end ? semanticText(source.slice(start + 1, end - 1)) : null,

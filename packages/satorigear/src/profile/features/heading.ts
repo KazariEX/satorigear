@@ -1,5 +1,5 @@
 import type { Heading } from "mdast";
-import { type BlockLines, skipLineWhitespace } from "../../block/lines.ts";
+import { type BlockLines, trimLineWhitespaceEnd, trimLineWhitespaceStart } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
@@ -25,20 +25,18 @@ function atxAt(
   if (markerEnd < lineEnd && source[markerEnd] !== " " && source[markerEnd] !== "\t") {
     return;
   }
-  const contentOffset = skipLineWhitespace(source, markerEnd, lineEnd);
-  let contentEnd = lineEnd;
-  while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
-    contentEnd--;
-  }
+  const contentOffset = trimLineWhitespaceStart(source, markerEnd, lineEnd);
+  let contentEnd = trimLineWhitespaceEnd(source, contentOffset, lineEnd);
   let closer = contentEnd;
   while (closer > contentOffset && source[closer - 1] === "#") {
     closer--;
   }
-  if (closer < contentEnd && (closer === contentOffset || source[closer - 1] === " " || source[closer - 1] === "\t")) {
-    contentEnd = closer;
-    while (contentEnd > contentOffset && (source[contentEnd - 1] === " " || source[contentEnd - 1] === "\t")) {
-      contentEnd--;
-    }
+  if (
+    closer < contentEnd && (
+      closer === contentOffset || source[closer - 1] === " " || source[closer - 1] === "\t"
+    )
+  ) {
+    contentEnd = trimLineWhitespaceEnd(source, contentOffset, closer);
   }
   return {
     markerEnd,
@@ -62,7 +60,7 @@ export function setextMarkerAt(
   while (offset < lineEnd && source[offset] === marker) {
     offset++;
   }
-  offset = skipLineWhitespace(source, offset, lineEnd);
+  offset = trimLineWhitespaceStart(source, offset, lineEnd);
   return offset === lineEnd ? marker : void 0;
 }
 

@@ -1,5 +1,5 @@
 import { Character } from "../constants/character.ts";
-import { type BlockLines, lineContentEnd, lineIndentOffset, skipLineWhitespace } from "./lines.ts";
+import { type BlockLines, lineContentEnd, lineIndentOffset, trimLineWhitespaceStart } from "./lines.ts";
 
 export interface Fence {
   indent: number;
@@ -84,7 +84,7 @@ export function closesFence(source: string, lines: BlockLines, index: number, fe
     return false;
   }
   const lineEnd = lines.end(index);
-  return skipLineWhitespace(source, offset, lineEnd) === lineEnd;
+  return trimLineWhitespaceStart(source, offset, lineEnd) === lineEnd;
 }
 
 export function fencedBlock(
@@ -96,7 +96,7 @@ export function fencedBlock(
   closed: boolean,
 ): FencedBlock {
   const lineEnd = lines.end(index);
-  const infoStart = skipLineWhitespace(source, fence.offset + fence.length, lineEnd);
+  const infoStart = trimLineWhitespaceStart(source, fence.offset + fence.length, lineEnd);
   let content: string | undefined;
   if (lines.physicallyContiguous()) {
     const contentStart = lines.next(index);

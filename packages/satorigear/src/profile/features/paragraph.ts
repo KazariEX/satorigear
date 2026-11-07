@@ -1,5 +1,5 @@
 import type { Paragraph } from "mdast";
-import { indentOffset, skipLineWhitespace } from "../../block/lines.ts";
+import { indentOffset, trimLineWhitespaceStart } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -20,7 +20,7 @@ export const feature: SyntaxFeature = {
         let index = start + 1;
         while (index < lines.length) {
           const lineEnd = lines.end(index);
-          const contentStart = skipLineWhitespace(source, lines.start(index), lineEnd);
+          const contentStart = trimLineWhitespaceStart(source, lines.start(index), lineEnd);
           if (contentStart === lineEnd) {
             break;
           }

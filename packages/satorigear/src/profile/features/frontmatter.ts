@@ -1,5 +1,5 @@
 import type { Yaml } from "mdast";
-import { type BlockLines, skipLineWhitespace } from "../../block/lines.ts";
+import { type BlockLines, trimLineWhitespaceStart } from "../../block/lines.ts";
 import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { type BlockNodeBuilder, leafBlockPosition } from "../../fragment/block.ts";
@@ -26,7 +26,7 @@ function frontmatterFenceAt(
     return false;
   }
   const end = lines.end(index);
-  return skipLineWhitespace(source, start + 3, end) === end;
+  return trimLineWhitespaceStart(source, start + 3, end) === end;
 }
 
 export const buildYamlBlock: BlockNodeBuilder<Yaml> = (tokenStart, context) => {

@@ -275,27 +275,22 @@ export class BlockTokenStream implements DefinitionLookup {
 
     // 3. Replace packed fields in place. A size-changing middle edit shifts the suffix,
     // growing the dense backing store only when its retained capacity is insufficient.
+    const fieldStart = start * BlockTokenField.Stride;
+    const replacementFieldLength = replacement.#fieldLength;
+    let fieldLength = this.#fieldLength;
     if (end === previousLength) {
-      const fieldStart = start * BlockTokenField.Stride;
-      const fieldEnd = fieldStart + replacement.#fieldLength;
-      this.#ensureCapacity(fieldEnd);
-      this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
-      this.#fieldLength = fieldEnd;
+      fieldLength = fieldStart + replacementFieldLength;
+      this.#ensureCapacity(fieldLength);
     }
-    else if (replacementLength === replacedLength) {
-      const fieldStart = start * BlockTokenField.Stride;
-      this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
-    }
-    else {
-      const fieldStart = start * BlockTokenField.Stride;
+    else if (replacementLength !== replacedLength) {
       const oldFieldEnd = end * BlockTokenField.Stride;
-      const newFieldEnd = fieldStart + replacement.#fieldLength;
-      const nextFieldLength = this.#fieldLength + newFieldEnd - oldFieldEnd;
-      this.#ensureCapacity(nextFieldLength);
+      const newFieldEnd = fieldStart + replacementFieldLength;
+      fieldLength += newFieldEnd - oldFieldEnd;
+      this.#ensureCapacity(fieldLength);
       this.#fields.copyWithin(newFieldEnd, oldFieldEnd, this.#fieldLength);
-      this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
-      this.#fieldLength = nextFieldLength;
     }
+    this.#fields.set(replacement.#fields.subarray(0, replacementFieldLength), fieldStart);
+    this.#fieldLength = fieldLength;
 
     // 4. Splice sparse metadata. Stable indexes update in place; a size-changing
     // middle replacement shifts suffix slots into a new array.

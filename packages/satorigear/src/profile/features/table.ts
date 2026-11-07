@@ -1,5 +1,10 @@
 import type { AlignType, TableCell, TableRow } from "mdast";
-import { type BlockLines, lineIndentOffset, skipLineWhitespace } from "../../block/lines.ts";
+import {
+  type BlockLines,
+  lineIndentOffset,
+  trimLineWhitespaceEnd,
+  trimLineWhitespaceStart,
+} from "../../block/lines.ts";
 import { BlockKind, BlockRole } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -23,14 +28,8 @@ function appendTableCell(
   contentStart: number,
   contentEnd: number,
 ): void {
-  contentStart = skipLineWhitespace(source, contentStart, contentEnd);
-  while (contentEnd > contentStart) {
-    const code = source.charCodeAt(contentEnd - 1);
-    if (code !== Character.Space && code !== Character.CharacterTabulation) {
-      break;
-    }
-    contentEnd--;
-  }
+  contentStart = trimLineWhitespaceStart(source, contentStart, contentEnd);
+  contentEnd = trimLineWhitespaceEnd(source, contentStart, contentEnd);
   cells.push(start, contentStart, contentEnd);
 }
 
@@ -61,14 +60,7 @@ function tableCellsAt(
     return;
   }
 
-  let visibleEnd = lineEnd;
-  while (visibleEnd > contentOffset) {
-    const code = source.charCodeAt(visibleEnd - 1);
-    if (code !== Character.Space && code !== Character.CharacterTabulation) {
-      break;
-    }
-    visibleEnd--;
-  }
+  const visibleEnd = trimLineWhitespaceEnd(source, contentOffset, lineEnd);
   const trailingPipe = pipes.at(-1) === visibleEnd - 1;
   const leadingPipe = pipes[0] === contentOffset;
   const cells: number[] = [];

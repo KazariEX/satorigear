@@ -1,12 +1,9 @@
+import { trimLineWhitespaceStart } from "../../../block/lines.ts";
 import { Character } from "../../../constants/character.ts";
 import { isAsciiDigit, isAsciiLetter } from "../../utils.ts";
 import type { Attributes, AttributeValue } from "./types.ts";
 
 const brackets: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
-
-function isHorizontalWhitespace(character: string): boolean {
-  return character === " " || character === "\t";
-}
 
 function assignAttribute(attributes: Attributes, name: string, value: AttributeValue): void {
   if (name === "class" && typeof value === "string" && typeof attributes.class === "string") {
@@ -92,9 +89,7 @@ function scanAttributes(
   };
 
   while (offset < limit) {
-    while (isHorizontalWhitespace(source[offset])) {
-      offset++;
-    }
+    offset = trimLineWhitespaceStart(source, offset, limit);
     if (source[offset] === "}") {
       return offset + 1;
     }
@@ -138,9 +133,7 @@ function scanAttributes(
       offset++;
     }
     const nameEnd = offset;
-    while (isHorizontalWhitespace(source[offset])) {
-      offset++;
-    }
+    offset = trimLineWhitespaceStart(source, offset, limit);
     if (source[offset] !== "=") {
       if (attributes) {
         const name = source.slice(nameStart, nameEnd);
@@ -153,9 +146,7 @@ function scanAttributes(
       continue;
     }
     offset++;
-    while (isHorizontalWhitespace(source[offset])) {
-      offset++;
-    }
+    offset = trimLineWhitespaceStart(source, offset, limit);
     const character = source[offset];
     let valueStart = offset;
     let valueEnd: number;

@@ -1,4 +1,4 @@
-import { type BlockLines, isBlankLine, skipLineWhitespace } from "../../block/lines.ts";
+import { type BlockLines, isBlankLine, trimLineWhitespaceStart } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { leafBlockPosition } from "../../fragment/block.ts";
@@ -102,7 +102,7 @@ function linkDefinitionAt(
     offset += 2;
 
     let lineEnd = lines.end(lineIndex);
-    offset = skipLineWhitespace(source, offset, lineEnd);
+    offset = trimLineWhitespaceStart(source, offset, lineEnd);
     if (offset === lineEnd) {
       const nextLine = lineIndex + 1;
       lookaheadEnd = nextLine < lines.length ? lines.end(nextLine) : lines.next(lineIndex);
@@ -112,7 +112,7 @@ function linkDefinitionAt(
       lineIndex++;
       offset = lines.start(lineIndex);
       lineEnd = lines.end(lineIndex);
-      offset = skipLineWhitespace(source, offset, lineEnd);
+      offset = trimLineWhitespaceStart(source, offset, lineEnd);
     }
 
     let destination: string;
@@ -168,14 +168,14 @@ function linkDefinitionAt(
     if (offset < lineEnd && source[offset] !== " " && source[offset] !== "\t") {
       break parseDefinition;
     }
-    offset = skipLineWhitespace(source, offset, lineEnd);
+    offset = trimLineWhitespaceStart(source, offset, lineEnd);
     let titleOnNextLine = false;
     if (offset === lineEnd && lineIndex + 1 < lines.length) {
       lookaheadEnd = lines.end(lineIndex + 1);
       lineIndex++;
       offset = lines.start(lineIndex);
       lineEnd = lines.end(lineIndex);
-      offset = skipLineWhitespace(source, offset, lineEnd);
+      offset = trimLineWhitespaceStart(source, offset, lineEnd);
       titleOnNextLine = true;
     }
 
@@ -226,7 +226,7 @@ function linkDefinitionAt(
       titleStart = offset;
     }
     if (closed) {
-      offset = skipLineWhitespace(source, offset, lineEnd);
+      offset = trimLineWhitespaceStart(source, offset, lineEnd);
       if (offset === lineEnd) {
         fields.title = title;
         return { definitionKey, end: lineIndex + 1, fields };
