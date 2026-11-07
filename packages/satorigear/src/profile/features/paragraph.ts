@@ -15,7 +15,7 @@ export const feature: SyntaxFeature = {
         const openToken = out.length;
         const offset = lines.start(start);
         out.push(BlockKind.ParagraphOpen, offset, offset);
-        // Hold one line so only the final inline chunk excludes its line ending.
+        // Keep one chunk across contiguous lines; split only where source has a gap.
         let chunkOffset = contentOffset;
         let index = start + 1;
         while (index < lines.length) {
@@ -41,8 +41,11 @@ export const feature: SyntaxFeature = {
               break;
             }
           }
-          out.push(BlockKind.InlineChunk, chunkOffset, lines.next(index - 1));
-          chunkOffset = chunkStart;
+          const previousEnd = lines.next(index - 1);
+          if (chunkStart !== previousEnd) {
+            out.push(BlockKind.InlineChunk, chunkOffset, previousEnd);
+            chunkOffset = chunkStart;
+          }
           index++;
         }
         const close = lines.end(index - 1);

@@ -53,13 +53,18 @@ function tokenize(
     offset++;
   }
   for (; offset < end;) {
-    textBoundary.lastIndex = offset;
-    if (!textBoundary.test(source)) {
-      break;
+    let code = source.charCodeAt(offset);
+    // Handle a current LF directly; scanners can end immediately before one.
+    // Otherwise search only LFs beside whitespace, plus CR and feature markers.
+    if (code !== Character.LineFeed) {
+      textBoundary.lastIndex = offset;
+      if (!textBoundary.test(source)) {
+        break;
+      }
+      offset = textBoundary.lastIndex - 1;
+      code = source.charCodeAt(offset);
     }
-    offset = textBoundary.lastIndex - 1;
 
-    const code = source.charCodeAt(offset);
     if (code === Character.LineFeed || code === Character.CarriageReturn) {
       if (
         source.charCodeAt(offset - 1) === Character.Space &&
@@ -108,7 +113,7 @@ function generateInlineTokenizer(
     `return s=>{`,
     `const t=[],e=s.length;let o=0;`,
     `while(s.charCodeAt(o)===${Character.Space})o++;for(;o<e;){`,
-    `b.lastIndex=o;if(!b.test(s))break;o=b.lastIndex-1;`,
+    `if(s.charCodeAt(o)!==${Character.LineFeed}){b.lastIndex=o;if(!b.test(s))break;o=b.lastIndex-1;}`,
     `const c=s.charCodeAt(o);`,
     `if(c===${Character.LineFeed}||c===${Character.CarriageReturn}){`,
     `if(s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space}){`,
@@ -145,9 +150,9 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
   }
   const boundaries = String.fromCharCode(...boundaryCodes).replaceAll(/[\\\]-]/g, "\\$&");
   const textBoundary = new RegExp(
-    // The standard profile has 9 unique markers. With more feature markers,
-    // letting the expression start at hard-break spaces advances faster.
-    `${boundaryCodes.length > 9 ? " {2,}[\\n\\r]|" : ""}[\\n\\r${boundaries}]`,
+    // Hard-break spaces advance quickly when a profile has more than 9 feature markers.
+    // A literal LF is relevant only beside whitespace; the scan loop handles a current LF before this search.
+    `${boundaryCodes.length > 9 ? " {2,}[\\n\\r]|" : ""}[\\r${boundaries}]|\\n(?:(?<=[ \t]\\n)|(?= ))`,
     "g",
   );
   try {
