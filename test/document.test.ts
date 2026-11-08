@@ -27,6 +27,37 @@ describe("markdown document", () => {
     expect(document.tree).toEqual(parser.parse("alpha\nbeta"));
   });
 
+  it("updates heading depth and body through edits", () => {
+    const document = parser.createDocument("  ### title ###  \n\nsuffix");
+    expect(document.tree.children[0]).toMatchObject({
+      type: "heading",
+      depth: 3,
+      children: [{ value: "title" }],
+      position: {
+        start: { line: 1, column: 3, offset: 2 },
+        end: { line: 1, column: 18, offset: 17 },
+      },
+    });
+
+    document.edit([{ start: 2, end: 5, text: "######" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
+      depth: 6,
+      position: { end: { line: 1, column: 21, offset: 20 } },
+    });
+
+    document.edit([{ start: 9, end: 14, text: "" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
+      type: "heading",
+      depth: 6,
+      children: [],
+      position: { end: { line: 1, column: 16, offset: 15 } },
+    });
+    document.edit([{ start: 0, end: 2, text: "" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+  });
+
   it("keeps a parser profile fixed across documents", () => {
     const tableParser = createParser({ features: { table: true } });
     const source = "a | b\n--- | ---\nc | d\n";
