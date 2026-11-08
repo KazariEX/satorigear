@@ -1,7 +1,7 @@
 import { Character } from "../constants/character.ts";
-import { InlineKind } from "../constants/inline.ts";
+import { InlineKind, InlineRole } from "../constants/inline.ts";
 import {
-  appendResolvedDelimiterToken,
+  appendResolvedRawToken,
   compileDelimiterConfigs,
   type DelimiterReplacement,
   type DelimiterRun,
@@ -10,6 +10,7 @@ import {
 } from "../inline/delimiter.ts";
 import {
   appendInlineToken,
+  copyInlineToken,
   inlineTokenCount,
   inlineTokenData,
   inlineTokenEnd,
@@ -60,21 +61,11 @@ const enum FrameFlag {
   LiteralBracket = 32,
 }
 
-const enum ResolutionFlag {
-  Rewrite = 1,
-}
-
-const frameHeaderSize = 1;
-// Without an opener, no downstream frame write can reach this shared header.
-const noBracketFrames = [0];
+// Without an opener, pairing and emission never write frame slots.
+const noBracketFrames: number[] = [];
 
 // Analysis uses A for candidate bottoms and B for candidate links. Resolution reuses
 // A for delimiter checkpoints then resolved ends, and B for logical then resolved parents.
-
-function setFrameState(frames: number[], frame: number, state: number): void {
-  frames[frame + FrameSlot.State] = state;
-  frames[0] = ResolutionFlag.Rewrite;
-}
 
 function rewriteLinkCandidates(
   frames: number[],
@@ -170,7 +161,7 @@ function analyzeBrackets(
   for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
     const kind = inlineTokenKind(tokens, tokenIndex);
     if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
-      const arena = frames ??= [0];
+      const arena = frames ??= [];
       const frame = arena.length;
       // Append one complete frame in `FrameSlot` order before advancing the stack top.
       arena.push(
@@ -184,7 +175,7 @@ function analyzeBrackets(
       stackTop = frame;
       continue;
     }
-    if (kind < InlineKind.LinkTail || kind > InlineKind.BracketClose) {
+    if (kind !== InlineKind.LinkTail && kind !== InlineKind.BracketClose) {
       continue;
     }
 
@@ -206,7 +197,7 @@ function analyzeBrackets(
         label.end === inlineTokenEnd(tokens, tokenIndex) &&
         definitions.hasDefinition(label.definitionKey)
       ) {
-        setFrameState(arena, frame, FrameClaim.Footnote);
+        arena[frame + FrameSlot.State] = FrameClaim.Footnote;
         candidateTop = arena[frame + FrameSlot.WorkspaceA];
         continue;
       }
@@ -229,7 +220,7 @@ function analyzeBrackets(
       inlineTokenKind(tokens, componentToken) === InlineKind.InlineComponent &&
       inlineTokenEnd(tokens, componentToken) === inlineTokenStart(tokens, openToken)
     ) {
-      setFrameState(arena, frame, FrameClaim.Component);
+      arena[frame + FrameSlot.State] = FrameClaim.Component;
       arena[frame + FrameSlot.WorkspaceB] = candidateTop;
       candidateTop = frame;
       continue;
@@ -248,11 +239,7 @@ function analyzeBrackets(
       trailing === Character.LeftCurlyBracket &&
       attributesEnd(source, suffixStart) !== void 0
     );
-    setFrameState(
-      arena,
-      frame,
-      attributed ? FrameClaim.AttributedSpan : FrameClaim.Span,
-    );
+    arena[frame + FrameSlot.State] = attributed ? FrameClaim.AttributedSpan : FrameClaim.Span;
     arena[frame + FrameSlot.WorkspaceB] = candidateTop;
     candidateTop = frame;
   }
@@ -267,14 +254,14 @@ function resolvePairedSyntax(
   delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
 ): readonly DelimiterReplacement[][] {
   // An empty definition table makes every non-resource bracket candidate literal.
-  const hasDefinitions = frames.length > frameHeaderSize && definitions.hasDefinitions();
+  const hasDefinitions = frames.length > 0 && definitions.hasDefinitions();
   // Delimiter scopes share a reusable run prefix; frames checkpoint its logical length.
   let runs: DelimiterRun[] | undefined;
   let runCount = 0;
   let replacements: DelimiterReplacement[][] | undefined;
   let rawTop = -1;
   let logicalTop = -1;
-  let frameCursor = frameHeaderSize;
+  let frameCursor = 0;
   let consumedEnd = -1;
   let consumeFrames = false;
   let inactiveBefore = 0;
@@ -311,7 +298,7 @@ function resolvePairedSyntax(
       rawTop = frame;
       if (consuming) {
         if (consumeFrames) {
-          setFrameState(frames, frame, FrameClaim.Consumed);
+          frames[frame + FrameSlot.State] = FrameClaim.Consumed;
         }
         continue;
       }
@@ -341,7 +328,7 @@ function resolvePairedSyntax(
       continue;
     }
 
-    if (kind < InlineKind.LinkTail || kind > InlineKind.BracketClose) {
+    if (kind !== InlineKind.LinkTail && kind !== InlineKind.BracketClose) {
       continue;
     }
     const rawFrame = rawTop;
@@ -350,7 +337,7 @@ function resolvePairedSyntax(
     }
     if (consuming) {
       if (consumeFrames && rawFrame >= 0) {
-        setFrameState(frames, rawFrame, FrameClaim.Consumed);
+        frames[rawFrame + FrameSlot.State] = FrameClaim.Consumed;
       }
       continue;
     }
@@ -403,11 +390,8 @@ function resolvePairedSyntax(
           }
 
           if (matched) {
-            setFrameState(
-              frames,
-              frame,
-              (reference ? FrameClaim.Reference : FrameClaim.Link) |
-                (image ? FrameFlag.Image : 0),
+            frames[frame + FrameSlot.State] = (reference ? FrameClaim.Reference : FrameClaim.Link) | (
+              image ? FrameFlag.Image : 0
             );
             frames[frame + FrameSlot.CloseToken] = tokenIndex;
             runStart = frames[frame + FrameSlot.WorkspaceA];
@@ -477,7 +461,7 @@ function emitResolvedTokens(
   const result: number[] = [];
   let rawTop = -1;
   let referenceTop = -1;
-  let frameCursor = frameHeaderSize;
+  let frameCursor = 0;
   let skipEnd = -1;
 
   const count = inlineTokenCount(tokens);
@@ -531,13 +515,13 @@ function emitResolvedTokens(
           skipEnd = inlineTokenEnd(tokens, frames[frame + FrameSlot.CloseToken]);
         }
         else if (!(state & FrameFlag.LiteralBracket)) {
-          appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
+          appendResolvedRawToken(result, tokens, tokenIndex, replacements);
         }
       }
       continue;
     }
 
-    if (kind >= InlineKind.LinkTail && kind <= InlineKind.BracketClose) {
+    if (kind === InlineKind.LinkTail || kind === InlineKind.BracketClose) {
       const rawFrame = rawTop;
       if (rawFrame >= 0) {
         rawTop = frames[rawFrame + FrameSlot.Parent];
@@ -551,8 +535,8 @@ function emitResolvedTokens(
           referenceTop = frames[referenceFrame + FrameSlot.WorkspaceB];
           skipEnd = appendReferenceBoundary(result, tokens, frames, referenceFrame, true);
         }
-        else if (rawFrame >= 0) {
-          const state = frames[rawFrame + FrameSlot.State];
+        else {
+          const state = rawFrame < 0 ? FrameClaim.Raw : frames[rawFrame + FrameSlot.State];
           const claim = state & FrameClaim.Mask;
           if (claim === FrameClaim.Component) {
             const openToken = frames[rawFrame + FrameSlot.OpenToken];
@@ -565,11 +549,13 @@ function emitResolvedTokens(
           }
           // Of the remaining claims, only a footnote replaces its entire source.
           else if (claim !== FrameClaim.Footnote && !(state & FrameFlag.LiteralBracket)) {
-            appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
+            if (kind >= InlineRole.Text) {
+              copyInlineToken(result, tokens, tokenIndex);
+            }
+            else {
+              appendResolvedRawToken(result, tokens, tokenIndex, replacements);
+            }
           }
-        }
-        else {
-          appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
         }
       }
 
@@ -577,7 +563,12 @@ function emitResolvedTokens(
     }
 
     if (!skipping) {
-      appendResolvedDelimiterToken(result, tokens, tokenIndex, replacements);
+      if (kind >= InlineRole.Text) {
+        copyInlineToken(result, tokens, tokenIndex);
+      }
+      else {
+        appendResolvedRawToken(result, tokens, tokenIndex, replacements);
+      }
     }
   }
   return result;
@@ -591,7 +582,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
       let tokenIndex = inlineTokenCount(tokens) - 1;
       for (; tokenIndex >= 0; tokenIndex--) {
         const kind = inlineTokenKind(tokens, tokenIndex);
-        if (kind >= InlineKind.AsteriskRun && kind <= InlineKind.BracketClose) {
+        if (kind < InlineRole.Text) {
           break;
         }
       }
@@ -611,9 +602,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
         definitions,
         delimiterByKind,
       );
-      return frames[0] & ResolutionFlag.Rewrite || replacements.length > 0
-        ? emitResolvedTokens(tokens, frames, replacements)
-        : tokens;
+      return emitResolvedTokens(tokens, frames, replacements);
     };
   };
 }

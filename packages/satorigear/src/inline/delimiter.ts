@@ -1,14 +1,14 @@
 import { Character } from "../constants/character.ts";
+import { InlineKind, InlineRole } from "../constants/inline.ts";
 import { isAsciiPunctuation } from "../profile/utils.ts";
 import {
   appendInlineToken,
-  copyInlineToken,
   inlineTokenEnd,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
 } from "./tokens.ts";
-import type { InlineKind } from "../constants/inline.ts";
+import type { SourceSpan } from "../source-view.ts";
 
 interface DelimiterPair {
   open: InlineKind;
@@ -48,10 +48,8 @@ export interface DelimiterRun {
   state: number;
 }
 
-export interface DelimiterReplacement {
-  offset: number;
-  end: number;
-  kind: number;
+export interface DelimiterReplacement extends SourceSpan {
+  kind: InlineKind;
 }
 
 // CanOpen/CanClose occupy the low bits; the high bits store the original run length modulo 3.
@@ -222,8 +220,8 @@ export function resolveDelimiterScope(
     const closeEnd = closeStart + use;
     // Partial delimiters always define a single replacement; unsupported whole runs were filtered before matching.
     const pair = use === 2 ? closer.config.double! : closer.config.single!;
-    (replacements[opener.tokenIndex] ??= []).push({ offset: openStart, end: openEnd, kind: pair.open });
-    (replacements[closer.tokenIndex] ??= []).push({ offset: closeStart, end: closeEnd, kind: pair.close });
+    (replacements[opener.tokenIndex] ??= []).push({ start: openStart, end: openEnd, kind: pair.open });
+    (replacements[closer.tokenIndex] ??= []).push({ start: closeStart, end: closeEnd, kind: pair.close });
     opener.remaining -= use;
     closer.start += use;
     closer.remaining -= use;
@@ -272,32 +270,30 @@ export function delimiterRunAt(
   }
 }
 
-export function appendResolvedDelimiterToken(
+/** Lowers a raw candidate; the resolver copies semantic tokens directly. */
+export function appendResolvedRawToken(
   result: number[],
   tokens: InlineTokenStream,
   tokenIndex: number,
   replacements: readonly DelimiterReplacement[][],
 ): void {
   const matched = replacements[tokenIndex];
-  if (!matched) {
-    copyInlineToken(result, tokens, tokenIndex);
-    return;
-  }
-  if (matched.length > 1) {
-    matched.sort((left, right) => left.offset - right.offset);
-  }
-  const kind = inlineTokenKind(tokens, tokenIndex);
-  let offset = inlineTokenStart(tokens, tokenIndex);
-  for (const replacement of matched) {
-    if (replacement.offset > offset) {
-      appendInlineToken(result, kind, offset, replacement.offset);
+  if (matched) {
+    if (matched.length > 1) {
+      matched.sort((left, right) => left.start - right.start);
     }
-    appendInlineToken(result, replacement.kind, replacement.offset, replacement.end);
-    offset = replacement.end;
+    for (const replacement of matched) {
+      appendInlineToken(result, replacement.kind, replacement.start, replacement.end);
+    }
   }
-  const end = inlineTokenEnd(tokens, tokenIndex);
-  if (offset < end) {
-    appendInlineToken(result, kind, offset, end);
+  // A decorator needs its preceding literal text materialized before it runs.
+  // All other unmatched ranges remain implicit source gaps.
+  if (inlineTokenKind(tokens, tokenIndex + 1) >= InlineRole.Decorate) {
+    const start = matched ? matched[matched.length - 1].end : inlineTokenStart(tokens, tokenIndex);
+    const end = inlineTokenEnd(tokens, tokenIndex);
+    if (start < end) {
+      appendInlineToken(result, InlineKind.LiteralText, start, end);
+    }
   }
 }
 

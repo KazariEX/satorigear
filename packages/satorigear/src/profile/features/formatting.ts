@@ -3,7 +3,6 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { inlineMarkerRunEnd, type InlineScanRule } from "../../inline/lexer.ts";
 import { appendInlineToken } from "../../inline/tokens.ts";
-import { buildInlineText } from "./text.ts";
 import type { DelimiterConfig } from "../../inline/delimiter.ts";
 import type { InlineBuildRule } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -74,8 +73,6 @@ export interface StrikethroughOptions {
 
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {
   const builds: InlineBuildRule[] = [
-    { kind: "text", token: InlineKind.AsteriskRun, build: buildInlineText },
-    { kind: "text", token: InlineKind.UnderscoreRun, build: buildInlineText },
     emphasisPair,
     strongPair,
   ];
@@ -90,7 +87,6 @@ export function feature(strikethroughOptions?: boolean | StrikethroughOptions): 
 
   if (strikethroughOptions) {
     builds.push(
-      { kind: "text", token: InlineKind.TildeRun, build: buildInlineText },
       deletePair,
     );
     delimiters.push(

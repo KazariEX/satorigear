@@ -10,17 +10,20 @@ export const enum InlineRole {
 export const enum InlineKind {
   None,
 
-  LiteralText = InlineRole.Text,
-  Escape,
-  Entity,
-  Newline,
+  // Raw candidates become source gaps unless resolution gives them semantic meaning.
   AsteriskRun,
   UnderscoreRun,
   TildeRun,
   ImageOpen,
   BracketOpen,
-  LinkTail,
   BracketClose,
+
+  LiteralText = InlineRole.Text,
+  Escape,
+  Entity,
+  Newline,
+  // An unmatched resource tail still decodes escapes and entities.
+  LinkTail,
 
   HardBreak = InlineRole.Leaf,
   CodeSpan,

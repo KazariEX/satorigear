@@ -10,7 +10,7 @@ import {
   inlineTokenText,
 } from "../../inline/tokens.ts";
 import { isMarkdownWhitespace, normalizeIdentifier, semanticText } from "../utils.ts";
-import { buildDecodedInlineText, buildInlineText } from "./text.ts";
+import { buildDecodedInlineText } from "./text.ts";
 import type { InlineBuildContext, InlinePairBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -368,10 +368,7 @@ export const feature: SyntaxFeature = {
           };
         },
       },
-      { kind: "text", token: InlineKind.BracketOpen, build: buildInlineText },
-      { kind: "text", token: InlineKind.ImageOpen, build: buildInlineText },
       { kind: "text", token: InlineKind.LinkTail, build: buildDecodedInlineText },
-      { kind: "text", token: InlineKind.BracketClose, build: buildInlineText },
     ],
   },
 };
