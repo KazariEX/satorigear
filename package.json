@@ -16,6 +16,7 @@
     "test": "vitest",
     "typecheck": "tsc -b",
     "benchmark:docs": "node scripts/benchmark.ts",
+    "benchmark:abba": "node --expose-gc scripts/benchmark-abba.ts",
     "benchmark:features": "node --expose-gc test/benchmark/features.bench.ts",
     "benchmark:incremental": "node --expose-gc test/benchmark/incremental.bench.ts",
     "benchmark:parse": "node --expose-gc test/benchmark/parse.bench.ts"
