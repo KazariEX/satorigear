@@ -135,6 +135,28 @@ describe("task list", () => {
     });
   });
 
+  it("keeps tasks after consecutive multiline definitions stable across edits", () => {
+    const source = "- [ref]: /url\r\n  \"multi\r\n  line\"\r\n  [next]: /n\r\n  [x] task\r\n";
+    const document = parser.createDocument(source);
+    expect(document.tree).toEqual(parser.parse(source));
+    expect(document.tree.children[0]).toMatchObject({
+      children: [{
+        checked: true,
+        children: [
+          { type: "definition", identifier: "ref", title: "multi\r\nline" },
+          { type: "definition", identifier: "next" },
+          { type: "paragraph", children: [{ value: "task" }] },
+        ],
+      }],
+    });
+
+    const start = source.indexOf("/url");
+    document.edit([{ start, end: start + 4, text: "/longer-url" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    document.edit([{ start, end: start + 11, text: "/u" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+  });
+
   it("keeps full and incremental task list parsing equivalent", () => {
     const document = parser.createDocument("- [ ] todo\n- plain\n");
     const edit = (start: number, end: number, text: string): void => {
