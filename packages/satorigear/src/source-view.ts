@@ -42,16 +42,16 @@ export class SourceView {
   #offset = 0;
   // Segmented views store sourceStart - viewStart and cumulative view end pairs;
   // contiguous views need only the offset above.
-  readonly #segments: number[] | undefined;
-  readonly text: string;
+  #segments: number[] | undefined;
+  text = "";
 
   /** Projects the consecutive inline chunks owned by a block token. */
-  constructor(
-    source: string,
-    tokens: BlockTokenStream,
-    tokenStart: number,
-    nodeLength: number,
-  ) {
+  constructor(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number) {
+    this.reset(source, tokens, tokenStart, nodeLength);
+  }
+
+  reset(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number): this {
+    this.#segments = void 0;
     let token = tokenStart + 1;
     const firstStart = tokens.start(token);
     const tokenEnd = tokenStart + nodeLength;
@@ -69,10 +69,11 @@ export class SourceView {
       while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk);
       this.#segments = segments;
       this.text = parts.join("");
-      return;
+      return this;
     }
     this.#offset = firstStart;
     this.text = source.slice(firstStart, end);
+    return this;
   }
 
   /** Maps an offset at an internal gap to the following source segment. */

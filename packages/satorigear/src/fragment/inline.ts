@@ -354,12 +354,11 @@ export function buildInlineFragment(
     if (blockTokens.kind(tokenStart + 1) !== BlockKind.InlineChunk) {
       return { children: [] };
     }
-    view = new SourceView(
-      context.source,
-      blockTokens,
-      tokenStart,
-      blockTokens.nodeLength(tokenStart),
-    );
+    const nodeLength = blockTokens.nodeLength(tokenStart);
+    const previousView = context.inlineContext?.view;
+    view = previousView
+      ? previousView.reset(context.source, blockTokens, tokenStart, nodeLength)
+      : new SourceView(context.source, blockTokens, tokenStart, nodeLength);
     tokens = context.profile.resolve(view.text, context.profile.tokenize(view.text), blockTokens);
   }
   const inlineContext = context.inlineContext ??= {
