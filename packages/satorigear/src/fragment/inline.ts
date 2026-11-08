@@ -106,11 +106,14 @@ function appendText(
   start: number,
   end: number,
   context: InlineBuildContext,
+  literal: boolean,
 ): void {
   const previousText = output.lastText;
   const mergeForward = previousText !== void 0 && !("attributes" in previousText);
-  const offset = trimLineWhitespaceEnd(value, 0, value.length);
-  const trailingSpaces = value.length - offset;
+  // Decoded runs are semantic text; whitespace they produce is not a source suffix.
+  const trailingSpaces = literal
+    ? value.length - trimLineWhitespaceEnd(value, 0, value.length)
+    : 0;
   output.trailingSpaces = trailingSpaces === value.length && mergeForward
     ? output.trailingSpaces + trailingSpaces
     : trailingSpaces;
@@ -156,7 +159,7 @@ function appendGap(
 ): void {
   const value = context.view.text.slice(start, end);
   const sourceStart = context.view.mapOffset(start);
-  appendText(output, value, sourceStart, context.view.mapEnd(end), context);
+  appendText(output, value, sourceStart, context.view.mapEnd(end), context, true);
 }
 
 function appendLeaf(
@@ -220,6 +223,7 @@ function appendRange(
           sourceStart,
           context.view.mapEnd(contentStart),
           context,
+          false,
         );
       }
       output.cursor = contentStart;
@@ -241,6 +245,7 @@ function appendRange(
           sourceStart,
           childStart === childEnd ? sourceStart : context.view.mapEnd(childEnd),
           context,
+          kind === InlineKind.LiteralText,
         );
       }
       else {

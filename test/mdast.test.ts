@@ -51,6 +51,32 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it("keeps decoded whitespace distinct from source line suffixes", () => {
+    expect(parser.parse("&#9;  \n").children[0]).toEqual({
+      type: "paragraph",
+      children: [{
+        type: "text",
+        value: "\t",
+        position: {
+          start: { line: 1, column: 1, offset: 0 },
+          end: { line: 1, column: 5, offset: 4 },
+        },
+      }],
+      position: {
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 7, offset: 6 },
+      },
+    });
+    expect(parser.parse("x&#9;  \n").children[0]).toMatchObject({
+      children: [{
+        type: "text",
+        value: "x\t",
+        position: { end: { line: 1, column: 6, offset: 5 } },
+      }],
+      position: { end: { line: 1, column: 8, offset: 7 } },
+    });
+  });
+
   it("removes fence indentation only at physical line starts", () => {
     expect(parser.parse(" ```\n x\u2028 y\n ```\n").children[0]).toMatchObject({
       type: "code",
