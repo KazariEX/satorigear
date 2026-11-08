@@ -36,22 +36,19 @@ export interface InlineFragment {
 interface InlineOutput extends InlineFragment {
   // The cursor bounds source text that remains implicit between semantic tokens.
   cursor: number;
-  // Cache the last child when it is text so the hot append path does not retrieve
-  // heterogeneous node shapes through `.at(-1)` and force the optimized path to exit.
-  lastText: Text | undefined;
-  // A pending text run shares its start location until resolving the final end once.
-  textEnd: number;
-  // Maintain the suffix length while appending so trimming never scans merged text.
-  trailingSpaces: number;
+  // The text child is published immediately; only its source end remains pending.
+  pendingText: Text | undefined;
+  pendingEnd: number;
+  pendingSpaces: number;
 }
 
 function createInlineOutput(children: PhrasingContent[], cursor: number): InlineOutput {
   return {
     children,
     cursor,
-    lastText: void 0,
-    textEnd: -1,
-    trailingSpaces: 0,
+    pendingText: void 0,
+    pendingEnd: 0,
+    pendingSpaces: 0,
   };
 }
 
@@ -108,17 +105,15 @@ function appendText(
   context: InlineBuildContext,
   literal: boolean,
 ): void {
-  const previousText = output.lastText;
-  const mergeForward = previousText !== void 0 && !("attributes" in previousText);
   // Decoded runs are semantic text; whitespace they produce is not a source suffix.
   const trailingSpaces = literal
     ? value.length - trimLineWhitespaceEnd(value, 0, value.length)
     : 0;
-  output.trailingSpaces = trailingSpaces === value.length && mergeForward
-    ? output.trailingSpaces + trailingSpaces
-    : trailingSpaces;
-  if (mergeForward) {
-    previousText!.value += value;
+  if (output.pendingText !== void 0 && !("attributes" in output.pendingText)) {
+    output.pendingText.value += value;
+    output.pendingSpaces = trailingSpaces === value.length
+      ? trailingSpaces + output.pendingSpaces
+      : trailingSpaces;
   }
   else {
     const startLocation = context.locator.locationAt(start);
@@ -128,27 +123,26 @@ function appendText(
       position: { start: startLocation, end: startLocation },
     };
     output.children.push(text);
-    output.lastText = text;
+    output.pendingText = text;
+    output.pendingSpaces = trailingSpaces;
   }
-  output.textEnd = end;
+  output.pendingEnd = end;
 }
 
 function finishText(output: InlineOutput, context: InlineBuildContext): void {
-  const end = output.textEnd;
-  if (end >= 0) {
-    output.lastText!.position!.end = context.locator.locationAt(end);
-    output.textEnd = -1;
+  const text = output.pendingText;
+  if (text) {
+    text.position!.end = context.locator.locationAt(output.pendingEnd);
   }
 }
 
-function trimTrailingText(output: InlineOutput): number {
-  const text = output.lastText;
-  const removed = text ? output.trailingSpaces : 0;
+function trimTrailingText(output: InlineOutput): void {
+  const removed = output.pendingText ? output.pendingSpaces : 0;
   if (removed > 0) {
-    text!.value = text!.value.slice(0, -removed);
-    output.trailingSpaces = 0;
+    output.pendingText!.value = output.pendingText!.value.slice(0, -removed);
+    output.pendingEnd -= removed;
+    output.pendingSpaces = 0;
   }
-  return removed;
 }
 
 function appendGap(
@@ -181,7 +175,7 @@ function appendLeaf(
     context.locator.positionAt(sourceStart, sourceEnd),
     context,
   ));
-  output.lastText = void 0;
+  output.pendingText = void 0;
 }
 
 // Resolution has already made semantic pairs unambiguous, so projection can consume that stream
@@ -206,7 +200,7 @@ function appendRange(
       }
       // Markdown syntax newlines point past stripped container prefixes,
       // while mdast spans include the physical line ending.
-      const previous = output.lastText === void 0 ? output.children.at(-1) : void 0;
+      const previous = output.pendingText === void 0 ? output.children.at(-1) : void 0;
       if (previous?.type === "break") {
         // At a stripped container boundary, the left side maps before the prefix while
         // the right side maps after it. A hard break must span to the former.
@@ -291,9 +285,8 @@ function appendRange(
     if ((build as InlineTokenDecorator)(index, sourceSpan, context, output)) {
       // Applied decorators may mutate the exposed child list, so refresh the cached projection.
       const previous = output.children.at(-1);
-      output.lastText = previous?.type === "text"
-        ? previous as Text
-        : void 0;
+      output.pendingText = previous?.type === "text" ? previous as Text : void 0;
+      output.pendingEnd = sourceSpan.end;
       output.cursor = childEnd;
     }
     index++;
@@ -301,6 +294,13 @@ function appendRange(
   const contentEnd = index < endToken ? inlineTokenStart(context.tokens, index) : context.view.text.length;
   if (contentEnd > output.cursor) {
     appendGap(output, context, output.cursor, contentEnd);
+  }
+  // Every range closes its own projection; only a fragment boundary owns final trimming.
+  if (startToken === 0) {
+    trimTrailingText(output);
+    if (output.pendingText && !output.pendingText.value) {
+      output.children.pop();
+    }
   }
   finishText(output, context);
   return index;
@@ -350,7 +350,7 @@ function appendPair(
     context,
   );
   output.children.push(value);
-  output.lastText = void 0;
+  output.pendingText = void 0;
   output.cursor = childEnd;
   return closeToken + 1;
 }
@@ -415,16 +415,5 @@ export function buildInlineFragment(
     inlineContext,
     result,
   );
-  const last = result.lastText;
-  if (last) {
-    const removed = trimTrailingText(result);
-    if (removed > 0) {
-      last.position!.end.offset! -= removed;
-      last.position!.end.column -= removed;
-    }
-    if (!last.value) {
-      result.children.pop();
-    }
-  }
   return result;
 }
