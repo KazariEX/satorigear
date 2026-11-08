@@ -4,6 +4,29 @@ import { createParser } from "../packages/satorigear/src/index.ts";
 const parser = createParser();
 
 describe("markdown document", () => {
+  it("updates paragraphs and setext headings through edits", () => {
+    const document = parser.createDocument("alpha\nbeta");
+    document.edit([{ start: 6, end: 6, text: "  " }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ value: "alpha\nbeta", position: { end: { line: 2, column: 7, offset: 12 } } }],
+    });
+
+    document.edit([{ start: 6, end: 8, text: "" }]);
+    expect(document.tree).toEqual(parser.parse("alpha\nbeta"));
+    document.edit([{ start: 10, end: 10, text: "\n---" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
+      type: "heading",
+      depth: 2,
+      children: [{ value: "alpha\nbeta" }],
+      position: { end: { line: 3, column: 4, offset: 14 } },
+    });
+    document.edit([{ start: 10, end: 14, text: "" }]);
+    expect(document.tree).toEqual(parser.parse("alpha\nbeta"));
+  });
+
   it("keeps a parser profile fixed across documents", () => {
     const tableParser = createParser({ features: { table: true } });
     const source = "a | b\n--- | ---\nc | d\n";
