@@ -50,7 +50,7 @@ export class SourceView {
     this.reset(source, tokens, tokenStart, nodeLength);
   }
 
-  reset(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number): this {
+  reset(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number): void {
     this.#segments = void 0;
     let token = tokenStart + 1;
     const firstStart = tokens.start(token);
@@ -69,11 +69,10 @@ export class SourceView {
       while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk);
       this.#segments = segments;
       this.text = parts.join("");
-      return this;
+      return;
     }
     this.#offset = firstStart;
     this.text = source.slice(firstStart, end);
-    return this;
   }
 
   /** Maps an offset at an internal gap to the following source segment. */

@@ -1,6 +1,6 @@
 import type { PhrasingContent, Text } from "mdast";
+import { trimLineWhitespaceEnd } from "../block/lines.ts";
 import { BlockKind } from "../constants/block.ts";
-import { Character } from "../constants/character.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
 import {
   inlineTokenCount,
@@ -87,14 +87,17 @@ export type InlineBuilder =
   | InlineTextBuilder
   | InlineTokenDecorator;
 
-function trimTrailingText(output: InlineOutput): number {
-  const text = output.lastText;
-  const removed = text ? output.trailingSpaces : 0;
-  if (removed > 0) {
-    text!.value = text!.value.slice(0, -removed);
-    output.trailingSpaces = 0;
-  }
-  return removed;
+function createLiteralChildren(context: InlineBuildContext, start: number, end: number): PhrasingContent[] {
+  return start >= end
+    ? []
+    : [{
+      type: "text",
+      value: context.view.text.slice(start, end),
+      position: context.locator.positionAt(
+        context.view.mapOffset(start),
+        context.view.mapEnd(end),
+      ),
+    }];
 }
 
 function appendText(
@@ -106,14 +109,7 @@ function appendText(
 ): void {
   const previousText = output.lastText;
   const mergeForward = previousText !== void 0 && !("attributes" in previousText);
-  let offset = value.length;
-  while (offset > 0) {
-    const code = value.charCodeAt(offset - 1);
-    if (code !== Character.Space && code !== Character.CharacterTabulation) {
-      break;
-    }
-    offset--;
-  }
+  const offset = trimLineWhitespaceEnd(value, 0, value.length);
   const trailingSpaces = value.length - offset;
   output.trailingSpaces = trailingSpaces === value.length && mergeForward
     ? output.trailingSpaces + trailingSpaces
@@ -140,6 +136,16 @@ function finishText(output: InlineOutput, context: InlineBuildContext): void {
     output.lastText!.position!.end = context.locator.locationAt(end);
     output.textEnd = -1;
   }
+}
+
+function trimTrailingText(output: InlineOutput): number {
+  const text = output.lastText;
+  const removed = text ? output.trailingSpaces : 0;
+  if (removed > 0) {
+    text!.value = text!.value.slice(0, -removed);
+    output.trailingSpaces = 0;
+  }
+  return removed;
 }
 
 function appendGap(
@@ -305,18 +311,28 @@ function appendPair(
 ): number {
   const childStart = inlineTokenStart(context.tokens, openToken);
   const positionStart = context.locator.locationAt(context.view.mapOffset(childStart));
-  const children: PhrasingContent[] = [];
-  const childOutput = createInlineOutput(
-    children,
-    inlineTokenEnd(context.tokens, openToken),
-  );
-  const closeToken = appendRange(
-    openToken + 1,
-    endToken,
-    profile,
-    context,
-    childOutput,
-  );
+  const nextToken = openToken + 1;
+  const nextKind = inlineTokenKind(context.tokens, nextToken);
+  let children: PhrasingContent[];
+  let closeToken: number;
+  // Adjacent pair boundaries contain only an implicit literal source range.
+  if (nextKind >= InlineRole.Pair && nextKind < InlineRole.Decorate && nextKind & 1) {
+    children = createLiteralChildren(
+      context,
+      inlineTokenEnd(context.tokens, openToken),
+      inlineTokenStart(context.tokens, nextToken),
+    );
+    closeToken = nextToken;
+  }
+  else {
+    closeToken = appendRange(
+      nextToken,
+      endToken,
+      profile,
+      context,
+      createInlineOutput(children = [], inlineTokenEnd(context.tokens, openToken)),
+    );
+  }
   const childEnd = inlineTokenEnd(context.tokens, closeToken);
   const value = build(
     openToken,
@@ -341,6 +357,7 @@ export function buildInlineFragment(
 ): InlineFragment {
   let tokens: InlineTokenStream;
   let view: SourceView;
+
   if (context.cursor) {
     const region = context.cursor.take(tokenStart);
     if (!region) {
@@ -351,16 +368,23 @@ export function buildInlineFragment(
   }
   else {
     const blockTokens = context.structure.tokens;
-    if (blockTokens.kind(tokenStart + 1) !== BlockKind.InlineChunk) {
+    const nodeLength = blockTokens.nodeLength(tokenStart);
+    if (nodeLength === 1 || blockTokens.kind(tokenStart + 1) !== BlockKind.InlineChunk) {
       return { children: [] };
     }
-    const nodeLength = blockTokens.nodeLength(tokenStart);
+
     const previousView = context.inlineContext?.view;
-    view = previousView
-      ? previousView.reset(context.source, blockTokens, tokenStart, nodeLength)
-      : new SourceView(context.source, blockTokens, tokenStart, nodeLength);
-    tokens = context.profile.resolve(view.text, context.profile.tokenize(view.text), blockTokens);
+    view = (
+      previousView?.reset(context.source, blockTokens, tokenStart, nodeLength),
+      previousView
+    ) ?? new SourceView(context.source, blockTokens, tokenStart, nodeLength);
+
+    tokens = context.profile.tokenize(view.text);
+    if (tokens.length) {
+      tokens = context.profile.resolve(view.text, tokens, blockTokens);
+    }
   }
+
   const inlineContext = context.inlineContext ??= {
     locator: context.locator,
     tableCell,
@@ -370,6 +394,14 @@ export function buildInlineFragment(
   inlineContext.tableCell = tableCell;
   inlineContext.tokens = tokens;
   inlineContext.view = view;
+
+  if (tokens.length === 0) {
+    const end = trimLineWhitespaceEnd(view.text, 0, view.text.length);
+    return {
+      children: createLiteralChildren(inlineContext, 0, end),
+    };
+  }
+
   const result = createInlineOutput([], 0);
   appendRange(
     0,
