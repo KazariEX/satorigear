@@ -1,6 +1,6 @@
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
-import { inlineMarkerRunEnd, type InlineScanRule } from "../../../inline/lexer.ts";
+import { inlineMarkerRunEnd, type InlineScanRule } from "../../../inline/tokenize.ts";
 import {
   appendInlineToken,
   inlineTokenData,

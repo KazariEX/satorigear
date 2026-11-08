@@ -13,7 +13,7 @@ import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { fencedBlockPosition } from "../../fragment/block.ts";
-import { inlineMarkerRunEnd } from "../../inline/lexer.ts";
+import { inlineMarkerRunEnd } from "../../inline/tokenize.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";

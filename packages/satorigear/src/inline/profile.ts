@@ -1,4 +1,4 @@
-import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./lexer.ts";
+import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./tokenize.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
 import type { InlineKind } from "../constants/inline.ts";
 import type {

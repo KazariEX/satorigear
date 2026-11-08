@@ -1,5 +1,6 @@
 import { Character } from "../constants/character.ts";
 import { InlineKind } from "../constants/inline.ts";
+import { emptyArray } from "../primitives.ts";
 import { inlineTokenCount, inlineTokenEnd, type InlineTokenStream } from "./tokens.ts";
 
 type InlineScanner = (
@@ -40,31 +41,34 @@ function implicitSoftBreak(source: string, start: number, tokens: InlineTokenStr
   return previous !== Character.Space && previous !== Character.CharacterTabulation;
 }
 
+function nextBoundaryOffset(source: string, boundary: RegExp, offset: number): number {
+  if (offset >= source.length) {
+    return -1;
+  }
+  if (source.charCodeAt(offset) === Character.LineFeed) {
+    return offset;
+  }
+  boundary.lastIndex = offset;
+  return boundary.test(source) ? boundary.lastIndex - 1 : -1;
+}
+
 function tokenize(
   source: string,
-  textBoundary: RegExp,
-  scannerByCode: readonly (InlineScanner | undefined)[],
+  boundary: RegExp,
+  scanners: readonly (InlineScanner | undefined)[],
 ): InlineTokenStream {
   // Ordinary source text stays implicit between semantic tokens; the builder reads those gaps.
-  const tokens: number[] = [];
-  const end = source.length;
   let offset = 0;
   while (source.charCodeAt(offset) === Character.Space) {
     offset++;
   }
-  for (; offset < end;) {
-    let code = source.charCodeAt(offset);
-    // Handle a current LF directly; scanners can end immediately before one.
-    // Otherwise search only LFs beside whitespace, plus CR and feature markers.
-    if (code !== Character.LineFeed) {
-      textBoundary.lastIndex = offset;
-      if (!textBoundary.test(source)) {
-        break;
-      }
-      offset = textBoundary.lastIndex - 1;
-      code = source.charCodeAt(offset);
-    }
-
+  offset = nextBoundaryOffset(source, boundary, offset);
+  if (offset < 0) {
+    return emptyArray;
+  }
+  const tokens: number[] = [];
+  for (; offset >= 0; offset = nextBoundaryOffset(source, boundary, offset)) {
+    const code = source.charCodeAt(offset);
     if (code === Character.LineFeed || code === Character.CarriageReturn) {
       if (
         source.charCodeAt(offset - 1) === Character.Space &&
@@ -91,7 +95,7 @@ function tokenize(
       continue;
     }
 
-    const scannedEnd = scannerByCode[code]?.(source, offset, tokens) ?? offset;
+    const scannedEnd = scanners[code]?.(source, offset, tokens) ?? offset;
     // Rejected markers and ordinary characters remain implicit source text.
     offset = scannedEnd > offset ? scannedEnd : offset + 1;
   }
@@ -99,9 +103,9 @@ function tokenize(
 }
 
 function generateInlineTokenizer(
+  boundary: RegExp,
   boundaryCodes: readonly number[],
-  textBoundary: RegExp,
-  scannerByCode: readonly (InlineScanner | undefined)[],
+  scanners: readonly (InlineScanner | undefined)[],
 ): InlineTokenizer {
   const names = boundaryCodes.map((code, index) => `s${index}`);
   const cases = boundaryCodes
@@ -109,16 +113,15 @@ function generateInlineTokenizer(
     .join("");
 
   /** Mirrors {@link tokenize} with short aliases for its generated hot loop. */
-  return Function("b", "i", ...names, [
+  return Function("b", "a", "i", "n", ...names, [
     `return s=>{`,
-    `const t=[],e=s.length;let o=0;`,
-    `while(s.charCodeAt(o)===${Character.Space})o++;for(;o<e;){`,
-    `let c=s.charCodeAt(o);`,
-    `if(c!==${Character.LineFeed}){b.lastIndex=o;if(!b.test(s))break;o=b.lastIndex-1;c=s.charCodeAt(o);}`,
+    `let o=0;while(s.charCodeAt(o)===${Character.Space})o++;`,
+    `o=n(s,b,o);if(o<0)return a;const t=[];for(;o>=0;o=n(s,b,o)){`,
+    `const c=s.charCodeAt(o);`,
     `if(c===${Character.LineFeed}||c===${Character.CarriageReturn}){`,
     `if(s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space}){`,
-    `let n=o-2;while(s.charCodeAt(n-1)===${Character.Space})n--;`,
-    `t.push(${InlineKind.HardBreak},n,o,0)}`,
+    `let h=o-2;while(s.charCodeAt(h-1)===${Character.Space})h--;`,
+    `t.push(${InlineKind.HardBreak},h,o,0)}`,
     `const r=o++;if(c===${Character.CarriageReturn}&&s.charCodeAt(o)===${Character.LineFeed})o++;`,
     `const l=o;while(s.charCodeAt(o)===${Character.Space})o++;`,
     `if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,l);continue}`,
@@ -126,19 +129,21 @@ function generateInlineTokenizer(
     `o=d>o?d:o+1}`,
     `return t}`,
   ].join(""))(
-    textBoundary,
+    boundary,
+    emptyArray,
     implicitSoftBreak,
-    ...boundaryCodes.map((code) => scannerByCode[code]!),
+    nextBoundaryOffset,
+    ...boundaryCodes.map((code) => scanners[code]!),
   );
 }
 
 export function compileInlineTokenizer(rules: readonly InlineScanRule[]): InlineTokenizer {
-  const scannerByCode: (InlineScanner | undefined)[] = [];
+  const scanners: (InlineScanner | undefined)[] = [];
   const boundaryCodes: number[] = [];
   for (const rule of rules) {
     const code = rule.marker;
-    const previous = scannerByCode[code];
-    scannerByCode[code] = previous === void 0
+    const previous = scanners[code];
+    scanners[code] = previous === void 0
       ? rule.scan
       : (source, start, tokens) => {
         const end = previous(source, start, tokens);
@@ -149,16 +154,16 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
     }
   }
   const boundaries = String.fromCharCode(...boundaryCodes).replaceAll(/[\\\]-]/g, "\\$&");
-  const textBoundary = new RegExp(
+  const boundary = new RegExp(
     // Hard-break spaces advance quickly when a profile has more than 9 feature markers.
     // A literal LF is relevant only beside whitespace; the scan loop handles a current LF before this search.
     `${boundaryCodes.length > 9 ? " {2,}[\\n\\r]|" : ""}[\\r${boundaries}]|\\n(?:(?<=[ \t]\\n)|(?= ))`,
     "g",
   );
   try {
-    return generateInlineTokenizer(boundaryCodes, textBoundary, scannerByCode);
+    return generateInlineTokenizer(boundary, boundaryCodes, scanners);
   }
   catch {
-    return (source) => tokenize(source, textBoundary, scannerByCode);
+    return (source) => tokenize(source, boundary, scanners);
   }
 }

@@ -9,7 +9,7 @@ import {
 import { hasInlineColonBoundary } from "../../utils.ts";
 import { componentNameEnd, normalizeComponentName } from "./shared.ts";
 import type { InlinePairBuilder } from "../../../fragment/inline.ts";
-import type { InlineScanRule } from "../../../inline/lexer.ts";
+import type { InlineScanRule } from "../../../inline/tokenize.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
 
 export const inlineScans: readonly InlineScanRule[] = [
