@@ -33,8 +33,8 @@ export const feature: SyntaxFeature = {
                 openToken,
                 setext === "=" ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
               );
-              out.push(BlockKind.InlineChunk, chunkOffset, lines.end(index - 1));
-              out.push(BlockKind.HeadingClose, lineEnd, lineEnd);
+              out.setEnd(openToken, lineEnd);
+              out.closeRange(chunkOffset, lines.end(index - 1));
               return index + 1;
             }
             if (context.startsInterruptingBlock(source, lines, index, contentStart)) {

@@ -117,7 +117,9 @@ export class BlockTokenStream implements DefinitionLookup {
   closeRange(start: number, end: number): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
-    this.#fields[field + BlockTokenField.Kind] = BlockKind.InlineChunk;
+    this.#fields[field + BlockTokenField.Kind] = start < end
+      ? BlockKind.InlineChunk
+      : BlockKind.None;
     this.#fields[field + BlockTokenField.Start] = start;
     this.#fields[field + BlockTokenField.End] = end;
     this.#fields[field + BlockTokenField.Length] = 0;
@@ -386,6 +388,10 @@ export class BlockTokenStream implements DefinitionLookup {
     );
   }
 
+  setEnd(index: number, end: number): void {
+    this.#fields[index * BlockTokenField.Stride + BlockTokenField.End] = end;
+  }
+
   /** Returns the semantic content end before its trailing physical line ending. */
   contentEnd(source: string, index: number): number {
     return lineContentEnd(source, this.start(index), this.end(index));
@@ -420,7 +426,7 @@ export class BlockTokenStream implements DefinitionLookup {
     else {
       counts.set(key, nextCount);
     }
-    if (trackMembership && (previousCount === 0) !== (nextCount === 0)) {
+    if (trackMembership && (previousCount === 0 || nextCount === 0)) {
       const changes = this.#definitionMembershipChanges ??= new Set();
       if (!changes.delete(key)) {
         changes.add(key);

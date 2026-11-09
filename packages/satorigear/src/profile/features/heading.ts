@@ -2,7 +2,6 @@ import type { Heading } from "mdast";
 import { type BlockLines, trimLineWhitespaceEnd, trimLineWhitespaceStart } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -15,7 +14,7 @@ function atxAt(
 ): {
   contentEnd: number;
   contentOffset: number;
-  markerEnd: number;
+  depth: Heading["depth"];
 } | undefined {
   let markerEnd = markerOffset + 1;
   const lineEnd = lines.end(index);
@@ -39,9 +38,9 @@ function atxAt(
     contentEnd = trimLineWhitespaceEnd(source, contentOffset, closer);
   }
   return {
-    markerEnd,
     contentOffset,
     contentEnd,
+    depth: markerEnd - markerOffset as Heading["depth"],
   };
 }
 
@@ -68,18 +67,26 @@ export const feature: SyntaxFeature = {
   block: {
     builds: [
       {
-        token: BlockKind.AtxHeadingOpen,
+        token: [
+          BlockKind.AtxHeading1Open,
+          BlockKind.AtxHeading2Open,
+          BlockKind.AtxHeading3Open,
+          BlockKind.AtxHeading4Open,
+          BlockKind.AtxHeading5Open,
+          BlockKind.AtxHeading6Open,
+        ],
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const start = context.locator.locationAt(tokens.start(tokenStart));
+          const kind = tokens.kind(tokenStart);
           const inline = buildInlineFragment(tokenStart, false, context);
+          const children = inline.children;
           const result: Heading = {
             type: "heading",
-            depth: tokens.end(tokenStart) - tokens.start(tokenStart) as Heading["depth"],
-            children: inline.children,
+            depth: kind - BlockKind.AtxHeading1Open + 1 as Heading["depth"],
+            children,
             position: {
-              start,
-              end: context.locator.locationAt(blockEnd(tokenStart, context)),
+              start: context.locator.locationAt(tokens.start(tokenStart)),
+              end: context.locator.locationAt(tokens.end(tokenStart)),
             },
           };
           if (inline.attributes) {
@@ -95,17 +102,16 @@ export const feature: SyntaxFeature = {
         ],
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
+          const kind = tokens.kind(tokenStart);
           const inline = buildInlineFragment(tokenStart, false, context);
           const children = inline.children;
           const result: Heading = {
             type: "heading",
-            depth: tokens.kind(tokenStart) === BlockKind.SetextHeading1Open ? 1 : 2,
+            depth: kind - BlockKind.SetextHeading1Open + 1 as Heading["depth"],
             children,
             position: {
               start: firstChildStart(children),
-              end: context.locator.locationAt(
-                tokens.start(tokenStart + tokens.nodeLength(tokenStart) - 1),
-              ),
+              end: context.locator.locationAt(tokens.end(tokenStart)),
             },
           };
           if (inline.attributes) {
@@ -128,12 +134,9 @@ export const feature: SyntaxFeature = {
           if (!atx) {
             return;
           }
-          out.push(BlockKind.AtxHeadingOpen, contentOffset, atx.markerEnd);
-          if (atx.contentEnd > atx.contentOffset) {
-            out.push(BlockKind.InlineChunk, atx.contentOffset, atx.contentEnd);
-          }
           const lineEnd = lines.end(start);
-          out.push(BlockKind.HeadingClose, lineEnd, lineEnd);
+          out.push(BlockKind.AtxHeading1Open + atx.depth - 1, contentOffset, lineEnd);
+          out.closeRange(atx.contentOffset, atx.contentEnd);
           return start + 1;
         },
       },

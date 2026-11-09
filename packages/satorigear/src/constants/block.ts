@@ -27,7 +27,12 @@ export const enum BlockKind {
   BlockComponentOpen,
   BlockComponentSlotOpen,
 
-  AtxHeadingOpen = BlockRole.BlockOpen | BlockFlag.InlineContent,
+  AtxHeading1Open = BlockRole.BlockOpen | BlockFlag.InlineContent,
+  AtxHeading2Open,
+  AtxHeading3Open,
+  AtxHeading4Open,
+  AtxHeading5Open,
+  AtxHeading6Open,
   SetextHeading1Open,
   SetextHeading2Open,
   ParagraphOpen,
@@ -41,7 +46,6 @@ export const enum BlockKind {
   BlockComponentLabelOpen,
 
   BlockQuoteClose = BlockRole.Close,
-  HeadingClose,
   ListItemClose,
   ListItemSpreadClose,
   ListClose,
