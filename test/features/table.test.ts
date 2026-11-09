@@ -4,6 +4,18 @@ import { createParser } from "../../packages/satorigear/src/index.ts";
 const parser = createParser({ features: { table: true } });
 
 describe("table", () => {
+  it("requires a hyphen between alignment colons", () => {
+    for (const delimiter of [": | ---", "--- | :", "| : | --- |", "\t: | ---"]) {
+      const source = "a | b\n" + delimiter + "\n";
+      expect(parser.parse(source).children[0].type).toBe("paragraph");
+    }
+
+    const document = parser.createDocument("a | b\n:-: | ---\n");
+    document.edit([{ start: 7, end: 9, text: "" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0].type).toBe("paragraph");
+  });
+
   it("builds aligned GFM tables with inline cell content", () => {
     const source = "| **name** | value\\|unit |\n| :--- | ---: |\n| alpha | `1\\|2` |\n";
     expect(parser.parse(source).children[0]).toEqual({
