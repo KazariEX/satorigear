@@ -18,8 +18,7 @@
     "benchmark:docs": "node scripts/benchmark.ts",
     "benchmark:features": "node --expose-gc test/benchmark/features.bench.ts",
     "benchmark:incremental": "node --expose-gc test/benchmark/incremental.bench.ts",
-    "benchmark:parse": "node --expose-gc test/benchmark/parse.bench.ts",
-    "benchmark:stress": "node --expose-gc test/benchmark/stress.bench.ts"
+    "benchmark:parse": "node --expose-gc test/benchmark/parse.bench.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",
