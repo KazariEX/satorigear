@@ -114,6 +114,22 @@ describe("table", () => {
     expect(document.tree).toEqual(parser.parse(document.source));
   });
 
+  it("updates table cells and positions through edits", () => {
+    const source = "before\n\n| a | **b** |\n| --- | --- |\n| c | **d** |  \n";
+    const document = parser.createDocument(source);
+    const table = document.tree.children[1];
+    document.edit([{ start: 0, end: 0, text: "\n" }]);
+    expect(document.tree.children[1]).toBe(table);
+    expect(document.tree).toEqual(parser.parse(document.source));
+
+    const cell = document.source.indexOf("**d**") + 2;
+    document.edit([{ start: cell, end: cell + 1, text: "longer" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    const pipe = document.source.lastIndexOf("|");
+    document.edit([{ start: pipe, end: pipe + 1, text: "" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+  });
+
   it("keeps empty cells empty", () => {
     expect(parser.parse("|  | value |\n| --- | --- |\n").children[0]).toMatchObject({
       type: "table",
