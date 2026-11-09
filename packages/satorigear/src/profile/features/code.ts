@@ -148,10 +148,10 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.GraveAccent,
         scan(source, start, tokens) {
-          if (source.charCodeAt(start - 1) === Character.GraveAccent) {
-            return start + 1;
-          }
           const openEnd = inlineMarkerRunEnd(source, start);
+          if (source.charCodeAt(start - 1) === Character.GraveAccent) {
+            return openEnd;
+          }
           const markerLength = openEnd - start;
           let offset = openEnd;
           while (offset < source.length) {
@@ -166,7 +166,7 @@ export const feature: SyntaxFeature = {
             }
             offset = closeEnd;
           }
-          return start + 1;
+          return openEnd;
         },
       },
     ],
