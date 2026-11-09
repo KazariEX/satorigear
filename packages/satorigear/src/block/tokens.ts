@@ -66,7 +66,10 @@ export class BlockTokenStream implements DefinitionLookup {
     this.#fieldLength = 0;
     this.#groupField = -1;
     this.#metadata = void 0;
-    this.#opens.length = 0;
+    // Completed scans already emptied the stack; only a partial scan needs clearing.
+    if (this.#opens.length) {
+      this.#opens.length = 0;
+    }
     this.#relativeStart = Infinity;
     this.#sourceLength = sourceLength;
   }
