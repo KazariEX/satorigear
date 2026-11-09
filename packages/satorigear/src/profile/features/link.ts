@@ -6,24 +6,12 @@ import {
   inlineTokenData,
   inlineTokenEnd,
   inlineTokenStart,
-  type InlineTokenStream,
   inlineTokenText,
 } from "../../inline/tokens.ts";
 import { isMarkdownWhitespace, normalizeIdentifier, semanticText } from "../utils.ts";
 import { buildDecodedInlineText } from "./text.ts";
-import type { InlineBuildContext, InlinePairBuilder } from "../../fragment/inline.ts";
+import type { InlinePairBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
-
-interface Reference {
-  identifier: string;
-  label: string;
-  referenceType: "collapsed" | "full" | "shortcut";
-}
-
-interface Resource {
-  title: string | null;
-  url: string;
-}
 
 function skipWhitespace(source: string, start: number, end = source.length): number {
   while (start < end) {
@@ -167,53 +155,6 @@ function scanLinkTail(source: string, start: number, tokens: number[]): number {
   return end;
 }
 
-// LinkTail is already validated by the lexer; projection only separates its output fields.
-function resourceAt(source: string, tokens: InlineTokenStream, tokenIndex: number): Resource {
-  const tokenStart = inlineTokenStart(tokens, tokenIndex);
-  const tokenEnd = inlineTokenEnd(tokens, tokenIndex);
-  let start = tokenStart + 2;
-  let end = tokenEnd - 1;
-  start = skipWhitespace(source, start, end);
-  while (end > start && isMarkdownWhitespace(source.charCodeAt(end - 1))) {
-    end--;
-  }
-  if (start === end) {
-    return { url: "", title: null };
-  }
-
-  const resourceEnd = tokenStart + inlineTokenData(tokens, tokenIndex);
-  let destinationStart = start;
-  let destinationEnd = resourceEnd;
-  if (source[start] === "<") {
-    destinationStart++;
-    destinationEnd--;
-  }
-  start = skipWhitespace(source, resourceEnd, end);
-  return {
-    url: semanticText(source.slice(destinationStart, destinationEnd)),
-    title: start < end ? semanticText(source.slice(start + 1, end - 1)) : null,
-  };
-}
-
-function reference(
-  close: number,
-  syntaxStart: number,
-  syntaxEnd: number,
-  context: InlineBuildContext,
-  image: boolean,
-): Reference {
-  const closeText = inlineTokenText(context.view.text, context.tokens, close);
-  const full = closeText.startsWith("][") && closeText !== "][]";
-  const labelSource = full
-    ? closeText.slice(2, -1)
-    : context.view.text.slice(syntaxStart + (image ? 2 : 1), syntaxEnd - closeText.length);
-  return {
-    identifier: normalizeIdentifier(labelSource),
-    label: semanticText(labelSource),
-    referenceType: full ? "full" : closeText === "][]" ? "collapsed" : "shortcut",
-  };
-}
-
 function phrasingText(children: readonly PhrasingContent[]): string {
   let result = "";
   for (const child of children) {
@@ -234,47 +175,84 @@ function phrasingText(children: readonly PhrasingContent[]): string {
 }
 
 function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "reference"): InlinePairBuilder {
-  const image = media === "image";
-  const referenceNode = resourceKind === "reference";
+  const isImage = media === "image";
+  const isReference = resourceKind === "reference";
 
-  return (openToken, closeToken, sourceSpan, children, context) => {
-    if (referenceNode) {
-      const association = reference(
-        closeToken,
-        inlineTokenStart(context.tokens, openToken),
-        inlineTokenEnd(context.tokens, closeToken),
-        context,
-        image,
-      );
-      return image
+  return isReference
+    ? (openToken, closeToken, sourceSpan, children, context) => {
+      const closeText = inlineTokenText(context.view.text, context.tokens, closeToken);
+      const syntaxStart = inlineTokenStart(context.tokens, openToken);
+      const syntaxEnd = inlineTokenEnd(context.tokens, closeToken);
+      const full = closeText.startsWith("][") && closeText !== "][]";
+      const labelSource = full
+        ? closeText.slice(2, -1)
+        : context.view.text.slice(syntaxStart + (isImage ? 2 : 1), syntaxEnd - closeText.length);
+      const identifier = normalizeIdentifier(labelSource);
+      const label = semanticText(labelSource);
+      const referenceType = full ? "full" : closeText === "][]" ? "collapsed" : "shortcut";
+      return isImage
         ? {
           type: "imageReference",
           alt: phrasingText(children),
-          ...association,
+          identifier,
+          label,
+          referenceType,
           position: sourceSpan,
         }
         : {
           type: "linkReference",
           children,
-          ...association,
+          identifier,
+          label,
+          referenceType,
           position: sourceSpan,
         };
     }
-    const resource = resourceAt(context.view.text, context.tokens, closeToken);
-    return image
-      ? {
-        type: "image",
-        alt: phrasingText(children),
-        ...resource,
-        position: sourceSpan,
+    : (openToken, closeToken, sourceSpan, children, context) => {
+      let url: string;
+      let title: string | null;
+
+      const tokenStart = inlineTokenStart(context.tokens, closeToken);
+      const tokenEnd = inlineTokenEnd(context.tokens, closeToken);
+      let start = tokenStart + 2;
+      let end = tokenEnd - 1;
+      start = skipWhitespace(context.view.text, start, end);
+      while (end > start && isMarkdownWhitespace(context.view.text.charCodeAt(end - 1))) {
+        end--;
       }
-      : {
-        type: "link",
-        children,
-        ...resource,
-        position: sourceSpan,
-      };
-  };
+      if (start !== end) {
+        const resourceEnd = tokenStart + inlineTokenData(context.tokens, closeToken);
+        let destinationStart = start;
+        let destinationEnd = resourceEnd;
+        if (context.view.text[start] === "<") {
+          destinationStart++;
+          destinationEnd--;
+        }
+        start = skipWhitespace(context.view.text, resourceEnd, end);
+        url = semanticText(context.view.text.slice(destinationStart, destinationEnd));
+        title = start < end ? semanticText(context.view.text.slice(start + 1, end - 1)) : null;
+      }
+      else {
+        url = "";
+        title = null;
+      }
+
+      return isImage
+        ? {
+          type: "image",
+          alt: phrasingText(children),
+          url,
+          title,
+          position: sourceSpan,
+        }
+        : {
+          type: "link",
+          children,
+          url,
+          title,
+          position: sourceSpan,
+        };
+    };
 }
 
 const buildInlineImage = createBuildMedia("image", "direct");
