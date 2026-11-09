@@ -26,10 +26,8 @@ export type BlockNodeBuilder<T extends object = RootContent> = (
 export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-  // Structural close tokens include their boundary; a single leaf drops its line ending.
-  return close === tokenStart
-    ? tokens.contentEnd(context.source, close)
-    : tokens.end(close);
+  // Containers retain a structural closing boundary; leaves own their complete span.
+  return tokens.end(close);
 }
 
 export function leafBlockPosition(
@@ -37,10 +35,9 @@ export function leafBlockPosition(
   context: BlockBuildContext,
 ): SourcePosition {
   const tokens = context.structure.tokens;
-  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return context.locator.positionAt(
     tokens.start(tokenStart),
-    tokens.contentEnd(context.source, close),
+    tokens.contentEnd(context.source, tokenStart),
   );
 }
 
@@ -52,7 +49,7 @@ export function fencedBlockPosition(
   const tokens = context.structure.tokens;
   const end = tokens.end(tokenStart);
   const positionEnd = block.closed || end < tokens.sourceLength
-    ? blockEnd(tokenStart, context)
+    ? tokens.contentEnd(context.source, tokenStart)
     : end;
   return context.locator.positionAt(
     tokens.start(tokenStart) + block.markerOffset,

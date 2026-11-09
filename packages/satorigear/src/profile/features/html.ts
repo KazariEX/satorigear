@@ -4,7 +4,6 @@ import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { blockEnd } from "../../fragment/block.ts";
 import { matchInlinePatternEnd } from "../../inline/tokenize.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import type { InlineLeafBuilder } from "../../fragment/inline.ts";
@@ -96,7 +95,7 @@ export const feature: SyntaxFeature = {
             value: html,
             position: context.locator.positionAt(
               offset,
-              html.endsWith("\n") ? end : blockEnd(tokenStart, context),
+              html.endsWith("\n") ? end : tokens.contentEnd(context.source, tokenStart),
             ),
           };
         },
