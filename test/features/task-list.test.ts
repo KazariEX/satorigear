@@ -7,6 +7,22 @@ const compositeParser = createParser({
 });
 
 describe("task list", () => {
+  it("ignores retained tokens beyond a shorter paragraph when reusing a parser", () => {
+    const reused = createParser({ features: { taskList: true } });
+    reused.parse("- [ ] body\n  more\n");
+    const source = "- [ ] \n";
+    const tree = reused.parse(source);
+
+    expect(tree).toEqual(reused.createDocument(source).tree);
+    expect(tree.children[0]).toMatchObject({
+      type: "list",
+      children: [{
+        checked: null,
+        children: [{ type: "paragraph", children: [{ type: "text", value: "[ ]" }] }],
+      }],
+    });
+  });
+
   it("builds checked and unchecked GFM task list items", () => {
     const source = "- [ ] foo\n- [x] bar\n- [X] ~~baz~~\n";
     const list = compositeParser.parse(source).children[0];
