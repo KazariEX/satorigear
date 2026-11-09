@@ -42,9 +42,10 @@ export const enum BlockKind {
 
   BlockQuoteClose = BlockRole.Close,
   HeadingClose,
-  UnorderedListClose,
-  OrderedListClose,
   ListItemClose,
+  ListItemSpreadClose,
+  ListClose,
+  ListSpreadClose,
   FootnoteDefinitionClose,
   TableClose,
   TableRowClose,

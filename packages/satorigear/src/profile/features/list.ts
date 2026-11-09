@@ -201,7 +201,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return {
     type: "listItem",
-    spread: tokens.value<boolean>(close) === true,
+    spread: tokens.kind(close) === BlockKind.ListItemSpreadClose,
     checked: markerKind === BlockKind.CheckedTaskItemOpen
       ? true
       : markerKind === BlockKind.UncheckedTaskItemOpen ? false : null,
@@ -212,6 +212,16 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
     },
   };
 };
+
+function listStartNumber(
+  tokens: BlockTokenStream,
+  tokenStart: number,
+  source: string,
+): number {
+  // The ordered marker span is exactly its digits plus one delimiter character.
+  const digits = source.slice(tokens.start(tokenStart), tokens.end(tokenStart) - 1);
+  return Number(digits);
+}
 
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context) => {
@@ -225,8 +235,8 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     return {
       type: "list",
       ordered,
-      start: ordered ? tokens.value<number>(tokenStart)! : null,
-      spread: tokens.value<boolean>(close) === true,
+      start: ordered ? listStartNumber(tokens, tokenStart, context.source) : null,
+      spread: tokens.kind(close) === BlockKind.ListSpreadClose,
       children: items,
       position: {
         start: firstChildStart(items),
@@ -244,13 +254,7 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
   const delimiter = marker.delimiter;
   const ordered = delimiter === Character.FullStop || delimiter === Character.RightParenthesis;
   const listOpen = ordered ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
-  const listClose = ordered ? BlockKind.OrderedListClose : BlockKind.UnorderedListClose;
-  out.push(
-    listOpen,
-    marker.offset,
-    marker.end,
-    ordered ? { value: marker.startNumber } : void 0,
-  );
+  out.push(listOpen, marker.offset, marker.end);
   let index = start;
   let listEnd = marker.end;
   let listSpread = false;
@@ -324,15 +328,10 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
     const itemSpread = context.scanLines(source, itemLines, out);
     listEnd = itemLines.next(itemLines.length - 1);
     // A frame's blank-separation summary is known only when its close is emitted.
-    out.push(
-      BlockKind.ListItemClose,
-      listEnd,
-      listEnd,
-      itemSpread ? { value: true } : void 0,
-    );
+    out.push(itemSpread ? BlockKind.ListItemSpreadClose : BlockKind.ListItemClose, listEnd, listEnd);
     marker = sibling;
   }
-  out.push(listClose, listEnd, listEnd, listSpread ? { value: true } : void 0);
+  out.push(listSpread ? BlockKind.ListSpreadClose : BlockKind.ListClose, listEnd, listEnd);
   return index;
 };
 
