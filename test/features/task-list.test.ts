@@ -110,12 +110,18 @@ describe("task list", () => {
       }],
     });
 
-    expect(parser.parse("- [ref]: /url\n  [x] task\n").children[0]).toMatchObject({
+
+    expect(parser.parse(
+      "- [one]: /url\n" +
+      "  [two]: /url\n" +
+      "  [x] task\n",
+    ).children[0]).toMatchObject({
       type: "list",
       children: [{
         checked: true,
         children: [
-          { type: "definition" },
+          { type: "definition", label: "one" },
+          { type: "definition", label: "two" },
           { type: "paragraph", children: [{ value: "task" }] },
         ],
       }],

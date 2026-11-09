@@ -345,8 +345,8 @@ const taskListStart: BlockStart = (source, lines, start, contentOffset, out, con
   for (let item = listToken + 1; item < out.length - 1; item += out.nodeLength(item)) {
     let paragraph = item + 1;
     let contentKind = out.kind(paragraph);
-    // A link definition leaf does not count as the item's first content block.
-    if (contentKind === BlockKind.LinkDefinition) {
+    // Link definition leaves do not count as the item's first content block.
+    while (contentKind === BlockKind.LinkDefinition) {
       paragraph += out.nodeLength(paragraph);
       contentKind = out.kind(paragraph);
     }
