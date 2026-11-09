@@ -88,7 +88,7 @@ export const blockStarts: BlockFeature["starts"] = [
       }
       const definitionLines = context.createLineView(lines, start, match.contentOffset, 0);
       let index = start + 1;
-      let lazyParagraph = context.endsWithParagraphLeaf(source, definitionLines, 0);
+      let lazyParagraph: boolean | undefined;
       while (index < lines.length) {
         const line = definitionLines.pushAfterColumns(source, lines, index, 4);
         if (line === IndentedLine.Blank) {
@@ -98,15 +98,16 @@ export const blockStarts: BlockFeature["starts"] = [
           continue;
         }
         if (line === IndentedLine.Appended) {
-          lazyParagraph = context.endsWithParagraphLeaf(
-            source,
-            definitionLines,
-            definitionLines.length - 1,
-          );
+          lazyParagraph = void 0;
           index++;
           continue;
         }
-        if (!lazyParagraph || (!lines.lazy(index) && context.startsInterruptingBlock(source, lines, index))) {
+        lazyParagraph ??= context.endsWithParagraphLeaf(source, definitionLines, definitionLines.length - 1);
+        if (
+          !lazyParagraph ||
+          !lines.lazy(index) &&
+          context.startsInterruptingBlock(source, lines, index)
+        ) {
           break;
         }
         definitionLines.pushLazy(lines, index);

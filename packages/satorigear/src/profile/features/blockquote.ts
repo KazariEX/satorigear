@@ -82,15 +82,16 @@ export const feature: SyntaxFeature = {
             firstMarker.prefixColumns,
           );
           let index = start + 1;
-          let lazyParagraph = context.endsWithParagraphLeaf(source, quoteLines, 0);
+          let lazyParagraph: boolean | undefined;
           for (; index < lines.length; index++) {
             const markerOffset = lineIndentOffset(source, lines, index);
             const marker = blockQuoteOffset(source, lines, index, markerOffset);
             if (marker) {
               quoteLines.pushFrom(lines, index, marker.offset, marker.prefixColumns);
-              lazyParagraph = context.endsWithParagraphLeaf(source, quoteLines, quoteLines.length - 1);
+              lazyParagraph = void 0;
               continue;
             }
+            lazyParagraph ??= context.endsWithParagraphLeaf(source, quoteLines, quoteLines.length - 1);
             // A recognized content offset already proves that the line is nonblank.
             if (
               !lazyParagraph ||
