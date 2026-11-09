@@ -4,6 +4,27 @@ import { createParser } from "../packages/satorigear/src/index.ts";
 const parser = createParser();
 
 describe("markdown document", () => {
+  it("keeps container positions stable across prefix and body edits", () => {
+    const features = { footnote: true };
+    const fresh = createParser({ features });
+    for (const ending of ["\n", "\r\n", "\r"]) {
+      for (const lines of [
+        ["> first **one**", ">", "> second **two**", ""],
+        ["[^a]: first **one**", "", "    second **two**", ""],
+      ]) {
+        const document = fresh.createDocument(lines.join(ending));
+        const container = document.tree.children[0];
+        document.edit([{ start: 0, end: 0, text: "lead" + ending + ending }]);
+        expect(document.tree.children[1]).toBe(container);
+        expect(document.tree).toEqual(fresh.parse(document.source));
+
+        const start = document.source.lastIndexOf("second");
+        document.edit([{ start, end: start + 6, text: "longer body" }]);
+        expect(document.tree).toEqual(fresh.parse(document.source));
+      }
+    }
+  });
+
   it("updates paragraphs and setext headings through edits", () => {
     const document = parser.createDocument("alpha\nbeta");
     document.edit([{ start: 6, end: 6, text: "  " }]);
