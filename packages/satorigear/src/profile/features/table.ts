@@ -46,38 +46,33 @@ function tableCellsAt(
 
   const lineEnd = lines.end(index);
   const row = source.slice(contentOffset, lineEnd);
-  const pipes: number[] = [];
+  const cells: number[] = [];
+  let contentStart = contentOffset;
+  let spanStart = contentOffset;
+  let lastPipe: number | undefined;
   for (let pipe = row.indexOf("|"); pipe >= 0; pipe = row.indexOf("|", pipe + 1)) {
     let escapeStart = pipe;
     while (escapeStart > 0 && row.charCodeAt(escapeStart - 1) === Character.ReverseSolidus) {
       escapeStart--;
     }
-    if ((pipe - escapeStart) % 2 === 0) {
-      pipes.push(contentOffset + pipe);
+    if ((pipe - escapeStart) % 2 !== 0) {
+      continue;
     }
+    lastPipe = contentOffset + pipe;
+    if (pipe === 0) {
+      contentStart++;
+      continue;
+    }
+    appendTableCell(cells, source, spanStart, contentStart, lastPipe);
+    spanStart = lastPipe;
+    contentStart = lastPipe + 1;
   }
-  if (requirePipe && pipes.length === 0) {
+  if (requirePipe && lastPipe === void 0) {
     return;
   }
 
   const visibleEnd = trimLineWhitespaceEnd(source, contentOffset, lineEnd);
-  const trailingPipe = pipes.at(-1) === visibleEnd - 1;
-  const leadingPipe = pipes[0] === contentOffset;
-  const cells: number[] = [];
-  let contentStart = contentOffset;
-  let spanStart = contentOffset;
-  let pipeIndex = 0;
-  if (leadingPipe) {
-    contentStart++;
-    pipeIndex++;
-  }
-  for (; pipeIndex < pipes.length; pipeIndex++) {
-    const pipe = pipes[pipeIndex];
-    appendTableCell(cells, source, spanStart, contentStart, pipe);
-    spanStart = pipe;
-    contentStart = pipe + 1;
-  }
-  if (!trailingPipe) {
+  if (lastPipe !== visibleEnd - 1) {
     appendTableCell(cells, source, spanStart, contentStart, lineEnd);
   }
   return cells.length > 0 ? cells : void 0;
