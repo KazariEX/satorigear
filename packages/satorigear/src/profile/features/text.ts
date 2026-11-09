@@ -8,8 +8,12 @@ import type { SyntaxFeature } from "../types.ts";
 
 const entity = /&(?:#x[0-9A-F]{1,6}|#\d{1,7}|[A-Z][A-Z0-9]{0,30});/iy;
 
-export const buildInlineText: InlineTextBuilder = (tokenIndex, context) => {
+export const buildLiteralInlineText: InlineTextBuilder = (tokenIndex, context) => {
   return inlineTokenText(context.view.text, context.tokens, tokenIndex);
+};
+
+export const buildEscapedInlineText: InlineTextBuilder = (tokenIndex, context) => {
+  return inlineTokenText(context.view.text, context.tokens, tokenIndex, 1, 0);
 };
 
 export const buildDecodedInlineText: InlineTextBuilder = (tokenIndex, context) => {
@@ -53,8 +57,8 @@ export const feature: SyntaxFeature = {
       },
     ],
     builds: [
-      { kind: "text", token: InlineKind.LiteralText, build: buildInlineText },
-      { kind: "text", token: InlineKind.Escape, build: buildDecodedInlineText },
+      { kind: "text", token: InlineKind.LiteralText, build: buildLiteralInlineText },
+      { kind: "text", token: InlineKind.Escape, build: buildEscapedInlineText },
       { kind: "text", token: InlineKind.Entity, build: buildDecodedInlineText },
     ],
   },
