@@ -94,7 +94,7 @@ function alignmentAt(source: string, cells: readonly number[], cell: number): Bl
   if (right) {
     end--;
   }
-  if (start === end) {
+  if (start >= end) {
     return;
   }
   for (let offset = start; offset < end; offset++) {

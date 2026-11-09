@@ -127,4 +127,10 @@ describe("table", () => {
       ],
     });
   });
+
+  it("rejects delimiter cells without hyphens", () => {
+    expect(parser.parse("| a | b |\n| : | : |\n| c | d |\n").children[0]).toMatchObject({
+      type: "paragraph",
+    });
+  });
 });
