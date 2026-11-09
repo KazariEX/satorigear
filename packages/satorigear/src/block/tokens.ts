@@ -1,4 +1,4 @@
-import { type BlockKind, BlockRole } from "../constants/block.ts";
+import { BlockKind, BlockRole } from "../constants/block.ts";
 import { emptySet } from "../primitives.ts";
 import { type BlockLines, lineContentEnd, logicalLine } from "./lines.ts";
 
@@ -87,23 +87,21 @@ export class BlockTokenStream implements DefinitionLookup {
     return !!this.#definitionCounts?.size;
   }
 
-  /** Appends a token, with an optional role override for context-dependent syntax. */
+  /** Appends a token and derives its structural role from its kind. */
   push(
     kind: BlockKind,
     start: number,
     end: number,
     meta?: BlockTokenMeta,
-    role?: BlockRole,
   ): void {
-    const encodedRole = role ?? kind;
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
     this.#fields[field + BlockTokenField.Kind] = kind;
     this.#fields[field + BlockTokenField.Start] = start;
     this.#fields[field + BlockTokenField.End] = end;
-    this.#fields[field + BlockTokenField.Length] = encodedRole < BlockRole.BlockOpen
+    this.#fields[field + BlockTokenField.Length] = kind < BlockRole.BlockOpen
       ? 0
-      : this.#indexToken(field, encodedRole);
+      : this.#indexToken(field, kind);
     this.#fieldLength += BlockTokenField.Stride;
     if (meta) {
       this.#metadata ??= [];
@@ -115,20 +113,33 @@ export class BlockTokenStream implements DefinitionLookup {
     }
   }
 
+  /** The final inline range also closes the current frame. */
+  closeRange(start: number, end: number): void {
+    const field = this.#fieldLength;
+    this.#ensureCapacity(field + BlockTokenField.Stride);
+    this.#fields[field + BlockTokenField.Kind] = BlockKind.InlineChunk;
+    this.#fields[field + BlockTokenField.Start] = start;
+    this.#fields[field + BlockTokenField.End] = end;
+    this.#fields[field + BlockTokenField.Length] = 0;
+    const open = this.#opens.pop()!;
+    this.#fields[open + BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
+    this.#fieldLength += BlockTokenField.Stride;
+  }
+
   /** Updates structural indexes and returns the current token's traversal length. */
-  #indexToken(field: number, encodedRole: number): number {
-    if (encodedRole < BlockRole.Close) {
+  #indexToken(field: number, kind: number): number {
+    if (kind < BlockRole.Close) {
       this.#opens.push(field);
       return 0;
     }
-    if (encodedRole < BlockRole.Leaf) {
+    if (kind < BlockRole.Leaf) {
       const open = this.#opens.pop()!;
       this.#fields[open + BlockTokenField.Length] = (
         (field - open) / BlockTokenField.Stride + 1
       );
       return 0;
     }
-    if (encodedRole < BlockRole.Group) {
+    if (kind < BlockRole.Group) {
       return 1;
     }
     const previous = field - BlockTokenField.Stride;

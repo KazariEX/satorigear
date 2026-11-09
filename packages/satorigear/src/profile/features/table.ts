@@ -5,7 +5,7 @@ import {
   trimLineWhitespaceEnd,
   trimLineWhitespaceStart,
 } from "../../block/lines.ts";
-import { BlockKind, BlockRole } from "../../constants/block.ts";
+import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -147,12 +147,9 @@ function emitTableRow(
     // row-close token marks its outer end, so no separate close token is needed.
     const start = cells[cell];
     out.push(BlockKind.TableCellStart, start, start);
-    out.push(
-      BlockKind.InlineChunk,
+    out.closeRange(
       cells[cell + CellSlot.ContentStart],
       cells[cell + CellSlot.ContentEnd],
-      void 0,
-      BlockRole.Close,
     );
   }
   const lineEnd = lines.end(index);

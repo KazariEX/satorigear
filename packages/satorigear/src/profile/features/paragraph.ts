@@ -49,8 +49,7 @@ export const feature: SyntaxFeature = {
           index++;
         }
         const close = lines.end(index - 1);
-        out.push(BlockKind.InlineChunk, chunkOffset, close);
-        out.push(BlockKind.ParagraphClose, close, close);
+        out.closeRange(chunkOffset, close);
         return index;
       },
     ],
