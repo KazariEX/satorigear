@@ -58,6 +58,26 @@ describe("markdown document", () => {
     expect(document.tree).toEqual(parser.parse(document.source));
   });
 
+  it("rebuilds root ownership when a separate list becomes nested", () => {
+    const document = parser.createDocument("1. a\n\n  \r\n b\n\n   3. c\n");
+    document.edit([{ start: 4, end: 7, text: "*" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children).toHaveLength(1);
+    expect(document.tree.children[0]).toMatchObject({
+      type: "list",
+      ordered: true,
+      start: 1,
+      children: [{
+        type: "listItem",
+        spread: true,
+        children: [
+          { type: "paragraph", children: [{ value: "a*\nb" }] },
+          { type: "list", ordered: true, start: 3 },
+        ],
+      }],
+    });
+  });
+
   it("keeps a parser profile fixed across documents", () => {
     const tableParser = createParser({ features: { table: true } });
     const source = "a | b\n--- | ---\nc | d\n";
