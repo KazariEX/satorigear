@@ -17,6 +17,24 @@ describe("inline text boundaries", () => {
     });
   });
 
+  it("keeps unmatched backtick runs literal until a matching run arrives", () => {
+    const run = "`".repeat(64);
+    for (const escaped of [false, true]) {
+      const source = `before ${escaped ? "\\" : ""}${run} tail`;
+      const document = parser.createDocument(source);
+      expect(document.tree.children[0]).toMatchObject({
+        children: [{ type: "text", value: `before ${run} tail` }],
+      });
+      document.edit([{ start: source.length, end: source.length, text: ` ${run}` }]);
+      expect(document.tree).toEqual(parser.parse(document.source));
+      if (!escaped) {
+        expect(document.tree.children[0]).toMatchObject({
+          children: [{ type: "text", value: "before " }, { type: "inlineCode", value: "tail" }],
+        });
+      }
+    }
+  });
+
   it("preserves trailing decoded whitespace inside nested pairs", () => {
     expect(parse("[*x&#32;*](/u)")).toMatchObject({
       children: [{ type: "link", children: [{ type: "emphasis", children: [{ type: "text", value: "x " }] }] }],
