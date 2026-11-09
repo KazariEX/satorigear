@@ -6,42 +6,14 @@ import { buildInlineFragment } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-function atxAt(
-  source: string,
-  lines: BlockLines,
-  index: number,
-  markerOffset: number,
-): {
-  contentEnd: number;
-  contentOffset: number;
-  depth: Heading["depth"];
-} | undefined {
+function atxMarkerEnd(source: string, markerOffset: number, lineEnd: number): number {
   let markerEnd = markerOffset + 1;
-  const lineEnd = lines.end(index);
   while (markerEnd < lineEnd && markerEnd - markerOffset < 6 && source[markerEnd] === "#") {
     markerEnd++;
   }
-  if (markerEnd < lineEnd && source[markerEnd] !== " " && source[markerEnd] !== "\t") {
-    return;
-  }
-  const contentOffset = trimLineWhitespaceStart(source, markerEnd, lineEnd);
-  let contentEnd = trimLineWhitespaceEnd(source, contentOffset, lineEnd);
-  let closer = contentEnd;
-  while (closer > contentOffset && source[closer - 1] === "#") {
-    closer--;
-  }
-  if (
-    closer < contentEnd && (
-      closer === contentOffset || source[closer - 1] === " " || source[closer - 1] === "\t"
-    )
-  ) {
-    contentEnd = trimLineWhitespaceEnd(source, contentOffset, closer);
-  }
-  return {
-    contentOffset,
-    contentEnd,
-    depth: markerEnd - markerOffset as Heading["depth"],
-  };
+  return markerEnd < lineEnd && source[markerEnd] !== " " && source[markerEnd] !== "\t"
+    ? 0
+    : markerEnd;
 }
 
 export function setextMarkerAt(
@@ -127,16 +99,29 @@ export const feature: SyntaxFeature = {
           Character.NumberSign,
         ],
         interrupt(source, lines, index, contentOffset) {
-          return !!atxAt(source, lines, index, contentOffset);
+          return atxMarkerEnd(source, contentOffset, lines.end(index)) > 0;
         },
         start(source, lines, start, contentOffset, out) {
-          const atx = atxAt(source, lines, start, contentOffset);
-          if (!atx) {
+          const lineEnd = lines.end(start);
+          const markerEnd = atxMarkerEnd(source, contentOffset, lineEnd);
+          if (markerEnd <= 0) {
             return;
           }
-          const lineEnd = lines.end(start);
-          out.push(BlockKind.AtxHeading1Open + atx.depth - 1, contentOffset, lineEnd);
-          out.closeRange(atx.contentOffset, atx.contentEnd);
+          const contentStart = trimLineWhitespaceStart(source, markerEnd, lineEnd);
+          let contentEnd = trimLineWhitespaceEnd(source, contentStart, lineEnd);
+          let closer = contentEnd;
+          while (closer > contentStart && source[closer - 1] === "#") {
+            closer--;
+          }
+          if (
+            closer < contentEnd && (
+              closer === contentStart || source[closer - 1] === " " || source[closer - 1] === "\t"
+            )
+          ) {
+            contentEnd = trimLineWhitespaceEnd(source, contentStart, closer);
+          }
+          out.push(BlockKind.AtxHeading1Open + markerEnd - contentOffset - 1, contentOffset, lineEnd);
+          out.closeRange(contentStart, contentEnd);
           return start + 1;
         },
       },
