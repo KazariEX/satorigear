@@ -50,7 +50,6 @@ export class BlockTokenStream implements DefinitionLookup {
   #definitionMembershipChanges: Set<string> | undefined;
   #fieldLength = 0;
   #fields = new Int32Array();
-  #groupField = -1;
   #metadata?: (BlockTokenMeta | undefined)[];
   #opens: number[] = [];
   #relativeStart = Infinity;
@@ -64,7 +63,6 @@ export class BlockTokenStream implements DefinitionLookup {
     this.#definitionCounts?.clear();
     this.#definitionMembershipChanges?.clear();
     this.#fieldLength = 0;
-    this.#groupField = -1;
     this.#metadata = void 0;
     // Completed scans already emptied the stack; only a partial scan needs clearing.
     if (this.#opens.length) {
@@ -144,18 +142,6 @@ export class BlockTokenStream implements DefinitionLookup {
       );
       return 0;
     }
-    if (kind < BlockRole.Group) {
-      return 1;
-    }
-    const previous = field - BlockTokenField.Stride;
-    if (
-      this.#groupField >= 0 &&
-      this.#fields[previous + BlockTokenField.Kind] >= BlockRole.Group
-    ) {
-      this.#fields[this.#groupField + BlockTokenField.Length]++;
-      return 0;
-    }
-    this.#groupField = field;
     return 1;
   }
 
@@ -352,8 +338,6 @@ export class BlockTokenStream implements DefinitionLookup {
   }
 
   truncate(length: number): void {
-    // A later append must not extend a group removed by truncation.
-    this.#groupField = -1;
     this.#fieldLength = length * BlockTokenField.Stride;
     const metadata = this.#metadata;
     if (metadata) {

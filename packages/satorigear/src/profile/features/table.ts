@@ -195,9 +195,13 @@ function tableAlignment(
   context: BlockBuildContext,
 ): AlignType[] {
   const tokens = context.structure.tokens;
-  const tokenEnd = tokenStart + tokens.nodeLength(tokenStart);
   const result: AlignType[] = [];
-  for (let token = tokenStart; token < tokenEnd; token++) {
+  for (
+    let token = tokenStart;
+    tokens.kind(token) !== BlockKind.TableRowOpen &&
+    tokens.kind(token) !== BlockKind.TableClose;
+    token++
+  ) {
     const kind = tokens.kind(token);
     result.push(
       kind === BlockKind.TableAlignLeft
@@ -273,12 +277,13 @@ export const feature: SyntaxFeature = {
           const tokens = context.structure.tokens;
           const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
           const start = context.locator.locationAt(tokens.start(tokenStart));
-          // Tables are emitted as a header row, delimiter group, then body rows.
+          // Tables are emitted as a header row, delimiter leaves, then body rows.
           const header = tokenStart + 1;
           const delimiter = header + tokens.nodeLength(header);
+          const align = tableAlignment(delimiter, context);
           const rows = [buildTableRow(header, context)];
           for (
-            let row = delimiter + tokens.nodeLength(delimiter);
+            let row = delimiter + align.length;
             row < close;
             row += tokens.nodeLength(row)
           ) {
@@ -286,7 +291,7 @@ export const feature: SyntaxFeature = {
           }
           return {
             type: "table",
-            align: tableAlignment(delimiter, context),
+            align,
             children: rows,
             position: {
               start,

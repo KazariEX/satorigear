@@ -10,7 +10,6 @@ export const enum BlockRole {
   FrameOpen = 2 << 6,
   Close = 3 << 6,
   Leaf = 4 << 6,
-  Group = 5 << 6,
   Mask = 7 << 6,
 }
 
@@ -65,8 +64,7 @@ export const enum BlockKind {
   Frontmatter,
   MathBlock,
   BlockComponentYamlProps,
-
-  TableAlignNone = BlockRole.Group,
+  TableAlignNone,
   TableAlignLeft,
   TableAlignRight,
   TableAlignCenter,
