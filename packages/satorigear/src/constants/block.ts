@@ -17,13 +17,11 @@ export const enum BlockRole {
 export const enum BlockKind {
   None,
   InlineChunk,
-  LinkDefinitionChunk,
   BlockComponentAttributes,
 
   BlockQuoteOpen = BlockRole.BlockOpen,
   UnorderedListOpen,
   OrderedListOpen,
-  LinkDefinitionOpen,
   FootnoteDefinitionOpen,
   TableOpen,
   BlockComponentOpen,
@@ -48,7 +46,6 @@ export const enum BlockKind {
   UnorderedListClose,
   OrderedListClose,
   ListItemClose,
-  LinkDefinitionClose,
   FootnoteDefinitionClose,
   TableClose,
   TableRowClose,
@@ -57,6 +54,7 @@ export const enum BlockKind {
   BlockComponentSlotClose,
 
   ThematicBreak = BlockRole.Leaf,
+  LinkDefinition,
   FencedCodeBlock,
   IndentedCodeBlock,
   HtmlBlock,

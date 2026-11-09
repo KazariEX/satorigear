@@ -249,10 +249,10 @@ export const feature: SyntaxFeature = {
   block: {
     builds: [
       {
-        token: BlockKind.LinkDefinitionOpen,
+        token: BlockKind.LinkDefinition,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          // This rule only builds openers emitted with their parsed definition metadata.
+          // This rule only builds leaves emitted with their parsed definition metadata.
           const fields = tokens.value<LinkDefinitionFields>(tokenStart)!;
           const definitionKey = tokens.definitionKey(tokenStart)!;
           return {
@@ -276,18 +276,11 @@ export const feature: SyntaxFeature = {
           if (!definition) {
             return;
           }
-          out.push(BlockKind.LinkDefinitionOpen, contentOffset, contentOffset, {
+          // One leaf owns the whole definition, so the trailing newline stays implicit.
+          out.push(BlockKind.LinkDefinition, contentOffset, lines.end(definition.end - 1), {
             definitionKey: definition.definitionKey,
             value: definition.fields,
           });
-          let definitionEnd = contentOffset;
-          for (let definitionLine = start; definitionLine < definition.end; definitionLine++) {
-            definitionEnd = definitionLine + 1 < definition.end
-              ? lines.next(definitionLine)
-              : lines.end(definitionLine);
-            out.push(BlockKind.LinkDefinitionChunk, lines.start(definitionLine), definitionEnd);
-          }
-          out.push(BlockKind.LinkDefinitionClose, definitionEnd, definitionEnd);
           return definition.end;
         },
       },
