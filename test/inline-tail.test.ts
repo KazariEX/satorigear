@@ -35,6 +35,22 @@ describe("inline text boundaries", () => {
     }
   });
 
+  it("distinguishes absent and empty link titles during edits", () => {
+    const source = "[a](<u v> \"name\" \t)";
+    const document = parser.createDocument(source);
+    const start = source.indexOf("\"name\"");
+    document.edit([{ start, end: start + 6, text: "" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
+      children: [{ type: "link", url: "u v", title: null }],
+    });
+    document.edit([{ start, end: start, text: "\"\"" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
+      children: [{ type: "link", url: "u v", title: "" }],
+    });
+  });
+
   it("preserves trailing decoded whitespace inside nested pairs", () => {
     expect(parse("[*x&#32;*](/u)")).toMatchObject({
       children: [{ type: "link", children: [{ type: "emphasis", children: [{ type: "text", value: "x " }] }] }],
