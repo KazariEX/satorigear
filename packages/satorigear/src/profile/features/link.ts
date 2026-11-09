@@ -209,32 +209,27 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
         };
     }
     : (openToken, closeToken, sourceSpan, children, context) => {
-      let url: string;
-      let title: string | null;
+      let url = "";
+      let title: string | null = null;
 
       const tokenStart = inlineTokenStart(context.tokens, closeToken);
-      const tokenEnd = inlineTokenEnd(context.tokens, closeToken);
-      let start = tokenStart + 2;
-      let end = tokenEnd - 1;
-      start = skipWhitespace(context.view.text, start, end);
-      while (end > start && isMarkdownWhitespace(context.view.text.charCodeAt(end - 1))) {
-        end--;
-      }
+      let end = inlineTokenEnd(context.tokens, closeToken) - 1;
+      const resourceEnd = tokenStart + inlineTokenData(context.tokens, closeToken);
+      let start = skipWhitespace(context.view.text, tokenStart + 2, resourceEnd);
       if (start !== end) {
-        const resourceEnd = tokenStart + inlineTokenData(context.tokens, closeToken);
-        let destinationStart = start;
         let destinationEnd = resourceEnd;
         if (context.view.text[start] === "<") {
-          destinationStart++;
+          start++;
           destinationEnd--;
         }
+        url = semanticText(context.view.text.slice(start, destinationEnd));
         start = skipWhitespace(context.view.text, resourceEnd, end);
-        url = semanticText(context.view.text.slice(destinationStart, destinationEnd));
-        title = start < end ? semanticText(context.view.text.slice(start + 1, end - 1)) : null;
-      }
-      else {
-        url = "";
-        title = null;
+        if (start < end) {
+          while (end > start && isMarkdownWhitespace(context.view.text.charCodeAt(end - 1))) {
+            end--;
+          }
+          title = semanticText(context.view.text.slice(start + 1, end - 1));
+        }
       }
 
       return isImage
