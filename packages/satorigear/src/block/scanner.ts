@@ -389,13 +389,9 @@ export class BlockScanner {
     ) {
       oldRecordStart++;
     }
-    let oldRecordEnd = oldRecordStart;
-    while (
-      oldRecordEnd < previousRecords.length &&
-      previousRecords[oldRecordEnd].tokenStart < tokenChange.oldEnd
-    ) {
-      oldRecordEnd++;
-    }
+    // A matching token suffix may have moved inside a rebuilt ancestor. Only
+    // whole-block convergence proves that its former root record can be retained.
+    const oldRecordEnd = convergedIndex < 0 ? previousRecords.length : convergedIndex;
 
     const nextRecords = previousRecords.slice(0, stableBlockCount);
     nextRecords.push(...rescannedRecords);
