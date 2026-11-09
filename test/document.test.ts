@@ -78,6 +78,29 @@ describe("markdown document", () => {
     });
   });
 
+  it("keeps parsed fence nodes independent and shifts retained positions once", () => {
+    const fenceParser = createParser({ features: { math: true } });
+    for (const marker of ["```", "$$"]) {
+      const source = `before\n\n${marker}\n  value\n${marker}\n`;
+      const first = fenceParser.parse(source);
+      const snapshot = structuredClone(first);
+      fenceParser.parse(`${marker} other\nchanged\n${marker}`);
+      expect(first).toEqual(snapshot);
+
+      const document = fenceParser.createDocument(source);
+      const fence = document.tree.children[1];
+      document.edit([{ start: 0, end: 0, text: "\n" }]);
+      expect(document.tree.children[1]).toBe(fence);
+      expect(fence.position?.start.line).toBe(4);
+      expect(document.tree).toEqual(fenceParser.parse(document.source));
+
+      const opening = document.source.indexOf(marker);
+      document.edit([{ start: opening, end: opening, text: " " }]);
+      expect(document.tree).toEqual(fenceParser.parse(document.source));
+      expect(document.tree.children[1]).toMatchObject({ value: " value" });
+    }
+  });
+
   it("keeps a parser profile fixed across documents", () => {
     const tableParser = createParser({ features: { table: true } });
     const source = "a | b\n--- | ---\nc | d\n";
