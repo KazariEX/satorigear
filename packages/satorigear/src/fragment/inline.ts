@@ -38,6 +38,7 @@ interface InlineOutput extends InlineFragment {
   cursor: number;
   // The text child is published immediately; only its source end remains pending.
   pendingText: Text | undefined;
+  // Keep the end in view coordinates until the merged text is complete.
   pendingEnd: number;
   pendingSpaces: number;
 }
@@ -116,7 +117,7 @@ function appendText(
       : trailingSpaces;
   }
   else {
-    const startLocation = context.locator.locationAt(start);
+    const startLocation = context.locator.locationAt(context.view.mapOffset(start));
     const text: Text = {
       type: "text",
       value,
@@ -132,7 +133,7 @@ function appendText(
 function finishText(output: InlineOutput, context: InlineBuildContext): void {
   const text = output.pendingText;
   if (text) {
-    text.position!.end = context.locator.locationAt(output.pendingEnd);
+    text.position!.end = context.locator.locationAt(context.view.mapEnd(output.pendingEnd));
   }
 }
 
@@ -152,8 +153,7 @@ function appendGap(
   end: number,
 ): void {
   const value = context.view.text.slice(start, end);
-  const sourceStart = context.view.mapOffset(start);
-  appendText(output, value, sourceStart, context.view.mapEnd(end), context, true);
+  appendText(output, value, start, end, context, true);
 }
 
 function appendLeaf(
@@ -181,11 +181,11 @@ function appendLeaf(
 // Resolution has already made semantic pairs unambiguous, so projection can consume that stream
 // directly instead of copying it into a second syntax arena.
 function appendRange(
-  startToken: number,
-  endToken: number,
   profile: InlineProfile,
   context: InlineBuildContext,
   output: InlineOutput,
+  startToken: number,
+  endToken: number,
 ): number {
   let index = startToken;
   while (index < endToken) {
@@ -210,12 +210,11 @@ function appendRange(
       }
       else {
         trimTrailingText(output);
-        const sourceStart = context.view.mapOffset(endingStart);
         appendText(
           output,
           "\n",
-          sourceStart,
-          context.view.mapEnd(contentStart),
+          endingStart,
+          contentStart,
           context,
           false,
         );
@@ -232,12 +231,11 @@ function appendRange(
         if (childStart > output.cursor) {
           appendGap(output, context, output.cursor, childStart);
         }
-        const sourceStart = context.view.mapOffset(childStart);
         appendText(
           output,
           (build as InlineTextBuilder)(index, context),
-          sourceStart,
-          childStart === childEnd ? sourceStart : context.view.mapEnd(childEnd),
+          childStart,
+          childEnd,
           context,
           kind === InlineKind.LiteralText,
         );
@@ -266,11 +264,11 @@ function appendRange(
       }
       finishText(output, context);
       index = appendPair(
-        index,
-        endToken,
         profile,
         context,
         output,
+        index,
+        endToken,
         build as InlinePairBuilder,
       );
       continue;
@@ -286,7 +284,7 @@ function appendRange(
       // Applied decorators may mutate the exposed child list, so refresh the cached projection.
       const previous = output.children.at(-1);
       output.pendingText = previous?.type === "text" ? previous as Text : void 0;
-      output.pendingEnd = sourceSpan.end;
+      output.pendingEnd = childEnd;
       output.cursor = childEnd;
     }
     index++;
@@ -307,11 +305,11 @@ function appendRange(
 }
 
 function appendPair(
-  openToken: number,
-  endToken: number,
   profile: InlineProfile,
   context: InlineBuildContext,
   output: InlineOutput,
+  openToken: number,
+  endToken: number,
   build: InlinePairBuilder,
 ): number {
   const childStart = inlineTokenStart(context.tokens, openToken);
@@ -330,13 +328,8 @@ function appendPair(
     closeToken = nextToken;
   }
   else {
-    closeToken = appendRange(
-      nextToken,
-      endToken,
-      profile,
-      context,
-      createInlineOutput(children = [], inlineTokenEnd(context.tokens, openToken)),
-    );
+    const output = createInlineOutput(children = [], inlineTokenEnd(context.tokens, openToken));
+    closeToken = appendRange(profile, context, output, nextToken, endToken);
   }
   const childEnd = inlineTokenEnd(context.tokens, closeToken);
   const value = build(
@@ -407,13 +400,7 @@ export function buildInlineFragment(
     };
   }
 
-  const result = createInlineOutput([], 0);
-  appendRange(
-    0,
-    inlineTokenCount(tokens),
-    context.profile,
-    inlineContext,
-    result,
-  );
-  return result;
+  const output = createInlineOutput([], 0);
+  appendRange(context.profile, inlineContext, output, 0, inlineTokenCount(tokens));
+  return output;
 }
