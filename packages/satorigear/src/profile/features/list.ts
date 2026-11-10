@@ -227,12 +227,8 @@ function listStartNumber(
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context) => {
     const tokens = context.structure.tokens;
-    const items: ListItem[] = [];
     const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-    // Indexed list roots contain only direct item frames, so node lengths jump between siblings.
-    for (let child = tokenStart + 1; child < close; child += tokens.nodeLength(child)) {
-      items.push(buildListItem(child, context));
-    }
+    const items = buildBlockChildren<ListItem>(tokenStart, context);
     return {
       type: "list",
       ordered,
@@ -376,6 +372,14 @@ export function feature(taskList = false): SyntaxFeature {
   return {
     block: {
       builds: [
+        {
+          token: [
+            BlockKind.ListItemOpen,
+            BlockKind.UncheckedTaskItemOpen,
+            BlockKind.CheckedTaskItemOpen,
+          ],
+          build: buildListItem,
+        },
         {
           token: BlockKind.UnorderedListOpen,
           build: createBuildList(false),

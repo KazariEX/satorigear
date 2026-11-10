@@ -6,11 +6,9 @@ export const enum BlockFlag {
 
 export const enum BlockRole {
   Raw,
-  BlockOpen = 1 << 6,
-  FrameOpen = 2 << 6,
+  Open = 1 << 6,
   Close = 3 << 6,
   Leaf = 4 << 6,
-  Mask = 7 << 6,
 }
 
 export const enum BlockKind {
@@ -18,15 +16,19 @@ export const enum BlockKind {
   InlineChunk,
   BlockComponentAttributes,
 
-  BlockQuoteOpen = BlockRole.BlockOpen,
+  BlockQuoteOpen = BlockRole.Open,
   UnorderedListOpen,
   OrderedListOpen,
   FootnoteDefinitionOpen,
   TableOpen,
   BlockComponentOpen,
   BlockComponentSlotOpen,
+  ListItemOpen,
+  UncheckedTaskItemOpen,
+  CheckedTaskItemOpen,
+  TableRowOpen,
 
-  AtxHeading1Open = BlockRole.BlockOpen | BlockFlag.InlineContent,
+  AtxHeading1Open = BlockRole.Open | BlockFlag.InlineContent,
   AtxHeading2Open,
   AtxHeading3Open,
   AtxHeading4Open,
@@ -35,13 +37,7 @@ export const enum BlockKind {
   SetextHeading1Open,
   SetextHeading2Open,
   ParagraphOpen,
-
-  ListItemOpen = BlockRole.FrameOpen,
-  UncheckedTaskItemOpen,
-  CheckedTaskItemOpen,
-  TableRowOpen,
-
-  TableCellStart = BlockRole.FrameOpen | BlockFlag.InlineContent,
+  TableCellStart,
   BlockComponentLabelOpen,
 
   BlockQuoteClose = BlockRole.Close,

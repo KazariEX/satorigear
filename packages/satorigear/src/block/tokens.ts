@@ -100,7 +100,7 @@ export class BlockTokenStream implements DefinitionLookup {
     this.#fields[field + BlockTokenField.Kind] = kind;
     this.#fields[field + BlockTokenField.Start] = start;
     this.#fields[field + BlockTokenField.End] = end;
-    this.#fields[field + BlockTokenField.Length] = kind < BlockRole.BlockOpen
+    this.#fields[field + BlockTokenField.Length] = kind < BlockRole.Open
       ? 0
       : this.#indexToken(field, kind);
     this.#fieldLength += BlockTokenField.Stride;

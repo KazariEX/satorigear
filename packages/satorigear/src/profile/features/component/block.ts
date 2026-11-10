@@ -370,6 +370,10 @@ function createBlockStart(shorthand: boolean): BlockStart {
 
 export const blockBuilds: BlockFeature["builds"] = [
   {
+    token: BlockKind.BlockComponentLabelOpen,
+    build: buildBlockLabel,
+  },
+  {
     // The YAML props fence becomes a child yaml node, matching frontmatter's shape;
     // interpreting the mapping itself is the consumer's job.
     token: BlockKind.BlockComponentYamlProps,
@@ -382,10 +386,8 @@ export const blockBuilds: BlockFeature["builds"] = [
       const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
       // Component header fields are emitted in this fixed order before any body syntax.
       let openingToken = tokenStart + 1;
-      let label: Paragraph | undefined;
       let parsed: Attributes | undefined;
       if (tokens.kind(openingToken) === BlockKind.BlockComponentLabelOpen) {
-        label = buildBlockLabel(openingToken, context);
         openingToken += tokens.nodeLength(openingToken);
       }
       if (tokens.kind(openingToken) === BlockKind.BlockComponentAttributes) {
@@ -394,9 +396,6 @@ export const blockBuilds: BlockFeature["builds"] = [
       }
       const start = context.locator.locationAt(tokens.start(tokenStart));
       const children = buildBlockChildren(tokenStart, context);
-      if (label) {
-        children.unshift(label);
-      }
       const opening = tokens.text(context.source, tokenStart);
       return {
         type: "blockComponent",

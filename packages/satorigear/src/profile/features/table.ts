@@ -7,6 +7,7 @@ import {
 } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
+import { buildBlockChildren } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { BlockBuildContext, BlockNodeBuilder } from "../../fragment/block.ts";
@@ -171,10 +172,7 @@ const buildTableRow: BlockNodeBuilder<TableRow> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   const start = context.locator.locationAt(tokens.start(tokenStart));
-  const children: TableCell[] = [];
-  for (let cell = tokenStart + 1; cell < close; cell += tokens.nodeLength(cell)) {
-    children.push(buildTableCell(cell, context));
-  }
+  const children = buildBlockChildren<TableCell>(tokenStart, context);
   return {
     type: "tableRow",
     children,
@@ -267,6 +265,14 @@ export const feature: SyntaxFeature = {
     ],
     builds: [
       {
+        token: BlockKind.TableCellStart,
+        build: buildTableCell,
+      },
+      {
+        token: BlockKind.TableRowOpen,
+        build: buildTableRow,
+      },
+      {
         token: BlockKind.TableOpen,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
@@ -276,14 +282,7 @@ export const feature: SyntaxFeature = {
           const header = tokenStart + 1;
           const delimiter = header + tokens.nodeLength(header);
           const align = tableAlignment(delimiter, context);
-          const rows = [buildTableRow(header, context)];
-          for (
-            let row = delimiter + align.length;
-            row < close;
-            row += tokens.nodeLength(row)
-          ) {
-            rows.push(buildTableRow(row, context));
-          }
+          const rows = buildBlockChildren<TableRow>(tokenStart, context);
           return {
             type: "table",
             align,

@@ -1,5 +1,4 @@
-import type { RootContent, TopLevelContent } from "mdast";
-import { BlockRole } from "../constants/block.ts";
+import type { Node, RootContent, TopLevelContent } from "mdast";
 import type { FencedBlock } from "../block/fence.ts";
 import type { BlockStructure } from "../block/scanner.ts";
 import type { InlineProfile } from "../inline/profile.ts";
@@ -18,7 +17,7 @@ export interface BlockBuildContext {
 }
 
 // Core owns build traversal; profiles supply every syntax-specific node builder.
-export type BlockNodeBuilder<T extends object = RootContent> = (
+export type BlockNodeBuilder<T extends object = Node> = (
   tokenStart: number,
   context: BlockBuildContext,
 ) => T;
@@ -76,10 +75,9 @@ export function buildBlockChildren<T extends object = RootContent>(
   for (let child = tokenStart + 1; child < tokenEnd;) {
     const length = tokens.nodeLength(child);
     if (length > 0) {
-      const kind = tokens.kind(child);
-      const role = kind & BlockRole.Mask;
-      if (role === BlockRole.BlockOpen || role === BlockRole.Leaf) {
-        children.push(builds[kind]!(child, context) as T);
+      const build = builds[tokens.kind(child)];
+      if (build) {
+        children.push(build(child, context) as T);
       }
     }
     child += length || 1;
