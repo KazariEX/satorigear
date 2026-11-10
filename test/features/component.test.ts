@@ -21,6 +21,31 @@ function component(source: string): BlockComponent | InlineComponent {
 }
 
 describe("component", () => {
+  it("locates a block label before its following body", () => {
+    const tree = componentParser.parse("::Card[title]\nbody\n::\n");
+    expect(tree.children[0]).toMatchObject({
+      type: "blockComponent",
+      children: [
+        {
+          type: "paragraph",
+          position: {
+            start: { line: 1, column: 7, offset: 6 },
+            end: { line: 1, column: 14, offset: 13 },
+          },
+          children: [{
+            type: "text",
+            value: "title",
+            position: {
+              start: { line: 1, column: 8, offset: 7 },
+              end: { line: 1, column: 13, offset: 12 },
+            },
+          }],
+        },
+        { type: "paragraph", children: [{ type: "text", value: "body" }] },
+      ],
+    });
+  });
+
   it("keeps component recognition independent from attribute parsing", () => {
     const tree = componentParser.parse(":Card{tone=info} [span]{.mark}\n");
     expect(tree.children[0]).toMatchObject({

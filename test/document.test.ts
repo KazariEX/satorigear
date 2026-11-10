@@ -4,6 +4,30 @@ import { createParser } from "../packages/satorigear/src/index.ts";
 const parser = createParser();
 
 describe("markdown document", () => {
+  it("edits the body of a labeled block component", () => {
+    const fresh = createParser({ features: { component: true } });
+    const document = fresh.createDocument("::Card[title]\nbody\n::\n");
+    expect(document.tree).toEqual(fresh.parse(document.source));
+
+    const start = document.source.indexOf("body");
+    document.edit([{ start, end: start + 4, text: "first\nsecond" }]);
+    expect(document.tree).toEqual(fresh.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({
+      type: "blockComponent",
+      children: [
+        {
+          type: "paragraph",
+          children: [{
+            type: "text",
+            value: "title",
+            position: { start: { line: 1, column: 8, offset: 7 } },
+          }],
+        },
+        { type: "paragraph", children: [{ type: "text", value: "first\nsecond" }] },
+      ],
+    });
+  });
+
   it("keeps container positions stable across prefix and body edits", () => {
     const features = { footnote: true };
     const fresh = createParser({ features });
