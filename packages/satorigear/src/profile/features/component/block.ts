@@ -12,6 +12,7 @@ import { buildYamlBlock } from "../frontmatter.ts";
 import { componentNameEnd, normalizeComponentName } from "./shared.ts";
 import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
 import type { BlockScanContext } from "../../../block/scanner.ts";
+import type { Attributes } from "../attributes/types.ts";
 
 interface BlockOpening {
   attributesEnd?: number;
@@ -381,22 +382,20 @@ export const blockBuilds: BlockFeature["builds"] = [
       const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
       // Component header fields are emitted in this fixed order before any body syntax.
       let openingToken = tokenStart + 1;
-      const label = tokens.kind(openingToken) === BlockKind.BlockComponentLabelOpen
-        ? openingToken
-        : void 0;
-      if (label !== void 0) {
-        openingToken += tokens.nodeLength(label);
+      let label: Paragraph | undefined;
+      let parsed: Attributes | undefined;
+      if (tokens.kind(openingToken) === BlockKind.BlockComponentLabelOpen) {
+        label = buildBlockLabel(openingToken, context);
+        openingToken += tokens.nodeLength(openingToken);
       }
-      const attributesToken = tokens.kind(openingToken) === BlockKind.BlockComponentAttributes
-        ? openingToken++
-        : void 0;
-      const parsed = attributesToken !== void 0
-        ? parseAttributes(context.source, tokens.start(attributesToken))
-        : void 0;
+      if (tokens.kind(openingToken) === BlockKind.BlockComponentAttributes) {
+        parsed = parseAttributes(context.source, tokens.start(openingToken));
+        openingToken++;
+      }
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      let children = buildBlockChildren(tokenStart, context);
+      const children = buildBlockChildren(tokenStart, context);
       if (label) {
-        children = [buildBlockLabel(label, context), ...children];
+        children.unshift(label);
       }
       const opening = tokens.text(context.source, tokenStart);
       return {
