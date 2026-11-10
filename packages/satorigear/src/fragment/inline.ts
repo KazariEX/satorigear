@@ -365,7 +365,7 @@ export function buildInlineFragment(
   else {
     const blockTokens = context.structure.tokens;
     const nodeLength = blockTokens.nodeLength(tokenStart);
-    if (nodeLength === 1 || blockTokens.kind(tokenStart + 1) !== BlockKind.InlineChunk) {
+    if (nodeLength <= 1 || blockTokens.kind(tokenStart + 1) !== BlockKind.InlineChunk) {
       return { children: [] };
     }
 

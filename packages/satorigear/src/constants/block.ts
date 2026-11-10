@@ -1,9 +1,4 @@
-// Syntax flags occupy the low bits while structural roles occupy the high bits, so token
-// traversal can recover both without consulting the profile.
-export const enum BlockFlag {
-  InlineContent = 1 << 5,
-}
-
+// Structural roles index token ranges; inline content is represented by owned chunks.
 export const enum BlockRole {
   Raw,
   Open = 1 << 6,
@@ -16,19 +11,7 @@ export const enum BlockKind {
   InlineChunk,
   BlockComponentAttributes,
 
-  BlockQuoteOpen = BlockRole.Open,
-  UnorderedListOpen,
-  OrderedListOpen,
-  FootnoteDefinitionOpen,
-  TableOpen,
-  BlockComponentOpen,
-  BlockComponentSlotOpen,
-  ListItemOpen,
-  UncheckedTaskItemOpen,
-  CheckedTaskItemOpen,
-  TableRowOpen,
-
-  AtxHeading1Open = BlockRole.Open | BlockFlag.InlineContent,
+  AtxHeading1Open = BlockRole.Open,
   AtxHeading2Open,
   AtxHeading3Open,
   AtxHeading4Open,
@@ -36,8 +19,19 @@ export const enum BlockKind {
   AtxHeading6Open,
   SetextHeading1Open,
   SetextHeading2Open,
+  BlockQuoteOpen,
+  UnorderedListOpen,
+  OrderedListOpen,
+  ListItemOpen,
+  UncheckedTaskItemOpen,
+  CheckedTaskItemOpen,
+  FootnoteDefinitionOpen,
   ParagraphOpen,
-  TableCellStart,
+  TableOpen,
+  TableRowOpen,
+  TableCellOpen,
+  BlockComponentOpen,
+  BlockComponentSlotOpen,
   BlockComponentLabelOpen,
 
   BlockQuoteClose = BlockRole.Close,

@@ -1,4 +1,4 @@
-import { BlockFlag, BlockKind } from "../constants/block.ts";
+import { BlockKind } from "../constants/block.ts";
 import { emptyArray, emptySet } from "../primitives.ts";
 import { SourceView } from "../source-view.ts";
 import type { BlockScanChange, BlockStructure } from "../block/scanner.ts";
@@ -186,14 +186,10 @@ export class InlineRegionState {
       const tokenStart = structure.records[blockIndex].tokenStart;
       const tokenEnd = tokenStart + tokens.nodeLength(tokenStart);
       const regions: InlineRegion[] = [];
-      // Semantic nodes are the non-zero ranges in the flat block token stream.
+      // Only frames that directly own inline chunks contribute regions.
       for (let token = tokenStart; token < tokenEnd; token++) {
         const nodeLength = tokens.nodeLength(token);
-        if (nodeLength === 0 || !(tokens.kind(token) & BlockFlag.InlineContent)) {
-          continue;
-        }
-        if (nodeLength !== 1 && tokens.kind(token + 1) !== BlockKind.InlineChunk) {
-          token += nodeLength - 1;
+        if (nodeLength <= 1 || tokens.kind(token + 1) !== BlockKind.InlineChunk) {
           continue;
         }
         const regionIndex = regions.length;

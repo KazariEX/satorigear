@@ -142,7 +142,7 @@ function emitTableRow(
     // The possibly empty inline chunk closes the cell frame. The next cell or
     // row-close token marks its outer end, so no separate close token is needed.
     const start = cells[cell];
-    out.push(BlockKind.TableCellStart, start, start);
+    out.push(BlockKind.TableCellOpen, start, start);
     out.closeRange(
       cells[cell + CellSlot.ContentStart],
       cells[cell + CellSlot.ContentEnd],
@@ -265,7 +265,7 @@ export const feature: SyntaxFeature = {
     ],
     builds: [
       {
-        token: BlockKind.TableCellStart,
+        token: BlockKind.TableCellOpen,
         build: buildTableCell,
       },
       {
