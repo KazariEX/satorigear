@@ -110,7 +110,6 @@ describe("task list", () => {
       }],
     });
 
-
     expect(parser.parse(
       "- [one]: /url\n" +
       "  [two]: /url\n" +

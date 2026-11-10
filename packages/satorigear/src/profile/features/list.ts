@@ -181,7 +181,8 @@ function hasTaskListContent(
   firstChunk: number,
   contentStart: number,
 ): boolean {
-  for (let token = firstChunk; tokens.kind(token) === BlockKind.InlineChunk; token++) {
+  const tokenEnd = firstChunk - 1 + tokens.nodeLength(firstChunk - 1);
+  for (let token = firstChunk; token < tokenEnd; token++) {
     const start = token === firstChunk ? contentStart : tokens.start(token);
     const end = tokens.end(token);
     for (let offset = start; offset < end; offset++) {
