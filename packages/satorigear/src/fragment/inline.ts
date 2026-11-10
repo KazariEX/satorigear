@@ -40,7 +40,8 @@ interface InlineOutput extends InlineFragment {
   pendingText: Text | undefined;
   // Keep the end in view coordinates until the merged text is complete.
   pendingEnd: number;
-  pendingSpaces: number;
+  // Keep only the consecutive literal suffix; decoded whitespace is semantic text.
+  pendingLiteral: string;
 }
 
 function createInlineOutput(children: PhrasingContent[], cursor: number): InlineOutput {
@@ -49,7 +50,7 @@ function createInlineOutput(children: PhrasingContent[], cursor: number): Inline
     cursor,
     pendingText: void 0,
     pendingEnd: 0,
-    pendingSpaces: 0,
+    pendingLiteral: "",
   };
 }
 
@@ -106,15 +107,9 @@ function appendText(
   context: InlineBuildContext,
   literal: boolean,
 ): void {
-  // Decoded runs are semantic text; whitespace they produce is not a source suffix.
-  const trailingSpaces = literal
-    ? value.length - trimLineWhitespaceEnd(value, 0, value.length)
-    : 0;
   if (output.pendingText !== void 0 && !("attributes" in output.pendingText)) {
     output.pendingText.value += value;
-    output.pendingSpaces = trailingSpaces === value.length
-      ? trailingSpaces + output.pendingSpaces
-      : trailingSpaces;
+    output.pendingLiteral = literal ? output.pendingLiteral + value : "";
   }
   else {
     const startLocation = context.locator.locationAt(context.view.mapOffset(start));
@@ -125,7 +120,7 @@ function appendText(
     };
     output.children.push(text);
     output.pendingText = text;
-    output.pendingSpaces = trailingSpaces;
+    output.pendingLiteral = literal ? value : "";
   }
   output.pendingEnd = end;
 }
@@ -138,11 +133,14 @@ function finishText(output: InlineOutput, context: InlineBuildContext): void {
 }
 
 function trimTrailingText(output: InlineOutput): void {
-  const removed = output.pendingText ? output.pendingSpaces : 0;
-  if (removed > 0) {
-    output.pendingText!.value = output.pendingText!.value.slice(0, -removed);
-    output.pendingEnd -= removed;
-    output.pendingSpaces = 0;
+  if (output.pendingText) {
+    const literal = output.pendingLiteral;
+    const removed = literal.length - trimLineWhitespaceEnd(literal, 0, literal.length);
+    if (removed > 0) {
+      output.pendingText.value = output.pendingText.value.slice(0, -removed);
+      output.pendingEnd -= removed;
+      output.pendingLiteral = "";
+    }
   }
 }
 
