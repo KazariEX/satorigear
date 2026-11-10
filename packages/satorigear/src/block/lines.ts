@@ -87,11 +87,11 @@ export class BlockLines implements SourceLocator {
       // Default to the LF-only path; only CR-bearing input pays for mixed-ending selection.
       let end = lineFeed;
       let next = end + 1;
-      if (carriageReturn >= 0 && (end < 0 || carriageReturn < end)) {
+      if (carriageReturn !== -1 && (end < 0 || carriageReturn < end)) {
         end = carriageReturn;
         next = end + (source.charCodeAt(end + 1) === Character.LineFeed ? 2 : 1);
         carriageReturn = source.indexOf("\r", next);
-        if (lineFeed < next) {
+        if (lineFeed !== -1 && lineFeed < next) {
           lineFeed = source.indexOf("\n", next);
         }
       }
