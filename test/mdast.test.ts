@@ -248,3 +248,29 @@ describe("markdown mdast conversion", () => {
     }]);
   });
 });
+
+describe("literal code content", () => {
+  it("preserves tabs except for columns consumed by fence indentation", () => {
+    expect(parser.parse("> ```\n>   \tx\n> ```\n")).toMatchObject({
+      children: [{ type: "blockquote", children: [{ type: "code", value: "  \tx" }] }],
+    });
+    expect(parser.parse(">  ```\n> \tx\n>  ```\n")).toMatchObject({
+      children: [{ type: "blockquote", children: [{ type: "code", value: " x" }] }],
+    });
+    expect(parser.parse("   ```\n\tx\n   ```\n")).toMatchObject({
+      children: [{ type: "code", value: " x" }],
+    });
+  });
+
+  it("preserves physical blank lines and literal Unicode separators in code", () => {
+    expect(parser.parse("    a\r    \n    b\n")).toMatchObject({
+      children: [{ type: "code", value: "a\n\nb" }],
+    });
+    expect(parser.parse("> ```\r> a\r> \n> b\r> ```\n")).toMatchObject({
+      children: [{ type: "blockquote", children: [{ type: "code", value: "a\n\nb" }] }],
+    });
+    expect(parser.parse("    a\u2028    b\n")).toMatchObject({
+      children: [{ type: "code", value: "a\u2028    b" }],
+    });
+  });
+});
