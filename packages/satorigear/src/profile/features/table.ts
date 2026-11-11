@@ -133,23 +133,23 @@ function delimiterAt(
 
 function emitTableRow(
   lines: BlockLines,
+  tokens: BlockTokenStream,
   index: number,
   cells: readonly number[],
-  out: BlockTokenStream,
 ): void {
-  out.push(BlockKind.TableRowOpen, cells[0], cells[0]);
+  tokens.push(BlockKind.TableRowOpen, cells[0], cells[0]);
   for (let cell = 0; cell < cells.length; cell += CellSlot.Stride) {
     // The possibly empty inline chunk closes the cell frame. The next cell or
     // row-close token marks its outer end, so no separate close token is needed.
     const start = cells[cell];
-    out.push(BlockKind.TableCellOpen, start, start);
-    out.closeRange(
+    tokens.push(BlockKind.TableCellOpen, start, start);
+    tokens.closeRange(
       cells[cell + CellSlot.ContentStart],
       cells[cell + CellSlot.ContentEnd],
     );
   }
   const lineEnd = lines.end(index);
-  out.push(BlockKind.TableRowClose, lineEnd, lineEnd);
+  tokens.push(BlockKind.TableRowClose, lineEnd, lineEnd);
 }
 
 const buildTableCell: BlockNodeBuilder<TableCell> = (tokenStart, context) => {
@@ -210,7 +210,7 @@ function tableAlignment(
 export const feature: SyntaxFeature = {
   block: {
     fallbacks: [
-      (source, lines, start, contentOffset, out, context) => {
+      (source, lines, tokens, start, contentOffset, context) => {
         const delimiterLine = start + 1;
         if (delimiterLine >= lines.length) {
           return;
@@ -231,11 +231,11 @@ export const feature: SyntaxFeature = {
           return;
         }
 
-        out.push(BlockKind.TableOpen, header[0], header[0]);
-        emitTableRow(lines, start, header, out);
+        tokens.push(BlockKind.TableOpen, header[0], header[0]);
+        emitTableRow(lines, tokens, start, header);
         const delimiterEnd = lines.end(delimiterLine);
         for (let cell = 0; cell < delimiter.length; cell += CellSlot.Stride) {
-          out.push(
+          tokens.push(
             delimiter[cell + CellSlot.Alignment],
             delimiter[cell],
             delimiter[cell + CellSlot.Stride] ?? delimiterEnd,
@@ -255,11 +255,11 @@ export const feature: SyntaxFeature = {
           if (!cells) {
             break;
           }
-          emitTableRow(lines, end, cells, out);
+          emitTableRow(lines, tokens, end, cells);
           end++;
         }
         const tableEnd = lines.end(end - 1);
-        out.push(BlockKind.TableClose, tableEnd, tableEnd);
+        tokens.push(BlockKind.TableClose, tableEnd, tableEnd);
         return end;
       },
     ],

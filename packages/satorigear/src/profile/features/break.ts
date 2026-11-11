@@ -55,11 +55,11 @@ export const feature: SyntaxFeature = {
         interrupt(source, lines, index, contentOffset) {
           return isThematicBreak(source, lines, index, contentOffset);
         },
-        start(source, lines, start, contentOffset, out) {
+        start(source, lines, tokens, start, contentOffset) {
           if (!isThematicBreak(source, lines, start, contentOffset)) {
             return;
           }
-          out.push(BlockKind.ThematicBreak, contentOffset, lines.end(start));
+          tokens.push(BlockKind.ThematicBreak, contentOffset, lines.end(start));
           return start + 1;
         },
       },

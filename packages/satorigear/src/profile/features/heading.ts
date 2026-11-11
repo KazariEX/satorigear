@@ -101,7 +101,7 @@ export const feature: SyntaxFeature = {
         interrupt(source, lines, index, contentOffset) {
           return atxMarkerEnd(source, contentOffset, lines.end(index)) > 0;
         },
-        start(source, lines, start, contentOffset, out) {
+        start(source, lines, tokens, start, contentOffset) {
           const lineEnd = lines.end(start);
           const markerEnd = atxMarkerEnd(source, contentOffset, lineEnd);
           if (markerEnd <= 0) {
@@ -120,8 +120,8 @@ export const feature: SyntaxFeature = {
           ) {
             contentEnd = trimLineWhitespaceEnd(source, contentStart, closer);
           }
-          out.push(BlockKind.AtxHeading1Open + markerEnd - contentOffset - 1, contentOffset, lineEnd);
-          out.closeRange(contentStart, contentEnd);
+          tokens.push(BlockKind.AtxHeading1Open + markerEnd - contentOffset - 1, contentOffset, lineEnd);
+          tokens.closeRange(contentStart, contentEnd);
           return start + 1;
         },
       },

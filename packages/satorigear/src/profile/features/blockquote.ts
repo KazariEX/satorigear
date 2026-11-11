@@ -72,7 +72,7 @@ export const feature: SyntaxFeature = {
         interrupt() {
           return true;
         },
-        start(source, lines, start, contentOffset, out, context) {
+        start(source, lines, tokens, start, contentOffset, context) {
           // Dispatch on `>` proves the opening marker before this container starts.
           const firstMarker = blockQuoteOffset(source, lines, start, contentOffset)!;
           const quoteLines = context.createLineView(
@@ -102,10 +102,10 @@ export const feature: SyntaxFeature = {
             }
             quoteLines.pushLazy(lines, index);
           }
-          out.push(BlockKind.BlockQuoteOpen, contentOffset, contentOffset + 1);
-          context.scanLines(source, quoteLines, out);
+          tokens.push(BlockKind.BlockQuoteOpen, contentOffset, contentOffset + 1);
+          context.scanLines(source, quoteLines, tokens);
           const end = quoteLines.next(quoteLines.length - 1);
-          out.push(BlockKind.BlockQuoteClose, end, end);
+          tokens.push(BlockKind.BlockQuoteClose, end, end);
           return index;
         },
       },

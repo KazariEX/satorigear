@@ -9,9 +9,9 @@ import type { BlockTokenStream } from "./tokens.ts";
 export type BlockStart = (
   source: string,
   lines: BlockLines,
+  tokens: BlockTokenStream,
   start: number,
   contentOffset: number,
-  out: BlockTokenStream,
   context: BlockScanContext,
 ) => number | undefined;
 
@@ -72,15 +72,15 @@ function generateBlockDispatch(
     const resolvers: BlockStart[] = [];
     const call = (resolve: BlockStart): string => {
       const index = resolvers.push(resolve) - 1;
-      return `e=r${index}(s,l,i,o,t,c);if(e!==void 0)return e;`;
+      return `e=r${index}(s,l,t,i,o,c);if(e!==void 0)return e;`;
     };
     let cases = "";
     for (const code in starts) {
       cases += `case ${code}:${starts[code]!.map(call).join("")}break;`;
     }
-    // Generated aliases denote source, lines, index, offset, token output, and context.
+    // Generated aliases denote source, lines, tokens, start, offset, and context.
     const source = [
-      `return(s,l,i,o,t,c)=>{`,
+      `return(s,l,t,i,o,c)=>{`,
       `let e;switch(o<0?${Character.VirtualBlockIndent}:s.charCodeAt(o)){${cases}}`,
       ...fallbacks.map(call),
       `throw new Error("No block fallback")}`,
@@ -89,20 +89,20 @@ function generateBlockDispatch(
     return Function(...names, source)(...resolvers);
   }
   catch {
-    return (source, lines, start, contentOffset, out, context) => {
+    return (source, lines, tokens, start, contentOffset, context) => {
       const resolvers = starts[
         contentOffset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(contentOffset)
       ];
       if (resolvers) {
         for (const resolve of resolvers) {
-          const end = resolve(source, lines, start, contentOffset, out, context);
+          const end = resolve(source, lines, tokens, start, contentOffset, context);
           if (end !== void 0) {
             return end;
           }
         }
       }
       for (const fallback of fallbacks) {
-        const end = fallback(source, lines, start, contentOffset, out, context);
+        const end = fallback(source, lines, tokens, start, contentOffset, context);
         if (end !== void 0) {
           return end;
         }

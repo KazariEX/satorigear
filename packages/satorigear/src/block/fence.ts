@@ -95,7 +95,7 @@ const fenceTabIndent = [
 export function appendFencedToken(
   source: string,
   lines: BlockLines,
-  out: BlockTokenStream,
+  tokens: BlockTokenStream,
   kind: BlockKind,
   start: number,
   end: number,
@@ -109,7 +109,7 @@ export function appendFencedToken(
   const lineEnd = lines.end(start);
   const infoStart = trimLineWhitespaceStart(source, fence.offset + fence.length, lineEnd);
   const consumedEnd = lines.next(end - 1);
-  out.push(
+  tokens.push(
     kind,
     fence.offset,
     closed || consumedEnd < source.length ? lines.end(end - 1) : consumedEnd,

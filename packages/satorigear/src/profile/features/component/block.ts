@@ -268,56 +268,56 @@ function nextSlot(
 function emitComponentBody(
   source: string,
   lines: BlockLines,
+  tokens: BlockTokenStream,
   start: number,
   end: number,
   closingOffset: number,
-  out: BlockTokenStream,
   context: BlockScanContext,
 ): void {
   let cursor = start;
   const yamlEnd = cursor < end ? yamlPropsEnd(source, lines, cursor, end) : void 0;
   if (yamlEnd !== void 0) {
-    appendLogicalToken(out, BlockKind.BlockComponentYamlProps, source, lines, cursor, yamlEnd);
+    appendLogicalToken(source, lines, tokens, BlockKind.BlockComponentYamlProps, cursor, yamlEnd);
     cursor = yamlEnd;
   }
   let slot = nextSlot(source, lines, cursor, end);
   if (!slot) {
-    context.scanLines(source, lines.view(cursor, end), out);
+    context.scanLines(source, lines.view(cursor, end), tokens);
     return;
   }
   if (slot.index > cursor) {
-    context.scanLines(source, lines.view(cursor, slot.index), out);
+    context.scanLines(source, lines.view(cursor, slot.index), tokens);
   }
   while (slot) {
     const following = nextSlot(source, lines, slot.index + 1, end);
     const next = following?.index ?? end;
     const opening = slot.opening;
-    out.push(BlockKind.BlockComponentSlotOpen, opening.offset, opening.nameEnd);
+    tokens.push(BlockKind.BlockComponentSlotOpen, opening.offset, opening.nameEnd);
     if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
-      out.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
+      tokens.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
     }
-    context.scanLines(source, lines.view(slot.index + 1, next), out);
+    context.scanLines(source, lines.view(slot.index + 1, next), tokens);
     const slotEnd = following ? following.opening.offset : closingOffset;
-    out.push(BlockKind.BlockComponentSlotClose, slotEnd, slotEnd);
+    tokens.push(BlockKind.BlockComponentSlotClose, slotEnd, slotEnd);
     slot = following;
   }
 }
 
 function emitOpening(
+  tokens: BlockTokenStream,
   contentOffset: number,
   opening: BlockOpening,
-  out: BlockTokenStream,
 ): void {
-  out.push(BlockKind.BlockComponentOpen, contentOffset, opening.nameEnd);
+  tokens.push(BlockKind.BlockComponentOpen, contentOffset, opening.nameEnd);
   if (opening.labelStart !== void 0 && opening.labelEnd !== void 0) {
-    out.push(BlockKind.BlockComponentLabelOpen, opening.labelStart, opening.labelStart + 1);
+    tokens.push(BlockKind.BlockComponentLabelOpen, opening.labelStart, opening.labelStart + 1);
     if (opening.labelEnd > opening.labelStart + 2) {
-      out.push(BlockKind.InlineChunk, opening.labelStart + 1, opening.labelEnd - 1);
+      tokens.push(BlockKind.InlineChunk, opening.labelStart + 1, opening.labelEnd - 1);
     }
-    out.push(BlockKind.BlockComponentLabelClose, opening.labelEnd - 1, opening.labelEnd);
+    tokens.push(BlockKind.BlockComponentLabelClose, opening.labelEnd - 1, opening.labelEnd);
   }
   if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
-    out.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
+    tokens.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
   }
 }
 
@@ -337,15 +337,15 @@ const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
 };
 
 function createBlockStart(shorthand: boolean): BlockStart {
-  return (source, lines, start, contentOffset, out, context) => {
+  return (source, lines, tokens, start, contentOffset, context) => {
     const opening = blockOpeningAt(source, lines, start, contentOffset, shorthand);
     if (!opening) {
       return;
     }
     if (shorthand) {
-      emitOpening(contentOffset, opening, out);
+      emitOpening(tokens, contentOffset, opening);
       const lineEnd = lines.end(start);
-      out.push(BlockKind.BlockComponentClose, lineEnd, lineEnd);
+      tokens.push(BlockKind.BlockComponentClose, lineEnd, lineEnd);
       return start + 1;
     }
     const closing = blockClose(source, lines, start, opening);
@@ -353,17 +353,17 @@ function createBlockStart(shorthand: boolean): BlockStart {
       context.retainLookahead(lines.next(lines.length - 1));
       return;
     }
-    emitOpening(contentOffset, opening, out);
+    emitOpening(tokens, contentOffset, opening);
     emitComponentBody(
       source,
       lines,
+      tokens,
       start + 1,
       closing.index,
       closing.offset,
-      out,
       context,
     );
-    out.push(BlockKind.BlockComponentClose, closing.offset, lines.end(closing.index));
+    tokens.push(BlockKind.BlockComponentClose, closing.offset, lines.end(closing.index));
     return closing.index + 1;
   };
 }

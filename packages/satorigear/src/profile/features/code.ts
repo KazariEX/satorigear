@@ -84,7 +84,7 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.VirtualBlockIndent,
         ],
-        start(source, lines, start, contentOffset, out) {
+        start(source, lines, tokens, start) {
           let end = start + 1;
           while (end < lines.length && lineIndentOffset(source, lines, end) < 0) {
             end++;
@@ -94,7 +94,7 @@ export const feature: SyntaxFeature = {
           while (contentEnd > start && isBlankLine(source, lines, contentEnd - 1)) {
             contentEnd--;
           }
-          out.push(BlockKind.IndentedCodeBlock, lines.start(start), lines.end(contentEnd - 1), {
+          tokens.push(BlockKind.IndentedCodeBlock, lines.start(start), lines.end(contentEnd - 1), {
             text: indentedContent(source, lines, start, contentEnd),
           });
           return end;
@@ -108,7 +108,7 @@ export const feature: SyntaxFeature = {
         interrupt(source, lines, index, contentOffset) {
           return !!codeFenceAt(source, lines, index, contentOffset);
         },
-        start(source, lines, start, contentOffset, out) {
+        start(source, lines, tokens, start, contentOffset) {
           const fence = codeFenceAt(source, lines, start, contentOffset);
           if (!fence) {
             return;
@@ -124,7 +124,7 @@ export const feature: SyntaxFeature = {
           appendFencedToken(
             source,
             lines,
-            out,
+            tokens,
             BlockKind.FencedCodeBlock,
             start,
             end,

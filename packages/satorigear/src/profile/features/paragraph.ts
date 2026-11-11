@@ -10,11 +10,11 @@ import type { SyntaxFeature } from "../types.ts";
 export const feature: SyntaxFeature = {
   block: {
     fallbacks: [
-      (source, lines, start, contentOffset, out, context) => {
+      (source, lines, tokens, start, contentOffset, context) => {
         // Earlier fallbacks rejected this nonblank line, so it begins the paragraph.
-        const openToken = out.length;
+        const openToken = tokens.length;
         const offset = lines.start(start);
-        out.push(BlockKind.ParagraphOpen, offset, offset);
+        tokens.push(BlockKind.ParagraphOpen, offset, offset);
         // Keep one chunk across contiguous lines; split only where source has a gap.
         let chunkOffset = contentOffset;
         let index = start + 1;
@@ -29,12 +29,12 @@ export const feature: SyntaxFeature = {
           if (canInterrupt) {
             const setext = setextMarkerAt(source, lines, index, contentStart);
             if (setext) {
-              out.setKind(
+              tokens.setKind(
                 openToken,
                 setext === "=" ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
               );
-              out.setEnd(openToken, lineEnd);
-              out.closeRange(chunkOffset, lines.end(index - 1));
+              tokens.setEnd(openToken, lineEnd);
+              tokens.closeRange(chunkOffset, lines.end(index - 1));
               return index + 1;
             }
             if (context.startsInterruptingBlock(source, lines, index, contentStart)) {
@@ -43,13 +43,13 @@ export const feature: SyntaxFeature = {
           }
           const previousEnd = lines.next(index - 1);
           if (chunkStart !== previousEnd) {
-            out.push(BlockKind.InlineChunk, chunkOffset, previousEnd);
+            tokens.push(BlockKind.InlineChunk, chunkOffset, previousEnd);
             chunkOffset = chunkStart;
           }
           index++;
         }
         const close = lines.end(index - 1);
-        out.closeRange(chunkOffset, close);
+        tokens.closeRange(chunkOffset, close);
         return index;
       },
     ],

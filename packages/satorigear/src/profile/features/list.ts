@@ -215,9 +215,9 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
 };
 
 function listStartNumber(
+  source: string,
   tokens: BlockTokenStream,
   tokenStart: number,
-  source: string,
 ): number {
   // The ordered marker span is exactly its digits plus one delimiter character.
   const digits = source.slice(tokens.start(tokenStart), tokens.end(tokenStart) - 1);
@@ -232,7 +232,7 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     return {
       type: "list",
       ordered,
-      start: ordered ? listStartNumber(tokens, tokenStart, context.source) : null,
+      start: ordered ? listStartNumber(context.source, tokens, tokenStart) : null,
       spread: tokens.kind(close) === BlockKind.ListSpreadClose,
       children: items,
       position: {
@@ -243,7 +243,7 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   };
 }
 
-const listStart: BlockStart = (source, lines, start, contentOffset, out, context) => {
+const listStart: BlockStart = (source, lines, tokens, start, contentOffset, context) => {
   let marker = listMarkerAt(source, lines, start, contentOffset);
   if (!marker) {
     return;
@@ -251,7 +251,7 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
   const delimiter = marker.delimiter;
   const ordered = delimiter === Character.FullStop || delimiter === Character.RightParenthesis;
   const listOpen = ordered ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
-  out.push(listOpen, marker.offset, marker.end);
+  tokens.push(listOpen, marker.offset, marker.end);
   let index = start;
   let listEnd = marker.end;
   let listSpread = false;
@@ -261,7 +261,7 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
     // A trailing blank affects the list only when another sibling follows it.
     listSpread ||= trailingBlank;
     trailingBlank = false;
-    out.push(BlockKind.ListItemOpen, marker.offset, marker.end);
+    tokens.push(BlockKind.ListItemOpen, marker.offset, marker.end);
     const itemLines = context.createLineView(
       lines,
       index,
@@ -322,30 +322,30 @@ const listStart: BlockStart = (source, lines, start, contentOffset, out, context
       itemLines.pushLazy(lines, index);
       index++;
     }
-    const itemSpread = context.scanLines(source, itemLines, out);
+    const itemSpread = context.scanLines(source, itemLines, tokens);
     listEnd = itemLines.next(itemLines.length - 1);
     // A frame's blank-separation summary is known only when its close is emitted.
-    out.push(itemSpread ? BlockKind.ListItemSpreadClose : BlockKind.ListItemClose, listEnd, listEnd);
+    tokens.push(itemSpread ? BlockKind.ListItemSpreadClose : BlockKind.ListItemClose, listEnd, listEnd);
     marker = sibling;
   }
-  out.push(listSpread ? BlockKind.ListSpreadClose : BlockKind.ListClose, listEnd, listEnd);
+  tokens.push(listSpread ? BlockKind.ListSpreadClose : BlockKind.ListClose, listEnd, listEnd);
   return index;
 };
 
-const taskListStart: BlockStart = (source, lines, start, contentOffset, out, context) => {
-  const listToken = out.length;
-  const nextLine = listStart(source, lines, start, contentOffset, out, context);
+const taskListStart: BlockStart = (source, lines, tokens, start, contentOffset, context) => {
+  const listToken = tokens.length;
+  const nextLine = listStart(source, lines, tokens, start, contentOffset, context);
   if (nextLine === void 0) {
     return;
   }
   // List node lengths jump over nested frames; task variants refine direct item kinds in place.
-  for (let item = listToken + 1; item < out.length - 1; item += out.nodeLength(item)) {
+  for (let item = listToken + 1; item < tokens.length - 1; item += tokens.nodeLength(item)) {
     let paragraph = item + 1;
-    let contentKind = out.kind(paragraph);
+    let contentKind = tokens.kind(paragraph);
     // Link definition leaves do not count as the item's first content block.
     while (contentKind === BlockKind.LinkDefinition) {
-      paragraph += out.nodeLength(paragraph);
-      contentKind = out.kind(paragraph);
+      paragraph += tokens.nodeLength(paragraph);
+      contentKind = tokens.kind(paragraph);
     }
     if (contentKind !== BlockKind.ParagraphOpen) {
       continue;
@@ -353,17 +353,17 @@ const taskListStart: BlockStart = (source, lines, start, contentOffset, out, con
     const firstChunk = paragraph + 1;
     const marker = taskListMarkerAt(
       source,
-      out.start(firstChunk),
-      out.end(firstChunk),
+      tokens.start(firstChunk),
+      tokens.end(firstChunk),
     );
-    if (!marker || !hasTaskListContent(source, out, firstChunk, marker.contentStart)) {
+    if (!marker || !hasTaskListContent(source, tokens, firstChunk, marker.contentStart)) {
       continue;
     }
-    out.setKind(
+    tokens.setKind(
       item,
       marker.checked ? BlockKind.CheckedTaskItemOpen : BlockKind.UncheckedTaskItemOpen,
     );
-    out.setStart(firstChunk, marker.contentStart);
+    tokens.setStart(firstChunk, marker.contentStart);
   }
   return nextLine;
 };

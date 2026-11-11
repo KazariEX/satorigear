@@ -271,13 +271,13 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.LeftSquareBracket,
         ],
-        start(source, lines, start, contentOffset, out, context) {
+        start(source, lines, tokens, start, contentOffset, context) {
           const definition = linkDefinitionAt(source, lines, start, contentOffset, context);
           if (!definition) {
             return;
           }
           // One leaf owns the whole definition, so the trailing newline stays implicit.
-          out.push(BlockKind.LinkDefinition, contentOffset, lines.end(definition.end - 1), {
+          tokens.push(BlockKind.LinkDefinition, contentOffset, lines.end(definition.end - 1), {
             definitionKey: definition.definitionKey,
             value: definition.fields,
           });

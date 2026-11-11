@@ -34,7 +34,7 @@ export const blockStarts: BlockFeature["starts"] = [
     interrupt(source, lines, index, contentOffset) {
       return fenceAt(source, lines, index, mathFenceRule, contentOffset) !== void 0;
     },
-    start(source, lines, start, contentOffset, out) {
+    start(source, lines, tokens, start, contentOffset) {
       const fence = fenceAt(source, lines, start, mathFenceRule, contentOffset);
       if (!fence) {
         return;
@@ -50,7 +50,7 @@ export const blockStarts: BlockFeature["starts"] = [
       appendFencedToken(
         source,
         lines,
-        out,
+        tokens,
         BlockKind.MathBlock,
         start,
         end,

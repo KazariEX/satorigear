@@ -440,10 +440,10 @@ export class BlockTokenStream implements DefinitionLookup {
 }
 
 export function appendLogicalToken(
-  out: BlockTokenStream,
-  kind: BlockKind,
   source: string,
   lines: BlockLines,
+  tokens: BlockTokenStream,
+  kind: BlockKind,
   start: number,
   end: number,
   value?: unknown,
@@ -482,7 +482,7 @@ export function appendLogicalToken(
     }
     text = logicalLines.join("");
   }
-  out.push(
+  tokens.push(
     kind,
     tokenStart,
     tokenEnd,

@@ -81,7 +81,7 @@ export const blockStarts: BlockFeature["starts"] = [
     interrupt(source, lines, index, contentOffset) {
       return definitionAt(source, lines, index, contentOffset) !== void 0;
     },
-    start(source, lines, start, contentOffset, out, context) {
+    start(source, lines, tokens, start, contentOffset, context) {
       const match = definitionAt(source, lines, start, contentOffset);
       if (!match) {
         return;
@@ -119,7 +119,7 @@ export const blockStarts: BlockFeature["starts"] = [
       ) {
         definitionLines.pop();
       }
-      out.push(
+      tokens.push(
         BlockKind.FootnoteDefinitionOpen,
         contentOffset,
         match.markerEnd,
@@ -131,11 +131,11 @@ export const blockStarts: BlockFeature["starts"] = [
           },
         },
       );
-      context.scanLines(source, definitionLines, out);
+      context.scanLines(source, definitionLines, tokens);
       const end = definitionLines.length > 0
         ? definitionLines.next(definitionLines.length - 1)
         : match.markerEnd;
-      out.push(BlockKind.FootnoteDefinitionClose, end, end);
+      tokens.push(BlockKind.FootnoteDefinitionClose, end, end);
       return index;
     },
   },

@@ -56,13 +56,13 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
       starts: [
         {
           codes: [marker.charCodeAt(0)],
-          start(source, lines, start, contentOffset, out, context) {
+          start(source, lines, tokens, start, contentOffset, context) {
             if (lines.start(start) !== 0 || !frontmatterFenceAt(source, lines, start, marker)) {
               return;
             }
             for (let end = start + 1; end < lines.length; end++) {
               if (frontmatterFenceAt(source, lines, end, marker)) {
-                appendLogicalToken(out, BlockKind.Frontmatter, source, lines, start, end + 1);
+                appendLogicalToken(source, lines, tokens, BlockKind.Frontmatter, start, end + 1);
                 return end + 1;
               }
             }

@@ -119,7 +119,7 @@ export class BlockScanContext {
   scanBlockLines(
     source: string,
     lines: BlockLines,
-    out: BlockTokenStream,
+    tokens: BlockTokenStream,
     visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
   ): void {
     const profile = this.#profile;
@@ -144,9 +144,9 @@ export class BlockScanContext {
         contentOffset = -1;
       }
       const lineStart = index;
-      const tokenStart = out.length;
-      index = profile.dispatch(source, lines, index, contentOffset, out, this);
-      if (visit?.(lineStart, index, tokenStart, out.length)) {
+      const tokenStart = tokens.length;
+      index = profile.dispatch(source, lines, tokens, index, contentOffset, this);
+      if (visit?.(lineStart, index, tokenStart, tokens.length)) {
         return;
       }
     }
@@ -156,10 +156,10 @@ export class BlockScanContext {
    * Wraps {@link scanBlockLines} to report blank separation between direct blocks.
    * Releases the line view after scanning when it is owned by this context.
    */
-  scanLines(source: string, lines: BlockLines, out: BlockTokenStream): boolean {
+  scanLines(source: string, lines: BlockLines, tokens: BlockTokenStream): boolean {
     let blankSeparated = false;
     let previousContentEnd = -1;
-    this.scanBlockLines(source, lines, out, (lineStart, lineEnd) => {
+    this.scanBlockLines(source, lines, tokens, (lineStart, lineEnd) => {
       blankSeparated ||= previousContentEnd >= 0 && lineStart > previousContentEnd;
       previousContentEnd = lineEnd;
       // A child may consume trailing blank lines that still separate the following direct block.

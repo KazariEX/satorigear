@@ -109,7 +109,7 @@ export const feature: SyntaxFeature = {
         interrupt(source, lines, index, contentOffset) {
           return !!htmlStartAt(source, lines, index, contentOffset)?.interruptParagraph;
         },
-        start(source, lines, start, contentOffset, out) {
+        start(source, lines, tokens, start, contentOffset) {
           const htmlStart = htmlStartAt(source, lines, start, contentOffset);
           if (!htmlStart) {
             return;
@@ -136,7 +136,7 @@ export const feature: SyntaxFeature = {
               end++;
             }
           }
-          appendLogicalToken(out, BlockKind.HtmlBlock, source, lines, start, end, unterminated);
+          appendLogicalToken(source, lines, tokens, BlockKind.HtmlBlock, start, end, unterminated);
           return end;
         },
       },
