@@ -291,82 +291,53 @@ export class BlockScanner {
     // 2. Rescan from that boundary until block geometry and shifted tokens match an old record.
     const replacement = new BlockTokenStream(nextSource.length);
     const rescannedRecords: BlockRecord[] = [];
-    const initialEndRecord = previousRecords[Math.min(previousRecords.length - 1, affectedIndex + 2)];
+    const scanLines = scanLineStart === 0 ? nextLines : nextLines.view(scanLineStart);
     let convergedIndex = -1;
-    let scanLineEnd = nextLines.indexAtOrAfter(
-      Math.min(
-        nextSource.length,
-        Math.max(changedSpan.end, (initialEndRecord?.end ?? nextSource.length) + offsetDelta),
-      ),
-    );
-    while (true) {
-      const scanEnd = scanLineEnd < nextLines.length ? nextLines.start(scanLineEnd) : nextSource.length;
-      const scanLines = nextLines.slice(scanLineStart, scanLineEnd);
-      let convergenceIndex = affectedIndex;
-      context.resetLookahead();
-      // The visitor is consumed synchronously before this window can be expanded.
-      // eslint-disable-next-line no-loop-func
-      context.scanBlockLines(nextSource, scanLines, replacement, (
-        lineStart,
-        lineEnd,
-        tokenStart,
-        tokenEnd,
-      ) => {
-        const blockStart = scanLines.start(lineStart);
-        const blockEnd = scanLines.next(lineEnd - 1);
-        const observedEnd = context.consumeLookahead();
-        const dependencyEnd = Math.max(blockEnd, observedEnd);
-        // A failed probe that reached the temporary boundary needs a larger window before convergence is meaningful.
-        if (observedEnd >= scanEnd && scanEnd < nextSource.length) {
-          return true;
+    let convergenceIndex = affectedIndex;
+    context.resetLookahead();
+    context.scanBlockLines(nextSource, scanLines, replacement, (
+      lineStart,
+      lineEnd,
+      tokenStart,
+      tokenEnd,
+    ) => {
+      const blockStart = scanLines.start(lineStart);
+      const blockEnd = scanLines.next(lineEnd - 1);
+      const dependencyEnd = Math.max(blockEnd, context.consumeLookahead());
+      if (blockEnd >= changedSpan.end) {
+        const candidateStart = Math.max(oldChangedEnd, blockStart - offsetDelta);
+        while (
+          convergenceIndex < previousRecords.length &&
+          previousRecords[convergenceIndex].start < candidateStart
+        ) {
+          convergenceIndex++;
         }
-        // A block at the temporary boundary may change in the next window.
+        const candidateRecord = previousRecords[convergenceIndex];
         if (
-          blockEnd >= changedSpan.end && (
-            blockEnd < scanEnd || scanEnd === nextSource.length
+          candidateRecord?.start + offsetDelta === blockStart &&
+          candidateRecord.end + offsetDelta === blockEnd &&
+          candidateRecord.dependencyEnd + offsetDelta === dependencyEnd &&
+          sameShiftedBlock(
+            this.#tokens,
+            candidateRecord,
+            replacement,
+            tokenStart,
+            tokenEnd,
+            offsetDelta,
           )
         ) {
-          const candidateStart = Math.max(oldChangedEnd, blockStart - offsetDelta);
-          while (
-            convergenceIndex < previousRecords.length &&
-            previousRecords[convergenceIndex].start < candidateStart
-          ) {
-            convergenceIndex++;
-          }
-          const candidateRecord = previousRecords[convergenceIndex];
-          if (
-            candidateRecord?.start + offsetDelta === blockStart &&
-            candidateRecord.end + offsetDelta === blockEnd &&
-            candidateRecord.dependencyEnd + offsetDelta === dependencyEnd &&
-            sameShiftedBlock(
-              this.#tokens,
-              candidateRecord,
-              replacement,
-              tokenStart,
-              tokenEnd,
-              offsetDelta,
-            )
-          ) {
-            replacement.truncate(tokenStart);
-            convergedIndex = convergenceIndex;
-            return true;
-          }
+          replacement.truncate(tokenStart);
+          convergedIndex = convergenceIndex;
+          return true;
         }
-        rescannedRecords.push({
-          start: blockStart,
-          end: blockEnd,
-          dependencyEnd,
-          tokenStart: oldTokenStart + tokenStart,
-        });
-      });
-      if (convergedIndex >= 0 || scanEnd === nextSource.length) {
-        break;
       }
-      replacement.reset(nextSource.length);
-      rescannedRecords.length = 0;
-      const expandedEnd = Math.min(nextSource.length, restartOffset + (scanEnd - restartOffset) * 2);
-      scanLineEnd = nextLines.indexAtOrAfter(expandedEnd);
-    }
+      rescannedRecords.push({
+        start: blockStart,
+        end: blockEnd,
+        dependencyEnd,
+        tokenStart: oldTokenStart + tokenStart,
+      });
+    });
 
     // 3. Replace the rescanned token window, then map the narrowed token damage to record ranges.
     const oldTokenLength = this.#tokens.length;

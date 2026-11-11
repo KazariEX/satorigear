@@ -302,18 +302,29 @@ export class BlockLines implements SourceLocator {
     this.push(start, end, next, prefixColumns, lazy);
   }
 
-  slice(start = 0, end = this.length): BlockLines {
-    // The exact slice supplies its own backing store, so skip the default capacity.
+  /** Borrows a range for reading; the owner retains the backing store. */
+  view(start: number, end = this.length): BlockLines {
     const result = new BlockLines(this.#sourceLength, 0);
-    const fieldStart = start * BlockLineField.Stride;
-    const fieldEnd = end * BlockLineField.Stride;
-    result.#fields = this.#fields.slice(fieldStart, fieldEnd);
+    result.#fields = this.#fields.subarray(
+      start * BlockLineField.Stride,
+      end * BlockLineField.Stride,
+    );
     result.#length = end - start;
     result.#lineEndingsNormalized = this.#lineEndingsNormalized;
     if (this.#relativeStart < end) {
       result.#relativeStart = Math.max(0, this.#relativeStart - start);
     }
     return result;
+  }
+
+  #copy(): BlockLines {
+    // Editing owns an independent copy of the geometry it will overwrite.
+    const next = new BlockLines(this.#sourceLength, 0);
+    next.#fields = this.#fields.slice(0, this.#length * BlockLineField.Stride);
+    next.#length = this.#length;
+    next.#relativeStart = this.#relativeStart;
+    next.#lineEndingsNormalized = this.#lineEndingsNormalized;
+    return next;
   }
 
   update(
@@ -339,7 +350,7 @@ export class BlockLines implements SourceLocator {
     const changed = BlockLines.from(nextSource, restartOffset, newSuffixOffset);
     // Equal-length edits preserve line slots, so only overwrite the rebuilt window.
     if (delta === 0 && changed.length === suffix - prefixEnd) {
-      const next = this.slice();
+      const next = this.#copy();
       for (let index = 0; index < changed.length; index++) {
         next.#setAbsoluteFrom(prefixEnd + index, changed, index);
       }
@@ -530,29 +541,4 @@ export function physicalColumnAt(source: string, offset: number): number {
     start++;
   }
   return column;
-}
-
-export function logicalLine(source: string, lines: BlockLines, index: number): string {
-  const prefixColumns = lines.prefixColumns(index);
-  let result = " ".repeat(prefixColumns);
-  let offset = lines.start(index);
-  let logicalColumn = prefixColumns;
-  let physicalColumn = physicalColumnAt(source, offset);
-  const end = lines.end(index);
-  while (offset < end && logicalColumn < 4 && (source[offset] === " " || source[offset] === "\t")) {
-    if (source[offset] === " ") {
-      result += " ";
-      logicalColumn++;
-      physicalColumn++;
-    }
-    else {
-      const logicalWidth = 4 - (logicalColumn % 4);
-      const physicalWidth = 4 - (physicalColumn % 4);
-      result += "\t" + " ".repeat(Math.max(0, physicalWidth - logicalWidth));
-      logicalColumn += Math.max(logicalWidth, physicalWidth);
-      physicalColumn += physicalWidth;
-    }
-    offset++;
-  }
-  return result + source.slice(offset, lines.next(index));
 }

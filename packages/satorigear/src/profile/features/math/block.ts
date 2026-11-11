@@ -1,15 +1,6 @@
-import {
-  closesFence,
-  fenceAt,
-  fencedBlock,
-  type FencedBlock,
-  type FenceRule,
-  sourceColumnFenceContent,
-} from "../../../block/fence.ts";
-import { appendLogicalToken } from "../../../block/tokens.ts";
+import { appendFencedToken, closesFence, fenceAt, type FenceRule } from "../../../block/fence.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
-import { fencedBlockPosition } from "../../../fragment/block.ts";
 import { semanticText } from "../../utils.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 
@@ -24,15 +15,12 @@ export const blockBuilds: BlockFeature["builds"] = [
     token: BlockKind.MathBlock,
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
-      // The math scanner records fence geometry on every emitted block token.
-      const block = tokens.value<FencedBlock>(tokenStart)!;
-      const value = block.content ?? tokens.text(context.source, tokenStart);
-      const meta = semanticText(block.info);
+      const meta = semanticText(tokens.value<string>(tokenStart)!);
       return {
         type: "math",
         meta: meta || null,
-        value: sourceColumnFenceContent(value, block),
-        position: fencedBlockPosition(tokenStart, block, context),
+        value: tokens.text(context.source, tokenStart),
+        position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
       };
     },
   },
@@ -59,14 +47,16 @@ export const blockStarts: BlockFeature["starts"] = [
       if (end < lines.length) {
         end++;
       }
-      appendLogicalToken(
-        out,
-        BlockKind.MathBlock,
+      appendFencedToken(
         source,
         lines,
+        out,
+        BlockKind.MathBlock,
         start,
         end,
-        fencedBlock(source, lines, start, end, fence, closed),
+        fence,
+        closed,
+        false,
       );
       return end;
     },

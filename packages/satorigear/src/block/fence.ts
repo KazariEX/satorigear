@@ -1,5 +1,7 @@
 import { Character } from "../constants/character.ts";
-import { type BlockLines, lineContentEnd, lineIndentOffset, trimLineWhitespaceStart } from "./lines.ts";
+import { type BlockLines, lineIndentOffset, physicalColumnAt, trimLineWhitespaceStart } from "./lines.ts";
+import type { BlockKind } from "../constants/block.ts";
+import type { BlockTokenStream } from "./tokens.ts";
 
 export interface Fence {
   indent: number;
@@ -13,16 +15,6 @@ export interface FenceRule {
   forbiddenInfoMarker: number;
   marker: number;
   minimumLength: number;
-}
-
-// Scanning owns fence recognition; projection consumes this payload without recognizing it again.
-export interface FencedBlock {
-  closed: boolean;
-  // Physical views retain the raw body; projected views reconstruct it from token text.
-  content?: string;
-  indent: number;
-  info: string;
-  markerOffset: number;
 }
 
 export function fenceAt(
@@ -87,92 +79,110 @@ export function closesFence(source: string, lines: BlockLines, index: number, fe
   return trimLineWhitespaceStart(source, offset, lineEnd) === lineEnd;
 }
 
-export function fencedBlock(
-  source: string,
-  lines: BlockLines,
-  index: number,
-  end: number,
-  fence: Fence,
-  closed: boolean,
-): FencedBlock {
-  const lineEnd = lines.end(index);
-  const infoStart = trimLineWhitespaceStart(source, fence.offset + fence.length, lineEnd);
-  let content: string | undefined;
-  if (lines.physicallyContiguous()) {
-    const contentStart = lines.next(index);
-    const lastContentLine = end - (closed ? 2 : 1);
-    content = source.slice(
-      contentStart,
-      lastContentLine > index ? lines.end(lastContentLine) : contentStart,
-    );
-  }
-  return {
-    closed,
-    content,
-    indent: fence.indent,
-    info: source.slice(infoStart, lineEnd),
-    markerOffset: fence.offset - lines.start(index),
-  };
-}
-
-// Multiline anchors also recognize Unicode separators, which block scanning treats as content.
+// Multiline anchors also recognize Unicode separators, which remain literal content.
 const fenceSpaceIndent = [
   /^(?<![\u2028\u2029]) /gm,
   /^(?<![\u2028\u2029]) {1,2}/gm,
   /^(?<![\u2028\u2029]) {1,3}/gm,
 ];
-const sourceColumnFenceTabIndent = [
+const fenceTabIndent = [
   /^(?<![\u2028\u2029])\t/gm,
   /^(?<![\u2028\u2029]) ?\t/gm,
   /^(?<![\u2028\u2029]) {0,2}\t/gm,
 ];
 
-/** Extracts content from LF-normalized input, removing up to `block.indent` spaces per line. */
-export function normalizedFenceContent(source: string, block: FencedBlock): string {
-  let content = source;
-  if (block.content === void 0) {
-    const contentStart = source.indexOf("\n") + 1;
-    if (!contentStart) {
-      return "";
-    }
-    // Search before the closing line, whether or not its final LF is retained.
-    const limit = block.closed
-      ? source.lastIndexOf("\n", source.length - 2) + 1
-      : source.length;
-    content = source.slice(contentStart, lineContentEnd(source, contentStart, limit));
-  }
-  return block.indent
-    ? content.replace(fenceSpaceIndent[block.indent - 1], "")
-    : content;
+/** Publish literal body, info and source position; scan records retain consumed coverage. */
+export function appendFencedToken(
+  source: string,
+  lines: BlockLines,
+  out: BlockTokenStream,
+  kind: BlockKind,
+  start: number,
+  end: number,
+  fence: Fence,
+  closed: boolean,
+  normalizeEndings: boolean,
+): void {
+  const content = lines.physicallyContiguous()
+    ? physicalFenceContent(source, lines, start, end - (closed ? 2 : 1), fence.indent, normalizeEndings)
+    : logicalFenceContent(source, lines, start, end, closed, fence.indent, normalizeEndings);
+  const lineEnd = lines.end(start);
+  const infoStart = trimLineWhitespaceStart(source, fence.offset + fence.length, lineEnd);
+  const consumedEnd = lines.next(end - 1);
+  out.push(
+    kind,
+    fence.offset,
+    closed || consumedEnd < source.length ? lines.end(end - 1) : consumedEnd,
+    {
+      text: content,
+      value: source.slice(infoStart, lineEnd),
+    },
+  );
 }
 
-/** Extracts original source content, removing up to `block.indent` columns per line. */
-export function sourceColumnFenceContent(source: string, block: FencedBlock): string {
-  let content = block.content;
-  if (content === void 0) {
-    let contentStart = 0;
-    while (contentStart < source.length && source[contentStart] !== "\n" && source[contentStart] !== "\r") {
-      contentStart++;
-    }
-    if (contentStart < source.length) {
-      contentStart += source[contentStart] === "\r" && source[contentStart + 1] === "\n" ? 2 : 1;
-    }
-    let limit = source.length;
-    if (block.closed) {
-      limit = lineContentEnd(source, contentStart, limit);
-      // Walk from the closing fence back to the preceding source line ending.
-      while (limit > contentStart && source[limit - 1] !== "\n" && source[limit - 1] !== "\r") {
-        limit--;
+function physicalFenceContent(
+  source: string,
+  lines: BlockLines,
+  start: number,
+  last: number,
+  indent: number,
+  normalizeEndings: boolean,
+): string {
+  const firstOffset = lines.next(start);
+  let content = source.slice(firstOffset, last > start ? lines.end(last) : firstOffset);
+  if (normalizeEndings) {
+    content = lines.normalizeLineEndings(content);
+  }
+  if (!indent) {
+    return content;
+  }
+  if (content.includes("\t")) {
+    content = content.replace(fenceTabIndent[indent - 1], "    ");
+  }
+  return content.replace(fenceSpaceIndent[indent - 1], "");
+}
+
+function logicalFenceContent(
+  source: string,
+  lines: BlockLines,
+  start: number,
+  end: number,
+  closed: boolean,
+  indent: number,
+  normalizeEndings: boolean,
+): string {
+  let last = end - (closed ? 2 : 1);
+  // A final empty projected row without an ending contributes no body line.
+  if (!closed && last > start && lines.start(last) === lines.next(last) && !lines.prefixColumns(last)) {
+    last--;
+  }
+  const parts: string[] = [];
+  for (let index = start + 1; index <= last; index++) {
+    let offset = lines.start(index);
+    const lineEnd = lines.end(index);
+    let columns = lines.prefixColumns(index);
+    while (offset < lineEnd && columns < indent) {
+      const code = source.charCodeAt(offset);
+      if (code === Character.Space) {
+        columns++;
       }
+      else if (code === Character.CharacterTabulation) {
+        columns += 4 - physicalColumnAt(source, offset) % 4;
+      }
+      else {
+        break;
+      }
+      offset++;
     }
-    content = source.slice(contentStart, lineContentEnd(source, contentStart, limit));
+    parts.push(
+      " ".repeat(Math.max(0, columns - indent)) + source.slice(offset, lineEnd) + (
+        index < last
+          ? normalizeEndings
+            ? "\n"
+            : source.slice(lineEnd, lines.next(index))
+          : ""
+      ),
+    );
   }
-  if (block.indent) {
-    if (content.includes("\t")) {
-      // Expand the first indentation tab to its stop so space removal retains its overshoot.
-      content = content.replace(sourceColumnFenceTabIndent[block.indent - 1], "    ");
-    }
-    content = content.replace(fenceSpaceIndent[block.indent - 1], "");
-  }
-  return content;
+  return parts.join("");
 }

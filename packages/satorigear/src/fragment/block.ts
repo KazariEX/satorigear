@@ -1,5 +1,4 @@
 import type { Node, RootContent, TopLevelContent } from "mdast";
-import type { FencedBlock } from "../block/fence.ts";
 import type { BlockStructure } from "../block/scanner.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
@@ -37,22 +36,6 @@ export function leafBlockPosition(
   return context.locator.positionAt(
     tokens.start(tokenStart),
     tokens.contentEnd(context.source, tokenStart),
-  );
-}
-
-export function fencedBlockPosition(
-  tokenStart: number,
-  block: FencedBlock,
-  context: BlockBuildContext,
-): SourcePosition {
-  const tokens = context.structure.tokens;
-  const end = tokens.end(tokenStart);
-  const positionEnd = block.closed || end < tokens.sourceLength
-    ? tokens.contentEnd(context.source, tokenStart)
-    : end;
-  return context.locator.positionAt(
-    tokens.start(tokenStart) + block.markerOffset,
-    positionEnd,
   );
 }
 

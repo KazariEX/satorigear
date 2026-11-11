@@ -1,18 +1,14 @@
 import {
+  appendFencedToken,
   closesFence,
   type Fence,
   fenceAt,
-  fencedBlock,
-  type FencedBlock,
   type FenceRule,
-  normalizedFenceContent,
 } from "../../block/fence.ts";
-import { type BlockLines, isBlankLine, lineIndentOffset } from "../../block/lines.ts";
-import { appendLogicalToken } from "../../block/tokens.ts";
+import { type BlockLines, isBlankLine, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { fencedBlockPosition } from "../../fragment/block.ts";
 import { inlineMarkerRunEnd } from "../../inline/tokenize.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "../utils.ts";
@@ -34,19 +30,42 @@ export function codeFenceAt(
   return fenceAt(source, lines, index, codeFenceRule, markerOffset);
 }
 
+/** Consume structural code indentation before publishing the literal body. */
+function indentedContent(source: string, lines: BlockLines, start: number, end: number): string {
+  const parts: string[] = [];
+  for (let index = start; index < end; index++) {
+    let offset = lines.start(index);
+    let columns = lines.prefixColumns(index);
+    const lineEnd = lines.end(index);
+    while (offset < lineEnd && columns < 4) {
+      const code = source.charCodeAt(offset);
+      if (code === Character.Space) {
+        columns++;
+      }
+      else if (code === Character.CharacterTabulation) {
+        columns += Math.max(4 - columns, 4 - physicalColumnAt(source, offset) % 4);
+      }
+      else {
+        break;
+      }
+      offset++;
+    }
+    parts.push(" ".repeat(Math.max(0, columns - 4)) + source.slice(offset, lineEnd));
+  }
+  return parts.join("\n");
+}
+
 export const feature: SyntaxFeature = {
   block: {
     builds: [
       {
-        token: BlockKind.FencedCodeBlock,
+        token: [
+          BlockKind.FencedCodeBlock,
+          BlockKind.IndentedCodeBlock,
+        ],
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          // The fenced-code scanner records geometry on every emitted block token.
-          const block = tokens.value<FencedBlock>(tokenStart)!;
-          const source = context.locator.normalizeLineEndings(
-            block.content ?? tokens.text(context.source, tokenStart),
-          );
-          const rawInfo = semanticText(block.info);
+          const rawInfo = semanticText(tokens.value<string>(tokenStart) ?? "");
           const langEnd = rawInfo.search(/[ \t]/);
           const lang = rawInfo ? langEnd < 0 ? rawInfo : rawInfo.slice(0, langEnd) : null;
           const metaStart = langEnd < 0 ? -1 : rawInfo.slice(langEnd).search(/[^ \t]/);
@@ -54,28 +73,8 @@ export const feature: SyntaxFeature = {
             type: "code",
             lang,
             meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
-            value: normalizedFenceContent(source, block),
-            position: fencedBlockPosition(tokenStart, block, context),
-          };
-        },
-      },
-      {
-        token: BlockKind.IndentedCodeBlock,
-        build(tokenStart, context) {
-          const tokens = context.structure.tokens;
-          const offset = tokens.start(tokenStart);
-          const contentLength = tokens.value<number>(tokenStart)!;
-          // Remove one four-column indent from every line, then trailing blank code lines.
-          const value = context.locator
-            .normalizeLineEndings(tokens.text(context.source, tokenStart))
-            .replace(/^(?: {0,3}\t| {4}| {1,3}$)/gm, "")
-            .replace(/\n(?:[ \t]*\n)*[ \t]*$/, "");
-          return {
-            type: "code",
-            lang: null,
-            meta: null,
-            value,
-            position: context.locator.positionAt(offset, offset + contentLength),
+            value: tokens.text(context.source, tokenStart),
+            position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
           };
         },
       },
@@ -85,7 +84,7 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.VirtualBlockIndent,
         ],
-        start(source, lines, start, _contentOffset, out) {
+        start(source, lines, start, contentOffset, out) {
           let end = start + 1;
           while (end < lines.length && lineIndentOffset(source, lines, end) < 0) {
             end++;
@@ -95,16 +94,9 @@ export const feature: SyntaxFeature = {
           while (contentEnd > start && isBlankLine(source, lines, contentEnd - 1)) {
             contentEnd--;
           }
-          const contentLength = lines.end(contentEnd - 1) - lines.start(start);
-          appendLogicalToken(
-            out,
-            BlockKind.IndentedCodeBlock,
-            source,
-            lines,
-            start,
-            end,
-            contentLength,
-          );
+          out.push(BlockKind.IndentedCodeBlock, lines.start(start), lines.end(contentEnd - 1), {
+            text: indentedContent(source, lines, start, contentEnd),
+          });
           return end;
         },
       },
@@ -129,14 +121,16 @@ export const feature: SyntaxFeature = {
           if (end < lines.length) {
             end++;
           }
-          appendLogicalToken(
-            out,
-            BlockKind.FencedCodeBlock,
+          appendFencedToken(
             source,
             lines,
+            out,
+            BlockKind.FencedCodeBlock,
             start,
             end,
-            fencedBlock(source, lines, start, end, fence, closed),
+            fence,
+            closed,
+            true,
           );
           return end;
         },

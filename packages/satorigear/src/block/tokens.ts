@@ -1,6 +1,6 @@
 import { BlockKind, BlockRole } from "../constants/block.ts";
 import { emptySet } from "../primitives.ts";
-import { type BlockLines, lineContentEnd, logicalLine } from "./lines.ts";
+import { type BlockLines, lineContentEnd } from "./lines.ts";
 
 const enum BlockTokenField {
   Kind,
@@ -477,7 +477,8 @@ export function appendLogicalToken(
   if (!canSliceSource) {
     const logicalLines = new Array<string>(count);
     for (let index = 0; index < count; index++) {
-      logicalLines[index] = logicalLine(source, lines, start + index);
+      const line = start + index;
+      logicalLines[index] = " ".repeat(lines.prefixColumns(line)) + source.slice(lines.start(line), lines.next(line));
     }
     text = logicalLines.join("");
   }
