@@ -1,6 +1,7 @@
 import type { Paragraph } from "mdast";
 import { indentOffset, trimLineWhitespaceStart } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
+import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
 import { firstChildStart } from "../../fragment/node.ts";
@@ -31,7 +32,7 @@ export const feature: SyntaxFeature = {
             if (setext) {
               tokens.setKind(
                 openToken,
-                setext === "=" ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
+                setext === Character.EqualsSign ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
               );
               tokens.setEnd(openToken, lineEnd);
               tokens.closeRange(chunkOffset, lines.end(index - 1));

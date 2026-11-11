@@ -116,21 +116,23 @@ function linkDefinitionAt(
     }
 
     let destination: string;
-    if (source[offset] === "<") {
+    if (source.charCodeAt(offset) === Character.LessThanSign) {
       offset++;
+      let code = source.charCodeAt(offset);
       const destinationStart = offset;
-      while (offset < lineEnd && source[offset] !== ">") {
-        if (source[offset] === "<") {
+      while (offset < lineEnd && code !== Character.GreaterThanSign) {
+        if (code === Character.LessThanSign) {
           break parseDefinition;
         }
-        if (source[offset] === "\\" && offset + 1 < lineEnd) {
+        if (code === Character.ReverseSolidus && offset + 1 < lineEnd) {
           offset += 2;
         }
         else {
           offset++;
         }
+        code = source.charCodeAt(offset);
       }
-      if (source[offset] !== ">") {
+      if (code !== Character.GreaterThanSign) {
         break parseDefinition;
       }
       destination = source.slice(destinationStart, offset);
@@ -165,8 +167,11 @@ function linkDefinitionAt(
     }
 
     const destinationLine = lineIndex;
-    if (offset < lineEnd && source[offset] !== " " && source[offset] !== "\t") {
-      break parseDefinition;
+    if (offset < lineEnd) {
+      const code = source.charCodeAt(offset);
+      if (code !== Character.Space && code !== Character.CharacterTabulation) {
+        break parseDefinition;
+      }
     }
     offset = trimLineWhitespaceStart(source, offset, lineEnd);
     let titleOnNextLine = false;
@@ -179,10 +184,11 @@ function linkDefinitionAt(
       titleOnNextLine = true;
     }
 
-    const closer = source[offset] === "("
-      ? ")"
-      : source[offset] === "\"" || source[offset] === "'"
-        ? source[offset]
+    const code = source.charCodeAt(offset);
+    const closer = code === Character.LeftParenthesis
+      ? Character.RightParenthesis
+      : code === Character.QuotationMark || code === Character.Apostrophe
+        ? code
         : void 0;
     const definitionKey = normalizeIdentifier(label);
     const fields: LinkDefinitionFields = {
@@ -190,7 +196,7 @@ function linkDefinitionAt(
       label,
       title: void 0,
     };
-    if (!closer) {
+    if (closer === void 0) {
       return { definitionKey, end: destinationLine + 1, fields };
     }
     offset++;
@@ -200,11 +206,12 @@ function linkDefinitionAt(
     while (lineIndex < lines.length) {
       lineEnd = lines.end(lineIndex);
       while (offset < lineEnd) {
-        if (source[offset] === "\\" && offset + 1 < lineEnd) {
+        const code = source.charCodeAt(offset);
+        if (code === Character.ReverseSolidus && offset + 1 < lineEnd) {
           offset += 2;
           continue;
         }
-        if (source[offset] === closer) {
+        if (code === closer) {
           title += source.slice(titleStart, offset);
           offset++;
           closed = true;

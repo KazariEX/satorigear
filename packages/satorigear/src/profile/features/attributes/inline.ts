@@ -37,9 +37,12 @@ function hasVisibleText(source: string, start: number, end: number): boolean {
 }
 
 function attributeEndAt(source: string, start: number): number | undefined {
-  return source[start + 1] === "{" || source[start - 1] === "{" || source[start - 1] === "$"
-    ? void 0
-    : attributesEnd(source, start);
+  if (source.charCodeAt(start + 1) !== Character.LeftCurlyBracket) {
+    const code = source.charCodeAt(start - 1);
+    if (code !== Character.LeftCurlyBracket && code !== Character.DollarSign) {
+      return attributesEnd(source, start);
+    }
+  }
 }
 
 export const inlineScans: InlineFeature["scans"] = [

@@ -1,4 +1,5 @@
 import { BlockKind, BlockRole } from "../constants/block.ts";
+import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
 import { type BlockLines, lineContentEnd } from "./lines.ts";
 
@@ -454,12 +455,12 @@ export function appendLogicalToken(
   const tokenEnd = lines.next(lastLine);
   let canSliceSource = lines.physicallyContiguous();
   if (!canSliceSource) {
-    const previous = source[tokenStart - 1];
+    const previous = source.charCodeAt(tokenStart - 1);
     canSliceSource = (
       // Tab overshoot is represented as virtual leading columns absent from the source slice.
       lines.prefixColumns(start) === 0 && (
         // A derived first line may begin inside its physical line after a container marker.
-        tokenStart === 0 || previous === "\n" || previous === "\r"
+        tokenStart === 0 || previous === Character.LineFeed || previous === Character.CarriageReturn
       )
     );
     let previousLineEnd = lines.next(start);

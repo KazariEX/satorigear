@@ -38,13 +38,14 @@ interface SlotOpening {
 function closingBracket(source: string, start: number, limit: number): number | undefined {
   let depth = 0;
   for (let offset = start + 1; offset < limit; offset++) {
-    if (source[offset] === "\\" && offset + 1 < limit) {
+    const code = source.charCodeAt(offset);
+    if (code === Character.ReverseSolidus && offset + 1 < limit) {
       offset++;
     }
-    else if (source[offset] === "[") {
+    else if (code === Character.LeftSquareBracket) {
       depth++;
     }
-    else if (source[offset] === "]") {
+    else if (code === Character.RightSquareBracket) {
       if (depth === 0) {
         return offset;
       }
@@ -94,10 +95,14 @@ function slotOpeningAt(
   index: number,
   contentOffset: number,
 ): SlotOpening | undefined {
+  if (source.charCodeAt(contentOffset) !== Character.NumberSign) {
+    return;
+  }
+  const code = source.charCodeAt(contentOffset + 1);
   if (
-    source[contentOffset] !== "#" ||
-    source[contentOffset + 1] === "#" || source[contentOffset + 1] === " " ||
-    source[contentOffset + 1] === "\t"
+    code === Character.NumberSign ||
+    code === Character.Space ||
+    code === Character.CharacterTabulation
   ) {
     return;
   }
@@ -109,7 +114,7 @@ function slotOpeningAt(
   let offset = trimLineWhitespaceStart(source, nameEnd, lineEnd);
   let attributesStart: number | undefined;
   let attributesEndValue: number | undefined;
-  if (source[offset] === "{") {
+  if (source.charCodeAt(offset) === Character.LeftCurlyBracket) {
     attributesStart = offset;
     attributesEndValue = attributesEnd(source, offset, lineEnd);
     if (attributesEndValue === void 0) {
@@ -136,7 +141,7 @@ function blockOpeningAt(
   shorthand: boolean,
 ): BlockOpening | undefined {
   let offset = contentOffset;
-  while (source[offset] === ":") {
+  while (source.charCodeAt(offset) === Character.Colon) {
     offset++;
   }
   const fenceSize = offset - contentOffset;
@@ -155,7 +160,7 @@ function blockOpeningAt(
   offset = trimLineWhitespaceStart(source, nameEnd, lineEnd);
   let labelStart: number | undefined;
   let labelEnd: number | undefined;
-  if (source[offset] === "[") {
+  if (source.charCodeAt(offset) === Character.LeftSquareBracket) {
     const close = closingBracket(source, offset, lineEnd);
     if (close === void 0) {
       return;
@@ -166,7 +171,7 @@ function blockOpeningAt(
   }
   let attributesStart: number | undefined;
   let attributesEndValue: number | undefined;
-  if (source[offset] === "{") {
+  if (source.charCodeAt(offset) === Character.LeftCurlyBracket) {
     attributesStart = offset;
     attributesEndValue = attributesEnd(source, offset, lineEnd);
     if (attributesEndValue === void 0) {
@@ -211,7 +216,7 @@ function blockClose(
       continue;
     }
     let markerEnd = contentOffset;
-    while (source[markerEnd] === ":") {
+    while (source.charCodeAt(markerEnd) === Character.Colon) {
       markerEnd++;
     }
     if (

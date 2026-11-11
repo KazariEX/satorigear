@@ -218,7 +218,7 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
       let start = skipWhitespace(context.view.text, tokenStart + 2, resourceEnd);
       if (start !== end) {
         let destinationEnd = resourceEnd;
-        if (context.view.text[start] === "<") {
+        if (context.view.text.charCodeAt(start) === Character.LessThanSign) {
           start++;
           destinationEnd--;
         }

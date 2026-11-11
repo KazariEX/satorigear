@@ -21,15 +21,15 @@ function blockQuoteOffset(
   index: number,
   markerOffset: number,
 ): BlockQuoteMarker | undefined {
-  if (markerOffset < 0 || source[markerOffset] !== ">") {
+  if (markerOffset < 0 || source.charCodeAt(markerOffset) !== Character.GreaterThanSign) {
     return;
   }
   let offset = markerOffset + 1;
   let prefixColumns = lines.prefixColumns(index);
-  if (source[offset] === " ") {
+  if (source.charCodeAt(offset) === Character.Space) {
     offset++;
   }
-  else if (source[offset] === "\t") {
+  else if (source.charCodeAt(offset) === Character.CharacterTabulation) {
     prefixColumns += 4 - (physicalColumnAt(source, offset) % 4) - 1;
     offset++;
   }

@@ -8,12 +8,20 @@ import type { SyntaxFeature } from "../types.ts";
 
 function atxMarkerEnd(source: string, markerOffset: number, lineEnd: number): number {
   let markerEnd = markerOffset + 1;
-  while (markerEnd < lineEnd && markerEnd - markerOffset < 6 && source[markerEnd] === "#") {
+  while (
+    markerEnd < lineEnd &&
+    markerEnd - markerOffset < 6 &&
+    source.charCodeAt(markerEnd) === Character.NumberSign
+  ) {
     markerEnd++;
   }
-  return markerEnd < lineEnd && source[markerEnd] !== " " && source[markerEnd] !== "\t"
-    ? 0
-    : markerEnd;
+  if (markerEnd < lineEnd) {
+    const code = source.charCodeAt(markerEnd);
+    if (code !== Character.Space && code !== Character.CharacterTabulation) {
+      return 0;
+    }
+  }
+  return markerEnd;
 }
 
 export function setextMarkerAt(
@@ -21,14 +29,14 @@ export function setextMarkerAt(
   lines: BlockLines,
   index: number,
   markerOffset: number,
-): "=" | "-" | undefined {
-  const marker = source[markerOffset];
-  if (marker !== "=" && marker !== "-") {
+): number | undefined {
+  const marker = source.charCodeAt(markerOffset);
+  if (marker !== Character.EqualsSign && marker !== Character.HyphenMinus) {
     return;
   }
   const lineEnd = lines.end(index);
   let offset = markerOffset + 1;
-  while (offset < lineEnd && source[offset] === marker) {
+  while (offset < lineEnd && source.charCodeAt(offset) === marker) {
     offset++;
   }
   offset = trimLineWhitespaceStart(source, offset, lineEnd);
@@ -110,12 +118,14 @@ export const feature: SyntaxFeature = {
           const contentStart = trimLineWhitespaceStart(source, markerEnd, lineEnd);
           let contentEnd = trimLineWhitespaceEnd(source, contentStart, lineEnd);
           let closer = contentEnd;
-          while (closer > contentStart && source[closer - 1] === "#") {
+          let code = source.charCodeAt(closer - 1);
+          while (closer > contentStart && code === Character.NumberSign) {
             closer--;
+            code = source.charCodeAt(closer - 1);
           }
           if (
             closer < contentEnd && (
-              closer === contentStart || source[closer - 1] === " " || source[closer - 1] === "\t"
+              closer === contentStart || code === Character.Space || code === Character.CharacterTabulation
             )
           ) {
             contentEnd = trimLineWhitespaceEnd(source, contentStart, closer);

@@ -532,12 +532,16 @@ export function trimLineWhitespaceEnd(source: string, start: number, end: number
 
 export function physicalColumnAt(source: string, offset: number): number {
   let start = offset;
-  while (start > 0 && source[start - 1] !== "\n" && source[start - 1] !== "\r") {
+  while (start > 0) {
+    const code = source.charCodeAt(start - 1);
+    if (code === Character.LineFeed || code === Character.CarriageReturn) {
+      break;
+    }
     start--;
   }
   let column = 0;
   while (start < offset) {
-    column += source[start] === "\t" ? 4 - (column % 4) : 1;
+    column += source.charCodeAt(start) === Character.CharacterTabulation ? 4 - (column % 4) : 1;
     start++;
   }
   return column;

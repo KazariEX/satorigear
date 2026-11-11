@@ -3,7 +3,22 @@ import { Character } from "../../../constants/character.ts";
 import { isAsciiDigit, isAsciiLetter } from "../../utils.ts";
 import type { Attributes, AttributeValue } from "./types.ts";
 
-const brackets: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
+const brackets = {
+  [Character.LeftSquareBracket as number]: Character.RightSquareBracket,
+  [Character.LeftCurlyBracket as number]: Character.RightCurlyBracket,
+  [Character.LeftParenthesis as number]: Character.RightParenthesis,
+};
+
+const stops1 = new Set([
+  Character.Space,
+  Character.NumberSign,
+  Character.FullStop,
+  Character.RightCurlyBracket,
+]);
+const stops2 = new Set([
+  Character.Space,
+  Character.RightCurlyBracket,
+]);
 
 function assignAttribute(attributes: Attributes, name: string, value: AttributeValue): void {
   if (name === "class" && typeof value === "string" && typeof attributes.class === "string") {
@@ -26,61 +41,72 @@ function scanAttributes(
   attributes?: Attributes,
   limit = source.length,
 ): number | undefined {
-  if (source[start] !== "{" || source[start + 1] === "{") {
+  if (
+    source.charCodeAt(start) !== Character.LeftCurlyBracket ||
+    source.charCodeAt(start + 1) === Character.LeftCurlyBracket
+  ) {
     return;
   }
   let offset = start + 1;
 
   // Scans only advance ranges; validation never materializes attribute strings.
-  const scanUntil = (stops: string): void => {
+  const scanUntil = (stops: Set<number>): void => {
     while (offset < limit) {
-      const character = source[offset];
-      if (character === "\n" || character === "\r" || stops.includes(character)) {
+      const code = source.charCodeAt(offset);
+      if (code === Character.LineFeed || code === Character.CarriageReturn || stops.has(code)) {
         break;
       }
-      offset += character === "\\" && offset + 1 < limit ? 2 : 1;
+      offset += code === Character.ReverseSolidus && offset + 1 < limit ? 2 : 1;
     }
   };
 
-  const scanQuoted = (quote: string): boolean => {
+  const scanQuoted = (quote: number): boolean => {
     offset++;
     while (offset < limit) {
-      const character = source[offset];
-      if (character === "\n" || character === "\r" || character === quote) {
+      const character = source.charCodeAt(offset);
+      if (
+        character === quote ||
+        character === Character.LineFeed ||
+        character === Character.CarriageReturn
+      ) {
         break;
       }
-      offset += character === "\\" && offset + 1 < limit ? 2 : 1;
+      offset += character === Character.ReverseSolidus && offset + 1 < limit ? 2 : 1;
     }
-    if (source[offset] !== quote) {
+    if (source.charCodeAt(offset) !== quote) {
       return false;
     }
     offset++;
     return true;
   };
 
-  const scanBracketed = (close: string): boolean => {
+  const scanBracketed = (close: number): boolean => {
     const stack = [close];
     offset++;
     while (offset < limit && stack.length > 0) {
-      const character = source[offset];
-      if (character === "\n" || character === "\r") {
+      const code = source.charCodeAt(offset);
+      if (code === Character.LineFeed || code === Character.CarriageReturn) {
         return false;
       }
-      if (character === "\\" && offset + 1 < limit) {
+      if (code === Character.ReverseSolidus && offset + 1 < limit) {
         offset += 2;
         continue;
       }
-      if (character === "\"" || character === "'" || character === "`") {
-        if (!scanQuoted(character)) {
+      if (
+        code === Character.QuotationMark ||
+        code === Character.Apostrophe ||
+        code === Character.GraveAccent
+      ) {
+        if (!scanQuoted(code)) {
           return false;
         }
         continue;
       }
-      const nestedClose = brackets[character];
-      if (nestedClose) {
-        stack.push(nestedClose);
+      const nested = brackets[code];
+      if (nested) {
+        stack.push(nested);
       }
-      else if (character === stack.at(-1)) {
+      else if (code === stack.at(-1)) {
         stack.pop();
       }
       offset++;
@@ -90,21 +116,21 @@ function scanAttributes(
 
   while (offset < limit) {
     offset = trimLineWhitespaceStart(source, offset, limit);
-    if (source[offset] === "}") {
+    if (source.charCodeAt(offset) === Character.RightCurlyBracket) {
       return offset + 1;
     }
-    const marker = source[offset];
-    if (marker === "." || marker === "#") {
+    const marker = source.charCodeAt(offset);
+    if (marker === Character.FullStop || marker === Character.NumberSign) {
       offset++;
       const valueStart = offset;
-      scanUntil(" #.}");
+      scanUntil(stops1);
       if (offset === valueStart) {
         return;
       }
       if (attributes) {
         assignAttribute(
           attributes,
-          marker === "." ? "class" : "id",
+          marker === Character.FullStop ? "class" : "id",
           source.slice(valueStart, offset),
         );
       }
@@ -134,7 +160,7 @@ function scanAttributes(
     }
     const nameEnd = offset;
     offset = trimLineWhitespaceStart(source, offset, limit);
-    if (source[offset] !== "=") {
+    if (source.charCodeAt(offset) !== Character.EqualsSign) {
       if (attributes) {
         const name = source.slice(nameStart, nameEnd);
         assignAttribute(
@@ -147,24 +173,28 @@ function scanAttributes(
     }
     offset++;
     offset = trimLineWhitespaceStart(source, offset, limit);
-    const character = source[offset];
+    const character = source.charCodeAt(offset);
     let valueStart = offset;
     let valueEnd: number;
-    if (character === "\"" || character === "'" || character === "`") {
+    if (
+      character === Character.QuotationMark ||
+      character === Character.Apostrophe ||
+      character === Character.GraveAccent
+    ) {
       if (!scanQuoted(character)) {
         return;
       }
       valueStart++;
       valueEnd = offset - 1;
     }
-    else if (brackets[character]) {
+    else if (character in brackets) {
       if (!scanBracketed(brackets[character])) {
         return;
       }
       valueEnd = offset;
     }
     else {
-      scanUntil(" }");
+      scanUntil(stops2);
       valueEnd = offset;
       if (valueEnd === valueStart) {
         return;
