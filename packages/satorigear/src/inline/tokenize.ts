@@ -154,12 +154,9 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
     }
   }
   const boundaries = String.fromCharCode(...boundaryCodes).replaceAll(/[\\\]-]/g, "\\$&");
-  const boundary = new RegExp(
-    // Hard-break spaces advance quickly when a profile has more than 9 feature markers.
-    // A literal LF is relevant only beside whitespace; the scan loop handles a current LF before this search.
-    `${boundaryCodes.length > 9 ? " {2,}[\\n\\r]|" : ""}[\\r${boundaries}]|\\n(?:(?<=[ \t]\\n)|(?= ))`,
-    "g",
-  );
+  // A literal LF is relevant only beside whitespace; the scan loop handles a current LF before this search.
+  const boundary = new RegExp(`[\\r${boundaries}]|\\n(?:(?<=[ \t]\\n)|(?= ))`, "g");
+
   try {
     return generateInlineTokenizer(boundary, boundaryCodes, scanners);
   }
