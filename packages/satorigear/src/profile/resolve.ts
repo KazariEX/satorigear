@@ -42,7 +42,8 @@ interface BracketFrame {
   delimiterStart: number;
   resolvedEnd: number;
   logicalParent: BracketFrame | undefined;
-  referenceParent: BracketFrame | undefined;
+  // Link emitted at this raw closer; its opener may belong to another frame.
+  closingLink: BracketFrame | undefined;
 }
 
 const enum FrameClaim {
@@ -173,7 +174,7 @@ function analyzeBrackets(
         delimiterStart: 0,
         resolvedEnd: 0,
         logicalParent: void 0,
-        referenceParent: void 0,
+        closingLink: void 0,
       };
       if (last) {
         last.next = frame;
@@ -400,6 +401,8 @@ function resolvePairedSyntax(
               image ? FrameFlag.Image : 0
             );
             frame.close = tokenIndex;
+            // Pending logical openers remain in the raw stack until they match.
+            rawFrame!.closingLink = frame;
             runStart = frame.delimiterStart;
             frame.resolvedEnd = closeEnd;
             if (!image) {
@@ -463,7 +466,6 @@ function emitResolvedTokens(
 ): InlineTokenStream {
   const result: number[] = [];
   let rawTop: BracketFrame | undefined;
-  let referenceTop: BracketFrame | undefined;
   let skipEnd = -1;
 
   const count = inlineTokenCount(tokens);
@@ -510,8 +512,6 @@ function emitResolvedTokens(
         }
         else if (claim === FrameClaim.Link || claim === FrameClaim.Reference) {
           appendReferenceBoundary(result, tokens, frame, false);
-          frame.referenceParent = referenceTop;
-          referenceTop = frame;
         }
         else if (claim === FrameClaim.Consumed) {
           skipEnd = inlineTokenEnd(tokens, frame.close);
@@ -528,14 +528,11 @@ function emitResolvedTokens(
       if (rawFrame !== void 0) {
         rawTop = rawFrame.parent;
       }
-      const referenceFrame = referenceTop;
-      const closesReference = referenceFrame !== void 0 &&
-        referenceFrame.close === tokenIndex;
+      const closingLink = rawFrame?.closingLink;
 
       if (!skipping) {
-        if (closesReference) {
-          referenceTop = referenceFrame.referenceParent;
-          skipEnd = appendReferenceBoundary(result, tokens, referenceFrame, true);
+        if (closingLink) {
+          skipEnd = appendReferenceBoundary(result, tokens, closingLink, true);
         }
         else {
           const state = rawFrame === void 0 ? FrameClaim.Raw : rawFrame.state;
