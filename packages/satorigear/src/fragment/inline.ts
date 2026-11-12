@@ -4,7 +4,6 @@ import { BlockKind } from "../constants/block.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
 import {
   inlineTokenCount,
-  inlineTokenData,
   inlineTokenEnd,
   inlineTokenKind,
   inlineTokenStart,
@@ -100,11 +99,11 @@ function createLiteralChildren(context: InlineBuildContext, start: number, end: 
 }
 
 function appendText(
+  context: InlineBuildContext,
   output: InlineOutput,
   value: string,
   start: number,
   end: number,
-  context: InlineBuildContext,
   literal: boolean,
 ): void {
   if (output.pendingText !== void 0 && !("attributes" in output.pendingText)) {
@@ -145,25 +144,25 @@ function trimTrailingText(output: InlineOutput): void {
 }
 
 function appendGap(
-  output: InlineOutput,
   context: InlineBuildContext,
+  output: InlineOutput,
   start: number,
   end: number,
 ): void {
   const value = context.view.text.slice(start, end);
-  appendText(output, value, start, end, context, true);
+  appendText(context, output, value, start, end, true);
 }
 
 function appendLeaf(
-  output: InlineOutput,
   context: InlineBuildContext,
+  output: InlineOutput,
   token: number,
   start: number,
   end: number,
   build: InlineLeafBuilder,
 ): void {
   if (start > output.cursor) {
-    appendGap(output, context, output.cursor, start);
+    appendGap(context, output, output.cursor, start);
   }
   const sourceStart = context.view.mapOffset(start);
   const sourceEnd = start === end ? sourceStart : context.view.mapEnd(end);
@@ -191,32 +190,12 @@ function appendRange(
     // Newline has fixed semantic text, so it does not enter profile builder dispatch.
     if (kind === InlineKind.Newline) {
       const endingStart = inlineTokenStart(context.tokens, index);
-      const lineStart = inlineTokenData(context.tokens, index);
       const contentStart = inlineTokenEnd(context.tokens, index);
       if (endingStart > output.cursor) {
-        appendGap(output, context, output.cursor, endingStart);
+        appendGap(context, output, output.cursor, endingStart);
       }
-      // Markdown syntax newlines point past stripped container prefixes,
-      // while mdast spans include the physical line ending.
-      const previous = output.pendingText === void 0 ? output.children.at(-1) : void 0;
-      if (previous?.type === "break") {
-        // At a stripped container boundary, the left side maps before the prefix while
-        // the right side maps after it. A hard break must span to the former.
-        previous.position!.end = context.locator.locationAt(
-          context.view.mapOffset(lineStart - 1) + 1,
-        );
-      }
-      else {
-        trimTrailingText(output);
-        appendText(
-          output,
-          "\n",
-          endingStart,
-          contentStart,
-          context,
-          false,
-        );
-      }
+      trimTrailingText(output);
+      appendText(context, output, "\n", endingStart, contentStart, false);
       output.cursor = contentStart;
       index++;
       continue;
@@ -227,26 +206,13 @@ function appendRange(
       const childEnd = inlineTokenEnd(context.tokens, index);
       if (kind < InlineRole.Leaf) {
         if (childStart > output.cursor) {
-          appendGap(output, context, output.cursor, childStart);
+          appendGap(context, output, output.cursor, childStart);
         }
-        appendText(
-          output,
-          (build as InlineTextBuilder)(index, context),
-          childStart,
-          childEnd,
-          context,
-          kind === InlineKind.LiteralText,
-        );
+        const value = (build as InlineTextBuilder)(index, context);
+        appendText(context, output, value, childStart, childEnd, kind === InlineKind.LiteralText);
       }
       else {
-        appendLeaf(
-          output,
-          context,
-          index,
-          childStart,
-          childEnd,
-          build as InlineLeafBuilder,
-        );
+        appendLeaf(context, output, index, childStart, childEnd, build as InlineLeafBuilder);
       }
       output.cursor = childEnd;
       index++;
@@ -258,17 +224,10 @@ function appendRange(
         break;
       }
       if (childStart > output.cursor) {
-        appendGap(output, context, output.cursor, childStart);
+        appendGap(context, output, output.cursor, childStart);
       }
       finishText(output, context);
-      index = appendPair(
-        profile,
-        context,
-        output,
-        index,
-        endToken,
-        build as InlinePairBuilder,
-      );
+      index = appendPair(profile, context, output, index, endToken, build as InlinePairBuilder);
       continue;
     }
     const childEnd = inlineTokenEnd(context.tokens, index);
@@ -289,7 +248,7 @@ function appendRange(
   }
   const contentEnd = index < endToken ? inlineTokenStart(context.tokens, index) : context.view.text.length;
   if (contentEnd > output.cursor) {
-    appendGap(output, context, output.cursor, contentEnd);
+    appendGap(context, output, output.cursor, contentEnd);
   }
   // Every range closes its own projection; only a fragment boundary owns final trimming.
   if (startToken === 0) {

@@ -40,8 +40,17 @@ export const feature: SyntaxFeature = {
         scan(source, start, tokens) {
           const next = source.charCodeAt(start + 1);
           if (next === Character.LineFeed || next === Character.CarriageReturn) {
-            appendInlineToken(tokens, InlineKind.HardBreak, start, start + 1);
-            return start + 1;
+            // The break absorbs its line ending, so projection spans one token.
+            let offset = start + 2;
+            if (next === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
+              offset++;
+            }
+            const lineStart = offset;
+            while (source.charCodeAt(offset) === Character.Space) {
+              offset++;
+            }
+            appendInlineToken(tokens, InlineKind.HardBreak, start, offset, lineStart);
+            return offset;
           }
           if (isAsciiPunctuation(next)) {
             const end = start + 2;

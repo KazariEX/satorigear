@@ -70,16 +70,10 @@ function tokenize(
   for (; offset >= 0; offset = nextBoundaryOffset(source, boundary, offset)) {
     const code = source.charCodeAt(offset);
     if (code === Character.LineFeed || code === Character.CarriageReturn) {
-      if (
+      const spacesBreak = (
         source.charCodeAt(offset - 1) === Character.Space &&
         source.charCodeAt(offset - 2) === Character.Space
-      ) {
-        let spaces = offset - 2;
-        while (source.charCodeAt(spaces - 1) === Character.Space) {
-          spaces--;
-        }
-        tokens.push(InlineKind.HardBreak, spaces, offset, 0);
-      }
+      );
       const endingStart = offset++;
       if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
         offset++;
@@ -89,7 +83,19 @@ function tokenize(
       while (source.charCodeAt(offset) === Character.Space) {
         offset++;
       }
-      if (code !== Character.LineFeed || lineStart !== offset || !implicitSoftBreak(source, endingStart, tokens)) {
+      if (spacesBreak) {
+        let spaces = endingStart - 2;
+        while (source.charCodeAt(spaces - 1) === Character.Space) {
+          spaces--;
+        }
+        // The break absorbs its line ending, so projection spans one token.
+        tokens.push(InlineKind.HardBreak, spaces, offset, lineStart);
+      }
+      else if (
+        code !== Character.LineFeed ||
+        lineStart !== offset ||
+        !implicitSoftBreak(source, endingStart, tokens)
+      ) {
         tokens.push(InlineKind.Newline, endingStart, offset, lineStart);
       }
       continue;
@@ -119,12 +125,11 @@ function generateInlineTokenizer(
     `o=n(s,b,o);if(o<0)return a;const t=[];for(;o>=0;o=n(s,b,o)){`,
     `const c=s.charCodeAt(o);`,
     `if(c===${Character.LineFeed}||c===${Character.CarriageReturn}){`,
-    `if(s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space}){`,
-    `let h=o-2;while(s.charCodeAt(h-1)===${Character.Space})h--;`,
-    `t.push(${InlineKind.HardBreak},h,o,0)}`,
+    `const k=s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space};`,
     `const r=o++;if(c===${Character.CarriageReturn}&&s.charCodeAt(o)===${Character.LineFeed})o++;`,
     `const l=o;while(s.charCodeAt(o)===${Character.Space})o++;`,
-    `if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,l);continue}`,
+    `if(k){let h=r-2;while(s.charCodeAt(h-1)===${Character.Space})h--;t.push(${InlineKind.HardBreak},h,o,l)}`,
+    `else if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,l);continue}`,
     `let d;switch(c){${cases}default:d=o}`,
     `o=d>o?d:o+1}`,
     `return t}`,

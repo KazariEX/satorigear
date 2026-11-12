@@ -2,6 +2,7 @@ import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { leafBlockPosition } from "../../fragment/block.ts";
+import { inlineTokenData } from "../../inline/tokens.ts";
 import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -70,10 +71,14 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.HardBreak,
-        build(tokenIndex, sourceSpan) {
+        build(tokenIndex, sourceSpan, context) {
+          const lineStart = inlineTokenData(context.tokens, tokenIndex);
           return {
             type: "break",
-            position: sourceSpan,
+            position: {
+              start: sourceSpan.start,
+              end: context.locator.locationAt(context.view.mapOffset(lineStart - 1) + 1),
+            },
           };
         },
       },
