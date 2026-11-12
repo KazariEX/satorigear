@@ -15,7 +15,7 @@ export interface InlineScanRule {
   scan: InlineScanner;
 }
 
-export type InlineTokenizer = (source: string) => InlineTokenStream;
+export type InlineTokenizer = (source: string, hasWhitespaceBreak?: boolean) => InlineTokenStream;
 
 export function matchInlinePatternEnd(pattern: RegExp, source: string, start: number): number {
   pattern.lastIndex = start;
@@ -44,9 +44,6 @@ function implicitSoftBreak(source: string, start: number, tokens: InlineTokenStr
 function nextBoundaryOffset(source: string, boundary: RegExp, offset: number): number {
   if (offset >= source.length) {
     return -1;
-  }
-  if (source.charCodeAt(offset) === Character.LineFeed) {
-    return offset;
   }
   boundary.lastIndex = offset;
   return boundary.test(source) ? boundary.lastIndex - 1 : -1;
@@ -109,7 +106,8 @@ function tokenize(
 }
 
 function generateInlineTokenizer(
-  boundary: RegExp,
+  boundaryFast: RegExp,
+  boundarySlow: RegExp,
   boundaryCodes: readonly number[],
   scanners: readonly (InlineScanner | undefined)[],
 ): InlineTokenizer {
@@ -119,10 +117,9 @@ function generateInlineTokenizer(
     .join("");
 
   /** Mirrors {@link tokenize} with short aliases for its generated hot loop. */
-  return Function("b", "a", "i", "n", ...names, [
-    `return s=>{`,
-    `let o=0;while(s.charCodeAt(o)===${Character.Space})o++;`,
-    `o=n(s,b,o);if(o<0)return a;const t=[];for(;o>=0;o=n(s,b,o)){`,
+  return Function("f", "b", "a", "i", "n", ...names, [
+    `return(s,u)=>{const x=u?b:f;let o=0;while(s.charCodeAt(o)===${Character.Space})o++;`,
+    `o=n(s,x,o);if(o<0)return a;const t=[];for(;o>=0;o=n(s,x,o)){`,
     `const c=s.charCodeAt(o);`,
     `if(c===${Character.LineFeed}||c===${Character.CarriageReturn}){`,
     `const k=s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space};`,
@@ -134,7 +131,8 @@ function generateInlineTokenizer(
     `o=d>o?d:o+1}`,
     `return t}`,
   ].join(""))(
-    boundary,
+    boundaryFast,
+    boundarySlow,
     emptyArray,
     implicitSoftBreak,
     nextBoundaryOffset,
@@ -159,13 +157,18 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
     }
   }
   const boundaries = String.fromCharCode(...boundaryCodes).replaceAll(/[\\\]-]/g, "\\$&");
-  // A literal LF is relevant only beside whitespace; the scan loop handles a current LF before this search.
-  const boundary = new RegExp(`[\\r${boundaries}]|\\n(?:(?<=[ \t]\\n)|(?= ))`, "g");
+  // Lookaround keeps V8 off the character-class scan. Only a whitespace-adjacent break uses it.
+  const boundaryFast = new RegExp(`[\\r${boundaries}]`, "g");
+  const boundarySlow = new RegExp(`[\\r${boundaries}]|\\n(?:(?<=[ \\t]\\n)|(?= ))`, "g");
 
   try {
-    return generateInlineTokenizer(boundary, boundaryCodes, scanners);
+    return generateInlineTokenizer(boundaryFast, boundarySlow, boundaryCodes, scanners);
   }
   catch {
-    return (source) => tokenize(source, boundary, scanners);
+    return (source, withBoundaryBreak) => tokenize(
+      source,
+      withBoundaryBreak ? boundarySlow : boundaryFast,
+      scanners,
+    );
   }
 }

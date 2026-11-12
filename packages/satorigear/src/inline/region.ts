@@ -56,7 +56,7 @@ class InlineRegion implements ResolvedInlineRegion {
     this.#profile = profile;
     this.tokenStart = tokenStart;
     this.view = view;
-    this.#updateTokens(view.text, definitions, emptySet);
+    this.#updateTokens(view, definitions, emptySet);
   }
 
   update(
@@ -65,7 +65,7 @@ class InlineRegion implements ResolvedInlineRegion {
     definitions: TrackedDefinitionLookup,
     definitionMembershipChanges: ReadonlySet<string>,
   ): this {
-    this.#updateTokens(view.text, definitions, definitionMembershipChanges);
+    this.#updateTokens(view, definitions, definitionMembershipChanges);
     this.tokenStart = tokenStart;
     this.view = view;
     return this;
@@ -75,7 +75,7 @@ class InlineRegion implements ResolvedInlineRegion {
     definitions: TrackedDefinitionLookup,
     definitionMembershipChanges: ReadonlySet<string>,
   ): boolean {
-    return this.#updateTokens(this.view.text, definitions, definitionMembershipChanges);
+    return this.#updateTokens(this.view, definitions, definitionMembershipChanges);
   }
 
   shift(delta: number, tokenDelta: number): void {
@@ -109,20 +109,20 @@ class InlineRegion implements ResolvedInlineRegion {
   }
 
   #updateTokens(
-    source: string,
+    view: SourceView,
     definitions: TrackedDefinitionLookup,
     definitionMembershipChanges: ReadonlySet<string>,
   ): boolean {
     const previousTokens = this.#rawTokens;
-    const sourceUnchanged = previousTokens !== void 0 && source === this.view.text;
+    const sourceUnchanged = previousTokens !== void 0 && view.text === this.view.text;
     if (sourceUnchanged && !this.#dependenciesChanged(definitionMembershipChanges)) {
       return false;
     }
 
     // Incremental regions retain exactly the definition lookups that can invalidate them.
     definitions.dependencies = void 0;
-    const rawTokens = sourceUnchanged ? previousTokens : this.#profile.tokenize(source);
-    const tokens = this.#profile.resolve(source, rawTokens, definitions);
+    const rawTokens = sourceUnchanged ? previousTokens : this.#profile.tokenize(view.text, view.withBoundaryBreak);
+    const tokens = this.#profile.resolve(view.text, rawTokens, definitions);
 
     this.#definitionDependencies = definitions.dependencies ?? emptySet;
     this.#rawTokens = rawTokens;

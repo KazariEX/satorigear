@@ -1,4 +1,4 @@
-import { BlockKind } from "./constants/block.ts";
+import { BlockKind, boundaryBreak } from "./constants/block.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
 
 export interface SourceLocation {
@@ -44,6 +44,7 @@ export class SourceView {
   // contiguous views need only the offset above.
   #segments: number[] | undefined;
   text = "";
+  withBoundaryBreak = false;
 
   /** Projects the consecutive inline chunks owned by a block token. */
   constructor(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number) {
@@ -51,7 +52,7 @@ export class SourceView {
   }
 
   reset(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number): void {
-    this.#segments = void 0;
+    this.withBoundaryBreak = tokens.value(tokenStart) === boundaryBreak;
     let token = tokenStart + 1;
     const firstStart = tokens.start(token);
     const tokenEnd = tokenStart + nodeLength;
@@ -72,6 +73,7 @@ export class SourceView {
       return;
     }
     this.#offset = firstStart;
+    this.#segments = void 0;
     this.text = source.slice(firstStart, end);
   }
 

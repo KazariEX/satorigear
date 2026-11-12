@@ -59,3 +59,5 @@ export const enum BlockKind {
   TableAlignRight,
   TableAlignCenter,
 }
+
+export const boundaryBreak = Symbol();

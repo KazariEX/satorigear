@@ -334,7 +334,7 @@ export function buildInlineFragment(
       previousView
     ) ?? new SourceView(context.source, blockTokens, tokenStart, nodeLength);
 
-    tokens = context.profile.tokenize(view.text);
+    tokens = context.profile.tokenize(view.text, view.withBoundaryBreak);
     if (tokens.length) {
       tokens = context.profile.resolve(view.text, tokens, blockTokens);
     }

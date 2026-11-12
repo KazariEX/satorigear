@@ -1,6 +1,6 @@
 import type { Paragraph } from "mdast";
 import { indentOffset, trimLineWhitespaceStart } from "../../block/lines.ts";
-import { BlockKind } from "../../constants/block.ts";
+import { BlockKind, boundaryBreak } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { blockEnd } from "../../fragment/block.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -18,6 +18,7 @@ export const feature: SyntaxFeature = {
         tokens.push(BlockKind.ParagraphOpen, offset, offset);
         // Keep one chunk across contiguous lines; split only where source has a gap.
         let chunkOffset = contentOffset;
+        let withBoundaryBreak = false;
         let index = start + 1;
         while (index < lines.length) {
           const lineEnd = lines.end(index);
@@ -43,6 +44,18 @@ export const feature: SyntaxFeature = {
             }
           }
           const previousEnd = lines.next(index - 1);
+          const newline = lines.end(index - 1);
+          if (!withBoundaryBreak && source.charCodeAt(newline) === Character.LineFeed) {
+            const previous = source.charCodeAt(newline - 1);
+            if (
+              previous === Character.Space ||
+              previous === Character.CharacterTabulation ||
+              source.charCodeAt(chunkStart) === Character.Space
+            ) {
+              withBoundaryBreak = true;
+              tokens.setValue(openToken, boundaryBreak);
+            }
+          }
           if (chunkStart !== previousEnd) {
             tokens.push(BlockKind.InlineChunk, chunkOffset, previousEnd);
             chunkOffset = chunkStart;

@@ -393,6 +393,12 @@ export class BlockTokenStream implements DefinitionLookup {
     return this.#metadata?.[index]?.value as T | undefined;
   }
 
+  setValue(index: number, value: unknown): void {
+    this.#metadata ??= [];
+    this.#metadata[index] ??= {};
+    this.#metadata[index].value = value;
+  }
+
   definitionKey(index: number): string | undefined {
     return this.#metadata?.[index]?.definitionKey;
   }
