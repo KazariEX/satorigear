@@ -1,4 +1,3 @@
-import type { Delete, Emphasis, Strong } from "mdast";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { inlineMarkerRunEnd, type InlineScanRule } from "../../inline/tokenize.ts";
@@ -7,94 +6,113 @@ import type { DelimiterConfig } from "../../inline/delimiter.ts";
 import type { InlineBuildRule } from "../../inline/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-type InlinePairBuildRule = Extract<InlineBuildRule, { kind: "pair" }> & {
-  open: InlineKind;
-  close: InlineKind;
-};
+interface Formatting {
+  delimiter: DelimiterConfig;
+  scanner: InlineScanRule;
+  builder: InlineBuildRule;
+}
 
-const scanFormatting: InlineScanRule["scan"] = (source, start, tokens) => {
-  const code = source.charCodeAt(start);
-  const end = inlineMarkerRunEnd(source, start);
-  const kind = code === Character.Asterisk
-    ? InlineKind.AsteriskRun
-    : code === Character.LowLine ? InlineKind.UnderscoreRun : InlineKind.TildeRun;
-  appendInlineToken(tokens, kind, start, end);
-  return end;
-};
-
-function createFormattingPair(
-  type: (Emphasis | Strong | Delete)["type"],
-  open: InlineKind,
-  close: InlineKind,
-): InlinePairBuildRule {
+function createFormatting(
+  type: "emphasis" | "strong" | "delete",
+  marker: Character,
+  buildToken: InlineKind,
+  delimiter: DelimiterConfig,
+): Formatting {
   return {
-    kind: "pair",
-    token: open,
-    open,
-    close,
-    build(openToken, closeToken, position, children) {
-      return {
+    delimiter,
+    scanner: {
+      marker,
+      scan(source, start, tokens) {
+        const end = inlineMarkerRunEnd(source, start);
+        appendInlineToken(tokens, delimiter.token, start, end);
+        return end;
+      },
+    },
+    builder: {
+      kind: "pair",
+      token: buildToken,
+      build: (openToken, closeToken, position, children) => ({
         type,
         children,
         position,
-      };
+      }),
     },
   };
 }
 
-const emphasisPair = createFormattingPair("emphasis", InlineKind.EmphasisOpen, InlineKind.EmphasisClose);
-const strongPair = createFormattingPair("strong", InlineKind.StrongOpen, InlineKind.StrongClose);
-const deletePair = createFormattingPair("delete", InlineKind.DeleteOpen, InlineKind.DeleteClose);
-
-const asteriskDelimiter: DelimiterConfig = {
+const formattingAsterisk = createFormatting("emphasis", Character.Asterisk, InlineKind.EmphasisOpen, {
   token: InlineKind.AsteriskRun,
-  single: emphasisPair,
-  double: strongPair,
-  pairing: { kind: "partial", ruleOfThree: true },
-};
+  single: {
+    open: InlineKind.EmphasisOpen,
+    close: InlineKind.EmphasisClose,
+  },
+  double: {
+    open: InlineKind.StrongOpen,
+    close: InlineKind.StrongClose,
+  },
+  pairing: {
+    kind: "partial",
+    ruleOfThree: true,
+  },
+});
 
-const underscoreDelimiter: DelimiterConfig = {
+const formattingUnderscore = createFormatting("strong", Character.LowLine, InlineKind.StrongOpen, {
   token: InlineKind.UnderscoreRun,
-  single: emphasisPair,
-  double: strongPair,
-  pairing: { kind: "partial", ruleOfThree: true },
+  single: {
+    open: InlineKind.EmphasisOpen,
+    close: InlineKind.EmphasisClose,
+  },
+  double: {
+    open: InlineKind.StrongOpen,
+    close: InlineKind.StrongClose,
+  },
+  pairing: {
+    kind: "partial",
+    ruleOfThree: true,
+  },
   allowIntraword: false,
-};
+});
 
-const strikethroughDelimiter: DelimiterConfig = {
+const formattingStrikethrough = createFormatting("delete", Character.Tilde, InlineKind.DeleteOpen, {
   token: InlineKind.TildeRun,
-  double: deletePair,
-  pairing: { kind: "whole" },
-};
+  double: {
+    open: InlineKind.DeleteOpen,
+    close: InlineKind.DeleteClose,
+  },
+  pairing: {
+    kind: "whole",
+  },
+});
 
 export interface StrikethroughOptions {
   singleTilde?: boolean;
 }
 
 export function feature(strikethroughOptions?: boolean | StrikethroughOptions): SyntaxFeature {
-  const builds: InlineBuildRule[] = [
-    emphasisPair,
-    strongPair,
+  const scans = [
+    formattingAsterisk.scanner,
+    formattingUnderscore.scanner,
   ];
   const delimiters = [
-    asteriskDelimiter,
-    underscoreDelimiter,
+    formattingAsterisk.delimiter,
+    formattingUnderscore.delimiter,
   ];
-  const scans: InlineScanRule[] = [
-    { marker: Character.Asterisk, scan: scanFormatting },
-    { marker: Character.LowLine, scan: scanFormatting },
+  const builds = [
+    formattingAsterisk.builder,
+    formattingUnderscore.builder,
   ];
 
   if (strikethroughOptions) {
-    builds.push(
-      deletePair,
-    );
+    scans.push(formattingStrikethrough.scanner);
+    builds.push(formattingStrikethrough.builder);
     delimiters.push(
       typeof strikethroughOptions !== "object" || strikethroughOptions.singleTilde !== false
-        ? { ...strikethroughDelimiter, single: deletePair }
-        : strikethroughDelimiter,
+        ? {
+          single: formattingStrikethrough.delimiter.double,
+          ...formattingStrikethrough.delimiter,
+        }
+        : formattingStrikethrough.delimiter,
     );
-    scans.push({ marker: Character.Tilde, scan: scanFormatting });
   }
 
   return {
