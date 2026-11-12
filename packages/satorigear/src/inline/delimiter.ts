@@ -43,8 +43,8 @@ export interface DelimiterRun {
   config: CompiledDelimiterConfig;
   start: number;
   remaining: number;
-  previous: number;
-  next: number;
+  previous: DelimiterRun | undefined;
+  next: DelimiterRun | undefined;
   state: number;
 }
 
@@ -164,26 +164,24 @@ function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
   );
 }
 
-function unlinkRun(runs: DelimiterRun[], runIndex: number): void {
-  const run = runs[runIndex];
-  if (run.previous >= 0) {
-    runs[run.previous].next = run.next;
+function unlinkRun(run: DelimiterRun): void {
+  if (run.previous) {
+    run.previous.next = run.next;
   }
-  if (run.next >= 0) {
-    runs[run.next].previous = run.previous;
+  if (run.next) {
+    run.next.previous = run.previous;
   }
 }
 
 export function resolveDelimiterScope(
-  runs: DelimiterRun[],
-  first: number,
+  first: DelimiterRun,
   replacements: DelimiterReplacement[][] = [],
 ): DelimiterReplacement[][] {
-  const openersBottom: number[] = [];
-  let current = first;
+  const openersBottom: (DelimiterRun | undefined)[] = [];
+  let current: DelimiterRun | undefined = first;
   // Matching unlinks exhausted runs, so every active run has remaining source.
-  while (current >= 0) {
-    const closer = runs[current];
+  while (current) {
+    const closer: DelimiterRun = current;
     const next = closer.next;
     if (!(closer.state & DelimiterRunState.CanClose)) {
       current = next;
@@ -194,25 +192,23 @@ export function resolveDelimiterScope(
     const bottomSlot = bottomSlotBase +
       (closer.state & DelimiterRunState.CanOpen ? DelimiterRunLayout.LengthModuloCount : 0) +
       (closer.state >> DelimiterRunLayout.OriginalLengthModuloShift);
-    const bottom = openersBottom[bottomSlot] ?? -1;
-    let openerIndex = closer.previous;
-    while (openerIndex >= 0 && openerIndex !== bottom) {
-      const opener = runs[openerIndex];
+    const bottom = openersBottom[bottomSlot];
+    let opener = closer.previous;
+    while (opener && opener !== bottom) {
       if (opener.config === closer.config && canPair(opener, closer)) {
         break;
       }
-      openerIndex = opener.previous;
+      opener = opener.previous;
     }
-    if (openerIndex < 0 || openerIndex === bottom) {
+    if (!opener || opener === bottom) {
       openersBottom[bottomSlot] = closer.previous;
       if (!(closer.state & DelimiterRunState.CanOpen)) {
-        unlinkRun(runs, current);
+        unlinkRun(closer);
       }
       current = next;
       continue;
     }
 
-    const opener = runs[openerIndex];
     const use = opener.remaining >= 2 && closer.remaining >= 2 && closer.config.double ? 2 : 1;
     const openEnd = opener.start + opener.remaining;
     const openStart = openEnd - use;
@@ -225,13 +221,13 @@ export function resolveDelimiterScope(
     opener.remaining -= use;
     closer.start += use;
     closer.remaining -= use;
-    opener.next = current;
-    closer.previous = openerIndex;
+    opener.next = closer;
+    closer.previous = opener;
     if (opener.remaining === 0) {
-      unlinkRun(runs, openerIndex);
+      unlinkRun(opener);
     }
     if (closer.remaining === 0) {
-      unlinkRun(runs, current);
+      unlinkRun(closer);
       current = next;
     }
   }
@@ -261,8 +257,8 @@ export function delimiterRunAt(
       config,
       start: offset,
       remaining: length,
-      previous: -1,
-      next: -1,
+      previous: void 0,
+      next: void 0,
       state: delimiterFlanking | (
         (length % DelimiterRunLayout.LengthModuloCount) << DelimiterRunLayout.OriginalLengthModuloShift
       ),

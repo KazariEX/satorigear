@@ -39,7 +39,7 @@ interface BracketFrame {
   state: number;
   candidateBottom: BracketFrame | undefined;
   candidateNext: BracketFrame | undefined;
-  delimiterStart: number;
+  delimiterBottom: DelimiterRun | undefined;
   resolvedEnd: number;
   logicalParent: BracketFrame | undefined;
   // Link emitted at this raw closer; its opener may belong to another frame.
@@ -171,7 +171,7 @@ function analyzeBrackets(
         state: kind === InlineKind.ImageOpen ? FrameFlag.Image : FrameClaim.Raw,
         candidateBottom: candidateTop,
         candidateNext: void 0,
-        delimiterStart: 0,
+        delimiterBottom: void 0,
         resolvedEnd: 0,
         logicalParent: void 0,
         closingLink: void 0,
@@ -263,9 +263,9 @@ function resolvePairedSyntax(
 ): readonly DelimiterReplacement[][] {
   // An empty definition table makes every non-resource bracket candidate literal.
   const hasDefinitions = nextFrame !== void 0 && definitions.hasDefinitions();
-  // Delimiter scopes share a reusable run prefix; frames checkpoint its logical length.
-  let runs: DelimiterRun[] | undefined;
-  let runCount = 0;
+  // Frames retain the last run outside their scope; closing detaches only its suffix.
+  let firstRun: DelimiterRun | undefined;
+  let lastRun: DelimiterRun | undefined;
   let replacements: DelimiterReplacement[][] | undefined;
   let rawTop: BracketFrame | undefined;
   let logicalTop: BracketFrame | undefined;
@@ -289,13 +289,14 @@ function resolvePairedSyntax(
     if (!consuming && delimiter) {
       const run = delimiterRunAt(source, tokens, tokenIndex, delimiter);
       if (run) {
-        const arena = runs ??= [];
-        const runIndex = runCount++;
-        if (runIndex > 0) {
-          run.previous = runIndex - 1;
-          arena[runIndex - 1].next = runIndex;
+        run.previous = lastRun;
+        if (lastRun) {
+          lastRun.next = run;
         }
-        arena[runIndex] = run;
+        else {
+          firstRun = run;
+        }
+        lastRun = run;
       }
     }
 
@@ -309,7 +310,7 @@ function resolvePairedSyntax(
         }
         continue;
       }
-      frame.delimiterStart = runCount;
+      frame.delimiterBottom = lastRun;
 
       const state = frame.state;
       const claim = state & FrameClaim.Mask;
@@ -351,10 +352,10 @@ function resolvePairedSyntax(
 
     const rawState = rawFrame === void 0 ? FrameClaim.Raw : rawFrame.state;
     const rawClaim = rawState & FrameClaim.Mask;
-    let runStart = rawClaim >= FrameClaim.Footnote && rawClaim <= FrameClaim.AttributedSpan
-      ? rawFrame!.delimiterStart
-      : -1;
-    const visible = runStart < 0 && (
+    let scopeFrame = rawClaim >= FrameClaim.Footnote && rawClaim <= FrameClaim.AttributedSpan
+      ? rawFrame
+      : void 0;
+    const visible = scopeFrame === void 0 && (
       literalDepth <= 0 || rawFrame === void 0 || (rawState & FrameFlag.Image) !== 0
     );
 
@@ -401,10 +402,10 @@ function resolvePairedSyntax(
               image ? FrameFlag.Image : 0
             );
             frame.close = tokenIndex;
+            frame.resolvedEnd = closeEnd;
             // Pending logical openers remain in the raw stack until they match.
             rawFrame!.closingLink = frame;
-            runStart = frame.delimiterStart;
-            frame.resolvedEnd = closeEnd;
+            scopeFrame = frame;
             if (!image) {
               inactiveBefore = openToken + 1;
             }
@@ -420,18 +421,22 @@ function resolvePairedSyntax(
     if (rawState & FrameFlag.InLinkLabel) {
       literalDepth--;
     }
-    if (runStart >= 0 && runCount > runStart) {
-      // Replacements retain the resolved suffix, so its run slots can be reused.
-      if (runStart > 0) {
-        runs![runStart].previous = -1;
-        runs![runStart - 1].next = -1;
+    if (scopeFrame && lastRun !== scopeFrame.delimiterBottom) {
+      const bottom = scopeFrame.delimiterBottom;
+      const first = bottom ? bottom.next! : firstRun!;
+      if (bottom) {
+        bottom.next = void 0;
       }
-      replacements = resolveDelimiterScope(runs!, runStart, replacements);
-      runCount = runStart;
+      else {
+        firstRun = void 0;
+      }
+      first.previous = void 0;
+      replacements = resolveDelimiterScope(first, replacements);
+      lastRun = bottom;
     }
   }
-  if (runCount > 0) {
-    replacements = resolveDelimiterScope(runs!, 0, replacements);
+  if (firstRun) {
+    replacements = resolveDelimiterScope(firstRun, replacements);
   }
   return replacements ?? emptyArray;
 }
