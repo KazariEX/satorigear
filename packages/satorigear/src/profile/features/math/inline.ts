@@ -45,7 +45,7 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
   {
     kind: "leaf",
     token: InlineKind.MathText,
-    build(tokenIndex, sourceSpan, context) {
+    build(tokenIndex, position, context) {
       const markerLength = inlineTokenData(context.tokens, tokenIndex);
       let value = inlineTokenText(context.view.text, context.tokens, tokenIndex, markerLength);
       const startPadding = value.startsWith("\r\n") ? 2 : /^[ \r\n]/.test(value) ? 1 : 0;
@@ -56,7 +56,7 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
       return {
         type: "inlineMath",
         value,
-        position: sourceSpan,
+        position,
       };
     },
   },

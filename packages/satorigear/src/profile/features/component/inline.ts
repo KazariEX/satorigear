@@ -9,8 +9,8 @@ import {
 import { hasInlineColonBoundary } from "../../utils.ts";
 import { componentNameEnd, normalizeComponentName } from "./shared.ts";
 import type { InlinePairBuilder } from "../../../fragment/inline.ts";
-import type { InlineScanRule } from "../../../inline/tokenize.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
+import type { InlineScanRule } from "../../../inline/tokenize.ts";
 
 export const inlineScans: readonly InlineScanRule[] = [
   {
@@ -32,7 +32,7 @@ export const inlineScans: readonly InlineScanRule[] = [
 const buildInlineComponent: InlinePairBuilder = (
   open,
   close,
-  sourceSpan,
+  position,
   children,
   context,
 ) => {
@@ -50,7 +50,7 @@ const buildInlineComponent: InlinePairBuilder = (
     name,
     attributes: {},
     children,
-    position: sourceSpan,
+    position,
   };
 };
 
@@ -58,8 +58,8 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
   {
     kind: "leaf",
     token: InlineKind.InlineComponent,
-    build(token, sourceSpan, context) {
-      return buildInlineComponent(token, token, sourceSpan, [], context);
+    build(token, position, context) {
+      return buildInlineComponent(token, token, position, [], context);
     },
   },
   {
@@ -70,13 +70,13 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
   {
     kind: "pair",
     token: InlineKind.InlineSpanOpen,
-    build(open, close, sourceSpan, children) {
+    build(open, close, position, children) {
       return {
         type: "inlineComponent",
         name: "span",
         attributes: {},
         children,
-        position: sourceSpan,
+        position,
       };
     },
   },

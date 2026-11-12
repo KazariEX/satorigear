@@ -43,7 +43,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.Binding,
-        build(tokenIndex, sourceSpan, context) {
+        build(tokenIndex, position, context) {
           const source = context.view.text;
           const tokenStart = inlineTokenStart(context.tokens, tokenIndex);
           const start = tokenStart + 2;
@@ -60,7 +60,7 @@ export const feature: SyntaxFeature = {
             name: "binding",
             attributes,
             children: [],
-            position: sourceSpan,
+            position,
           };
         },
       },

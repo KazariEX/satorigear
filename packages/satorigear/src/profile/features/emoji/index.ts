@@ -41,11 +41,11 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.Emoji,
-        build(tokenIndex, sourceSpan, context) {
+        build(tokenIndex, position, context) {
           return {
             type: "emoji",
             value: inlineTokenText(context.view.text, context.tokens, tokenIndex),
-            position: sourceSpan,
+            position,
           };
         },
       },

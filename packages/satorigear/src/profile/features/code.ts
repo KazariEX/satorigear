@@ -168,7 +168,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.CodeSpan,
-        build: (tokenIndex, sourceSpan, context) => {
+        build: (tokenIndex, position, context) => {
           const markerLength = inlineTokenData(context.tokens, tokenIndex);
           let value = context.locator.normalizeLineEndings(
             inlineTokenText(context.view.text, context.tokens, tokenIndex, markerLength),
@@ -179,7 +179,7 @@ export const feature: SyntaxFeature = {
           return {
             type: "inlineCode",
             value: context.tableCell ? value.replace(/\\\|/g, "|") : value,
-            position: sourceSpan,
+            position,
           };
         },
       },

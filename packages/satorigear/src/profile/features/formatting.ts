@@ -32,11 +32,11 @@ function createFormattingPair(
     token: open,
     open,
     close,
-    build(openToken, closeToken, sourceSpan, children) {
+    build(openToken, closeToken, position, children) {
       return {
         type,
         children,
-        position: sourceSpan,
+        position,
       };
     },
   };

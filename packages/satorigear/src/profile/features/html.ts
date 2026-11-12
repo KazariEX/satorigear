@@ -64,12 +64,12 @@ function htmlStartAt(
   }
 }
 
-const buildInlineHtml: InlineLeafBuilder = (tokenIndex, sourceSpan, context) => {
+const buildInlineHtml: InlineLeafBuilder = (tokenIndex, position, context) => {
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
   return {
     type: "html",
     value: text,
-    position: sourceSpan,
+    position,
   };
 };
 

@@ -71,12 +71,12 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.HardBreak,
-        build(tokenIndex, sourceSpan, context) {
+        build(tokenIndex, position, context) {
           const lineStart = inlineTokenData(context.tokens, tokenIndex);
           return {
             type: "break",
             position: {
-              start: sourceSpan.start,
+              start: position.start,
               end: context.locator.locationAt(context.view.mapOffset(lineStart - 1) + 1),
             },
           };

@@ -179,7 +179,7 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
   const isReference = resourceKind === "reference";
 
   return isReference
-    ? (openToken, closeToken, sourceSpan, children, context) => {
+    ? (openToken, closeToken, position, children, context) => {
       const closeText = inlineTokenText(context.view.text, context.tokens, closeToken);
       const syntaxStart = inlineTokenStart(context.tokens, openToken);
       const syntaxEnd = inlineTokenEnd(context.tokens, closeToken);
@@ -197,7 +197,7 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
           identifier,
           label,
           referenceType,
-          position: sourceSpan,
+          position,
         }
         : {
           type: "linkReference",
@@ -205,10 +205,10 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
           identifier,
           label,
           referenceType,
-          position: sourceSpan,
+          position,
         };
     }
-    : (openToken, closeToken, sourceSpan, children, context) => {
+    : (openToken, closeToken, position, children, context) => {
       let url = "";
       let title: string | null = null;
 
@@ -238,14 +238,14 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
           alt: phrasingText(children),
           url,
           title,
-          position: sourceSpan,
+          position,
         }
         : {
           type: "link",
           children,
           url,
           title,
-          position: sourceSpan,
+          position,
         };
     };
 }
@@ -313,7 +313,7 @@ export const feature: SyntaxFeature = {
       {
         kind: "leaf",
         token: InlineKind.Autolink,
-        build(tokenIndex, sourceSpan, context) {
+        build(tokenIndex, position, context) {
           const label = inlineTokenText(context.view.text, context.tokens, tokenIndex, 1);
           return {
             type: "link",
@@ -325,19 +325,19 @@ export const feature: SyntaxFeature = {
                 value: label,
                 position: {
                   start: {
-                    line: sourceSpan.start.line,
-                    column: sourceSpan.start.column + 1,
-                    offset: sourceSpan.start.offset + 1,
+                    line: position.start.line,
+                    column: position.start.column + 1,
+                    offset: position.start.offset + 1,
                   },
                   end: {
-                    line: sourceSpan.end.line,
-                    column: sourceSpan.end.column - 1,
-                    offset: sourceSpan.end.offset - 1,
+                    line: position.end.line,
+                    column: position.end.column - 1,
+                    offset: position.end.offset - 1,
                   },
                 },
               },
             ],
-            position: sourceSpan,
+            position,
           };
         },
       },

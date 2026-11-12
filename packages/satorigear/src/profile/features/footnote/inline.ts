@@ -7,13 +7,13 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
   {
     kind: "leaf",
     token: InlineKind.FootnoteReference,
-    build(tokenIndex, sourceSpan, context) {
+    build(tokenIndex, position, context) {
       const label = inlineTokenText(context.view.text, context.tokens, tokenIndex, 2, 1);
       return {
         type: "footnoteReference",
         identifier: normalizeIdentifier(label),
         label: semanticText(label),
-        position: sourceSpan,
+        position,
       };
     },
   },
