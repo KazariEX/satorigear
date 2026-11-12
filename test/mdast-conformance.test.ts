@@ -31,6 +31,16 @@ describe("mdast conformance", () => {
   it("matches mdast-util-from-markdown for the official corpus", () => {
     expect(exact).toBe(tests.length);
   });
+
+  it("keeps backticks literal in reference labels inside images", () => {
+    const source = "![[r][`]`](u)\n\n[`]: /tick\n";
+    expect(parser.parse(source)).toEqual(fromMarkdown(source));
+  });
+
+  it("preserves mixed emphasis across repeated delimiter runs", () => {
+    const source = "_a*b_c**d***e_f ".repeat(4);
+    expect(parser.parse(source)).toEqual(fromMarkdown(source));
+  });
 });
 
 afterAll(() => {

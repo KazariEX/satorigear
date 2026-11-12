@@ -202,6 +202,27 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it.each(["\n", "\r", "\r\n"])("maps backslash breaks before continuation indentation (%j)", (ending) => {
+    const tree = parser.parse(`> a\\${ending}>   b${ending}`);
+    expect(tree.children[0]).toMatchObject({
+      type: "blockquote",
+      children: [{
+        type: "paragraph",
+        children: [
+          { type: "text", value: "a" },
+          {
+            type: "break",
+            position: {
+              start: { line: 1, column: 4, offset: 3 },
+              end: { line: 2, column: 1, offset: 4 + ending.length },
+            },
+          },
+          { type: "text", value: "b" },
+        ],
+      }],
+    });
+  });
+
   it.each([
     { name: "LF", ending: "\n", breakEnd: 7 },
     { name: "CR", ending: "\r", breakEnd: 7 },
