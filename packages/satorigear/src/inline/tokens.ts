@@ -2,7 +2,7 @@ export type InlineTokenStream = readonly number[];
 
 // The lexer, resolver, and node builders share this region-local record layout.
 // Markdown inline tokens never need discontiguous ranges.
-const enum InlineTokenField {
+export const enum InlineTokenField {
   Kind,
   Start,
   End,

@@ -14,6 +14,7 @@ import {
   inlineTokenCount,
   inlineTokenData,
   inlineTokenEnd,
+  InlineTokenField,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
@@ -154,13 +155,14 @@ function analyzeBrackets(
   tokens: InlineTokenStream,
   definitions: DefinitionLookup,
   options: InlineResolverOptions,
+  start: number,
+  end: number,
 ): BracketFrame | undefined {
   let first: BracketFrame | undefined;
   let last: BracketFrame | undefined;
   let candidateTop: BracketFrame | undefined;
   let stackTop: BracketFrame | undefined;
-  const count = inlineTokenCount(tokens);
-  for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
+  for (let tokenIndex = start; tokenIndex < end; tokenIndex++) {
     const kind = inlineTokenKind(tokens, tokenIndex);
     if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
       const frame: BracketFrame = {
@@ -260,6 +262,8 @@ function resolvePairedSyntax(
   nextFrame: BracketFrame | undefined,
   definitions: DefinitionLookup,
   delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
+  start: number,
+  end: number,
 ): readonly DelimiterReplacement[][] {
   // An empty definition table makes every non-resource bracket candidate literal.
   const hasDefinitions = nextFrame !== void 0 && definitions.hasDefinitions();
@@ -275,8 +279,7 @@ function resolvePairedSyntax(
   let lastVisibleOpener = -1;
   let literalDepth = 0;
 
-  const count = inlineTokenCount(tokens);
-  for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
+  for (let tokenIndex = start; tokenIndex < end; tokenIndex++) {
     const kind = inlineTokenKind(tokens, tokenIndex);
     const tokenStart = inlineTokenStart(tokens, tokenIndex);
     if (consumedEnd >= 0 && tokenStart >= consumedEnd) {
@@ -468,13 +471,15 @@ function emitResolvedTokens(
   tokens: InlineTokenStream,
   nextFrame: BracketFrame | undefined,
   replacements: readonly DelimiterReplacement[][],
+  start: number,
+  end: number,
 ): InlineTokenStream {
-  const result: number[] = [];
+  // The complete semantic prefix is copied before any later component can promote its tail.
+  const result = start ? tokens.slice(0, start * InlineTokenField.Stride) : [];
   let rawTop: BracketFrame | undefined;
   let skipEnd = -1;
 
-  const count = inlineTokenCount(tokens);
-  for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
+  for (let tokenIndex = start; tokenIndex < end; tokenIndex++) {
     const kind = inlineTokenKind(tokens, tokenIndex);
     const tokenStart = inlineTokenStart(tokens, tokenIndex);
     if (skipEnd >= 0 && tokenStart >= skipEnd) {
@@ -535,35 +540,30 @@ function emitResolvedTokens(
       }
       const closingLink = rawFrame?.closingLink;
 
-      if (!skipping) {
-        if (closingLink) {
-          skipEnd = appendReferenceBoundary(result, tokens, closingLink, true);
-        }
-        else {
-          const state = rawFrame === void 0 ? FrameClaim.Raw : rawFrame.state;
-          const claim = state & FrameClaim.Mask;
-          if (claim === FrameClaim.Component) {
-            const openToken = rawFrame!.open;
-            if (inlineTokenEnd(tokens, openToken) < tokenStart) {
-              appendInlineToken(result, InlineKind.InlineComponentClose, tokenStart, tokenStart + 1);
-            }
-          }
-          else if (claim >= FrameClaim.Span && claim <= FrameClaim.AttributedSpan) {
-            appendInlineToken(result, InlineKind.InlineSpanClose, tokenStart, tokenStart + 1);
-          }
-          // Of the remaining claims, only a footnote replaces its entire source.
-          else if (claim !== FrameClaim.Footnote && !(state & FrameFlag.LiteralBracket)) {
-            if (kind >= InlineRole.Text) {
-              copyInlineToken(result, tokens, tokenIndex);
-            }
-            else {
-              appendResolvedRawToken(result, tokens, tokenIndex, replacements);
-            }
-          }
-        }
+      if (skipping) {
+        continue;
       }
-
-      continue;
+      if (closingLink) {
+        skipEnd = appendReferenceBoundary(result, tokens, closingLink, true);
+        continue;
+      }
+      const state = rawFrame === void 0 ? FrameClaim.Raw : rawFrame.state;
+      const claim = state & FrameClaim.Mask;
+      if (claim === FrameClaim.Component) {
+        const openToken = rawFrame!.open;
+        if (inlineTokenEnd(tokens, openToken) < tokenStart) {
+          appendInlineToken(result, InlineKind.InlineComponentClose, tokenStart, tokenStart + 1);
+        }
+        continue;
+      }
+      if (claim >= FrameClaim.Span && claim <= FrameClaim.AttributedSpan) {
+        appendInlineToken(result, InlineKind.InlineSpanClose, tokenStart, tokenStart + 1);
+        continue;
+      }
+      // Of the remaining claims, only a footnote replaces its entire source.
+      if (claim === FrameClaim.Footnote || state & FrameFlag.LiteralBracket) {
+        continue;
+      }
     }
 
     if (!skipping) {
@@ -582,31 +582,18 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
   return (delimiterConfigs) => {
     const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
     return (source, tokens, definitions) => {
-      // Paired syntax is usually recognized sooner from its closing token.
-      let tokenIndex = inlineTokenCount(tokens) - 1;
-      for (; tokenIndex >= 0; tokenIndex--) {
-        const kind = inlineTokenKind(tokens, tokenIndex);
-        if (kind < InlineRole.Text) {
-          break;
-        }
+      // The first raw candidate starts structural resolution; its semantic prefix is complete.
+      let start = 0;
+      const end = inlineTokenCount(tokens);
+      while (start < end && inlineTokenKind(tokens, start) >= InlineRole.Text) {
+        start++;
       }
-      if (tokenIndex < 0) {
+      if (start === end) {
         return tokens;
       }
-      const frames = analyzeBrackets(
-        source,
-        tokens,
-        definitions,
-        options,
-      );
-      const replacements = resolvePairedSyntax(
-        source,
-        tokens,
-        frames,
-        definitions,
-        delimiterByKind,
-      );
-      return emitResolvedTokens(tokens, frames, replacements);
+      const frames = analyzeBrackets(source, tokens, definitions, options, start, end);
+      const replacements = resolvePairedSyntax(source, tokens, frames, definitions, delimiterByKind, start, end);
+      return emitResolvedTokens(tokens, frames, replacements, start, end);
     };
   };
 }
