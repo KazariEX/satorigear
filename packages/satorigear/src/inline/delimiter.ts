@@ -177,35 +177,35 @@ export function resolveDelimiterScope(
   first: DelimiterRun,
   replacements: DelimiterReplacement[][] = [],
 ): DelimiterReplacement[][] {
-  const openersBottom: (DelimiterRun | undefined)[] = [];
-  let current: DelimiterRun | undefined = first;
+  const openersBottom: number[] = [];
+  let closer: DelimiterRun | undefined = first;
   // Matching unlinks exhausted runs, so every active run has remaining source.
-  while (current) {
-    const closer: DelimiterRun = current;
-    const next = closer.next;
+  while (closer) {
     if (!(closer.state & DelimiterRunState.CanClose)) {
-      current = next;
+      closer = closer.next;
       continue;
     }
-    const bottomSlotBase = closer.config.bits >>> DelimiterConfigLayout.BottomSlotBaseShift;
+    const bottomSlotBase: number = closer.config.bits >>> DelimiterConfigLayout.BottomSlotBaseShift;
     // Each config owns two groups of three remainder classes; can-open selects the second group.
     const bottomSlot = bottomSlotBase +
       (closer.state & DelimiterRunState.CanOpen ? DelimiterRunLayout.LengthModuloCount : 0) +
       (closer.state >> DelimiterRunLayout.OriginalLengthModuloShift);
-    const bottom = openersBottom[bottomSlot];
+    // A source-order bound survives removal of the node that established it.
+    const bottom = openersBottom[bottomSlot] ?? 0;
     let opener = closer.previous;
-    while (opener && opener !== bottom) {
+    while (opener && opener.tokenIndex >= bottom) {
       if (opener.config === closer.config && canPair(opener, closer)) {
         break;
       }
       opener = opener.previous;
     }
-    if (!opener || opener === bottom) {
-      openersBottom[bottomSlot] = closer.previous;
+    if (!opener || opener.tokenIndex < bottom) {
+      // Earlier candidates failed this class; the current run may still open a later pair.
+      openersBottom[bottomSlot] = closer.tokenIndex;
       if (!(closer.state & DelimiterRunState.CanOpen)) {
         unlinkRun(closer);
       }
-      current = next;
+      closer = closer.next;
       continue;
     }
 
@@ -228,7 +228,7 @@ export function resolveDelimiterScope(
     }
     if (closer.remaining === 0) {
       unlinkRun(closer);
-      current = next;
+      closer = closer.next;
     }
   }
   return replacements;
