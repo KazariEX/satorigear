@@ -35,6 +35,7 @@ interface BracketFrame {
   open: number;
   close: number;
   parent: BracketFrame | undefined;
+  next: BracketFrame | undefined;
   state: number;
   candidateBottom: BracketFrame | undefined;
   candidateNext: BracketFrame | undefined;
@@ -63,9 +64,6 @@ const enum FrameFlag {
   InLinkLabel = 16,
   LiteralBracket = 32,
 }
-
-// Without an opener, pairing and emission never access frame records.
-const noBracketFrames: BracketFrame[] = [];
 
 // Each frame keeps its syntax identity while analysis, pairing, and emission
 // establish their own links and boundaries without changing a field's meaning.
@@ -155,19 +153,20 @@ function analyzeBrackets(
   tokens: InlineTokenStream,
   definitions: DefinitionLookup,
   options: InlineResolverOptions,
-): BracketFrame[] {
-  let frames: BracketFrame[] | undefined;
+): BracketFrame | undefined {
+  let first: BracketFrame | undefined;
+  let last: BracketFrame | undefined;
   let candidateTop: BracketFrame | undefined;
   let stackTop: BracketFrame | undefined;
   const count = inlineTokenCount(tokens);
   for (let tokenIndex = 0; tokenIndex < count; tokenIndex++) {
     const kind = inlineTokenKind(tokens, tokenIndex);
     if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
-      const arena = frames ??= [];
       const frame: BracketFrame = {
         open: tokenIndex,
         close: -1,
         parent: stackTop,
+        next: void 0,
         state: kind === InlineKind.ImageOpen ? FrameFlag.Image : FrameClaim.Raw,
         candidateBottom: candidateTop,
         candidateNext: void 0,
@@ -176,7 +175,13 @@ function analyzeBrackets(
         logicalParent: void 0,
         referenceParent: void 0,
       };
-      arena.push(frame);
+      if (last) {
+        last.next = frame;
+      }
+      else {
+        first = frame;
+      }
+      last = frame;
       stackTop = frame;
       continue;
     }
@@ -245,25 +250,24 @@ function analyzeBrackets(
     frame.candidateNext = candidateTop;
     candidateTop = frame;
   }
-  return frames ?? noBracketFrames;
+  return first;
 }
 
 function resolvePairedSyntax(
   source: string,
   tokens: InlineTokenStream,
-  frames: BracketFrame[],
+  nextFrame: BracketFrame | undefined,
   definitions: DefinitionLookup,
   delimiterByKind: ReturnType<typeof compileDelimiterConfigs>,
 ): readonly DelimiterReplacement[][] {
   // An empty definition table makes every non-resource bracket candidate literal.
-  const hasDefinitions = frames.length > 0 && definitions.hasDefinitions();
+  const hasDefinitions = nextFrame !== void 0 && definitions.hasDefinitions();
   // Delimiter scopes share a reusable run prefix; frames checkpoint its logical length.
   let runs: DelimiterRun[] | undefined;
   let runCount = 0;
   let replacements: DelimiterReplacement[][] | undefined;
   let rawTop: BracketFrame | undefined;
   let logicalTop: BracketFrame | undefined;
-  let frameCursor = 0;
   let consumedEnd = -1;
   let consumeFrames = false;
   let inactiveBefore = 0;
@@ -295,7 +299,8 @@ function resolvePairedSyntax(
     }
 
     if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
-      const frame = frames[frameCursor++];
+      const frame = nextFrame!;
+      nextFrame = frame.next;
       rawTop = frame;
       if (consuming) {
         if (consumeFrames) {
@@ -453,13 +458,12 @@ function appendReferenceBoundary(
 
 function emitResolvedTokens(
   tokens: InlineTokenStream,
-  frames: BracketFrame[],
+  nextFrame: BracketFrame | undefined,
   replacements: readonly DelimiterReplacement[][],
 ): InlineTokenStream {
   const result: number[] = [];
   let rawTop: BracketFrame | undefined;
   let referenceTop: BracketFrame | undefined;
-  let frameCursor = 0;
   let skipEnd = -1;
 
   const count = inlineTokenCount(tokens);
@@ -472,7 +476,8 @@ function emitResolvedTokens(
     const skipping = skipEnd >= 0;
 
     if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
-      const frame = frames[frameCursor++];
+      const frame = nextFrame!;
+      nextFrame = frame.next;
       rawTop = frame;
       const state = frame.state;
       const claim = state & FrameClaim.Mask;
