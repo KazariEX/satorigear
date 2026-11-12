@@ -28,9 +28,6 @@ export class BlockLines implements SourceLocator {
   #fields: Int32Array;
   #length = 0;
   #locatorField = 0;
-  // Positions in the retained edit suffix are stored relative to source EOF. Changing
-  // source length then shifts the whole suffix without rewriting every line coordinate.
-  #relativeStart = Infinity;
   // Projected views omit source ownership, so a positive length also proves physical contiguity.
   #sourceLength: number;
   // Once false, edits keep this conservative rather than rescanning retained source.
@@ -63,7 +60,6 @@ export class BlockLines implements SourceLocator {
   scan(source: string): this {
     this.#sourceLength = source.length;
     this.#locatorField = 0;
-    this.#relativeStart = Infinity;
     const lineCapacity = Math.min((source.length + 15) >>> 4, 16384);
     this.#ensureCapacity(lineCapacity * BlockLineField.Stride);
     this.#length = BlockLines.#scan(source, this);
@@ -119,15 +115,15 @@ export class BlockLines implements SourceLocator {
   }
 
   start(index: number): number {
-    return this.#position(this.#fields[index * BlockLineField.Stride + BlockLineField.Start]);
+    return this.#fields[index * BlockLineField.Stride + BlockLineField.Start];
   }
 
   end(index: number): number {
-    return this.#position(this.#fields[index * BlockLineField.Stride + BlockLineField.End]);
+    return this.#fields[index * BlockLineField.Stride + BlockLineField.End];
   }
 
   next(index: number): number {
-    return this.#position(this.#fields[index * BlockLineField.Stride + BlockLineField.Next]);
+    return this.#fields[index * BlockLineField.Stride + BlockLineField.Next];
   }
 
   prefixColumns(index: number): number {
@@ -179,7 +175,7 @@ export class BlockLines implements SourceLocator {
     const sourceLength = this.#sourceLength;
     if (
       offset === sourceLength &&
-      this.#position(fields[fieldLength - BlockLineField.Stride + BlockLineField.End]) < sourceLength
+      fields[fieldLength - BlockLineField.Stride + BlockLineField.End] < sourceLength
     ) {
       return {
         line: fieldLength / BlockLineField.Stride + 1,
@@ -188,11 +184,9 @@ export class BlockLines implements SourceLocator {
       };
     }
     let field = this.#locatorField;
-    let start = this.#position(fields[field + BlockLineField.Start]);
+    let start = fields[field + BlockLineField.Start];
     while (field + BlockLineField.Stride < fieldLength) {
-      const nextStart = this.#position(
-        fields[field + BlockLineField.Stride + BlockLineField.Start],
-      );
+      const nextStart = fields[field + BlockLineField.Stride + BlockLineField.Start];
       if (nextStart > offset) {
         break;
       }
@@ -298,7 +292,6 @@ export class BlockLines implements SourceLocator {
     const end = lines.end(index);
     const next = lines.next(index);
     this.#length = 0;
-    this.#relativeStart = Infinity;
     this.push(start, end, next, prefixColumns, lazy);
   }
 
@@ -311,9 +304,6 @@ export class BlockLines implements SourceLocator {
     );
     result.#length = end - start;
     result.#lineEndingsNormalized = this.#lineEndingsNormalized;
-    if (this.#relativeStart < end) {
-      result.#relativeStart = Math.max(0, this.#relativeStart - start);
-    }
     return result;
   }
 
@@ -322,7 +312,6 @@ export class BlockLines implements SourceLocator {
     const next = new BlockLines(this.#sourceLength, 0);
     next.#fields = this.#fields.slice(0, this.#length * BlockLineField.Stride);
     next.#length = this.#length;
-    next.#relativeStart = this.#relativeStart;
     next.#lineEndingsNormalized = this.#lineEndingsNormalized;
     return next;
   }
@@ -361,10 +350,14 @@ export class BlockLines implements SourceLocator {
       nextSource.length,
       prefixEnd + changed.length + this.length - suffix,
     );
-    // Reassemble an absolute prefix and rebuilt window with an EOF-relative stable suffix.
-    next.#appendAbsoluteRange(this, 0, prefixEnd);
+    // Stored coordinates stay absolute. The retained suffix moves once with the edit.
+    next.#appendRawRange(this, 0, prefixEnd);
     next.#appendRawRange(changed, 0, changed.length);
-    next.#appendRelativeRange(this, suffix);
+    const suffixStart = next.length;
+    next.#appendRawRange(this, suffix, this.length);
+    if (delta !== 0) {
+      next.#shiftPositions(suffixStart, delta);
+    }
     next.#lineEndingsNormalized = this.#lineEndingsNormalized && changed.#lineEndingsNormalized;
     return next;
   }
@@ -372,44 +365,20 @@ export class BlockLines implements SourceLocator {
   pop(): void {
     if (this.#length > 0) {
       this.#length--;
-      // A boundary at or beyond the new end means no EOF-relative lines remain.
-      if (this.#relativeStart >= this.length) {
-        this.#relativeStart = Infinity;
-      }
     }
   }
 
-  /** Copies an absolute-coordinate line while preserving the target slot's encoding. */
+  /** Copies one absolute line into an existing slot. */
   #setAbsoluteFrom(index: number, lines: BlockLines, line: number): void {
     const field = index * BlockLineField.Stride;
     const sourceField = line * BlockLineField.Stride;
-    const shift = index >= this.#relativeStart ? -this.#sourceLength - 1 : 0;
-    this.#fields[field + BlockLineField.Start] = lines.#fields[sourceField + BlockLineField.Start] + shift;
-    this.#fields[field + BlockLineField.End] = lines.#fields[sourceField + BlockLineField.End] + shift;
-    this.#fields[field + BlockLineField.Next] = lines.#fields[sourceField + BlockLineField.Next] + shift;
+    this.#fields[field + BlockLineField.Start] = lines.#fields[sourceField + BlockLineField.Start];
+    this.#fields[field + BlockLineField.End] = lines.#fields[sourceField + BlockLineField.End];
+    this.#fields[field + BlockLineField.Next] = lines.#fields[sourceField + BlockLineField.Next];
     this.#fields[field + BlockLineField.State] = lines.#fields[sourceField + BlockLineField.State];
   }
 
-  /** Appends a range in absolute source coordinates. */
-  #appendAbsoluteRange(lines: BlockLines, start: number, end: number): void {
-    const boundary = Math.max(start, Math.min(end, lines.#relativeStart));
-    this.#appendRawRange(lines, start, boundary);
-    const relativeStart = this.length;
-    this.#appendRawRange(lines, boundary, end);
-    this.#shiftPositions(relativeStart, lines.#sourceLength + 1);
-  }
-
-  /** Appends an EOF-relative suffix whose coordinates follow future source-length changes. */
-  #appendRelativeRange(lines: BlockLines, start = 0, end = lines.length): void {
-    this.#relativeStart = this.length;
-    const boundary = Math.max(start, Math.min(end, lines.#relativeStart));
-    const absoluteStart = this.length;
-    this.#appendRawRange(lines, start, boundary);
-    this.#shiftPositions(absoluteStart, -lines.#sourceLength - 1);
-    this.#appendRawRange(lines, boundary, end);
-  }
-
-  /** Appends stored fields unchanged; their coordinate encoding must already match the target. */
+  /** Appends stored fields unchanged. */
   #appendRawRange(lines: BlockLines, start: number, end: number): void {
     if (start >= end) {
       return;
@@ -439,10 +408,6 @@ export class BlockLines implements SourceLocator {
     const nextFields = new Int32Array(lineCapacity * BlockLineField.Stride);
     nextFields.set(fields);
     this.#fields = nextFields;
-  }
-
-  #position(position: number): number {
-    return position < 0 ? position + this.#sourceLength + 1 : position;
   }
 
   #shiftPositions(start: number, delta: number): void {
