@@ -340,8 +340,10 @@ export class BlockLines implements SourceLocator {
     // Equal-length edits preserve line slots, so only overwrite the rebuilt window.
     if (delta === 0 && changed.length === suffix - prefixEnd) {
       const next = this.#copy();
-      for (let index = 0; index < changed.length; index++) {
-        next.#setAbsoluteFrom(prefixEnd + index, changed, index);
+      const target = prefixEnd * BlockLineField.Stride;
+      const fieldLength = changed.length * BlockLineField.Stride;
+      for (let field = 0; field < fieldLength; field++) {
+        next.#fields[target + field] = changed.#fields[field];
       }
       next.#lineEndingsNormalized &&= changed.#lineEndingsNormalized;
       return next;
@@ -366,16 +368,6 @@ export class BlockLines implements SourceLocator {
     if (this.#length > 0) {
       this.#length--;
     }
-  }
-
-  /** Copies one absolute line into an existing slot. */
-  #setAbsoluteFrom(index: number, lines: BlockLines, line: number): void {
-    const field = index * BlockLineField.Stride;
-    const sourceField = line * BlockLineField.Stride;
-    this.#fields[field + BlockLineField.Start] = lines.#fields[sourceField + BlockLineField.Start];
-    this.#fields[field + BlockLineField.End] = lines.#fields[sourceField + BlockLineField.End];
-    this.#fields[field + BlockLineField.Next] = lines.#fields[sourceField + BlockLineField.Next];
-    this.#fields[field + BlockLineField.State] = lines.#fields[sourceField + BlockLineField.State];
   }
 
   /** Appends stored fields unchanged. */
