@@ -10,7 +10,6 @@ export const enum InlineTokenField {
   Stride,
 }
 
-// Newline spans its physical line ending and stripped indentation; Data stores the next line start.
 // Token copies preserve this slot as opaque data.
 // Zero means that the token carries no additional fact.
 

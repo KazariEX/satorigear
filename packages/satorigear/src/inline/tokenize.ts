@@ -93,7 +93,7 @@ function tokenize(
         lineStart !== offset ||
         !implicitSoftBreak(source, endingStart, tokens)
       ) {
-        tokens.push(InlineKind.Newline, endingStart, offset, lineStart);
+        tokens.push(InlineKind.Newline, endingStart, offset, 0);
       }
       continue;
     }
@@ -126,7 +126,7 @@ function generateInlineTokenizer(
     `const r=o++;if(c===${Character.CarriageReturn}&&s.charCodeAt(o)===${Character.LineFeed})o++;`,
     `const l=o;while(s.charCodeAt(o)===${Character.Space})o++;`,
     `if(k){let h=r-2;while(s.charCodeAt(h-1)===${Character.Space})h--;t.push(${InlineKind.HardBreak},h,o,l)}`,
-    `else if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,l);continue}`,
+    `else if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,0);continue}`,
     `let d;switch(c){${cases}default:d=o}`,
     `o=d>o?d:o+1}`,
     `return t}`,
