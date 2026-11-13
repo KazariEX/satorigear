@@ -53,14 +53,10 @@ export class BlockTokenStream implements DefinitionLookup {
   #fields = new Int32Array();
   #metadata?: (BlockTokenMeta | undefined)[];
   #opens: number[] = [];
-  #relativeStart = Infinity;
-  #sourceLength: number;
 
-  constructor(sourceLength = 0) {
-    this.#sourceLength = sourceLength;
-  }
+  constructor() {}
 
-  reset(sourceLength: number): void {
+  reset(): void {
     this.#definitionCounts?.clear();
     this.#definitionMembershipChanges?.clear();
     this.#fieldLength = 0;
@@ -69,16 +65,10 @@ export class BlockTokenStream implements DefinitionLookup {
     if (this.#opens.length) {
       this.#opens.length = 0;
     }
-    this.#relativeStart = Infinity;
-    this.#sourceLength = sourceLength;
   }
 
   get length(): number {
     return this.#fieldLength / BlockTokenField.Stride;
-  }
-
-  get sourceLength(): number {
-    return this.#sourceLength;
   }
 
   hasDefinition(key: string): boolean {
@@ -204,11 +194,11 @@ export class BlockTokenStream implements DefinitionLookup {
     replacement: BlockTokenStream,
     damageStart: number,
     damageEnd: number,
+    sourceDelta: number,
   ): BlockTokenChange {
     const previousLength = this.length;
     const replacedLength = end - start;
     const replacementLength = replacement.length;
-    const sourceDelta = replacement.#sourceLength - this.#sourceLength;
 
     // 1. Narrow the reported damage to the tokens that actually changed.
     const overlapLength = Math.min(replacedLength, replacementLength);
@@ -258,25 +248,7 @@ export class BlockTokenStream implements DefinitionLookup {
       oldStart,
     };
 
-    // 2. Align coordinate encoding with the replacement boundary. Positions before it
-    // stay absolute; the retained suffix becomes EOF-relative so sourceLength rebases it.
-    if (this.#relativeStart < end) {
-      for (let index = this.#relativeStart; index < end; index++) {
-        const field = index * BlockTokenField.Stride;
-        this.#fields[field + BlockTokenField.Start] += this.#sourceLength + 1;
-        this.#fields[field + BlockTokenField.End] += this.#sourceLength + 1;
-      }
-    }
-    else if (this.#relativeStart > end) {
-      const relativeEnd = Math.min(this.#relativeStart, previousLength);
-      for (let index = end; index < relativeEnd; index++) {
-        const field = index * BlockTokenField.Stride;
-        this.#fields[field + BlockTokenField.Start] -= this.#sourceLength + 1;
-        this.#fields[field + BlockTokenField.End] -= this.#sourceLength + 1;
-      }
-    }
-
-    // 3. Replace packed fields in place. A size-changing middle edit shifts the suffix,
+    // 2. Replace packed fields in place. A size-changing middle edit shifts the suffix,
     // growing the dense backing store only when its retained capacity is insufficient.
     const fieldStart = start * BlockTokenField.Stride;
     const replacementFieldLength = replacement.#fieldLength;
@@ -332,9 +304,15 @@ export class BlockTokenStream implements DefinitionLookup {
       this.#metadata = metadata.length > 0 ? metadata : void 0;
     }
 
+    // All coordinates stay absolute, so the retained suffix moves once with this edit.
     const newSuffixStart = start + replacementLength;
-    this.#relativeStart = newSuffixStart < this.length ? newSuffixStart : Infinity;
-    this.#sourceLength = replacement.#sourceLength;
+    if (sourceDelta !== 0 && newSuffixStart < this.length) {
+      const suffixFieldStart = newSuffixStart * BlockTokenField.Stride;
+      for (let field = suffixFieldStart; field < this.#fieldLength; field += BlockTokenField.Stride) {
+        this.#fields[field + BlockTokenField.Start] += sourceDelta;
+        this.#fields[field + BlockTokenField.End] += sourceDelta;
+      }
+    }
     return change;
   }
 
@@ -361,9 +339,7 @@ export class BlockTokenStream implements DefinitionLookup {
   }
 
   start(index: number): number {
-    return this.#position(
-      this.#fields[index * BlockTokenField.Stride + BlockTokenField.Start],
-    );
+    return this.#fields[index * BlockTokenField.Stride + BlockTokenField.Start];
   }
 
   setStart(index: number, start: number): void {
@@ -371,9 +347,7 @@ export class BlockTokenStream implements DefinitionLookup {
   }
 
   end(index: number): number {
-    return this.#position(
-      this.#fields[index * BlockTokenField.Stride + BlockTokenField.End],
-    );
+    return this.#fields[index * BlockTokenField.Stride + BlockTokenField.End];
   }
 
   setEnd(index: number, end: number): void {
@@ -439,10 +413,6 @@ export class BlockTokenStream implements DefinitionLookup {
     const fields = new Int32Array(capacity);
     fields.set(this.#fields.subarray(0, this.#fieldLength));
     this.#fields = fields;
-  }
-
-  #position(position: number): number {
-    return position < 0 ? position + this.#sourceLength + 1 : position;
   }
 }
 

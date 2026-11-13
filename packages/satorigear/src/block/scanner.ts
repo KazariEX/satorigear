@@ -215,7 +215,7 @@ export class BlockScanner {
     const context = this.#context;
     const tokens = this.#tokens;
     context.resetLookahead();
-    tokens.reset(source.length);
+    tokens.reset();
 
     if (!indexed) {
       context.scanBlockLines(source, lines, tokens);
@@ -289,7 +289,7 @@ export class BlockScanner {
     const oldTokenStart = restartRecord?.tokenStart ?? 0;
 
     // 2. Rescan from that boundary until block geometry and shifted tokens match an old record.
-    const replacement = new BlockTokenStream(nextSource.length);
+    const replacement = new BlockTokenStream();
     const rescannedRecords: BlockRecord[] = [];
     const scanLines = scanLineStart === 0 ? nextLines : nextLines.view(scanLineStart);
     let convergedIndex = -1;
@@ -350,6 +350,7 @@ export class BlockScanner {
       replacement,
       changedSpan.start,
       oldChangedEnd,
+      offsetDelta,
     );
     const tokenDelta = tokenChange.newEnd - tokenChange.oldEnd;
     // Record ranges are contiguous, and their starts remain in old coordinates until suffix shifting below.
