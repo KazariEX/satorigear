@@ -19,3 +19,5 @@ taskpolicy -c utility pnpm benchmark:abba baseline.mjs candidate.mjs jit.json --
 Full GC can invalidate optimized code. The absence of bailouts does not establish JIT quiescence. To investigate sensitivity to post-GC recovery, declare more bounded rounds with `--settle-rounds N` (1–16, each 150 ms). Incremental settling always executes complete append/remove pairs. More rounds do not automatically prove steady state. Choose the comparison protocol before collecting admission samples, and retain contrary results.
 
 Reference estimates require matching settling settings; older reports without a round count mean one round. `--control` uses the baseline bundle in both slots. `document/spec` measures document creation, while `commonmark/spec` measures one-shot parsing.
+
+Archived measurements and recent findings are organized in the [report index](reference/README.md). Historical status and ratios apply only to their frozen source and protocol.

@@ -1,0 +1,765 @@
+{
+  "runtime": "v26.13.0",
+  "cpu": "Apple M1 Pro",
+  "arch": "arm64",
+  "platform": "darwin",
+  "osRelease": "27.2.0",
+  "commit": "778eb241dee4c78ed3e3bcd6fe5dd09024ed8d79",
+  "nodeFlags": [
+    "--expose-gc"
+  ],
+  "workerNodeFlags": [
+    "--expose-gc"
+  ],
+  "nodeOptions": null,
+  "paths": {
+    "A": "/Users/zhilu/kazariex-projects/satorigear/node_modules/.cache/inline-resolution-69240f6/A.mjs",
+    "B": "remark"
+  },
+  "inputs": {
+    "/Users/zhilu/kazariex-projects/satorigear/node_modules/.cache/inline-resolution-69240f6/A.mjs": "dd573943f5aec969f0295f202a6d254c19f9a11628df078a982e0a29c0717695",
+    "/Users/zhilu/kazariex-projects/satorigear/scripts/benchmark-abba.ts": "434f45a3a2e99bb1b9131fcc8750e6f6c8c30dc1e79a49ec4bcfe624f6f0dfc2",
+    "/Users/zhilu/kazariex-projects/satorigear/test/benchmark/helpers/abba.ts": "ac51ff81c92054d8f6007371288b634e3fa57fc447a4ff964370a286dfea2531",
+    "/Users/zhilu/kazariex-projects/satorigear/test/benchmark/helpers/utils.ts": "6e6e42f61b4f1f13c21cc9f2cd9212f59c44c2907d868b56ad0ee1c73cdbfff2",
+    "/Users/zhilu/kazariex-projects/satorigear/test/benchmark/helpers/corpus.ts": "f8395e2d7b0aefa67b49f513872dcf30e06082e6e2150b3a883679a0bf2c4fa6",
+    "/Users/zhilu/kazariex-projects/satorigear/packages/satorigear/tsdown.config.ts": "298a3c58a7a36e95b40f0b9600a1502acb46b70950c67d06eeb02876282a9672",
+    "/Users/zhilu/kazariex-projects/satorigear/pnpm-lock.yaml": "cc14774be83c050cf080783991b8c6b8b77aa7bc1aa0bc4c5db7c8645e7aaa65",
+    "/Users/zhilu/kazariex-projects/satorigear/node_modules/.pnpm/mitata@1.0.34/node_modules/mitata/src/main.mjs": "9a38d9d30d97a97c9089775ade57c52540c189e2ea97149ef8c0ccfa3aa606b4",
+    "/Users/zhilu/kazariex-projects/satorigear/node_modules/.pnpm/mdast-util-from-markdown@2.1.0/node_modules/mdast-util-from-markdown/index.js": "b5ac1d75a898f7e28ae90ce26ab937b5f574bd5b4e8c17745bd15ba78a4a33f5",
+    "/Users/zhilu/kazariex-projects/satorigear/test/corpus/commonmark-spec.md": "257c41ad946f7a1414a499aca402a1aa8fdac3678532266611348c1cf54f4b80",
+    "/Users/zhilu/kazariex-projects/satorigear/test/corpus/rust-releases.md": "71f3041abd60658f03414ade634a70a4e246e642c23f0a42c4c9a1164f8d9a9a",
+    "/Users/zhilu/kazariex-projects/satorigear/test/corpus/public-apis.md": "f5b898cf6de399de93730f079312f4accf52c4ce75040e82e5066fce41df094c",
+    "/Users/zhilu/kazariex-projects/satorigear/test/corpus/commonmark.json": "d431b29d97b6f73e69d547109cf5081578fac931e72afe95639ebe766c1b2a20"
+  },
+  "blocks": 8,
+  "control": false,
+  "benchmarkVersion": 2,
+  "warmupMs": 250,
+  "postGcSettleMs": 150,
+  "postGcSettleRounds": 1,
+  "diagnosticOnly": false,
+  "budgetMs": 300,
+  "maxMs": 500,
+  "method": "Alternating ABBA/BAAB; fresh process and module cache per observation; GC before warmup and settling; natural GC included; all samples retained.",
+  "status": "complete",
+  "results": {
+    "commonmark/spec": {
+      "runs": [
+        {
+          "variant": "A",
+          "ns": 950972.6624203821,
+          "count": 314,
+          "elapsedMs": 298.605416,
+          "maxIteration": 1.4992079999999532,
+          "cpu": {
+            "user": 325124,
+            "system": 3567
+          },
+          "heapBefore": 31507216,
+          "heapAfter": 25904880,
+          "gcCount": 18,
+          "gcMs": 7.087542995810509,
+          "settling": [
+            {
+              "count": 150,
+              "elapsedMs": 150.81599999999997
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 76377847.33333334,
+          "count": 3,
+          "elapsedMs": 229.13354200000003,
+          "maxIteration": 81.21087499999999,
+          "cpu": {
+            "user": 388210,
+            "system": 4563
+          },
+          "heapBefore": 73615728,
+          "heapAfter": 133086808,
+          "gcCount": 13,
+          "gcMs": 26.75595898926258,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 183.43654099999998
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 78134902.66666667,
+          "count": 3,
+          "elapsedMs": 234.40470800000003,
+          "maxIteration": 84.08237499999996,
+          "cpu": {
+            "user": 394774,
+            "system": 5653
+          },
+          "heapBefore": 72464872,
+          "heapAfter": 132539688,
+          "gcCount": 13,
+          "gcMs": 26.186583012342453,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 193.012625
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 954710.8717948718,
+          "count": 312,
+          "elapsedMs": 297.869792,
+          "maxIteration": 1.6184999999999263,
+          "cpu": {
+            "user": 326603,
+            "system": 3623
+          },
+          "heapBefore": 28935624,
+          "heapAfter": 19896040,
+          "gcCount": 18,
+          "gcMs": 7.3187509924173355,
+          "settling": [
+            {
+              "count": 148,
+              "elapsedMs": 150.73245899999995
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 77556027.66666667,
+          "count": 3,
+          "elapsedMs": 232.66808300000002,
+          "maxIteration": 82.54949999999997,
+          "cpu": {
+            "user": 391088,
+            "system": 6173
+          },
+          "heapBefore": 73414272,
+          "heapAfter": 132425904,
+          "gcCount": 13,
+          "gcMs": 26.782749995589256,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 183.22312499999998
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 943896.4905063293,
+          "count": 316,
+          "elapsedMs": 298.2712910000001,
+          "maxIteration": 1.4545419999999467,
+          "cpu": {
+            "user": 320161,
+            "system": 3189
+          },
+          "heapBefore": 39928200,
+          "heapAfter": 36318392,
+          "gcCount": 18,
+          "gcMs": 6.844875052571297,
+          "settling": [
+            {
+              "count": 154,
+              "elapsedMs": 150.24483299999997
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 941069.2681388011,
+          "count": 317,
+          "elapsedMs": 298.31895799999995,
+          "maxIteration": 1.5210000000000719,
+          "cpu": {
+            "user": 328256,
+            "system": 3098
+          },
+          "heapBefore": 33343136,
+          "heapAfter": 33434904,
+          "gcCount": 18,
+          "gcMs": 7.377333015203476,
+          "settling": [
+            {
+              "count": 151,
+              "elapsedMs": 150.59608299999996
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 78337611.33333333,
+          "count": 3,
+          "elapsedMs": 235.012834,
+          "maxIteration": 84.58699999999999,
+          "cpu": {
+            "user": 394495,
+            "system": 5116
+          },
+          "heapBefore": 73400928,
+          "heapAfter": 132405368,
+          "gcCount": 13,
+          "gcMs": 25.186334013938904,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 195.171042
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 941363.958990536,
+          "count": 317,
+          "elapsedMs": 298.41237499999994,
+          "maxIteration": 1.493249999999989,
+          "cpu": {
+            "user": 328516,
+            "system": 3381
+          },
+          "heapBefore": 29433816,
+          "heapAfter": 29505272,
+          "gcCount": 18,
+          "gcMs": 7.368166014552116,
+          "settling": [
+            {
+              "count": 148,
+              "elapsedMs": 150.56933299999997
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 77091791.66666669,
+          "count": 3,
+          "elapsedMs": 231.27537500000005,
+          "maxIteration": 83.43500000000006,
+          "cpu": {
+            "user": 404060,
+            "system": 7345
+          },
+          "heapBefore": 73665632,
+          "heapAfter": 132675368,
+          "gcCount": 13,
+          "gcMs": 30.271126985549927,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 185.44574999999998
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 76716305.66666666,
+          "count": 3,
+          "elapsedMs": 230.14891699999998,
+          "maxIteration": 80.51974999999993,
+          "cpu": {
+            "user": 386042,
+            "system": 5634
+          },
+          "heapBefore": 73290640,
+          "heapAfter": 133364728,
+          "gcCount": 13,
+          "gcMs": 27.432874992489815,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 183.17929099999998
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 947132.276190476,
+          "count": 315,
+          "elapsedMs": 298.34666699999997,
+          "maxIteration": 1.523290999999972,
+          "cpu": {
+            "user": 329328,
+            "system": 3201
+          },
+          "heapBefore": 32556720,
+          "heapAfter": 28998168,
+          "gcCount": 18,
+          "gcMs": 7.594415977597237,
+          "settling": [
+            {
+              "count": 150,
+              "elapsedMs": 150.48162499999995
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 74634514.00000001,
+          "count": 3,
+          "elapsedMs": 223.90354200000002,
+          "maxIteration": 78.65575000000001,
+          "cpu": {
+            "user": 375586,
+            "system": 4681
+          },
+          "heapBefore": 73613600,
+          "heapAfter": 133281544,
+          "gcCount": 13,
+          "gcMs": 25.612042024731636,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 180.65070799999995
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 943688.0284810127,
+          "count": 316,
+          "elapsedMs": 298.205417,
+          "maxIteration": 1.4580829999999878,
+          "cpu": {
+            "user": 321402,
+            "system": 2777
+          },
+          "heapBefore": 33374496,
+          "heapAfter": 31598360,
+          "gcCount": 18,
+          "gcMs": 7.287624031305313,
+          "settling": [
+            {
+              "count": 151,
+              "elapsedMs": 150.35391700000002
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 946714.815873016,
+          "count": 315,
+          "elapsedMs": 298.21516700000006,
+          "maxIteration": 1.4805829999999673,
+          "cpu": {
+            "user": 327606,
+            "system": 3810
+          },
+          "heapBefore": 32559024,
+          "heapAfter": 29767384,
+          "gcCount": 18,
+          "gcMs": 7.973208993673325,
+          "settling": [
+            {
+              "count": 150,
+              "elapsedMs": 150.28554199999996
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 76422236.33333333,
+          "count": 3,
+          "elapsedMs": 229.266709,
+          "maxIteration": 81.0296249999999,
+          "cpu": {
+            "user": 386951,
+            "system": 5654
+          },
+          "heapBefore": 73410768,
+          "heapAfter": 132411664,
+          "gcCount": 13,
+          "gcMs": 25.91820900142193,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 178.78483400000005
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 944684.4651898735,
+          "count": 316,
+          "elapsedMs": 298.520291,
+          "maxIteration": 1.484125000000006,
+          "cpu": {
+            "user": 328012,
+            "system": 3239
+          },
+          "heapBefore": 29667368,
+          "heapAfter": 27735088,
+          "gcCount": 18,
+          "gcMs": 7.759084016084671,
+          "settling": [
+            {
+              "count": 149,
+              "elapsedMs": 150.57737500000002
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 74530819.33333336,
+          "count": 3,
+          "elapsedMs": 223.59245800000008,
+          "maxIteration": 80.18170799999996,
+          "cpu": {
+            "user": 377172,
+            "system": 5279
+          },
+          "heapBefore": 73467544,
+          "heapAfter": 133172504,
+          "gcCount": 13,
+          "gcMs": 25.911373004317284,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 182.287416
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 74923527.66666667,
+          "count": 3,
+          "elapsedMs": 224.770583,
+          "maxIteration": 79.22583399999996,
+          "cpu": {
+            "user": 378434,
+            "system": 4782
+          },
+          "heapBefore": 73352400,
+          "heapAfter": 133390552,
+          "gcCount": 13,
+          "gcMs": 25.500833988189697,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 177.98154099999994
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 940085.041009464,
+          "count": 317,
+          "elapsedMs": 298.00695800000005,
+          "maxIteration": 1.644207999999935,
+          "cpu": {
+            "user": 325631,
+            "system": 3451
+          },
+          "heapBefore": 31505416,
+          "heapAfter": 30809856,
+          "gcCount": 18,
+          "gcMs": 7.75320802628994,
+          "settling": [
+            {
+              "count": 150,
+              "elapsedMs": 150.32595899999995
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 75389875,
+          "count": 3,
+          "elapsedMs": 226.169625,
+          "maxIteration": 79.88191700000004,
+          "cpu": {
+            "user": 381146,
+            "system": 6267
+          },
+          "heapBefore": 72576424,
+          "heapAfter": 132625288,
+          "gcCount": 13,
+          "gcMs": 25.074497997760773,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 177.42087499999997
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 949964.5700636943,
+          "count": 314,
+          "elapsedMs": 298.288875,
+          "maxIteration": 1.4616249999999127,
+          "cpu": {
+            "user": 320233,
+            "system": 3425
+          },
+          "heapBefore": 38091408,
+          "heapAfter": 31336208,
+          "gcCount": 18,
+          "gcMs": 7.424585998058319,
+          "settling": [
+            {
+              "count": 153,
+              "elapsedMs": 150.70875
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 945563.8888888891,
+          "count": 315,
+          "elapsedMs": 297.85262500000005,
+          "maxIteration": 1.5717919999999594,
+          "cpu": {
+            "user": 327519,
+            "system": 2869
+          },
+          "heapBefore": 32554792,
+          "heapAfter": 27740064,
+          "gcCount": 18,
+          "gcMs": 7.459834039211273,
+          "settling": [
+            {
+              "count": 150,
+              "elapsedMs": 150.75154199999997
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 77143597.33333333,
+          "count": 3,
+          "elapsedMs": 231.430792,
+          "maxIteration": 83.69237500000008,
+          "cpu": {
+            "user": 388256,
+            "system": 5299
+          },
+          "heapBefore": 72454216,
+          "heapAfter": 133623592,
+          "gcCount": 13,
+          "gcMs": 25.29804103076458,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 190.18066699999997
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 935577.7178683383,
+          "count": 319,
+          "elapsedMs": 298.44929199999996,
+          "maxIteration": 1.4950410000000147,
+          "cpu": {
+            "user": 326570,
+            "system": 3115
+          },
+          "heapBefore": 29674200,
+          "heapAfter": 32649496,
+          "gcCount": 18,
+          "gcMs": 7.154498025774956,
+          "settling": [
+            {
+              "count": 149,
+              "elapsedMs": 150.595209
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 75562861,
+          "count": 3,
+          "elapsedMs": 226.688583,
+          "maxIteration": 81.93449999999996,
+          "cpu": {
+            "user": 398492,
+            "system": 6756
+          },
+          "heapBefore": 73296368,
+          "heapAfter": 132660392,
+          "gcCount": 13,
+          "gcMs": 27.376663982868195,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 183.494458
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 77372513.99999999,
+          "count": 3,
+          "elapsedMs": 232.11754199999996,
+          "maxIteration": 81.848791,
+          "cpu": {
+            "user": 390819,
+            "system": 6165
+          },
+          "heapBefore": 73407392,
+          "heapAfter": 133599800,
+          "gcCount": 13,
+          "gcMs": 25.786790028214455,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 177.527625
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 945379.3650793651,
+          "count": 315,
+          "elapsedMs": 297.7945,
+          "maxIteration": 1.5241250000000264,
+          "cpu": {
+            "user": 324286,
+            "system": 3363
+          },
+          "heapBefore": 31507272,
+          "heapAfter": 27704248,
+          "gcCount": 18,
+          "gcMs": 7.736418008804321,
+          "settling": [
+            {
+              "count": 150,
+              "elapsedMs": 150.884709
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 75891777.66666667,
+          "count": 3,
+          "elapsedMs": 227.67533300000002,
+          "maxIteration": 79.48466699999994,
+          "cpu": {
+            "user": 383099,
+            "system": 6509
+          },
+          "heapBefore": 73451112,
+          "heapAfter": 133236816,
+          "gcCount": 13,
+          "gcMs": 27.48895700275898,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 179.69708400000002
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 939984.094637224,
+          "count": 317,
+          "elapsedMs": 297.974958,
+          "maxIteration": 1.5005420000001095,
+          "cpu": {
+            "user": 320530,
+            "system": 3218
+          },
+          "heapBefore": 31538216,
+          "heapAfter": 31337080,
+          "gcCount": 18,
+          "gcMs": 7.16050398349762,
+          "settling": [
+            {
+              "count": 150,
+              "elapsedMs": 150.12870800000002
+            }
+          ]
+        },
+        {
+          "variant": "A",
+          "ns": 944359.3069620254,
+          "count": 316,
+          "elapsedMs": 298.41754099999997,
+          "maxIteration": 1.5397919999999772,
+          "cpu": {
+            "user": 328207,
+            "system": 3794
+          },
+          "heapBefore": 37011920,
+          "heapAfter": 35269568,
+          "gcCount": 18,
+          "gcMs": 7.71666494011879,
+          "settling": [
+            {
+              "count": 153,
+              "elapsedMs": 150.88545899999997
+            }
+          ]
+        },
+        {
+          "variant": "B",
+          "ns": 75959097.33333333,
+          "count": 3,
+          "elapsedMs": 227.877292,
+          "maxIteration": 79.39404200000001,
+          "cpu": {
+            "user": 380980,
+            "system": 6037
+          },
+          "heapBefore": 73426840,
+          "heapAfter": 133364936,
+          "gcCount": 13,
+          "gcMs": 26.58704099059105,
+          "settling": [
+            {
+              "count": 2,
+              "elapsedMs": 177.07829199999998
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "changePercent": 7984.083488835939,
+        "ci95Percent": [
+          7897.720988167685,
+          8071.3785653633295
+        ],
+        "blockChangesPercent": [
+          8007.487623526676,
+          8170.275168706886,
+          8044.48838335845,
+          7890.168094786152,
+          7829.5784218825975,
+          7946.505489874473,
+          8030.262285969522,
+          7958.577288660164
+        ]
+      }
+    }
+  },
+  "sourceCommit": "69240f6f4a8cad8b9d60e8afa3f893f162525d50",
+  "scope": "Accepted source only; excludes four inherited pending source changes and scanner experiments B/C. Direct reference run, not an extrapolated historical ratio.",
+  "derived": {
+    "sourceCommit": "69240f6f4a8cad8b9d60e8afa3f893f162525d50",
+    "bundleSha256": "dd573943f5aec969f0295f202a6d254c19f9a11628df078a982e0a29c0717695",
+    "ratio": 80.84083488835938,
+    "ci95Ratio": [
+      79.97720988167686,
+      81.7137856536333
+    ],
+    "remainingTimeReductionPercent": 19.15916511164062,
+    "runtime": "v26.13.0",
+    "cpu": "Apple M1 Pro",
+    "phases": "250ms warmup/full GC/150ms settle/approximately 300ms measurement, <=500ms each",
+    "averageMicroseconds": {
+      "A": 944.6966763808937,
+      "B": 76377.831625
+    },
+    "medianMicroseconds": {
+      "A": 944.5218860759494,
+      "B": 76400.04183333334
+    },
+    "maxMeasuredMs": 298.605416,
+    "scope": "Accepted source only; excludes main pending paragraph/heading/shortcut work and B/C scanner experiments. No extrapolated cumulative multiplier."
+  }
+}

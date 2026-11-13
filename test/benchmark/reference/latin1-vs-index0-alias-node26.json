@@ -1,0 +1,5355 @@
+{
+  "status": "complete",
+  "runtime": "v26.13.0",
+  "v8": "14.6.202.34-node.40",
+  "arch": "arm64",
+  "inputs": {
+    "/Users/zhilu/kazariex-projects/satorigear/node_modules/.cache/latin1-index0-20261115/compare.mjs": "65044e2e1472dfd90b8834cc0112241865b9e53d4d4de64aa525db1744f3e0af",
+    "/Users/zhilu/kazariex-projects/satorigear/node_modules/.cache/latin1-index0-20261115/latin1.ts": "84b1ce3f27391a38066423605f27aa955dc61c27f670c2b95ff2aa53754cc9a2",
+    "/Users/zhilu/kazariex-projects/satorigear/node_modules/.cache/latin1-index0-20261115/index0.ts": "5ef75178c5df59f62fe1d155d12691e9ea72dbc8bce321288f847d0dee81f730",
+    "/Users/zhilu/kazariex-projects/satorigear/node_modules/.cache/latin1-index0-20261115/latin1-export.mjs": "74fef70bcb40280f0333530551b1c7aeff164e39dffc360e395bef8217d04fd2",
+    "/Users/zhilu/kazariex-projects/satorigear/node_modules/.cache/latin1-index0-20261115/index0-export.mjs": "bf5790993365ca3ca7b81edaa95925dbf0ba185121e1971163f64503bcb4ed47",
+    "test/corpus/commonmark-spec.md": "257c41ad946f7a1414a499aca402a1aa8fdac3678532266611348c1cf54f4b80",
+    "test/corpus/rust-releases.md": "71f3041abd60658f03414ade634a70a4e246e642c23f0a42c4c9a1164f8d9a9a"
+  },
+  "cases": [
+    {
+      "name": "64K/ASCII/no-newlines",
+      "pattern": "abcdefghijklmnop",
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 0,
+        "nonLatin1": 0,
+        "rows": 1,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "64K/Chinese/no-alias/no-newlines",
+      "pattern": "中文世界天地人和",
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 0,
+        "nonLatin1": 65536,
+        "rows": 1,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "64K/all-alias-U010A-U010D",
+      "pattern": "Ċč",
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 65536,
+        "aliasPercent": 100,
+        "breakUnits": 0,
+        "nonLatin1": 65536,
+        "rows": 1,
+        "maxAliasRun": 65536
+      }
+    },
+    {
+      "name": "64K/all-alias-Chinese",
+      "pattern": "上不",
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 65536,
+        "aliasPercent": 100,
+        "breakUnits": 0,
+        "nonLatin1": 65536,
+        "rows": 1,
+        "maxAliasRun": 65536
+      }
+    },
+    {
+      "name": "64K/ASCII/LF32",
+      "pattern": "abcdefghijklmnop",
+      "width": 32,
+      "endings": [
+        "\n"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 1985,
+        "nonLatin1": 0,
+        "rows": 1986,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "64K/Chinese/no-alias/LF32",
+      "pattern": "中文世界天地人和",
+      "width": 32,
+      "endings": [
+        "\n"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 1985,
+        "nonLatin1": 63551,
+        "rows": 1986,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "64K/Chinese/alias25/LF32",
+      "pattern": "上不中文天地人和",
+      "width": 32,
+      "endings": [
+        "\n"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 15888,
+        "aliasPercent": 24.2431640625,
+        "breakUnits": 1985,
+        "nonLatin1": 63551,
+        "rows": 1986,
+        "maxAliasRun": 2
+      }
+    },
+    {
+      "name": "64K/Chinese/alias100/LF32",
+      "pattern": "上不",
+      "width": 32,
+      "endings": [
+        "\n"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 63551,
+        "aliasPercent": 96.97113037109375,
+        "breakUnits": 1985,
+        "nonLatin1": 63551,
+        "rows": 1986,
+        "maxAliasRun": 32
+      }
+    },
+    {
+      "name": "64K/Chinese/paragraph/LF64",
+      "pattern": "本文介绍 Markdown 解析器的实现。扫描器需要正确处理中文、标点与换行。上线之前应检查性能，不同输入的结果都应保持一致。",
+      "width": 64,
+      "endings": [
+        "\n"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 2016,
+        "aliasPercent": 3.076171875,
+        "breakUnits": 1008,
+        "nonLatin1": 54438,
+        "rows": 1009,
+        "maxAliasRun": 1
+      }
+    },
+    {
+      "name": "64K/ASCII/mixed128",
+      "pattern": "abcdefghijklmnop",
+      "width": 128,
+      "endings": [
+        "\n",
+        "\r\n",
+        "\r"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 675,
+        "nonLatin1": 0,
+        "rows": 507,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "64K/Chinese/alias25/mixed128",
+      "pattern": "上不中文天地人和",
+      "width": 128,
+      "endings": [
+        "\n",
+        "\r\n",
+        "\r"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 16216,
+        "aliasPercent": 24.74365234375,
+        "breakUnits": 675,
+        "nonLatin1": 64861,
+        "rows": 507,
+        "maxAliasRun": 2
+      }
+    },
+    {
+      "name": "64K/ASCII/mixed4096",
+      "pattern": "abcdefghijklmnop",
+      "width": 4096,
+      "endings": [
+        "\n",
+        "\r\n",
+        "\r"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 20,
+        "nonLatin1": 0,
+        "rows": 16,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "64K/Chinese/alias25/mixed4096",
+      "pattern": "上不中文天地人和",
+      "width": 4096,
+      "endings": [
+        "\n",
+        "\r\n",
+        "\r"
+      ],
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 16380,
+        "aliasPercent": 24.993896484375,
+        "breakUnits": 20,
+        "nonLatin1": 65516,
+        "rows": 16,
+        "maxAliasRun": 2
+      }
+    },
+    {
+      "name": "64K/all-LF",
+      "pattern": "\n",
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 65536,
+        "nonLatin1": 0,
+        "rows": 65536,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "64K/all-CRLF",
+      "pattern": "\r\n",
+      "stats": {
+        "utf16Units": 65536,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 65536,
+        "nonLatin1": 0,
+        "rows": 32768,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "1M/all-alias-Chinese",
+      "pattern": "上不",
+      "size": 1048576,
+      "stats": {
+        "utf16Units": 1048576,
+        "aliases": 1048576,
+        "aliasPercent": 100,
+        "breakUnits": 0,
+        "nonLatin1": 1048576,
+        "rows": 1,
+        "maxAliasRun": 1048576
+      }
+    },
+    {
+      "name": "1M/ASCII/LF32",
+      "pattern": "abcdefghijklmnop",
+      "width": 32,
+      "endings": [
+        "\n"
+      ],
+      "size": 1048576,
+      "stats": {
+        "utf16Units": 1048576,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 31775,
+        "nonLatin1": 0,
+        "rows": 31776,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "real/CommonMark-spec",
+      "file": "test/corpus/commonmark-spec.md",
+      "stats": {
+        "utf16Units": 204706,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 9756,
+        "nonLatin1": 231,
+        "rows": 9756,
+        "maxAliasRun": 0
+      }
+    },
+    {
+      "name": "real/Rust-releases",
+      "file": "test/corpus/rust-releases.md",
+      "stats": {
+        "utf16Units": 909946,
+        "aliases": 0,
+        "aliasPercent": 0,
+        "breakUnits": 16166,
+        "nonLatin1": 87,
+        "rows": 16166,
+        "maxAliasRun": 0
+      }
+    }
+  ],
+  "method": "A=Index0, B=current Latin1. Same BlockLines API and capacity preparation; only scanner routing differs. Reused line table and Latin1 scratch buffer; Latin1 copy included. 8 consecutive lengths per synthetic case, one full document per real corpus. Full row/normalization oracle before timing. 100ms warmup, GC, 50ms settling, 200ms natural-GC timing per case. Four ABBA/BAAB blocks in each of forward and reversed case orders, one fresh process per observation. ns is per document, not per group of eight. No production-source changes.",
+  "orders": {
+    "forward": {
+      "64K/ASCII/no-newlines": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 2775.9173420672805,
+            "count": 9007,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02149999999997
+          },
+          {
+            "variant": "B",
+            "ns": 14249.59935897436,
+            "count": 1755,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.064375
+          },
+          {
+            "variant": "B",
+            "ns": 14234.354297097323,
+            "count": 1757,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07808399999996
+          },
+          {
+            "variant": "A",
+            "ns": 2766.5713317472614,
+            "count": 9037,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.012041
+          },
+          {
+            "variant": "B",
+            "ns": 14247.955270655271,
+            "count": 1755,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.041292
+          },
+          {
+            "variant": "A",
+            "ns": 2770.4259002770077,
+            "count": 9025,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02474999999998
+          },
+          {
+            "variant": "A",
+            "ns": 2761.265738899934,
+            "count": 9054,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00400000000002
+          },
+          {
+            "variant": "B",
+            "ns": 14574.564758158509,
+            "count": 1716,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.079625
+          },
+          {
+            "variant": "A",
+            "ns": 2937.9161721504115,
+            "count": 8510,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01333300000002
+          },
+          {
+            "variant": "B",
+            "ns": 15585.134345794393,
+            "count": 1605,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.113125
+          },
+          {
+            "variant": "B",
+            "ns": 14292.35114285714,
+            "count": 1750,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.09291599999997
+          },
+          {
+            "variant": "A",
+            "ns": 2809.202373595506,
+            "count": 8900,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01520900000003
+          },
+          {
+            "variant": "B",
+            "ns": 14254.356114595212,
+            "count": 1754,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.017125
+          },
+          {
+            "variant": "A",
+            "ns": 2791.370101596517,
+            "count": 8957,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01841600000003
+          },
+          {
+            "variant": "A",
+            "ns": 2835.154300861873,
+            "count": 8818,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00312499999998
+          },
+          {
+            "variant": "B",
+            "ns": 14153.390846066779,
+            "count": 1767,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.072333
+          }
+        ],
+        "summary": {
+          "changePercent": 414.7974654836354,
+          "ci95Percent": [
+            403.2792763447072,
+            426.57926309459054
+          ],
+          "blockChangesPercent": [
+            413.9205824113196,
+            421.01076554315785,
+            419.5123793201308,
+            404.90188370923346
+          ]
+        },
+        "index0Us": 2.8054495406071136,
+        "latin1Us": 14.44238313046771,
+        "latin1OverIndex0": 5.147974654836353
+      },
+      "64K/Chinese/no-alias/no-newlines": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 6130.721769249631,
+            "count": 4078,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00866699999995
+          },
+          {
+            "variant": "B",
+            "ns": 14991.163294364513,
+            "count": 1668,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04208300000005
+          },
+          {
+            "variant": "B",
+            "ns": 14857.137551990489,
+            "count": 1683,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03649999999993
+          },
+          {
+            "variant": "A",
+            "ns": 6143.073034398034,
+            "count": 4070,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.018458
+          },
+          {
+            "variant": "B",
+            "ns": 14820.16582691168,
+            "count": 1687,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01295800000003
+          },
+          {
+            "variant": "A",
+            "ns": 6364.80610361507,
+            "count": 3928,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00766699999997
+          },
+          {
+            "variant": "A",
+            "ns": 6128.33180147059,
+            "count": 4080,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02875000000006
+          },
+          {
+            "variant": "B",
+            "ns": 14872.481038072578,
+            "count": 1681,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00512500000002
+          },
+          {
+            "variant": "A",
+            "ns": 6479.128854625553,
+            "count": 3859,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02366600000005
+          },
+          {
+            "variant": "B",
+            "ns": 15783.53519570707,
+            "count": 1584,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.008958
+          },
+          {
+            "variant": "B",
+            "ns": 14815.270808649291,
+            "count": 1688,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06541700000002
+          },
+          {
+            "variant": "A",
+            "ns": 6140.70174361493,
+            "count": 4072,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03949999999998
+          },
+          {
+            "variant": "B",
+            "ns": 14815.860115521322,
+            "count": 1688,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07337499999994
+          },
+          {
+            "variant": "A",
+            "ns": 6339.966563133871,
+            "count": 3944,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0386249999999
+          },
+          {
+            "variant": "A",
+            "ns": 6128.399479166668,
+            "count": 4080,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03095900000005
+          },
+          {
+            "variant": "B",
+            "ns": 14975.436601796406,
+            "count": 1670,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07183299999997
+          }
+        ],
+        "summary": {
+          "changePercent": 140.56321924240706,
+          "ci95Percent": [
+            136.38515183235407,
+            144.81513328431336
+          ],
+          "blockChangesPercent": [
+            143.18489539804517,
+            137.7138681553886,
+            142.4318234931072,
+            138.96602731316526
+          ]
+        },
+        "index0Us": 6.230518268533594,
+        "latin1Us": 14.988335322270697,
+        "latin1OverIndex0": 2.405632192424071
+      },
+      "64K/all-alias-U010A-U010D": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 613937.7530487807,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.3715830000001
+          },
+          {
+            "variant": "B",
+            "ns": 145282.7557803468,
+            "count": 173,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.07133399999998
+          },
+          {
+            "variant": "B",
+            "ns": 145276.8843930636,
+            "count": 173,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.06320800000003
+          },
+          {
+            "variant": "A",
+            "ns": 613570.5030487805,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.251125
+          },
+          {
+            "variant": "B",
+            "ns": 145748.18313953496,
+            "count": 172,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.54950000000008
+          },
+          {
+            "variant": "A",
+            "ns": 617553.3536585369,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.55750000000012
+          },
+          {
+            "variant": "A",
+            "ns": 610248.2195121952,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.16141600000003
+          },
+          {
+            "variant": "B",
+            "ns": 153070.66158536586,
+            "count": 164,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.828708
+          },
+          {
+            "variant": "A",
+            "ns": 664742.7335526318,
+            "count": 38,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.08179100000007
+          },
+          {
+            "variant": "B",
+            "ns": 154678.81944444444,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.46375
+          },
+          {
+            "variant": "B",
+            "ns": 148937.06547619042,
+            "count": 168,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1714159999999
+          },
+          {
+            "variant": "A",
+            "ns": 626548.7,
+            "count": 40,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.495584
+          },
+          {
+            "variant": "B",
+            "ns": 145868.24709302332,
+            "count": 172,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.7147080000001
+          },
+          {
+            "variant": "A",
+            "ns": 615382.4939024387,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.8454579999999
+          },
+          {
+            "variant": "A",
+            "ns": 619386.4329268291,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.15874999999994
+          },
+          {
+            "variant": "B",
+            "ns": 148095.81434911236,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2255409999999
+          }
+        ],
+        "summary": {
+          "changePercent": -76.17023683651006,
+          "ci95Percent": [
+            -76.72253096291671,
+            -75.60483867368185
+          ],
+          "blockChangesPercent": [
+            -76.3293117032128,
+            -75.6691628625604,
+            -76.48133832019437,
+            -76.1933459374472
+          ]
+        },
+        "index0Us": 622.4588335812458,
+        "latin1Us": 148.33046583263345,
+        "latin1OverIndex0": 0.23829763163490034
+      },
+      "64K/all-alias-Chinese": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 611620.4268292682,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.61149999999998
+          },
+          {
+            "variant": "B",
+            "ns": 146158.73328488372,
+            "count": 172,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.114417
+          },
+          {
+            "variant": "B",
+            "ns": 145693.58648255814,
+            "count": 172,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.474375
+          },
+          {
+            "variant": "A",
+            "ns": 616891.2591463417,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.3403330000001
+          },
+          {
+            "variant": "B",
+            "ns": 145959.7870639536,
+            "count": 172,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.84066700000017
+          },
+          {
+            "variant": "A",
+            "ns": 611544.7134146339,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.58666599999992
+          },
+          {
+            "variant": "A",
+            "ns": 618739.9634146347,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.94670800000017
+          },
+          {
+            "variant": "B",
+            "ns": 154142.319018405,
+            "count": 163,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.0015840000001
+          },
+          {
+            "variant": "A",
+            "ns": 658703.3980263156,
+            "count": 38,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.24583299999995
+          },
+          {
+            "variant": "B",
+            "ns": 155348.05201863358,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.08829100000003
+          },
+          {
+            "variant": "B",
+            "ns": 149801.70883233543,
+            "count": 167,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.13508300000012
+          },
+          {
+            "variant": "A",
+            "ns": 613408.5365853654,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.19799999999987
+          },
+          {
+            "variant": "B",
+            "ns": 149264.4776785715,
+            "count": 168,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.61145800000008
+          },
+          {
+            "variant": "A",
+            "ns": 614949.9481707317,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.70358299999998
+          },
+          {
+            "variant": "A",
+            "ns": 612626.6524390245,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.94154200000003
+          },
+          {
+            "variant": "B",
+            "ns": 152900.78734756104,
+            "count": 164,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.60583300000008
+          }
+        ],
+        "summary": {
+          "changePercent": -75.81403943264566,
+          "ci95Percent": [
+            -76.41650651045741,
+            -75.1961816503139
+          ],
+          "blockChangesPercent": [
+            -76.24323491344785,
+            -75.6157522029969,
+            -76.00109481372795,
+            -75.38695954179244
+          ]
+        },
+        "index0Us": 619.6376449639084,
+        "latin1Us": 149.86531647145384,
+        "latin1OverIndex0": 0.24185960567354317
+      },
+      "64K/ASCII/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 26030.33415712798,
+            "count": 961,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1212089999999
+          },
+          {
+            "variant": "B",
+            "ns": 20336.49644308942,
+            "count": 1230,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1111249999999
+          },
+          {
+            "variant": "B",
+            "ns": 20489.079954954945,
+            "count": 1221,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1373329999999
+          },
+          {
+            "variant": "A",
+            "ns": 26099.730297494778,
+            "count": 958,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02833299999998
+          },
+          {
+            "variant": "B",
+            "ns": 20374.07960097721,
+            "count": 1228,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15495800000008
+          },
+          {
+            "variant": "A",
+            "ns": 26059.74388020836,
+            "count": 960,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1388330000002
+          },
+          {
+            "variant": "A",
+            "ns": 26058.870442708347,
+            "count": 960,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1321250000001
+          },
+          {
+            "variant": "B",
+            "ns": 21915.210560911462,
+            "count": 1141,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0420419999998
+          },
+          {
+            "variant": "A",
+            "ns": 27901.070791527327,
+            "count": 897,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2180840000001
+          },
+          {
+            "variant": "B",
+            "ns": 20606.830827841837,
+            "count": 1214,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.13354099999992
+          },
+          {
+            "variant": "B",
+            "ns": 20414.8512244898,
+            "count": 1225,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06554200000005
+          },
+          {
+            "variant": "A",
+            "ns": 26104.17210334029,
+            "count": 958,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06237499999997
+          },
+          {
+            "variant": "B",
+            "ns": 20390.06041157294,
+            "count": 1227,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.14883299999997
+          },
+          {
+            "variant": "A",
+            "ns": 26128.303422152567,
+            "count": 957,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03829100000007
+          },
+          {
+            "variant": "A",
+            "ns": 26035.509885535907,
+            "count": 961,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.16100000000006
+          },
+          {
+            "variant": "B",
+            "ns": 20465.77076513911,
+            "count": 1222,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07337499999994
+          }
+        ],
+        "summary": {
+          "changePercent": -21.58988569747851,
+          "ci95Percent": [
+            -24.825449913809,
+            -18.215060577211855
+          ],
+          "blockChangesPercent": [
+            -21.685637910879553,
+            -18.913424712348405,
+            -24.00004852473546,
+            -21.677839331266995
+          ]
+        },
+        "index0Us": 26.29548577420582,
+        "latin1Us": 20.618320451958052,
+        "latin1OverIndex0": 0.7841011430252146
+      },
+      "64K/Chinese/no-alias/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 31157.599003735995,
+            "count": 803,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15641600000004
+          },
+          {
+            "variant": "B",
+            "ns": 20871.165484140216,
+            "count": 1198,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02924999999982
+          },
+          {
+            "variant": "B",
+            "ns": 21065.698715248494,
+            "count": 1187,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0398749999997
+          },
+          {
+            "variant": "A",
+            "ns": 30880.967129629626,
+            "count": 810,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.10866699999997
+          },
+          {
+            "variant": "B",
+            "ns": 21119.373733108103,
+            "count": 1184,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04270799999995
+          },
+          {
+            "variant": "A",
+            "ns": 31040.807227047124,
+            "count": 806,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15112499999987
+          },
+          {
+            "variant": "A",
+            "ns": 30880.58132716048,
+            "count": 810,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1061669999999
+          },
+          {
+            "variant": "B",
+            "ns": 22673.456935630107,
+            "count": 1103,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07058400000005
+          },
+          {
+            "variant": "A",
+            "ns": 32647.070822454265,
+            "count": 766,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06124999999975
+          },
+          {
+            "variant": "B",
+            "ns": 22108.159261715296,
+            "count": 1131,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.034625
+          },
+          {
+            "variant": "B",
+            "ns": 20770.547757475095,
+            "count": 1204,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0619160000001
+          },
+          {
+            "variant": "A",
+            "ns": 31408.664415829156,
+            "count": 796,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01037500000007
+          },
+          {
+            "variant": "B",
+            "ns": 20829.196190674465,
+            "count": 1201,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.12691700000028
+          },
+          {
+            "variant": "A",
+            "ns": 30920.67104449941,
+            "count": 809,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.11858300000017
+          },
+          {
+            "variant": "A",
+            "ns": 30909.945302842985,
+            "count": 809,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0491659999998
+          },
+          {
+            "variant": "B",
+            "ns": 21254.70390824131,
+            "count": 1177,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1342920000002
+          }
+        ],
+        "summary": {
+          "changePercent": -31.700596974317506,
+          "ci95Percent": [
+            -34.24536920043917,
+            -29.057339430825873
+          ],
+          "blockChangesPercent": [
+            -32.40200002258876,
+            -29.321039918685376,
+            -33.080386840814974,
+            -31.940271629267514
+          ]
+        },
+        "index0Us": 31.225850317791302,
+        "latin1Us": 21.327069356744644,
+        "latin1OverIndex0": 0.6829940302568251
+      },
+      "64K/Chinese/alias25/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 173095.72586206882,
+            "count": 145,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.79104199999983
+          },
+          {
+            "variant": "B",
+            "ns": 57069.72522779045,
+            "count": 439,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.42887500000006
+          },
+          {
+            "variant": "B",
+            "ns": 56948.177272727204,
+            "count": 440,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.45758399999977
+          },
+          {
+            "variant": "A",
+            "ns": 172187.85702054793,
+            "count": 146,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.11541699999998
+          },
+          {
+            "variant": "B",
+            "ns": 57769.13741339499,
+            "count": 433,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.11229200000025
+          },
+          {
+            "variant": "A",
+            "ns": 171701.73373287646,
+            "count": 146,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.5476249999997
+          },
+          {
+            "variant": "A",
+            "ns": 175032.0882867135,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.23670900000025
+          },
+          {
+            "variant": "B",
+            "ns": 59600.59523809532,
+            "count": 420,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.25800000000027
+          },
+          {
+            "variant": "A",
+            "ns": 186416.16481481495,
+            "count": 135,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.32945800000016
+          },
+          {
+            "variant": "B",
+            "ns": 59833.78169856462,
+            "count": 418,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0841660000001
+          },
+          {
+            "variant": "B",
+            "ns": 57203.16067351599,
+            "count": 438,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.43987500000003
+          },
+          {
+            "variant": "A",
+            "ns": 177470.59751773058,
+            "count": 141,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1868340000001
+          },
+          {
+            "variant": "B",
+            "ns": 57135.42865296804,
+            "count": 438,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.202542
+          },
+          {
+            "variant": "A",
+            "ns": 175616.51398601392,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.90529199999992
+          },
+          {
+            "variant": "A",
+            "ns": 171717.92979452058,
+            "count": 146,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.56654200000003
+          },
+          {
+            "variant": "B",
+            "ns": 56556.30389390528,
+            "count": 443,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.43554100000028
+          }
+        ],
+        "summary": {
+          "changePercent": -67.06356346374224,
+          "ci95Percent": [
+            -68.15734938050564,
+            -65.93220631442017
+          ],
+          "blockChangesPercent": [
+            -66.97838023722717,
+            -66.15246370415383,
+            -67.83539303085232,
+            -67.26572273659343
+          ]
+        },
+        "index0Us": 175.3462670327365,
+        "latin1Us": 57.75281195993432,
+        "latin1OverIndex0": 0.32936436536257757
+      },
+      "64K/Chinese/alias100/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 650486.7788461546,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.9518750000002
+          },
+          {
+            "variant": "B",
+            "ns": 181842.69293478248,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.75433299999986
+          },
+          {
+            "variant": "B",
+            "ns": 181944.55706521732,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.86679099999992
+          },
+          {
+            "variant": "A",
+            "ns": 652462.3397435892,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.5682499999998
+          },
+          {
+            "variant": "B",
+            "ns": 181614.28170289824,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.50216699999964
+          },
+          {
+            "variant": "A",
+            "ns": 652075.4551282048,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.44754199999988
+          },
+          {
+            "variant": "A",
+            "ns": 644950.9871794877,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.2247080000002
+          },
+          {
+            "variant": "B",
+            "ns": 190183.67234848457,
+            "count": 132,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.8339579999997
+          },
+          {
+            "variant": "A",
+            "ns": 683046.7331081069,
+            "count": 37,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.18183299999964
+          },
+          {
+            "variant": "B",
+            "ns": 193047.63653846155,
+            "count": 130,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.769542
+          },
+          {
+            "variant": "B",
+            "ns": 182118.62137681167,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.05895800000008
+          },
+          {
+            "variant": "A",
+            "ns": 651599.4903846161,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.29904100000022
+          },
+          {
+            "variant": "B",
+            "ns": 183018.8184306568,
+            "count": 137,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.58862499999987
+          },
+          {
+            "variant": "A",
+            "ns": 652467.4134615386,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.56983300000002
+          },
+          {
+            "variant": "A",
+            "ns": 647623.3974358977,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.0585000000001
+          },
+          {
+            "variant": "B",
+            "ns": 181956.6721014492,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.88016599999992
+          }
+        ],
+        "summary": {
+          "changePercent": -71.81203551819823,
+          "ci95Percent": [
+            -72.31881458055766,
+            -71.2959784926969
+          ],
+          "blockChangesPercent": [
+            -72.07967305017691,
+            -71.34177218250035,
+            -71.89433637147896,
+            -71.92684731503714
+          ]
+        },
+        "index0Us": 654.2464502267085,
+        "latin1Us": 184.41875701335334,
+        "latin1OverIndex0": 0.28187964481801747
+      },
+      "64K/Chinese/paragraph/LF64": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 37090.40888888888,
+            "count": 675,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.28820799999994
+          },
+          {
+            "variant": "B",
+            "ns": 23982.412511984658,
+            "count": 1043,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.10924999999997
+          },
+          {
+            "variant": "B",
+            "ns": 23945.947966507192,
+            "count": 1045,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.18812500000013
+          },
+          {
+            "variant": "A",
+            "ns": 37116.26798961423,
+            "count": 674,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.13091699999995
+          },
+          {
+            "variant": "B",
+            "ns": 23905.274020076504,
+            "count": 1046,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03933300000017
+          },
+          {
+            "variant": "A",
+            "ns": 37181.52544576521,
+            "count": 673,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1853329999999
+          },
+          {
+            "variant": "A",
+            "ns": 37065.910555555565,
+            "count": 675,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15591700000004
+          },
+          {
+            "variant": "B",
+            "ns": 24939.509596211385,
+            "count": 1003,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.11462500000016
+          },
+          {
+            "variant": "A",
+            "ns": 39409.39153543307,
+            "count": 635,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.19970899999998
+          },
+          {
+            "variant": "B",
+            "ns": 25203.676285282276,
+            "count": 992,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01637500000015
+          },
+          {
+            "variant": "B",
+            "ns": 23747.274572649603,
+            "count": 1053,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04704100000026
+          },
+          {
+            "variant": "A",
+            "ns": 37286.621460506685,
+            "count": 671,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1545839999999
+          },
+          {
+            "variant": "B",
+            "ns": 23963.287236590004,
+            "count": 1044,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1413749999997
+          },
+          {
+            "variant": "A",
+            "ns": 37185.0390044577,
+            "count": 673,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.20425000000023
+          },
+          {
+            "variant": "A",
+            "ns": 37022.559171597604,
+            "count": 676,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.21799999999985
+          },
+          {
+            "variant": "B",
+            "ns": 24022.004082612857,
+            "count": 1041,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0552499999999
+          }
+        ],
+        "summary": {
+          "changePercent": -35.29273043855156,
+          "ci95Percent": [
+            -36.555807592843344,
+            -34.00450734359659
+          ],
+          "blockChangesPercent": [
+            -35.41234895119823,
+            -34.22817700863243,
+            -36.179169457809714,
+            -35.336311110220926
+          ]
+        },
+        "index0Us": 37.41229973029422,
+        "latin1Us": 24.208477635618483,
+        "latin1OverIndex0": 0.6470726956144831
+      },
+      "64K/ASCII/mixed128": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 9269.277381393631,
+            "count": 2698,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06808300000012
+          },
+          {
+            "variant": "B",
+            "ns": 17266.534962016554,
+            "count": 1448,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01554099999976
+          },
+          {
+            "variant": "B",
+            "ns": 17210.365794907095,
+            "count": 1453,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.05329200000006
+          },
+          {
+            "variant": "A",
+            "ns": 9312.081005586604,
+            "count": 2685,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02350000000024
+          },
+          {
+            "variant": "B",
+            "ns": 17199.64322558462,
+            "count": 1454,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0662500000003
+          },
+          {
+            "variant": "A",
+            "ns": 9861.174093059948,
+            "count": 2536,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0635000000002
+          },
+          {
+            "variant": "A",
+            "ns": 9370.371439280365,
+            "count": 2668,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00120800000013
+          },
+          {
+            "variant": "B",
+            "ns": 18477.78464523282,
+            "count": 1353,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00354100000004
+          },
+          {
+            "variant": "A",
+            "ns": 9732.394268197748,
+            "count": 2569,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02016700000013
+          },
+          {
+            "variant": "B",
+            "ns": 18011.921379682994,
+            "count": 1388,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00437499999998
+          },
+          {
+            "variant": "B",
+            "ns": 17159.978380233366,
+            "count": 1457,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0167080000001
+          },
+          {
+            "variant": "A",
+            "ns": 9321.26276556093,
+            "count": 2683,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0715839999998
+          },
+          {
+            "variant": "B",
+            "ns": 17209.856761871997,
+            "count": 1453,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0473750000001
+          },
+          {
+            "variant": "A",
+            "ns": 9262.923351241217,
+            "count": 2699,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00504100000035
+          },
+          {
+            "variant": "A",
+            "ns": 9351.731955871363,
+            "count": 2674,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.05225000000019
+          },
+          {
+            "variant": "B",
+            "ns": 17256.29028640445,
+            "count": 1449,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0349170000004
+          }
+        ],
+        "summary": {
+          "changePercent": 85.18537503383186,
+          "ci95Percent": [
+            84.49418917644496,
+            85.87915033802783
+          ],
+          "blockChangesPercent": [
+            85.54588830165089,
+            85.45645477711291,
+            84.58277333237574,
+            85.15791701613608
+          ]
+        },
+        "index0Us": 9.432766365337532,
+        "latin1Us": 17.468103769715466,
+        "latin1OverIndex0": 1.8518537503383194
+      },
+      "64K/Chinese/alias25/mixed128": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 168140.23993288592,
+            "count": 149,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.42316600000004
+          },
+          {
+            "variant": "B",
+            "ns": 62278.37375621886,
+            "count": 402,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.28724999999986
+          },
+          {
+            "variant": "B",
+            "ns": 64275.73361182526,
+            "count": 389,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0260830000002
+          },
+          {
+            "variant": "A",
+            "ns": 167553.85416666663,
+            "count": 150,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.06462499999998
+          },
+          {
+            "variant": "B",
+            "ns": 62963.13599246225,
+            "count": 398,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.47462499999983
+          },
+          {
+            "variant": "A",
+            "ns": 170074.852195946,
+            "count": 148,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.36862500000007
+          },
+          {
+            "variant": "A",
+            "ns": 167332.56916666694,
+            "count": 150,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.79908300000034
+          },
+          {
+            "variant": "B",
+            "ns": 69196.73687845294,
+            "count": 362,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.39374999999973
+          },
+          {
+            "variant": "A",
+            "ns": 178836.04910714278,
+            "count": 140,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2963749999999
+          },
+          {
+            "variant": "B",
+            "ns": 62614.40093750011,
+            "count": 400,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.36608300000034
+          },
+          {
+            "variant": "B",
+            "ns": 62608.841250000034,
+            "count": 400,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.34829200000013
+          },
+          {
+            "variant": "A",
+            "ns": 168840.15016778518,
+            "count": 149,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.25745899999993
+          },
+          {
+            "variant": "B",
+            "ns": 62474.65991271821,
+            "count": 401,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.41870900000004
+          },
+          {
+            "variant": "A",
+            "ns": 168205.71224832218,
+            "count": 149,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.50120900000002
+          },
+          {
+            "variant": "A",
+            "ns": 169917.58192567568,
+            "count": 148,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.182417
+          },
+          {
+            "variant": "B",
+            "ns": 65322.11422976496,
+            "count": 383,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1469579999998
+          }
+        ],
+        "summary": {
+          "changePercent": -62.35591700058669,
+          "ci95Percent": [
+            -64.32620074658416,
+            -60.276813389002
+          ],
+          "blockChangesPercent": [
+            -62.30540249569555,
+            -60.87307732043039,
+            -63.96790202877784,
+            -62.21298926103936
+          ]
+        },
+        "index0Us": 169.8271280373581,
+        "latin1Us": 63.92986503390295,
+        "latin1OverIndex0": 0.3764408299941328
+      },
+      "64K/ASCII/mixed4096": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 3375.5906574861524,
+            "count": 7407,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02399999999943
+          },
+          {
+            "variant": "B",
+            "ns": 14487.099869640788,
+            "count": 1726,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03787499999999
+          },
+          {
+            "variant": "B",
+            "ns": 14435.133443995363,
+            "count": 1732,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01320899999973
+          },
+          {
+            "variant": "A",
+            "ns": 3380.2146768523485,
+            "count": 7396,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00054199999977
+          },
+          {
+            "variant": "B",
+            "ns": 14502.371519721586,
+            "count": 1724,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0167080000001
+          },
+          {
+            "variant": "A",
+            "ns": 3387.890260840108,
+            "count": 7380,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02104099999997
+          },
+          {
+            "variant": "A",
+            "ns": 3388.5065227704054,
+            "count": 7378,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00320900000042
+          },
+          {
+            "variant": "B",
+            "ns": 15402.061576354712,
+            "count": 1624,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1035840000004
+          },
+          {
+            "variant": "A",
+            "ns": 3600.329421082953,
+            "count": 6944,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0055000000002
+          },
+          {
+            "variant": "B",
+            "ns": 15481.901470588235,
+            "count": 1615,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.026167
+          },
+          {
+            "variant": "B",
+            "ns": 14833.895536773409,
+            "count": 1686,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07958299999973
+          },
+          {
+            "variant": "A",
+            "ns": 3434.692986673988,
+            "count": 7279,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00904199999968
+          },
+          {
+            "variant": "B",
+            "ns": 14733.101281673515,
+            "count": 1697,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01658299999963
+          },
+          {
+            "variant": "A",
+            "ns": 3392.8542203826855,
+            "count": 7369,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0155420000001
+          },
+          {
+            "variant": "A",
+            "ns": 3416.1272714851752,
+            "count": 7319,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02108399999997
+          },
+          {
+            "variant": "B",
+            "ns": 14547.659758580598,
+            "count": 1719,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0594170000004
+          }
+        ],
+        "summary": {
+          "changePercent": 332.51704772270483,
+          "ci95Percent": [
+            323.3986135915806,
+            341.8318590698486
+          ],
+          "blockChangesPercent": [
+            328.10874457163777,
+            341.1031008687154,
+            330.9478083498727,
+            330.02532589020876
+          ]
+        },
+        "index0Us": 3.421331379197316,
+        "latin1Us": 14.797841474114737,
+        "latin1OverIndex0": 4.32517047722705
+      },
+      "64K/Chinese/alias25/mixed4096": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 149529.11086309532,
+            "count": 168,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.96712500000012
+          },
+          {
+            "variant": "B",
+            "ns": 51608.78427835054,
+            "count": 485,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2420830000001
+          },
+          {
+            "variant": "B",
+            "ns": 51303.07581967206,
+            "count": 488,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.28720799999974
+          },
+          {
+            "variant": "A",
+            "ns": 148314.07174556222,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.5206250000001
+          },
+          {
+            "variant": "B",
+            "ns": 51165.228783231076,
+            "count": 489,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15837499999998
+          },
+          {
+            "variant": "A",
+            "ns": 148387.389053255,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.61975000000075
+          },
+          {
+            "variant": "A",
+            "ns": 149516.52380952396,
+            "count": 168,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.9502080000002
+          },
+          {
+            "variant": "B",
+            "ns": 56215.47275280882,
+            "count": 445,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1270829999994
+          },
+          {
+            "variant": "A",
+            "ns": 156978.58046874983,
+            "count": 160,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.9325829999998
+          },
+          {
+            "variant": "B",
+            "ns": 51240.1383196722,
+            "count": 488,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04150000000027
+          },
+          {
+            "variant": "B",
+            "ns": 51524.55221193418,
+            "count": 486,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.3274590000001
+          },
+          {
+            "variant": "A",
+            "ns": 149224.02083333334,
+            "count": 168,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.55708400000003
+          },
+          {
+            "variant": "B",
+            "ns": 51421.42582135528,
+            "count": 487,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.33787500000017
+          },
+          {
+            "variant": "A",
+            "ns": 149178.5714285715,
+            "count": 168,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.4960000000001
+          },
+          {
+            "variant": "A",
+            "ns": 148318.94082840267,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.52720800000043
+          },
+          {
+            "variant": "B",
+            "ns": 54995.993406593225,
+            "count": 455,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.18541599999935
+          }
+        ],
+        "summary": {
+          "changePercent": -65.04352539489176,
+          "ci95Percent": [
+            -66.79988864378518,
+            -63.19424643770547
+          ],
+          "blockChangesPercent": [
+            -65.44750110947838,
+            -63.99421353596048,
+            -66.42834958691081,
+            -64.24917622986143
+          ]
+        },
+        "index0Us": 149.9070511055727,
+        "latin1Us": 52.402220250986275,
+        "latin1OverIndex0": 0.34956474605108323
+      },
+      "64K/all-LF": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 809971.7741935505,
+            "count": 31,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.8730000000005
+          },
+          {
+            "variant": "B",
+            "ns": 215997.84482758612,
+            "count": 116,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.4459999999999
+          },
+          {
+            "variant": "B",
+            "ns": 217190.7769396553,
+            "count": 116,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.55304100000012
+          },
+          {
+            "variant": "A",
+            "ns": 800590.0078124988,
+            "count": 32,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.9510419999997
+          },
+          {
+            "variant": "B",
+            "ns": 215976.87715517258,
+            "count": 116,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.42654200000015
+          },
+          {
+            "variant": "A",
+            "ns": 808731.5201612895,
+            "count": 31,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.5654169999998
+          },
+          {
+            "variant": "A",
+            "ns": 799784.1796874994,
+            "count": 32,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.74474999999984
+          },
+          {
+            "variant": "B",
+            "ns": 256381.43112244818,
+            "count": 98,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.00304199999937
+          },
+          {
+            "variant": "A",
+            "ns": 853769.2708333338,
+            "count": 30,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.90462500000012
+          },
+          {
+            "variant": "B",
+            "ns": 215932.06681034545,
+            "count": 116,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.38495800000055
+          },
+          {
+            "variant": "B",
+            "ns": 217879.61956521802,
+            "count": 115,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.44925000000057
+          },
+          {
+            "variant": "A",
+            "ns": 808325.7741935474,
+            "count": 31,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.46479199999976
+          },
+          {
+            "variant": "B",
+            "ns": 216072.64655172432,
+            "count": 116,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.5154160000002
+          },
+          {
+            "variant": "A",
+            "ns": 799887.6953124992,
+            "count": 32,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.77124999999978
+          },
+          {
+            "variant": "A",
+            "ns": 811078.2943548391,
+            "count": 31,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.14741700000013
+          },
+          {
+            "variant": "B",
+            "ns": 241579.37740384648,
+            "count": 104,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.99404200000026
+          }
+        ],
+        "summary": {
+          "changePercent": -72.36956284351686,
+          "ci95Percent": [
+            -74.53555474439102,
+            -70.01933284644389
+          ],
+          "blockChangesPercent": [
+            -73.10290522513581,
+            -70.74107789095873,
+            -73.89020861885885,
+            -71.63492560907736
+          ]
+        },
+        "index0Us": 811.35234626019,
+        "latin1Us": 224.180200151074,
+        "latin1OverIndex0": 0.2763043715648323
+      },
+      "64K/all-CRLF": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 543556.4042553188,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.37720799999988
+          },
+          {
+            "variant": "B",
+            "ns": 154351.4020061728,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03941699999996
+          },
+          {
+            "variant": "B",
+            "ns": 153920.9164110431,
+            "count": 163,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.71287500000017
+          },
+          {
+            "variant": "A",
+            "ns": 547406.3641304333,
+            "count": 46,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.44554199999948
+          },
+          {
+            "variant": "B",
+            "ns": 153751.11809815982,
+            "count": 163,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.49145800000042
+          },
+          {
+            "variant": "A",
+            "ns": 541145.832446807,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.4708329999994
+          },
+          {
+            "variant": "A",
+            "ns": 542391.1781914899,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.9390830000002
+          },
+          {
+            "variant": "B",
+            "ns": 552275.9293478257,
+            "count": 46,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.23754199999985
+          },
+          {
+            "variant": "A",
+            "ns": 576172.9403409106,
+            "count": 44,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.81287500000053
+          },
+          {
+            "variant": "B",
+            "ns": 154992.9266975308,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.87083299999995
+          },
+          {
+            "variant": "B",
+            "ns": 155788.43167701853,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.65549999999985
+          },
+          {
+            "variant": "A",
+            "ns": 545389.9456521753,
+            "count": 46,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.70350000000053
+          },
+          {
+            "variant": "B",
+            "ns": 155771.6420807457,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.63387500000044
+          },
+          {
+            "variant": "A",
+            "ns": 542878.877659574,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.12245799999982
+          },
+          {
+            "variant": "A",
+            "ns": 543014.8484042548,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.17358299999978
+          },
+          {
+            "variant": "B",
+            "ns": 524372.1770833337,
+            "count": 48,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.35891600000014
+          }
+        ],
+        "summary": {
+          "changePercent": -61.40996133460608,
+          "ci95Percent": [
+            -78.62023504105306,
+            -30.34576913936528
+          ],
+          "blockChangesPercent": [
+            -71.74294610860309,
+            -46.21344470565249,
+            -72.27997935046868,
+            -47.36111344527734
+          ]
+        },
+        "index0Us": 547.6391701850245,
+        "latin1Us": 211.33416752124344,
+        "latin1OverIndex0": 0.3859003866539394
+      },
+      "1M/all-alias-Chinese": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 9810888.87500001,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.4613330000002
+          },
+          {
+            "variant": "B",
+            "ns": 2531044.8000000063,
+            "count": 10,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.48358400000052
+          },
+          {
+            "variant": "B",
+            "ns": 2529705.212500005,
+            "count": 10,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.3764170000004
+          },
+          {
+            "variant": "A",
+            "ns": 9805239.583333332,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.32574999999997
+          },
+          {
+            "variant": "B",
+            "ns": 2526597.3874999983,
+            "count": 10,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.1277909999999
+          },
+          {
+            "variant": "A",
+            "ns": 10008012.125000013,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 240.1922910000003
+          },
+          {
+            "variant": "A",
+            "ns": 9808041.666666668,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.39300000000003
+          },
+          {
+            "variant": "B",
+            "ns": 9151013.875000028,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 219.62433300000066
+          },
+          {
+            "variant": "A",
+            "ns": 10417465.249999965,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 250.01916599999913
+          },
+          {
+            "variant": "B",
+            "ns": 2567192.1874999953,
+            "count": 10,
+            "documentsPerOperation": 8,
+            "elapsedMs": 205.37537499999962
+          },
+          {
+            "variant": "B",
+            "ns": 2619003.650000002,
+            "count": 10,
+            "documentsPerOperation": 8,
+            "elapsedMs": 209.52029200000015
+          },
+          {
+            "variant": "A",
+            "ns": 9852848.958333349,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 236.46837500000038
+          },
+          {
+            "variant": "B",
+            "ns": 2573922.9249999993,
+            "count": 10,
+            "documentsPerOperation": 8,
+            "elapsedMs": 205.91383399999995
+          },
+          {
+            "variant": "A",
+            "ns": 9934822.916666651,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 238.43574999999964
+          },
+          {
+            "variant": "A",
+            "ns": 9812779.499999994,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.5067079999999
+          },
+          {
+            "variant": "B",
+            "ns": 8682482.624999996,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 208.3795829999999
+          }
+        ],
+        "summary": {
+          "changePercent": -64.80511702376464,
+          "ci95Percent": [
+            -80.25610149772697,
+            -37.26265420335819
+          ],
+          "blockChangesPercent": [
+            -74.20107614087937,
+            -51.466952132830855,
+            -74.4061688628501,
+            -52.1211572048337
+          ]
+        },
+        "index0Us": 9929.36769645544,
+        "latin1Us": 3494.629341047611,
+        "latin1OverIndex0": 0.3519488297623538
+      },
+      "1M/ASCII/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 470634.93287036964,
+            "count": 54,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.31429099999968
+          },
+          {
+            "variant": "B",
+            "ns": 381553.10795454594,
+            "count": 66,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.46004100000027
+          },
+          {
+            "variant": "B",
+            "ns": 381712.7537878791,
+            "count": 66,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.54433400000016
+          },
+          {
+            "variant": "A",
+            "ns": 469766.97685185116,
+            "count": 54,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.9393339999997
+          },
+          {
+            "variant": "B",
+            "ns": 387510.89807692374,
+            "count": 65,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.50566700000036
+          },
+          {
+            "variant": "A",
+            "ns": 470885.127314815,
+            "count": 54,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.4223750000001
+          },
+          {
+            "variant": "A",
+            "ns": 470340.5671296284,
+            "count": 54,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.18712499999947
+          },
+          {
+            "variant": "B",
+            "ns": 629008.5937499981,
+            "count": 40,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.2827499999994
+          },
+          {
+            "variant": "A",
+            "ns": 513487.56377550977,
+            "count": 49,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.28712499999983
+          },
+          {
+            "variant": "B",
+            "ns": 381707.623106062,
+            "count": 66,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.54162500000075
+          },
+          {
+            "variant": "B",
+            "ns": 394331.2167968749,
+            "count": 64,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.89758299999994
+          },
+          {
+            "variant": "A",
+            "ns": 474244.2028301875,
+            "count": 53,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.0795419999995
+          },
+          {
+            "variant": "B",
+            "ns": 382015.0738636354,
+            "count": 66,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.7039589999995
+          },
+          {
+            "variant": "A",
+            "ns": 470898.5324074067,
+            "count": 54,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.4281659999997
+          },
+          {
+            "variant": "A",
+            "ns": 479289.70283018716,
+            "count": 53,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.21883399999933
+          },
+          {
+            "variant": "B",
+            "ns": 595325.3958333319,
+            "count": 42,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0293329999995
+          }
+        ],
+        "summary": {
+          "changePercent": -9.460424908802604,
+          "ci95Percent": [
+            -28.265595503932282,
+            14.274520228908175
+          ],
+          "blockChangesPercent": [
+            -18.83617395351907,
+            4.9075014769445024,
+            -21.380547369478364,
+            0.3817440522551832
+          ]
+        },
+        "index0Us": 477.24779604579385,
+        "latin1Us": 432.0981266719665,
+        "latin1OverIndex0": 0.9053957509119748
+      },
+      "real/CommonMark-spec": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 219288.33515881718,
+            "count": 913,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.2102500000001
+          },
+          {
+            "variant": "B",
+            "ns": 126529.4908285896,
+            "count": 1581,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.04312500000015
+          },
+          {
+            "variant": "B",
+            "ns": 123478.57530864226,
+            "count": 1620,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.03529200000048
+          },
+          {
+            "variant": "A",
+            "ns": 219708.83644346936,
+            "count": 911,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.1547500000006
+          },
+          {
+            "variant": "B",
+            "ns": 124943.31667707722,
+            "count": 1601,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.0342500000006
+          },
+          {
+            "variant": "A",
+            "ns": 219710.11745334804,
+            "count": 911,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.15591700000004
+          },
+          {
+            "variant": "A",
+            "ns": 221219.10718232061,
+            "count": 905,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.20329200000015
+          },
+          {
+            "variant": "B",
+            "ns": 212239.39554612912,
+            "count": 943,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.14174999999977
+          },
+          {
+            "variant": "A",
+            "ns": 231757.82155272365,
+            "count": 863,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.00700000000052
+          },
+          {
+            "variant": "B",
+            "ns": 125199.91176470605,
+            "count": 1598,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.06945900000028
+          },
+          {
+            "variant": "B",
+            "ns": 125347.14411027553,
+            "count": 1596,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.05404199999975
+          },
+          {
+            "variant": "A",
+            "ns": 223482.16871508377,
+            "count": 895,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.01654099999996
+          },
+          {
+            "variant": "B",
+            "ns": 126918.14720812193,
+            "count": 1576,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.02300000000014
+          },
+          {
+            "variant": "A",
+            "ns": 218970.5054704593,
+            "count": 914,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.1390419999998
+          },
+          {
+            "variant": "A",
+            "ns": 219547.93304061468,
+            "count": 911,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.00816699999996
+          },
+          {
+            "variant": "B",
+            "ns": 206153.87950566466,
+            "count": 971,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.17541700000038
+          }
+        ],
+        "summary": {
+          "changePercent": -35.71220751307378,
+          "ci95Percent": [
+            -50.18043214181682,
+            -17.04222977993517
+          ],
+          "blockChangesPercent": [
+            -43.05440200323143,
+            -26.135940996557196,
+            -44.95465543943183,
+            -26.22654366386058
+          ]
+        },
+        "index0Us": 221.67463375114673,
+        "latin1Us": 142.50972854209078,
+        "latin1OverIndex0": 0.6428779248692615
+      },
+      "real/Rust-releases": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 432067.4946004331,
+            "count": 463,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.04725000000053
+          },
+          {
+            "variant": "B",
+            "ns": 361112.8916967514,
+            "count": 554,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.05654200000026
+          },
+          {
+            "variant": "B",
+            "ns": 357122.919786096,
+            "count": 561,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.34595799999988
+          },
+          {
+            "variant": "A",
+            "ns": 429302.84334763914,
+            "count": 466,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.05512499999986
+          },
+          {
+            "variant": "B",
+            "ns": 357170.385714286,
+            "count": 560,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.0154160000002
+          },
+          {
+            "variant": "A",
+            "ns": 428991.7023554594,
+            "count": 467,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.3391249999995
+          },
+          {
+            "variant": "A",
+            "ns": 430304.0322580644,
+            "count": 465,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.09137499999997
+          },
+          {
+            "variant": "B",
+            "ns": 542675.4742547435,
+            "count": 369,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.24725000000035
+          },
+          {
+            "variant": "A",
+            "ns": 446951.1718749999,
+            "count": 448,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.23412499999995
+          },
+          {
+            "variant": "B",
+            "ns": 362439.0851449265,
+            "count": 552,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.06637499999943
+          },
+          {
+            "variant": "B",
+            "ns": 360267.2374100725,
+            "count": 556,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.30858400000034
+          },
+          {
+            "variant": "A",
+            "ns": 445232.03555555583,
+            "count": 450,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.35441600000013
+          },
+          {
+            "variant": "B",
+            "ns": 360340.6780575546,
+            "count": 556,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.34941700000036
+          },
+          {
+            "variant": "A",
+            "ns": 430130.8236559146,
+            "count": 465,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.01083300000028
+          },
+          {
+            "variant": "A",
+            "ns": 430861.2903225797,
+            "count": 465,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.35049999999956
+          },
+          {
+            "variant": "B",
+            "ns": 524079.9502617818,
+            "count": 382,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.19854100000066
+          }
+        ],
+        "summary": {
+          "changePercent": -8.574920086760923,
+          "ci95Percent": [
+            -24.916675698292085,
+            11.323590356161416
+          ],
+          "blockChangesPercent": [
+            -16.617928832820233,
+            2.469747187650571,
+            -18.995964638446107,
+            0.9453682323375024
+          ]
+        },
+        "index0Us": 434.1757113939951,
+        "latin1Us": 396.9454911058332,
+        "latin1OverIndex0": 0.9142507991323883
+      }
+    },
+    "reverse": {
+      "real/Rust-releases": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 413114.09072164947,
+            "count": 485,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.360334
+          },
+          {
+            "variant": "B",
+            "ns": 347727.79340277775,
+            "count": 576,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.291209
+          },
+          {
+            "variant": "B",
+            "ns": 357734.3,
+            "count": 560,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.331208
+          },
+          {
+            "variant": "A",
+            "ns": 406097.3630831644,
+            "count": 493,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.20600000000002
+          },
+          {
+            "variant": "B",
+            "ns": 346274.5813148789,
+            "count": 578,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.146708
+          },
+          {
+            "variant": "A",
+            "ns": 408891.83673469396,
+            "count": 490,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.35700000000003
+          },
+          {
+            "variant": "A",
+            "ns": 406154.6653144016,
+            "count": 493,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.23425
+          },
+          {
+            "variant": "B",
+            "ns": 355438.648312611,
+            "count": 563,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.11195899999998
+          },
+          {
+            "variant": "A",
+            "ns": 406787.6869918699,
+            "count": 492,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.13954199999998
+          },
+          {
+            "variant": "B",
+            "ns": 357513.2446428572,
+            "count": 560,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.207417
+          },
+          {
+            "variant": "B",
+            "ns": 351458.40701754385,
+            "count": 570,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.331292
+          },
+          {
+            "variant": "A",
+            "ns": 409300.4437627812,
+            "count": 489,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.147917
+          },
+          {
+            "variant": "B",
+            "ns": 370670.2166666667,
+            "count": 540,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.161917
+          },
+          {
+            "variant": "A",
+            "ns": 406969.8516260163,
+            "count": 492,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.22916700000002
+          },
+          {
+            "variant": "A",
+            "ns": 407338,
+            "count": 491,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.002958
+          },
+          {
+            "variant": "B",
+            "ns": 361056.55776173284,
+            "count": 554,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.025333
+          }
+        ],
+        "summary": {
+          "changePercent": -12.78355594475092,
+          "ci95Percent": [
+            -15.553449805965371,
+            -9.922808022775374
+          ],
+          "blockChangesPercent": [
+            -13.89073053115592,
+            -13.911986287172557,
+            -13.128358329615827,
+            -10.149006746920278
+          ]
+        },
+        "index0Us": 408.07586078783834,
+        "latin1Us": 355.9092548270015,
+        "latin1OverIndex0": 0.8721644405524918
+      },
+      "real/CommonMark-spec": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 203950.2212028542,
+            "count": 981,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.07516699999996
+          },
+          {
+            "variant": "B",
+            "ns": 115106.63636363638,
+            "count": 1738,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.05533400000002
+          },
+          {
+            "variant": "B",
+            "ns": 125251.77457733246,
+            "count": 1597,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.02708399999995
+          },
+          {
+            "variant": "A",
+            "ns": 202799.8135764944,
+            "count": 987,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.16341599999998
+          },
+          {
+            "variant": "B",
+            "ns": 114837.25602755448,
+            "count": 1742,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.04649999999992
+          },
+          {
+            "variant": "A",
+            "ns": 202125.6313131313,
+            "count": 990,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.104375
+          },
+          {
+            "variant": "A",
+            "ns": 203382.66463414638,
+            "count": 984,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.12854200000004
+          },
+          {
+            "variant": "B",
+            "ns": 123204.27955665017,
+            "count": 1624,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.0837499999999
+          },
+          {
+            "variant": "A",
+            "ns": 203620.84638860635,
+            "count": 983,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.15929200000005
+          },
+          {
+            "variant": "B",
+            "ns": 118336.09343583675,
+            "count": 1691,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.10633399999995
+          },
+          {
+            "variant": "B",
+            "ns": 118446.04795737124,
+            "count": 1689,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.05537500000003
+          },
+          {
+            "variant": "A",
+            "ns": 203253.59857723574,
+            "count": 984,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.00154099999997
+          },
+          {
+            "variant": "B",
+            "ns": 125776.97485857946,
+            "count": 1591,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.1111669999999
+          },
+          {
+            "variant": "A",
+            "ns": 202426.061678463,
+            "count": 989,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.19937499999992
+          },
+          {
+            "variant": "A",
+            "ns": 202164.60404040408,
+            "count": 990,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.14295800000002
+          },
+          {
+            "variant": "B",
+            "ns": 123884.54613003094,
+            "count": 1615,
+            "documentsPerOperation": 1,
+            "elapsedMs": 200.07354199999997
+          }
+        ],
+        "summary": {
+          "changePercent": -40.613704981897655,
+          "ci95Percent": [
+            -43.03959202393858,
+            -38.08450182696627
+          ],
+          "blockChangesPercent": [
+            -40.96001215774816,
+            -41.3339782469792,
+            -41.804599613887234,
+            -38.29457229631107
+          ]
+        },
+        "index0Us": 202.96440745214483,
+        "latin1Us": 120.53304179127392,
+        "latin1OverIndex0": 0.5938629501810229
+      },
+      "1M/ASCII/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 472074.09669811314,
+            "count": 53,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15941699999996
+          },
+          {
+            "variant": "B",
+            "ns": 320434.86234177207,
+            "count": 79,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.51483299999995
+          },
+          {
+            "variant": "B",
+            "ns": 324805.4659090909,
+            "count": 77,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.08016699999996
+          },
+          {
+            "variant": "A",
+            "ns": 471827.3372641513,
+            "count": 53,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.05479100000014
+          },
+          {
+            "variant": "B",
+            "ns": 317860.43037974683,
+            "count": 79,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.887792
+          },
+          {
+            "variant": "A",
+            "ns": 470419.65509259276,
+            "count": 54,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.22129100000006
+          },
+          {
+            "variant": "A",
+            "ns": 474301.3962264151,
+            "count": 53,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.103792
+          },
+          {
+            "variant": "B",
+            "ns": 322783.5192307691,
+            "count": 78,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.4169159999999
+          },
+          {
+            "variant": "A",
+            "ns": 471731.6249999999,
+            "count": 53,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01420899999994
+          },
+          {
+            "variant": "B",
+            "ns": 319256.65981012664,
+            "count": 79,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.77020900000002
+          },
+          {
+            "variant": "B",
+            "ns": 319306.0395569622,
+            "count": 79,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.80141700000013
+          },
+          {
+            "variant": "A",
+            "ns": 474284.3938679248,
+            "count": 53,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.09658300000012
+          },
+          {
+            "variant": "B",
+            "ns": 320303.40189873433,
+            "count": 79,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.43175000000008
+          },
+          {
+            "variant": "A",
+            "ns": 470488.810185185,
+            "count": 54,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.2511659999999
+          },
+          {
+            "variant": "A",
+            "ns": 471649.9791666664,
+            "count": 54,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.7527909999999
+          },
+          {
+            "variant": "B",
+            "ns": 320752.2708333335,
+            "count": 78,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.14941700000008
+          }
+        ],
+        "summary": {
+          "changePercent": -32.07273128006437,
+          "ci95Percent": [
+            -32.64679055809179,
+            -31.49377922769968
+          ],
+          "blockChangesPercent": [
+            -31.64269863980578,
+            -32.18840203406595,
+            -32.49955501711038,
+            -31.95737085516177
+          ]
+        },
+        "index0Us": 472.0951184969832,
+        "latin1Us": 320.6813197551447,
+        "latin1OverIndex0": 0.6792726871993572
+      },
+      "1M/all-alias-Chinese": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 9926987.833333338,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 238.2477080000001
+          },
+          {
+            "variant": "B",
+            "ns": 2286877.3749999995,
+            "count": 11,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.24520899999993
+          },
+          {
+            "variant": "B",
+            "ns": 2287686.545454547,
+            "count": 11,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.31641600000012
+          },
+          {
+            "variant": "A",
+            "ns": 9805309.041666666,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.32741699999997
+          },
+          {
+            "variant": "B",
+            "ns": 2273500.9545454546,
+            "count": 11,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.068084
+          },
+          {
+            "variant": "A",
+            "ns": 9818036.458333334,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.632875
+          },
+          {
+            "variant": "A",
+            "ns": 9824064.250000002,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.77754200000004
+          },
+          {
+            "variant": "B",
+            "ns": 2277364.1136363638,
+            "count": 11,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.40804200000002
+          },
+          {
+            "variant": "A",
+            "ns": 9840925.333333341,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 236.18220800000017
+          },
+          {
+            "variant": "B",
+            "ns": 2277338.0681818197,
+            "count": 11,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.40575000000013
+          },
+          {
+            "variant": "B",
+            "ns": 2278241.0000000005,
+            "count": 11,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.48520800000006
+          },
+          {
+            "variant": "A",
+            "ns": 9828927.083333327,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.89424999999983
+          },
+          {
+            "variant": "B",
+            "ns": 2283425.670454544,
+            "count": 11,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.9414589999999
+          },
+          {
+            "variant": "A",
+            "ns": 9811340.250000002,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.47216600000002
+          },
+          {
+            "variant": "A",
+            "ns": 9803178.833333334,
+            "count": 3,
+            "documentsPerOperation": 8,
+            "elapsedMs": 235.276292
+          },
+          {
+            "variant": "B",
+            "ns": 2276592.3295454537,
+            "count": 11,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.34012499999994
+          }
+        ],
+        "summary": {
+          "changePercent": -76.80981034361383,
+          "ci95Percent": [
+            -76.87302354922733,
+            -76.74642435668703
+          ],
+          "blockChangesPercent": [
+            -76.8164301637027,
+            -76.83107468818756,
+            -76.8397864421469,
+            -76.75184767279617
+          ]
+        },
+        "index0Us": 9832.27439877417,
+        "latin1Us": 2280.123080612033,
+        "latin1OverIndex0": 0.23190189656386168
+      },
+      "64K/all-CRLF": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 540872.7845744677,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.36816699999986
+          },
+          {
+            "variant": "B",
+            "ns": 154970.51774691363,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.84179100000006
+          },
+          {
+            "variant": "B",
+            "ns": 155019.29012345677,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.90499999999997
+          },
+          {
+            "variant": "A",
+            "ns": 540409.686170213,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.19404200000008
+          },
+          {
+            "variant": "B",
+            "ns": 154969.48919753078,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.8404579999999
+          },
+          {
+            "variant": "A",
+            "ns": 542497.0079787228,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.9788749999998
+          },
+          {
+            "variant": "A",
+            "ns": 542177.6382978729,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.85879200000022
+          },
+          {
+            "variant": "B",
+            "ns": 155455.42158385084,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2265829999999
+          },
+          {
+            "variant": "A",
+            "ns": 539603.6117021275,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.89095799999996
+          },
+          {
+            "variant": "B",
+            "ns": 155212.8665123458,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.15587500000015
+          },
+          {
+            "variant": "B",
+            "ns": 154945.82716049367,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.8097919999998
+          },
+          {
+            "variant": "A",
+            "ns": 541868.6835106385,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.7426250000001
+          },
+          {
+            "variant": "B",
+            "ns": 158262.09810126587,
+            "count": 158,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04329200000006
+          },
+          {
+            "variant": "A",
+            "ns": 541884.0851063827,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.7484159999999
+          },
+          {
+            "variant": "A",
+            "ns": 540905.2526595738,
+            "count": 47,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.38037499999973
+          },
+          {
+            "variant": "B",
+            "ns": 154700.10339506177,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.49133400000005
+          }
+        ],
+        "summary": {
+          "changePercent": -71.28303482862552,
+          "ci95Percent": [
+            -71.4818840101099,
+            -71.08279912507948
+          ],
+          "blockChangesPercent": [
+            -71.33128106195517,
+            -71.38086107491064,
+            -71.3206468284461,
+            -71.09852791451542
+          ]
+        },
+        "index0Us": 541.276549871695,
+        "latin1Us": 155.4381983074719,
+        "latin1OverIndex0": 0.2871696517137445
+      },
+      "64K/all-LF": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 910143.9732142852,
+            "count": 28,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.8722499999999
+          },
+          {
+            "variant": "B",
+            "ns": 202579.34375,
+            "count": 124,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.958709
+          },
+          {
+            "variant": "B",
+            "ns": 202535.2399193547,
+            "count": 124,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.91495799999984
+          },
+          {
+            "variant": "A",
+            "ns": 910527.9017857149,
+            "count": 28,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.95825000000013
+          },
+          {
+            "variant": "B",
+            "ns": 201983.6189516128,
+            "count": 124,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.3677499999999
+          },
+          {
+            "variant": "A",
+            "ns": 911424.4776785715,
+            "count": 28,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.159083
+          },
+          {
+            "variant": "A",
+            "ns": 912341.7053571419,
+            "count": 28,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.3645419999998
+          },
+          {
+            "variant": "B",
+            "ns": 202231.6028225806,
+            "count": 124,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.61374999999998
+          },
+          {
+            "variant": "A",
+            "ns": 918752.7901785708,
+            "count": 28,
+            "documentsPerOperation": 8,
+            "elapsedMs": 205.80062499999985
+          },
+          {
+            "variant": "B",
+            "ns": 203031.46068548385,
+            "count": 124,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.40720899999997
+          },
+          {
+            "variant": "B",
+            "ns": 202879.2842741939,
+            "count": 124,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.25625000000036
+          },
+          {
+            "variant": "A",
+            "ns": 910609.9330357154,
+            "count": 28,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.97662500000024
+          },
+          {
+            "variant": "B",
+            "ns": 203193.59072580677,
+            "count": 124,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.56804200000033
+          },
+          {
+            "variant": "A",
+            "ns": 912530.5044642857,
+            "count": 28,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.406833
+          },
+          {
+            "variant": "A",
+            "ns": 912392.1160714283,
+            "count": 28,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.37583399999994
+          },
+          {
+            "variant": "B",
+            "ns": 202294.27116935488,
+            "count": 124,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.67591700000003
+          }
+        ],
+        "summary": {
+          "changePercent": -77.79431101258429,
+          "ci95Percent": [
+            -77.85423421734346,
+            -77.73422566439308
+          ],
+          "blockChangesPercent": [
+            -77.74917074084394,
+            -77.83623796807714,
+            -77.81113977386536,
+            -77.78059950543839
+          ]
+        },
+        "index0Us": 912.3367995798869,
+        "latin1Us": 202.59067223245174,
+        "latin1OverIndex0": 0.22205688987415692
+      },
+      "64K/Chinese/alias25/mixed4096": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 148468.04142011824,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.72879199999988
+          },
+          {
+            "variant": "B",
+            "ns": 49216.05339566927,
+            "count": 508,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0140409999999
+          },
+          {
+            "variant": "B",
+            "ns": 48850.71801757812,
+            "count": 512,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.09254099999998
+          },
+          {
+            "variant": "A",
+            "ns": 148271.29585798836,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.46279200000026
+          },
+          {
+            "variant": "B",
+            "ns": 48494.46875000002,
+            "count": 516,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1851670000001
+          },
+          {
+            "variant": "A",
+            "ns": 148532.26701183413,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.81562499999973
+          },
+          {
+            "variant": "A",
+            "ns": 148951.57514880947,
+            "count": 168,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1909169999999
+          },
+          {
+            "variant": "B",
+            "ns": 48912.465576171904,
+            "count": 512,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.34545900000012
+          },
+          {
+            "variant": "A",
+            "ns": 148566.07470414223,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.8613330000003
+          },
+          {
+            "variant": "B",
+            "ns": 49231.309301181165,
+            "count": 508,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07604100000026
+          },
+          {
+            "variant": "B",
+            "ns": 48990.04207436397,
+            "count": 511,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2712919999999
+          },
+          {
+            "variant": "A",
+            "ns": 148407.4829881657,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.64691700000003
+          },
+          {
+            "variant": "B",
+            "ns": 49450.69589920952,
+            "count": 506,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.17641700000013
+          },
+          {
+            "variant": "A",
+            "ns": 148589.86686390542,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.89350000000013
+          },
+          {
+            "variant": "A",
+            "ns": 148510.38609467435,
+            "count": 169,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.78604199999972
+          },
+          {
+            "variant": "B",
+            "ns": 48926.4526367188,
+            "count": 512,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.4027500000002
+          }
+        ],
+        "summary": {
+          "changePercent": -67.0060225019009,
+          "ci95Percent": [
+            -67.27506468589787,
+            -66.73476843586121
+          ],
+          "blockChangesPercent": [
+            -66.95210235352404,
+            -67.2566639210706,
+            -66.92598835262295,
+            -66.88802710759096
+          ]
+        },
+        "index0Us": 148.53701093248134,
+        "latin1Us": 49.0082679634119,
+        "latin1OverIndex0": 0.3299397749809911
+      },
+      "64K/ASCII/mixed4096": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 3517.668900379907,
+            "count": 7107,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.000583
+          },
+          {
+            "variant": "B",
+            "ns": 14493.05253623188,
+            "count": 1725,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00412499999993
+          },
+          {
+            "variant": "B",
+            "ns": 14571.241258741267,
+            "count": 1716,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0340000000001
+          },
+          {
+            "variant": "A",
+            "ns": 3533.114436122106,
+            "count": 7076,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00254200000018
+          },
+          {
+            "variant": "B",
+            "ns": 14518.19747533371,
+            "count": 1723,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.11883399999988
+          },
+          {
+            "variant": "A",
+            "ns": 3529.5192864200967,
+            "count": 7084,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02491699999973
+          },
+          {
+            "variant": "A",
+            "ns": 3541.986878453039,
+            "count": 7059,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02308300000004
+          },
+          {
+            "variant": "B",
+            "ns": 14926.06962686567,
+            "count": 1675,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00933299999997
+          },
+          {
+            "variant": "A",
+            "ns": 3525.982918488227,
+            "count": 7091,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02195900000015
+          },
+          {
+            "variant": "B",
+            "ns": 14613.444915254218,
+            "count": 1711,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02883399999973
+          },
+          {
+            "variant": "B",
+            "ns": 14447.110268630859,
+            "count": 1731,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0635830000001
+          },
+          {
+            "variant": "A",
+            "ns": 3531.3353283898336,
+            "count": 7080,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01483300000018
+          },
+          {
+            "variant": "B",
+            "ns": 14450.987427745673,
+            "count": 1730,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0016660000001
+          },
+          {
+            "variant": "A",
+            "ns": 3593.0568410462797,
+            "count": 6958,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00391600000012
+          },
+          {
+            "variant": "A",
+            "ns": 3537.2342777306185,
+            "count": 7068,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0093750000001
+          },
+          {
+            "variant": "B",
+            "ns": 14515.739843296602,
+            "count": 1723,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.08495800000037
+          }
+        ],
+        "summary": {
+          "changePercent": 311.63076684063464,
+          "ci95Percent": [
+            305.09013660245466,
+            318.2770028194811
+          ],
+          "blockChangesPercent": [
+            312.21318217729777,
+            316.3397025439621,
+            311.77238285359346,
+            306.2603078872125
+          ]
+        },
+        "index0Us": 3.5386717649105806,
+        "latin1Us": 14.566261721874442,
+        "latin1OverIndex0": 4.116307668406346
+      },
+      "64K/Chinese/alias25/mixed128": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 171183.460884354,
+            "count": 147,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.3117500000003
+          },
+          {
+            "variant": "B",
+            "ns": 61024.99999999995,
+            "count": 410,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1619999999998
+          },
+          {
+            "variant": "B",
+            "ns": 60836.47627737227,
+            "count": 411,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03033400000004
+          },
+          {
+            "variant": "A",
+            "ns": 173031.32155172402,
+            "count": 145,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.71633299999985
+          },
+          {
+            "variant": "B",
+            "ns": 60692.75910194174,
+            "count": 412,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04333399999996
+          },
+          {
+            "variant": "A",
+            "ns": 171117.41751700666,
+            "count": 147,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.23408299999983
+          },
+          {
+            "variant": "A",
+            "ns": 170250.28316326524,
+            "count": 147,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2143329999999
+          },
+          {
+            "variant": "B",
+            "ns": 61336.00153186266,
+            "count": 408,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.20070899999973
+          },
+          {
+            "variant": "A",
+            "ns": 171662.13613013722,
+            "count": 146,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.50137500000028
+          },
+          {
+            "variant": "B",
+            "ns": 61024.94908536589,
+            "count": 410,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.16183300000012
+          },
+          {
+            "variant": "B",
+            "ns": 61952.60952970296,
+            "count": 404,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.23083399999996
+          },
+          {
+            "variant": "A",
+            "ns": 170540.17857142846,
+            "count": 147,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.5552499999999
+          },
+          {
+            "variant": "B",
+            "ns": 60745.828276699,
+            "count": 412,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2182499999999
+          },
+          {
+            "variant": "A",
+            "ns": 173575.03620689645,
+            "count": 145,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.34704199999987
+          },
+          {
+            "variant": "A",
+            "ns": 170870.11054421755,
+            "count": 147,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.9432499999998
+          },
+          {
+            "variant": "B",
+            "ns": 60741.909283980545,
+            "count": 412,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.20533299999988
+          }
+        ],
+        "summary": {
+          "changePercent": -64.4115464866824,
+          "ci95Percent": [
+            -64.89476951734788,
+            -63.92167189742703
+          ],
+          "blockChangesPercent": [
+            -64.59678878709128,
+            -64.25336704993265,
+            -64.0637379072716,
+            -64.72835083856899
+          ]
+        },
+        "index0Us": 171.5251853428732,
+        "latin1Us": 61.04316084938012,
+        "latin1OverIndex0": 0.3558845351331751
+      },
+      "64K/ASCII/mixed128": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 10868.09403520208,
+            "count": 2301,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.05987499999992
+          },
+          {
+            "variant": "B",
+            "ns": 17069.453924914684,
+            "count": 1465,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0540000000001
+          },
+          {
+            "variant": "B",
+            "ns": 17184.124398625434,
+            "count": 1455,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02320800000007
+          },
+          {
+            "variant": "A",
+            "ns": 10623.099458368753,
+            "count": 2354,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.05420900000036
+          },
+          {
+            "variant": "B",
+            "ns": 17144.08413296776,
+            "count": 1459,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.10574999999972
+          },
+          {
+            "variant": "A",
+            "ns": 10593.8691737288,
+            "count": 2360,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01224999999977
+          },
+          {
+            "variant": "A",
+            "ns": 10622.09489167373,
+            "count": 2354,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0352909999997
+          },
+          {
+            "variant": "B",
+            "ns": 17273.797133977907,
+            "count": 1448,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.09966600000007
+          },
+          {
+            "variant": "A",
+            "ns": 10935.552853082627,
+            "count": 2287,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07687499999975
+          },
+          {
+            "variant": "B",
+            "ns": 17106.414586183284,
+            "count": 1462,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0766249999997
+          },
+          {
+            "variant": "B",
+            "ns": 17311.642214532887,
+            "count": 1445,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1225840000002
+          },
+          {
+            "variant": "A",
+            "ns": 10667.302154436857,
+            "count": 2344,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03324999999995
+          },
+          {
+            "variant": "B",
+            "ns": 17348.279299583915,
+            "count": 1442,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.12975000000006
+          },
+          {
+            "variant": "A",
+            "ns": 10669.950778583627,
+            "count": 2344,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.08291700000018
+          },
+          {
+            "variant": "A",
+            "ns": 10621.62361937129,
+            "count": 2354,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02641600000015
+          },
+          {
+            "variant": "B",
+            "ns": 17109.506839945272,
+            "count": 1462,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1127919999999
+          }
+        ],
+        "summary": {
+          "changePercent": 60.69052772024279,
+          "ci95Percent": [
+            58.24577732518061,
+            63.17304723998674
+          ],
+          "blockChangesPercent": [
+            59.393717724839235,
+            62.225328012064466,
+            59.33124884725882,
+            61.8341930377819
+          ]
+        },
+        "index0Us": 10.699531465077657,
+        "latin1Us": 17.1931335748267,
+        "latin1OverIndex0": 1.6069052772024268
+      },
+      "64K/Chinese/paragraph/LF64": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 39259.41091051808,
+            "count": 637,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06595800000014
+          },
+          {
+            "variant": "B",
+            "ns": 24023.380043227633,
+            "count": 1041,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06670899999972
+          },
+          {
+            "variant": "B",
+            "ns": 24269.257153249284,
+            "count": 1031,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.17283300000008
+          },
+          {
+            "variant": "A",
+            "ns": 39131.0803990611,
+            "count": 639,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03808300000037
+          },
+          {
+            "variant": "B",
+            "ns": 23920.744741873852,
+            "count": 1046,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1687920000004
+          },
+          {
+            "variant": "A",
+            "ns": 39055.55284711398,
+            "count": 641,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.27687500000047
+          },
+          {
+            "variant": "A",
+            "ns": 38942.643496884775,
+            "count": 642,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0094170000002
+          },
+          {
+            "variant": "B",
+            "ns": 23853.76942326018,
+            "count": 1049,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.18083299999944
+          },
+          {
+            "variant": "A",
+            "ns": 39764.08485691579,
+            "count": 629,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.09287500000028
+          },
+          {
+            "variant": "B",
+            "ns": 23849.588894184955,
+            "count": 1049,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.14575000000013
+          },
+          {
+            "variant": "B",
+            "ns": 23992.0402684564,
+            "count": 1043,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1895840000002
+          },
+          {
+            "variant": "A",
+            "ns": 38988.53679906549,
+            "count": 642,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.24512500000037
+          },
+          {
+            "variant": "B",
+            "ns": 23858.470419847363,
+            "count": 1048,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0294160000003
+          },
+          {
+            "variant": "A",
+            "ns": 39482.33773659308,
+            "count": 634,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2544170000001
+          },
+          {
+            "variant": "A",
+            "ns": 38999.05081775692,
+            "count": 642,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.29912499999955
+          },
+          {
+            "variant": "B",
+            "ns": 24674.499753451662,
+            "count": 1014,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15954199999987
+          }
+        ],
+        "summary": {
+          "changePercent": -38.64141509143674,
+          "ci95Percent": [
+            -39.38685501053072,
+            -37.88680751286766
+          ],
+          "blockChangesPercent": [
+            -38.39549265793636,
+            -38.74920252767616,
+            -39.24807059856039,
+            -38.167468292191344
+          ]
+        },
+        "index0Us": 39.201919511178176,
+        "latin1Us": 24.053743069052867,
+        "latin1OverIndex0": 0.6135858490856321
+      },
+      "64K/Chinese/alias100/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 650249.3301282077,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.8777910000008
+          },
+          {
+            "variant": "B",
+            "ns": 180642.19874100664,
+            "count": 139,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.87412499999937
+          },
+          {
+            "variant": "B",
+            "ns": 180520.42176258928,
+            "count": 139,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.7387089999993
+          },
+          {
+            "variant": "A",
+            "ns": 650892.0929487192,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.07833300000038
+          },
+          {
+            "variant": "B",
+            "ns": 180539.0809352522,
+            "count": 139,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.75945800000045
+          },
+          {
+            "variant": "A",
+            "ns": 648474.4935897413,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.32404199999928
+          },
+          {
+            "variant": "A",
+            "ns": 648598.4262820513,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.362709
+          },
+          {
+            "variant": "B",
+            "ns": 182345.59963768112,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.30954199999996
+          },
+          {
+            "variant": "A",
+            "ns": 651140.3589743575,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.15579199999956
+          },
+          {
+            "variant": "B",
+            "ns": 180369.90377697832,
+            "count": 139,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.57133299999987
+          },
+          {
+            "variant": "B",
+            "ns": 181844.4664855078,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.7562910000006
+          },
+          {
+            "variant": "A",
+            "ns": 650517.3621794886,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.96141700000044
+          },
+          {
+            "variant": "B",
+            "ns": 181183.3106884053,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.02637499999946
+          },
+          {
+            "variant": "A",
+            "ns": 650246.1282051282,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.87679200000002
+          },
+          {
+            "variant": "A",
+            "ns": 650770.8333333335,
+            "count": 39,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.04050000000007
+          },
+          {
+            "variant": "B",
+            "ns": 180748.46402877689,
+            "count": 139,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.9922919999999
+          }
+        ],
+        "summary": {
+          "changePercent": -72.15504650986429,
+          "ci95Percent": [
+            -72.30279686022604,
+            -72.0065079872845
+          ],
+          "blockChangesPercent": [
+            -72.24262961459516,
+            -72.02314688550547,
+            -72.17306789623528,
+            -72.18087437550345
+          ]
+        },
+        "index0Us": 650.1104283529928,
+        "latin1Us": 181.02294640941332,
+        "latin1OverIndex0": 0.27844953490135776
+      },
+      "64K/Chinese/alias25/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 175824.95629370646,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.14375000000018
+          },
+          {
+            "variant": "B",
+            "ns": 56230.51264044943,
+            "count": 445,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.18062499999996
+          },
+          {
+            "variant": "B",
+            "ns": 56367.081925675644,
+            "count": 444,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.21587499999987
+          },
+          {
+            "variant": "A",
+            "ns": 175459.20804195863,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.72533400000066
+          },
+          {
+            "variant": "B",
+            "ns": 56202.93792134837,
+            "count": 445,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0824590000002
+          },
+          {
+            "variant": "A",
+            "ns": 175312.6092657338,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.55762499999946
+          },
+          {
+            "variant": "A",
+            "ns": 175173.69580419554,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.39870799999971
+          },
+          {
+            "variant": "B",
+            "ns": 56439.26354401823,
+            "count": 443,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0207500000006
+          },
+          {
+            "variant": "A",
+            "ns": 175934.8409090915,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.26945800000067
+          },
+          {
+            "variant": "B",
+            "ns": 56598.99377828045,
+            "count": 442,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.13404199999968
+          },
+          {
+            "variant": "B",
+            "ns": 56505.50225733615,
+            "count": 443,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2554999999993
+          },
+          {
+            "variant": "A",
+            "ns": 175807.8015734268,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.12412500000028
+          },
+          {
+            "variant": "B",
+            "ns": 56543.97093679475,
+            "count": 443,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.3918330000006
+          },
+          {
+            "variant": "A",
+            "ns": 182053.3288043475,
+            "count": 138,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.9868749999996
+          },
+          {
+            "variant": "A",
+            "ns": 175694.0201048954,
+            "count": 143,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.99395900000036
+          },
+          {
+            "variant": "B",
+            "ns": 56352.6182432432,
+            "count": 444,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.16449999999986
+          }
+        ],
+        "summary": {
+          "changePercent": -68.02344416843727,
+          "ci95Percent": [
+            -68.46802499064495,
+            -67.5725950389822
+          ],
+          "blockChangesPercent": [
+            -67.94686917150406,
+            -67.86123715102984,
+            -67.84453998113271,
+            -68.43742702880954
+          ]
+        },
+        "index0Us": 176.39470371155812,
+        "latin1Us": 56.40495091624604,
+        "latin1OverIndex0": 0.3197655583156273
+      },
+      "64K/Chinese/no-alias/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 33864.914580514116,
+            "count": 739,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.20937499999945
+          },
+          {
+            "variant": "B",
+            "ns": 23966.415229885002,
+            "count": 1044,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.16749999999956
+          },
+          {
+            "variant": "B",
+            "ns": 24009.077135316635,
+            "count": 1042,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.13966699999946
+          },
+          {
+            "variant": "A",
+            "ns": 34920.42021648053,
+            "count": 716,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0241670000005
+          },
+          {
+            "variant": "B",
+            "ns": 23943.346291866004,
+            "count": 1045,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1663749999998
+          },
+          {
+            "variant": "A",
+            "ns": 33938.680291723154,
+            "count": 737,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.10245899999973
+          },
+          {
+            "variant": "A",
+            "ns": 33853.02503382956,
+            "count": 739,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.13908400000037
+          },
+          {
+            "variant": "B",
+            "ns": 23954.91606800764,
+            "count": 1044,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07145899999978
+          },
+          {
+            "variant": "A",
+            "ns": 34495.73275862083,
+            "count": 725,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07525000000078
+          },
+          {
+            "variant": "B",
+            "ns": 24306.137633624905,
+            "count": 1029,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.08812500000022
+          },
+          {
+            "variant": "B",
+            "ns": 23821.48809523804,
+            "count": 1050,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.10049999999956
+          },
+          {
+            "variant": "A",
+            "ns": 34060.222241144395,
+            "count": 734,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00162499999988
+          },
+          {
+            "variant": "B",
+            "ns": 23830.843214285713,
+            "count": 1050,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.179083
+          },
+          {
+            "variant": "A",
+            "ns": 33974.977411684806,
+            "count": 736,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04466700000012
+          },
+          {
+            "variant": "A",
+            "ns": 34016.87925170057,
+            "count": 735,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01924999999937
+          },
+          {
+            "variant": "B",
+            "ns": 24036.478266090366,
+            "count": 1041,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.17579100000057
+          }
+        ],
+        "summary": {
+          "changePercent": -29.748096729513545,
+          "ci95Percent": [
+            -30.351626695791495,
+            -29.139336943744986
+          ],
+          "blockChangesPercent": [
+            -30.245127325409122,
+            -29.344897039952787,
+            -29.800180696814714,
+            -29.599085508935847
+          ]
+        },
+        "index0Us": 34.13882324131644,
+        "latin1Us": 23.983173081171934,
+        "latin1OverIndex0": 0.7025190327048634
+      },
+      "64K/ASCII/LF32": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 29668.600533807923,
+            "count": 843,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0850420000006
+          },
+          {
+            "variant": "B",
+            "ns": 22820.69263229921,
+            "count": 1096,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0918329999995
+          },
+          {
+            "variant": "B",
+            "ns": 23027.197513812167,
+            "count": 1086,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06029200000012
+          },
+          {
+            "variant": "A",
+            "ns": 29662.724940687927,
+            "count": 843,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04541699999936
+          },
+          {
+            "variant": "B",
+            "ns": 22751.79606460427,
+            "count": 1099,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03379100000075
+          },
+          {
+            "variant": "A",
+            "ns": 29603.27292899408,
+            "count": 845,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.11812499999996
+          },
+          {
+            "variant": "A",
+            "ns": 29607.852514792936,
+            "count": 845,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.14908300000025
+          },
+          {
+            "variant": "B",
+            "ns": 23148.88113425929,
+            "count": 1080,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00633300000027
+          },
+          {
+            "variant": "A",
+            "ns": 29709.25489904981,
+            "count": 842,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.12154099999952
+          },
+          {
+            "variant": "B",
+            "ns": 23189.503243744115,
+            "count": 1079,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1717919999992
+          },
+          {
+            "variant": "B",
+            "ns": 23037.988259668524,
+            "count": 1086,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15404200000012
+          },
+          {
+            "variant": "A",
+            "ns": 29672.36298932391,
+            "count": 843,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.11041600000044
+          },
+          {
+            "variant": "B",
+            "ns": 22828.139256386934,
+            "count": 1096,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.15712500000063
+          },
+          {
+            "variant": "A",
+            "ns": 29681.519424673745,
+            "count": 843,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.17216699999972
+          },
+          {
+            "variant": "A",
+            "ns": 29888.857825567506,
+            "count": 837,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.13579200000004
+          },
+          {
+            "variant": "B",
+            "ns": 22789.724817684604,
+            "count": 1097,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00262500000008
+          }
+        ],
+        "summary": {
+          "changePercent": -22.69708191739902,
+          "ci95Percent": [
+            -23.54983856772201,
+            -21.834813267479877
+          ],
+          "blockChangesPercent": [
+            -22.726443511188975,
+            -22.482541286229683,
+            -22.15225221962083,
+            -23.421461601384614
+          ]
+        },
+        "index0Us": 29.686688852791548,
+        "latin1Us": 22.94867676531014,
+        "latin1OverIndex0": 0.7730291808260116
+      },
+      "64K/all-alias-Chinese": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 612504.0640243896,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.9013329999998
+          },
+          {
+            "variant": "B",
+            "ns": 155037.96913580212,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.92920799999956
+          },
+          {
+            "variant": "B",
+            "ns": 155263.9529320992,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.22208300000057
+          },
+          {
+            "variant": "A",
+            "ns": 610827.3628048786,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.3513750000002
+          },
+          {
+            "variant": "B",
+            "ns": 157288.16194968583,
+            "count": 159,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0705420000004
+          },
+          {
+            "variant": "A",
+            "ns": 609674.6041666658,
+            "count": 42,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.8506669999997
+          },
+          {
+            "variant": "A",
+            "ns": 611347.6859756103,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.52204100000017
+          },
+          {
+            "variant": "B",
+            "ns": 155343.200310559,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.082042
+          },
+          {
+            "variant": "A",
+            "ns": 610858.8658536596,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.36170800000036
+          },
+          {
+            "variant": "B",
+            "ns": 156788.34687499973,
+            "count": 160,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.68908399999964
+          },
+          {
+            "variant": "B",
+            "ns": 155586.11568323022,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.39491700000053
+          },
+          {
+            "variant": "A",
+            "ns": 623594.0060975607,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 204.53883399999995
+          },
+          {
+            "variant": "B",
+            "ns": 156671.58203125026,
+            "count": 160,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.53962500000034
+          },
+          {
+            "variant": "A",
+            "ns": 621739.2012195144,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.93045800000073
+          },
+          {
+            "variant": "A",
+            "ns": 611929.8780487825,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.71300000000065
+          },
+          {
+            "variant": "B",
+            "ns": 155141.75077160497,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.06370900000002
+          }
+        ],
+        "summary": {
+          "changePercent": -74.61268646690422,
+          "ci95Percent": [
+            -74.84764319885059,
+            -74.37553492409685
+          ],
+          "blockChangesPercent": [
+            -74.6346636378936,
+            -74.39640470531165,
+            -74.694151543731,
+            -74.72422365739445
+          ]
+        },
+        "index0Us": 614.038807896552,
+        "latin1Us": 155.88795737558053,
+        "latin1OverIndex0": 0.25387313533095646
+      },
+      "64K/all-alias-U010A-U010D": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 611269.4359756089,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.49637499999972
+          },
+          {
+            "variant": "B",
+            "ns": 155826.44254658397,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.70445800000016
+          },
+          {
+            "variant": "B",
+            "ns": 160263.65544871843,
+            "count": 156,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0090420000006
+          },
+          {
+            "variant": "A",
+            "ns": 616087.9085365867,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.07683400000042
+          },
+          {
+            "variant": "B",
+            "ns": 155940.1847826087,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.850958
+          },
+          {
+            "variant": "A",
+            "ns": 614398.50304878,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.52270899999985
+          },
+          {
+            "variant": "A",
+            "ns": 610245.5548780476,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.16054199999962
+          },
+          {
+            "variant": "B",
+            "ns": 155907.3819875773,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.80870799999957
+          },
+          {
+            "variant": "A",
+            "ns": 613091.7164634145,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.09408299999996
+          },
+          {
+            "variant": "B",
+            "ns": 155210.22993827198,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.15245800000048
+          },
+          {
+            "variant": "B",
+            "ns": 155286.78183229855,
+            "count": 161,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00937500000055
+          },
+          {
+            "variant": "A",
+            "ns": 620893.0396341474,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 203.65291700000034
+          },
+          {
+            "variant": "B",
+            "ns": 155012.34567901213,
+            "count": 162,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.89599999999973
+          },
+          {
+            "variant": "A",
+            "ns": 615504.826219513,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 201.88558300000022
+          },
+          {
+            "variant": "A",
+            "ns": 616989.9634146338,
+            "count": 41,
+            "documentsPerOperation": 8,
+            "elapsedMs": 202.37270799999988
+          },
+          {
+            "variant": "B",
+            "ns": 157420.43396226352,
+            "count": 159,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.2387919999992
+          }
+        ],
+        "summary": {
+          "changePercent": -74.56904608155648,
+          "ci95Percent": [
+            -74.95799772191492,
+            -74.17405325579851
+          ],
+          "blockChangesPercent": [
+            -74.2486253759022,
+            -74.53551044922106,
+            -74.83735467376545,
+            -74.65111181564701
+          ]
+        },
+        "index0Us": 614.8019590879837,
+        "latin1Us": 156.35000290535325,
+        "latin1OverIndex0": 0.2543095391844354
+      },
+      "64K/Chinese/no-alias/no-newlines": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 6146.716752704022,
+            "count": 4068,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0387499999997
+          },
+          {
+            "variant": "B",
+            "ns": 14801.328254437864,
+            "count": 1690,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1139579999999
+          },
+          {
+            "variant": "B",
+            "ns": 14809.166518650096,
+            "count": 1689,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.1014580000001
+          },
+          {
+            "variant": "A",
+            "ns": 6112.010358103156,
+            "count": 4091,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03387500000008
+          },
+          {
+            "variant": "B",
+            "ns": 14841.091765578642,
+            "count": 1685,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0579170000001
+          },
+          {
+            "variant": "A",
+            "ns": 6143.501750614233,
+            "count": 4070,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03241699999944
+          },
+          {
+            "variant": "A",
+            "ns": 6121.967342066599,
+            "count": 4084,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01691699999992
+          },
+          {
+            "variant": "B",
+            "ns": 14773.356024807998,
+            "count": 1693,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.09033399999953
+          },
+          {
+            "variant": "A",
+            "ns": 6166.942895905279,
+            "count": 4054,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00629200000003
+          },
+          {
+            "variant": "B",
+            "ns": 14865.824985136742,
+            "count": 1682,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.034541
+          },
+          {
+            "variant": "B",
+            "ns": 14824.15782454062,
+            "count": 1687,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0668340000002
+          },
+          {
+            "variant": "A",
+            "ns": 6131.544261893084,
+            "count": 4078,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03549999999996
+          },
+          {
+            "variant": "B",
+            "ns": 14807.183762581399,
+            "count": 1689,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07466699999986
+          },
+          {
+            "variant": "A",
+            "ns": 6287.870441398388,
+            "count": 3976,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0045829999999
+          },
+          {
+            "variant": "A",
+            "ns": 6130.45859892129,
+            "count": 4079,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04912499999955
+          },
+          {
+            "variant": "B",
+            "ns": 14815.313981042638,
+            "count": 1688,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0659999999998
+          }
+        ],
+        "summary": {
+          "changePercent": 140.73736856127073,
+          "ci95Percent": [
+            138.42398743317682,
+            143.07319597214612
+          ],
+          "blockChangesPercent": [
+            141.54720257262358,
+            141.44544122031306,
+            141.41242882655993,
+            138.55767242758168
+          ]
+        },
+        "index0Us": 6.154904624521967,
+        "latin1Us": 14.817155430530123,
+        "latin1OverIndex0": 2.407373685612704
+      },
+      "64K/ASCII/no-newlines": {
+        "runs": [
+          {
+            "variant": "A",
+            "ns": 2765.3415689636113,
+            "count": 9041,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0116250000001
+          },
+          {
+            "variant": "B",
+            "ns": 14089.512887323932,
+            "count": 1775,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.07108299999982
+          },
+          {
+            "variant": "B",
+            "ns": 14112.640519187373,
+            "count": 1772,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06079200000022
+          },
+          {
+            "variant": "A",
+            "ns": 2797.322527411059,
+            "count": 8938,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.01975000000039
+          },
+          {
+            "variant": "B",
+            "ns": 14122.926665725545,
+            "count": 1771,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.09362499999952
+          },
+          {
+            "variant": "A",
+            "ns": 2781.143395439381,
+            "count": 8990,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0198330000003
+          },
+          {
+            "variant": "A",
+            "ns": 2768.000235274586,
+            "count": 9032,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0046250000005
+          },
+          {
+            "variant": "B",
+            "ns": 14119.482848673062,
+            "count": 1771,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04483299999993
+          },
+          {
+            "variant": "A",
+            "ns": 2773.833629202263,
+            "count": 9013,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0045
+          },
+          {
+            "variant": "B",
+            "ns": 14151.401245048059,
+            "count": 1767,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.04420799999934
+          },
+          {
+            "variant": "B",
+            "ns": 14176.841269841301,
+            "count": 1764,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.06358400000045
+          },
+          {
+            "variant": "A",
+            "ns": 2762.9339364640923,
+            "count": 9050,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.03641700000026
+          },
+          {
+            "variant": "B",
+            "ns": 14075.46665728756,
+            "count": 1777,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.09683399999994
+          },
+          {
+            "variant": "A",
+            "ns": 2766.190321420668,
+            "count": 9038,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.00662499999999
+          },
+          {
+            "variant": "A",
+            "ns": 2764.592308968264,
+            "count": 9043,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0016660000001
+          },
+          {
+            "variant": "B",
+            "ns": 14140.59551753393,
+            "count": 1768,
+            "documentsPerOperation": 8,
+            "elapsedMs": 200.0045829999999
+          }
+        ],
+        "summary": {
+          "changePercent": 409.43530060139676,
+          "ci95Percent": [
+            406.3203764578466,
+            412.5693880116673
+          ],
+          "blockChangesPercent": [
+            406.99825723695096,
+            408.9521987795308,
+            411.6394294589737,
+            410.1626672433169
+          ]
+        },
+        "index0Us": 2.7723982210418336,
+        "latin1Us": 14.123575211232252,
+        "latin1OverIndex0": 5.0943530060139715
+      }
+    }
+  },
+  "sourceSnapshots": {
+    "latin1": {
+      "$text": "84b1ce3f27391a38066423605f27aa955dc61c27f670c2b95ff2aa53754cc9a2",
+      "utf8Bytes": 19991
+    },
+    "index0": {
+      "$text": "5ef75178c5df59f62fe1d155d12691e9ea72dbc8bce321288f847d0dee81f730",
+      "utf8Bytes": 19888
+    }
+  },
+  "harnessSource": {
+    "$text": "65044e2e1472dfd90b8834cc0112241865b9e53d4d4de64aa525db1744f3e0af",
+    "utf8Bytes": 7056
+  },
+  "buildSource": {
+    "$text": "6e6df6290d6c72965c7e9e0fdf0d7bfbeb477ec54ce7fb44eb50faa96755f381",
+    "utf8Bytes": 785
+  }
+}
