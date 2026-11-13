@@ -23,6 +23,14 @@ export interface SourceLocator {
   positionAt: (start: number, end: number) => SourcePosition;
 }
 
+export function cloneLocation(location: SourceLocation): SourceLocation {
+  return {
+    line: location.line,
+    column: location.column,
+    offset: location.offset,
+  };
+}
+
 function containingSegment(segments: number[], offset: number): number {
   let low = 0;
   let high = segments.length >>> 1;

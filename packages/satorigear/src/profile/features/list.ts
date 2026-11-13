@@ -3,7 +3,7 @@ import { type BlockLines, IndentedLine, lineIndentOffset } from "../../block/lin
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
-import { firstChildStart, lastChildEnd } from "../../fragment/node.ts";
+import { cloneLocation, type SourceLocation } from "../../source-view.ts";
 import { isThematicBreak } from "./break.ts";
 import type { BlockStart } from "../../block/profile.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -197,9 +197,9 @@ function hasTaskListContent(
 const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
   const markerKind = tokens.kind(tokenStart);
+  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   const start = context.locator.locationAt(tokens.start(tokenStart));
   const children = buildBlockChildren<ListItem["children"][number]>(tokenStart, context);
-  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   return {
     type: "listItem",
     spread: tokens.kind(close) === BlockKind.ListItemSpreadClose,
@@ -209,7 +209,9 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
     children,
     position: {
       start,
-      end: lastChildEnd(children) ?? context.locator.locationAt(tokens.end(close)),
+      end: children.length
+        ? cloneLocation(children.at(-1)!.position!.end as SourceLocation)
+        : context.locator.locationAt(tokens.end(close)),
     },
   };
 };
@@ -228,16 +230,17 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context) => {
     const tokens = context.structure.tokens;
     const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-    const items = buildBlockChildren<ListItem>(tokenStart, context);
+    const start = context.locator.locationAt(tokens.start(tokenStart));
+    const children = buildBlockChildren<ListItem>(tokenStart, context);
     return {
       type: "list",
       ordered,
       start: ordered ? listStartNumber(context.source, tokens, tokenStart) : null,
       spread: tokens.kind(close) === BlockKind.ListSpreadClose,
-      children: items,
+      children,
       position: {
-        start: firstChildStart(items),
-        end: lastChildEnd(items)!,
+        start,
+        end: cloneLocation(children.at(-1)!.position!.end as SourceLocation),
       },
     };
   };
@@ -323,9 +326,11 @@ const listStart: BlockStart = (source, lines, tokens, start, contentOffset, cont
       index++;
     }
     const itemSpread = context.scanLines(source, itemLines, tokens);
-    listEnd = itemLines.next(itemLines.length - 1);
+    // Close positions exclude the terminal line ending; outer list scans retain it.
+    const itemEnd = itemLines.length ? itemLines.end(itemLines.length - 1) : marker.end;
     // A frame's blank-separation summary is known only when its close is emitted.
-    tokens.push(itemSpread ? BlockKind.ListItemSpreadClose : BlockKind.ListItemClose, listEnd, listEnd);
+    tokens.push(itemSpread ? BlockKind.ListItemSpreadClose : BlockKind.ListItemClose, itemEnd, itemEnd);
+    listEnd = itemEnd;
     marker = sibling;
   }
   tokens.push(listSpread ? BlockKind.ListSpreadClose : BlockKind.ListClose, listEnd, listEnd);

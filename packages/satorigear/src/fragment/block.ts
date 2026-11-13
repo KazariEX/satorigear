@@ -21,13 +21,6 @@ export type BlockNodeBuilder<T extends object = Node> = (
   context: BlockBuildContext,
 ) => T;
 
-export function blockEnd(tokenStart: number, context: BlockBuildContext): number {
-  const tokens = context.structure.tokens;
-  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
-  // Containers retain a structural closing boundary; leaves own their complete span.
-  return tokens.end(close);
-}
-
 export function leafBlockPosition(
   tokenStart: number,
   context: BlockBuildContext,

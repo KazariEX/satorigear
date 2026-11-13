@@ -7,7 +7,7 @@ import {
 } from "../../../block/lines.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
-import { blockEnd, buildBlockChildren } from "../../../fragment/block.ts";
+import { buildBlockChildren } from "../../../fragment/block.ts";
 import { semanticText } from "../../utils.ts";
 import { type FootnoteLabel, footnoteLabelAt } from "./shared.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
@@ -47,10 +47,11 @@ export const blockBuilds: BlockFeature["builds"] = [
     token: BlockKind.FootnoteDefinitionOpen,
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
-      // This rule only builds openers emitted with their parsed definition fields.
-      const fields = tokens.value<FootnoteDefinitionFields>(tokenStart)!;
+      const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
       const start = context.locator.locationAt(tokens.start(tokenStart));
       const children = buildBlockChildren<FootnoteDefinition["children"][number]>(tokenStart, context);
+      // This rule only builds openers emitted with their parsed definition fields.
+      const fields = tokens.value<FootnoteDefinitionFields>(tokenStart)!;
       return {
         type: "footnoteDefinition",
         identifier: fields.normalizedLabel,
@@ -58,7 +59,7 @@ export const blockBuilds: BlockFeature["builds"] = [
         children,
         position: {
           start,
-          end: context.locator.locationAt(blockEnd(tokenStart, context)),
+          end: context.locator.locationAt(tokens.end(close)),
         },
       };
     },

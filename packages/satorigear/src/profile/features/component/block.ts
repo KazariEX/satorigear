@@ -430,14 +430,14 @@ export const blockBuilds: BlockFeature["builds"] = [
       return {
         type: "blockComponent",
         name: "template",
-        attributes: {
-          ...parsed,
-          name: normalizeComponentName(tokens.text(context.source, tokenStart).slice(1).trim()),
-        },
         children,
         position: {
           start,
           end: context.locator.locationAt(tokens.end(close)),
+        },
+        attributes: {
+          ...parsed,
+          name: normalizeComponentName(tokens.text(context.source, tokenStart).slice(1).trim()),
         },
       };
     },

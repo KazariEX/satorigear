@@ -7,7 +7,7 @@ import {
 } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
-import { blockEnd, buildBlockChildren } from "../../fragment/block.ts";
+import { buildBlockChildren } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface BlockQuoteMarker {
@@ -43,6 +43,7 @@ export const feature: SyntaxFeature = {
         token: BlockKind.BlockQuoteOpen,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
+          const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
           const start = context.locator.locationAt(tokens.start(tokenStart));
           const children = buildBlockChildren<Blockquote["children"][number]>(tokenStart, context);
           return {
@@ -50,7 +51,7 @@ export const feature: SyntaxFeature = {
             children,
             position: {
               start,
-              end: context.locator.locationAt(blockEnd(tokenStart, context)),
+              end: context.locator.locationAt(tokens.end(close)),
             },
           };
         },
@@ -104,7 +105,7 @@ export const feature: SyntaxFeature = {
           }
           tokens.push(BlockKind.BlockQuoteOpen, contentOffset, contentOffset + 1);
           context.scanLines(source, quoteLines, tokens);
-          const end = quoteLines.next(quoteLines.length - 1);
+          const end = quoteLines.end(quoteLines.length - 1);
           tokens.push(BlockKind.BlockQuoteClose, end, end);
           return index;
         },

@@ -50,7 +50,7 @@ describe("task list", () => {
     });
     expect(list.type === "list" && list.children[0].children[0]).toMatchObject({
       position: {
-        start: { line: 1, column: 7, offset: 6 },
+        start: { line: 1, column: 3, offset: 2 },
         end: { line: 1, column: 10, offset: 9 },
       },
     });

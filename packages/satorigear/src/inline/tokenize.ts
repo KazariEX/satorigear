@@ -15,7 +15,7 @@ export interface InlineScanRule {
   scan: InlineScanner;
 }
 
-export type InlineTokenizer = (source: string, hasWhitespaceBreak?: boolean) => InlineTokenStream;
+export type InlineTokenizer = (source: string, withBoundaryBreak?: boolean) => InlineTokenStream;
 
 export function matchInlinePatternEnd(pattern: RegExp, source: string, start: number): number {
   pattern.lastIndex = start;

@@ -106,11 +106,7 @@ function appendText(
   end: number,
   literal: boolean,
 ): void {
-  if (output.pendingText !== void 0 && !("attributes" in output.pendingText)) {
-    output.pendingText.value += value;
-    output.pendingLiteral = literal ? output.pendingLiteral + value : "";
-  }
-  else {
+  if (output.pendingText === void 0 || "attributes" in output.pendingText) {
     const startLocation = context.locator.locationAt(context.view.mapOffset(start));
     const text: Text = {
       type: "text",
@@ -121,21 +117,32 @@ function appendText(
     output.pendingText = text;
     output.pendingLiteral = literal ? value : "";
   }
+  else {
+    output.pendingText.value += value;
+    output.pendingLiteral = literal ? output.pendingLiteral + value : "";
+  }
   output.pendingEnd = end;
 }
 
-function finishText(output: InlineOutput, context: InlineBuildContext): void {
-  const text = output.pendingText;
-  if (text) {
-    text.position!.end = context.locator.locationAt(context.view.mapEnd(output.pendingEnd));
+function finishText(context: InlineBuildContext, output: InlineOutput): void {
+  if (output.pendingText) {
+    output.pendingText.position!.end = context.locator.locationAt(
+      context.view.mapEnd(output.pendingEnd),
+    );
   }
 }
 
-function trimTrailingText(output: InlineOutput): void {
+function trimTrailingText(context: InlineBuildContext, output: InlineOutput): void {
   if (output.pendingText) {
     const literal = output.pendingLiteral;
     const removed = literal.length - trimLineWhitespaceEnd(literal, 0, literal.length);
     if (removed > 0) {
+      // Removing an all-whitespace pending gap must also move its source start.
+      if (removed === output.pendingText.value.length) {
+        output.pendingText.position!.start = context.locator.locationAt(
+          context.view.mapOffset(output.pendingEnd),
+        );
+      }
       output.pendingText.value = output.pendingText.value.slice(0, -removed);
       output.pendingEnd -= removed;
       output.pendingLiteral = "";
@@ -166,7 +173,7 @@ function appendLeaf(
   }
   const sourceStart = context.view.mapOffset(start);
   const sourceEnd = start === end ? sourceStart : context.view.mapEnd(end);
-  finishText(output, context);
+  finishText(context, output);
   output.children.push(build(
     token,
     context.locator.positionAt(sourceStart, sourceEnd),
@@ -194,7 +201,7 @@ function appendRange(
       if (endingStart > output.cursor) {
         appendGap(context, output, output.cursor, endingStart);
       }
-      trimTrailingText(output);
+      trimTrailingText(context, output);
       appendText(context, output, "\n", endingStart, contentStart, false);
       output.cursor = contentStart;
       index++;
@@ -226,12 +233,12 @@ function appendRange(
       if (childStart > output.cursor) {
         appendGap(context, output, output.cursor, childStart);
       }
-      finishText(output, context);
+      finishText(context, output);
       index = appendPair(profile, context, output, index, endToken, build as InlinePairBuilder);
       continue;
     }
     const childEnd = inlineTokenEnd(context.tokens, index);
-    finishText(output, context);
+    finishText(context, output);
     const sourceStart = context.view.mapOffset(childStart);
     const sourceSpan = {
       start: sourceStart,
@@ -252,12 +259,12 @@ function appendRange(
   }
   // Every range closes its own projection; only a fragment boundary owns final trimming.
   if (startToken === 0) {
-    trimTrailingText(output);
+    trimTrailingText(context, output);
     if (output.pendingText && !output.pendingText.value) {
       output.children.pop();
     }
   }
-  finishText(output, context);
+  finishText(context, output);
   return index;
 }
 

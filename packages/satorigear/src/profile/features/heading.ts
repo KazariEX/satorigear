@@ -3,7 +3,6 @@ import { type BlockLines, trimLineWhitespaceEnd, trimLineWhitespaceStart } from 
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
-import { firstChildStart } from "../../fragment/node.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 function atxMarkerEnd(source: string, markerOffset: number, lineEnd: number): number {
@@ -58,14 +57,14 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const kind = tokens.kind(tokenStart);
+          const start = context.locator.locationAt(tokens.start(tokenStart));
           const inline = buildInlineFragment(tokenStart, false, context);
-          const children = inline.children;
           const result: Heading = {
             type: "heading",
             depth: kind - BlockKind.AtxHeading1Open + 1 as Heading["depth"],
-            children,
+            children: inline.children,
             position: {
-              start: context.locator.locationAt(tokens.start(tokenStart)),
+              start,
               end: context.locator.locationAt(tokens.end(tokenStart)),
             },
           };
@@ -83,14 +82,14 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           const kind = tokens.kind(tokenStart);
+          const start = context.locator.locationAt(tokens.start(tokenStart));
           const inline = buildInlineFragment(tokenStart, false, context);
-          const children = inline.children;
           const result: Heading = {
             type: "heading",
             depth: kind - BlockKind.SetextHeading1Open + 1 as Heading["depth"],
-            children,
+            children: inline.children,
             position: {
-              start: firstChildStart(children),
+              start,
               end: context.locator.locationAt(tokens.end(tokenStart)),
             },
           };
