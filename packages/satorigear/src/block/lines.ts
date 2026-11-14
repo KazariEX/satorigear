@@ -1,3 +1,4 @@
+import type { Buffer } from "node:buffer";
 import { Character } from "../constants/character.ts";
 import type { SourceLocation, SourceLocator, SourcePosition } from "../source-view.ts";
 
@@ -13,15 +14,262 @@ const enum BlockLineState {
   Lazy = 1,
 }
 
-const enum BlockLineCapacity {
-  Initial = 4,
-  DoublingLimit = 16,
-}
-
 export const enum IndentedLine {
   Underindented = -1,
   Blank,
   Appended,
+}
+
+function growLineFields(fields: Int32Array, fieldLength: number): Int32Array {
+  if (fieldLength <= fields.length) {
+    return fields;
+  }
+  let capacity = fields.length / BlockLineField.Stride;
+  while (capacity < fieldLength / BlockLineField.Stride) {
+    capacity += capacity < 16 ? Math.max(4, capacity) : capacity >>> 1;
+  }
+  const next = new Int32Array(capacity * BlockLineField.Stride);
+  next.set(fields);
+  return next;
+}
+
+class Latin1 {
+  static minimum = 2048;
+  static scratchBytes: Buffer | undefined;
+  static scratchWords: Uint32Array | undefined;
+  static scratchLimit = 0;
+
+  static prepare(limit: number): boolean {
+    if (this.scratchLimit < limit) {
+      // eslint-disable-next-line node/prefer-global/buffer
+      const Buffer = globalThis.Buffer;
+      const alloc = Buffer?.allocUnsafeSlow ?? Buffer?.allocUnsafe;
+      if (alloc === void 0) {
+        return false;
+      }
+      // Shift a pooled or odd offset onto a 4-byte boundary instead of giving up.
+      const raw = alloc(limit + 3);
+      const align = 4 - (raw.byteOffset & 3) & 3;
+      const bytes = raw.subarray(align, align + limit);
+      if (bytes.byteOffset & 3) {
+        return false;
+      }
+      this.scratchBytes = bytes;
+      this.scratchWords = new Uint32Array(bytes.buffer, bytes.byteOffset, limit >>> 2);
+      this.scratchLimit = limit;
+    }
+    return true;
+  }
+
+  // eslint-disable-next-line ts/explicit-function-return-type
+  static scan(source: string, fields: Int32Array) {
+    const bytes = this.scratchBytes!;
+    const words = this.scratchWords!;
+    const limit = source.length;
+    bytes.write(source, 0, limit, "latin1");
+    let field = 0;
+    let start = 0;
+    let normalized = true;
+    const wordLimit = limit & ~7;
+    let cursor = 0;
+    while (cursor < wordLimit) {
+      // One input unit can emit at most one row. The available output capacity
+      // bounds a safe input block, so the word loop needs no per-row growth check.
+      fields = growLineFields(fields, field + 8 * BlockLineField.Stride);
+      const wordEnd = Math.min(wordLimit, cursor + ((fields.length - field) / BlockLineField.Stride & ~7));
+      for (; cursor < wordEnd; cursor += 8) {
+        const word0 = words[cursor >>> 2];
+        const mixed0 = word0 ^ (word0 & 0x01010101) * 7 ^ 0x0A0A0A0A;
+        const mask0 = mixed0 - 0x01010101 & ~mixed0 & 0x80808080;
+        const word1 = words[(cursor >>> 2) + 1];
+        const mixed1 = word1 ^ (word1 & 0x01010101) * 7 ^ 0x0A0A0A0A;
+        const mask1 = mixed1 - 0x01010101 & ~mixed1 & 0x80808080;
+        if (mask0 !== 0) {
+          if (mask0 & 0x80) {
+            const at = cursor;
+            const code = source.charCodeAt(at);
+            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                normalized = false;
+                if (source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                }
+              }
+              fields[field++] = start;
+              fields[field++] = at;
+              fields[field++] = next;
+              fields[field++] = 0;
+              start = next;
+            }
+          }
+          if (mask0 & 0x8000) {
+            const at = cursor + 1;
+            const code = source.charCodeAt(at);
+            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                normalized = false;
+                if (source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                }
+              }
+              fields[field++] = start;
+              fields[field++] = at;
+              fields[field++] = next;
+              fields[field++] = 0;
+              start = next;
+            }
+          }
+          if (mask0 & 0x800000) {
+            const at = cursor + 2;
+            const code = source.charCodeAt(at);
+            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                normalized = false;
+                if (source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                }
+              }
+              fields[field++] = start;
+              fields[field++] = at;
+              fields[field++] = next;
+              fields[field++] = 0;
+              start = next;
+            }
+          }
+          if (mask0 & 0x80000000) {
+            const at = cursor + 3;
+            const code = source.charCodeAt(at);
+            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                normalized = false;
+                if (source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                }
+              }
+              fields[field++] = start;
+              fields[field++] = at;
+              fields[field++] = next;
+              fields[field++] = 0;
+              start = next;
+            }
+          }
+        }
+        if (mask1 !== 0) {
+          if (mask1 & 0x80) {
+            const at = cursor + 4;
+            const code = source.charCodeAt(at);
+            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                normalized = false;
+                if (source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                }
+              }
+              fields[field++] = start;
+              fields[field++] = at;
+              fields[field++] = next;
+              fields[field++] = 0;
+              start = next;
+            }
+          }
+          if (mask1 & 0x8000) {
+            const at = cursor + 5;
+            const code = source.charCodeAt(at);
+            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                normalized = false;
+                if (source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                }
+              }
+              fields[field++] = start;
+              fields[field++] = at;
+              fields[field++] = next;
+              fields[field++] = 0;
+              start = next;
+            }
+          }
+          if (mask1 & 0x800000) {
+            const at = cursor + 6;
+            const code = source.charCodeAt(at);
+            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                normalized = false;
+                if (source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                }
+              }
+              fields[field++] = start;
+              fields[field++] = at;
+              fields[field++] = next;
+              fields[field++] = 0;
+              start = next;
+            }
+          }
+          if (mask1 & 0x80000000) {
+            const at = cursor + 7;
+            const code = source.charCodeAt(at);
+            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                normalized = false;
+                if (source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                }
+              }
+              fields[field++] = start;
+              fields[field++] = at;
+              fields[field++] = next;
+              fields[field++] = 0;
+              start = next;
+            }
+          }
+        }
+      }
+    }
+    const tail = limit - cursor || (start < limit ? 1 : 0);
+    fields = growLineFields(fields, field + tail * BlockLineField.Stride);
+    for (; cursor < limit; cursor++) {
+      if (cursor < start) {
+        continue;
+      }
+      const code = source.charCodeAt(cursor);
+      let next = cursor + 1;
+      if (code === Character.CarriageReturn) {
+        normalized = false;
+        if (source.charCodeAt(next) === Character.LineFeed) {
+          next++;
+        }
+      }
+      else if (code !== Character.LineFeed) {
+        continue;
+      }
+      fields[field++] = start;
+      fields[field++] = cursor;
+      fields[field++] = next;
+      fields[field++] = 0;
+      start = next;
+    }
+    if (start < limit) {
+      fields[field++] = start;
+      fields[field++] = limit;
+      fields[field++] = limit;
+      fields[field++] = 0;
+    }
+
+    return {
+      count: field / BlockLineField.Stride,
+      fields,
+      normalized,
+    };
+  }
 }
 
 export class BlockLines implements SourceLocator {
@@ -31,16 +279,16 @@ export class BlockLines implements SourceLocator {
   // Projected views omit source ownership, so a positive length also proves physical contiguity.
   #sourceLength: number;
   // Once false, edits keep this conservative rather than rescanning retained source.
-  #lineEndingsNormalized = true;
+  #normalized = true;
 
-  constructor(sourceLength = 0, lineCapacity: number = BlockLineCapacity.Initial) {
+  constructor(sourceLength: number, capacity: number) {
     this.#sourceLength = sourceLength;
-    this.#fields = new Int32Array(lineCapacity * BlockLineField.Stride);
+    this.#fields = new Int32Array(capacity * BlockLineField.Stride);
   }
 
   static from(source: string, start: number, limit: number): BlockLines {
     const sourceLength = source.length;
-    // Scan partial ranges in isolation because String#indexOf cannot take an end bound.
+    // Isolate partial ranges so a CR at the limit cannot consume an LF outside the view.
     if (start > 0 || limit < sourceLength) {
       source = source.slice(start, limit);
     }
@@ -60,8 +308,8 @@ export class BlockLines implements SourceLocator {
   scan(source: string): this {
     this.#sourceLength = source.length;
     this.#locatorField = 0;
-    const lineCapacity = Math.min((source.length + 15) >>> 4, 16384);
-    this.#ensureCapacity(lineCapacity * BlockLineField.Stride);
+    const capacity = Math.min((source.length + 15) >>> 4, 16384);
+    this.#fields = growLineFields(this.#fields, capacity * BlockLineField.Stride);
     this.#length = BlockLines.#scan(source, this);
     return this;
   }
@@ -72,10 +320,16 @@ export class BlockLines implements SourceLocator {
    */
   static #scan(source: string, lines: BlockLines): number {
     const limit = source.length;
+    if (limit >= Latin1.minimum && Latin1.prepare(limit)) {
+      const { count, fields, normalized } = Latin1.scan(source, lines.#fields);
+      lines.#fields = fields;
+      lines.#normalized = normalized;
+      return count;
+    }
     let start = 0;
     let lineFeed = source.indexOf("\n");
     let carriageReturn = source.indexOf("\r");
-    lines.#lineEndingsNormalized = carriageReturn < 0;
+    lines.#normalized = carriageReturn < 0;
     // Physical lines initialize all packed fields in one sequential write run.
     let field = 0;
     let fields = lines.#fields;
@@ -98,7 +352,7 @@ export class BlockLines implements SourceLocator {
         lineFeed = source.indexOf("\n", next);
       }
       if (field >= fields.length) {
-        lines.#ensureCapacity(field + BlockLineField.Stride);
+        lines.#fields = growLineFields(lines.#fields, field + BlockLineField.Stride);
         fields = lines.#fields;
       }
       fields[field++] = start;
@@ -157,7 +411,7 @@ export class BlockLines implements SourceLocator {
 
   /** Normalizes a fragment only when retained source may contain carriage returns. */
   normalizeLineEndings(value: string): string {
-    return this.#lineEndingsNormalized || !value.includes("\r")
+    return this.#normalized || !value.includes("\r")
       ? value
       : value.replace(/\r\n|\r/g, "\n");
   }
@@ -224,7 +478,7 @@ export class BlockLines implements SourceLocator {
     const field = this.#length * BlockLineField.Stride;
     let fields = this.#fields;
     if (field >= fields.length) {
-      this.#ensureCapacity(field + BlockLineField.Stride);
+      this.#fields = growLineFields(this.#fields, field + BlockLineField.Stride);
       fields = this.#fields;
     }
     const state = prefixColumns * 2 + (lazy ? BlockLineState.Lazy : 0);
@@ -303,7 +557,7 @@ export class BlockLines implements SourceLocator {
       end * BlockLineField.Stride,
     );
     result.#length = end - start;
-    result.#lineEndingsNormalized = this.#lineEndingsNormalized;
+    result.#normalized = this.#normalized;
     return result;
   }
 
@@ -312,7 +566,7 @@ export class BlockLines implements SourceLocator {
     const next = new BlockLines(this.#sourceLength, 0);
     next.#fields = this.#fields.slice(0, this.#length * BlockLineField.Stride);
     next.#length = this.#length;
-    next.#lineEndingsNormalized = this.#lineEndingsNormalized;
+    next.#normalized = this.#normalized;
     return next;
   }
 
@@ -345,7 +599,7 @@ export class BlockLines implements SourceLocator {
       for (let field = 0; field < fieldLength; field++) {
         next.#fields[target + field] = changed.#fields[field];
       }
-      next.#lineEndingsNormalized &&= changed.#lineEndingsNormalized;
+      next.#normalized &&= changed.#normalized;
       return next;
     }
     const next = new BlockLines(
@@ -360,7 +614,7 @@ export class BlockLines implements SourceLocator {
     if (delta !== 0) {
       next.#shiftPositions(suffixStart, delta);
     }
-    next.#lineEndingsNormalized = this.#lineEndingsNormalized && changed.#lineEndingsNormalized;
+    next.#normalized = this.#normalized && changed.#normalized;
     return next;
   }
 
@@ -379,27 +633,9 @@ export class BlockLines implements SourceLocator {
     const sourceEnd = end * BlockLineField.Stride;
     const targetStart = this.#length * BlockLineField.Stride;
     const targetEnd = targetStart + sourceEnd - sourceStart;
-    this.#ensureCapacity(targetEnd);
+    this.#fields = growLineFields(this.#fields, targetEnd);
     this.#fields.set(lines.#fields.subarray(sourceStart, sourceEnd), targetStart);
     this.#length += end - start;
-  }
-
-  #ensureCapacity(fieldLength: number): void {
-    const fields = this.#fields;
-    if (fieldLength <= fields.length) {
-      return;
-    }
-    let lineCapacity = fields.length / BlockLineField.Stride;
-    const requiredLines = fieldLength / BlockLineField.Stride;
-    // Allocate four lines initially, double through 16, then grow by 50%.
-    while (lineCapacity < requiredLines) {
-      lineCapacity += lineCapacity < BlockLineCapacity.DoublingLimit
-        ? Math.max(BlockLineCapacity.Initial, lineCapacity)
-        : lineCapacity >>> 1;
-    }
-    const nextFields = new Int32Array(lineCapacity * BlockLineField.Stride);
-    nextFields.set(fields);
-    this.#fields = nextFields;
   }
 
   #shiftPositions(start: number, delta: number): void {
