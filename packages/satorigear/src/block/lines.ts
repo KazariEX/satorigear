@@ -62,218 +62,92 @@ class Latin1 {
 
   static scan(source: string, fields: Int32Array): ScanningResult {
     const limit = source.length;
-    if (this.scratchLimit < limit) {
-      const bytes = this.alloc(limit);
+    const wordLimit = limit + 7 & ~7;
+    if (this.scratchLimit < wordLimit) {
+      const bytes = this.alloc(wordLimit);
       this.scratchBytes = bytes;
-      this.scratchWords = new Uint32Array(bytes.buffer, bytes.byteOffset, limit >>> 2);
-      this.scratchLimit = limit;
+      this.scratchWords = new Uint32Array(bytes.buffer, bytes.byteOffset, wordLimit >>> 2);
+      this.scratchLimit = wordLimit;
     }
 
     const bytes = this.scratchBytes!;
     const words = this.scratchWords!;
+    // Clear the final block before copying so padding cannot emit newline events.
+    words[(wordLimit >>> 2) - 2] = 0;
+    words[(wordLimit >>> 2) - 1] = 0;
     bytes.write(source, 0, limit, "latin1");
     let field = 0;
     let start = 0;
     let cursor = 0;
-    let normalized = true;
-    const wordLimit = limit & ~7;
+    let crnext = -1;
     while (cursor < wordLimit) {
-      // One input unit can emit at most one row. The available output capacity
-      // bounds a safe input block, so the word loop needs no per-row growth check.
-      fields = growLineFields(fields, field + 8 * BlockLineField.Stride);
-      const wordEnd = Math.min(wordLimit, cursor + ((fields.length - field) / BlockLineField.Stride & ~7));
-      for (; cursor < wordEnd; cursor += 8) {
-        const word0 = words[cursor >>> 2];
+      // Reserve at most one row per real input unit; padding needs no capacity.
+      // This bounds each segment without per-row growth checks.
+      fields = growLineFields(fields, field + Math.min(8, limit - cursor) * BlockLineField.Stride);
+      const available = (fields.length - field) / BlockLineField.Stride;
+      const wordEnd = cursor > limit - available ? wordLimit : cursor + (available & ~7);
+      for (
+        let word0 = words[cursor >>> 2], word1 = words[(cursor >>> 2) + 1]
+        // eslint-disable-next-line style/semi-style
+        ; ; word0 = words[cursor >>> 2], word1 = words[(cursor >>> 2) + 1]
+      ) {
         const mixed0 = word0 ^ (word0 & 0x01010101) * 7 ^ 0x0A0A0A0A;
-        const mask0 = mixed0 - 0x01010101 & ~mixed0 & 0x80808080;
-        const word1 = words[(cursor >>> 2) + 1];
         const mixed1 = word1 ^ (word1 & 0x01010101) * 7 ^ 0x0A0A0A0A;
-        const mask1 = mixed1 - 0x01010101 & ~mixed1 & 0x80808080;
-        if (mask0 !== 0) {
-          if (mask0 & 0x80 && cursor >= start) {
-            const at = cursor;
+        // Folding preserves the high bits; the even folded bytes make this mask exact.
+        const hits0 = mixed0 - 0x01010101 & ~word0 & 0x80808080;
+        const hits1 = mixed1 - 0x01010101 & ~word1 & 0x80808080;
+        if (hits0 | hits1) {
+          // Interleave both masks, then pack all eight positions with one multiply.
+          let events = Math.imul(hits0 >>> 4 | hits1, 0x00204081) >>> 24;
+          do {
+            const at = cursor + (~Math.clz32(events & -events) & 7);
             const code = source.charCodeAt(at);
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
+            // Latin1 copying retains low bytes, so exclude non-Latin1 aliases.
+            if (code <= 0xFF) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
-                normalized = false;
-                if (source.charCodeAt(next) === Character.LineFeed) {
+                crnext = next;
+                // Consume an adjacent LF in this block; cross-block LF uses the carry below.
+                if (events >>> (at & 7) & 2 && source.charCodeAt(next) === Character.LineFeed) {
                   next++;
+                  events &= events - 1;
                 }
               }
-              fields[field++] = start;
-              fields[field++] = at;
-              fields[field++] = next;
-              fields[field++] = 0;
-              start = next;
-            }
-          }
-          if (mask0 & 0x8000 && cursor + 1 >= start) {
-            const at = cursor + 1;
-            const code = source.charCodeAt(at);
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
-              let next = at + 1;
-              if (code === Character.CarriageReturn) {
-                normalized = false;
-                if (source.charCodeAt(next) === Character.LineFeed) {
-                  next++;
-                }
+              else if (at === crnext) {
+                fields[field - 2] = next;
+                start = next;
+                continue;
               }
-              fields[field++] = start;
-              fields[field++] = at;
-              fields[field++] = next;
-              fields[field++] = 0;
+              // Four fields per row fit in 31 bits under Node's string length limit.
+              fields[field | BlockLineField.Start] = start;
+              fields[field | BlockLineField.End] = at;
+              fields[field | BlockLineField.Next] = next;
+              fields[field | BlockLineField.State] = 0;
+              field = field + BlockLineField.Stride & 0x7FFFFFFF;
               start = next;
             }
-          }
-          if (mask0 & 0x800000 && cursor + 2 >= start) {
-            const at = cursor + 2;
-            const code = source.charCodeAt(at);
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
-              let next = at + 1;
-              if (code === Character.CarriageReturn) {
-                normalized = false;
-                if (source.charCodeAt(next) === Character.LineFeed) {
-                  next++;
-                }
-              }
-              fields[field++] = start;
-              fields[field++] = at;
-              fields[field++] = next;
-              fields[field++] = 0;
-              start = next;
-            }
-          }
-          if (mask0 & 0x80000000 && cursor + 3 >= start) {
-            const at = cursor + 3;
-            const code = source.charCodeAt(at);
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
-              let next = at + 1;
-              if (code === Character.CarriageReturn) {
-                normalized = false;
-                if (source.charCodeAt(next) === Character.LineFeed) {
-                  next++;
-                }
-              }
-              fields[field++] = start;
-              fields[field++] = at;
-              fields[field++] = next;
-              fields[field++] = 0;
-              start = next;
-            }
-          }
+          } while (events &= events - 1);
         }
-        if (mask1 !== 0) {
-          if (mask1 & 0x80 && cursor + 4 >= start) {
-            const at = cursor + 4;
-            const code = source.charCodeAt(at);
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
-              let next = at + 1;
-              if (code === Character.CarriageReturn) {
-                normalized = false;
-                if (source.charCodeAt(next) === Character.LineFeed) {
-                  next++;
-                }
-              }
-              fields[field++] = start;
-              fields[field++] = at;
-              fields[field++] = next;
-              fields[field++] = 0;
-              start = next;
-            }
-          }
-          if (mask1 & 0x8000 && cursor + 5 >= start) {
-            const at = cursor + 5;
-            const code = source.charCodeAt(at);
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
-              let next = at + 1;
-              if (code === Character.CarriageReturn) {
-                normalized = false;
-                if (source.charCodeAt(next) === Character.LineFeed) {
-                  next++;
-                }
-              }
-              fields[field++] = start;
-              fields[field++] = at;
-              fields[field++] = next;
-              fields[field++] = 0;
-              start = next;
-            }
-          }
-          if (mask1 & 0x800000 && cursor + 6 >= start) {
-            const at = cursor + 6;
-            const code = source.charCodeAt(at);
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
-              let next = at + 1;
-              if (code === Character.CarriageReturn) {
-                normalized = false;
-                if (source.charCodeAt(next) === Character.LineFeed) {
-                  next++;
-                }
-              }
-              fields[field++] = start;
-              fields[field++] = at;
-              fields[field++] = next;
-              fields[field++] = 0;
-              start = next;
-            }
-          }
-          if (mask1 & 0x80000000 && cursor + 7 >= start) {
-            const at = cursor + 7;
-            const code = source.charCodeAt(at);
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
-              let next = at + 1;
-              if (code === Character.CarriageReturn) {
-                normalized = false;
-                if (source.charCodeAt(next) === Character.LineFeed) {
-                  next++;
-                }
-              }
-              fields[field++] = start;
-              fields[field++] = at;
-              fields[field++] = next;
-              fields[field++] = 0;
-              start = next;
-            }
-          }
+        cursor += 8;
+        if (cursor >= wordEnd) {
+          break;
         }
       }
     }
 
-    const tail = limit - cursor || (start < limit ? 1 : 0);
-    fields = growLineFields(fields, field + tail * BlockLineField.Stride);
-    for (; cursor < limit; cursor++) {
-      if (cursor < start) {
-        continue;
-      }
-      const code = source.charCodeAt(cursor);
-      let next = cursor + 1;
-      if (code === Character.CarriageReturn) {
-        normalized = false;
-        if (source.charCodeAt(next) === Character.LineFeed) {
-          next++;
-        }
-      }
-      else if (code !== Character.LineFeed) {
-        continue;
-      }
-      fields[field++] = start;
-      fields[field++] = cursor;
-      fields[field++] = next;
-      fields[field++] = 0;
-      start = next;
-    }
     if (start < limit) {
-      fields[field++] = start;
-      fields[field++] = limit;
-      fields[field++] = limit;
-      fields[field++] = 0;
+      fields = growLineFields(fields, field + BlockLineField.Stride);
+      fields[field | BlockLineField.Start] = start;
+      fields[field | BlockLineField.End] = limit;
+      fields[field | BlockLineField.Next] = limit;
+      fields[field | BlockLineField.State] = 0;
+      field = field + BlockLineField.Stride & 0x7FFFFFFF;
     }
 
     return {
       fields,
       length: field / BlockLineField.Stride,
-      normalized,
+      normalized: crnext < 0,
     };
   }
 }
