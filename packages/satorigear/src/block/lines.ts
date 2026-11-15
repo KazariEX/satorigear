@@ -51,9 +51,6 @@ class Latin1 {
       const raw = alloc(limit + 3);
       const align = 4 - (raw.byteOffset & 3) & 3;
       const bytes = raw.subarray(align, align + limit);
-      if (bytes.byteOffset & 3) {
-        return false;
-      }
       this.scratchBytes = bytes;
       this.scratchWords = new Uint32Array(bytes.buffer, bytes.byteOffset, limit >>> 2);
       this.scratchLimit = limit;
