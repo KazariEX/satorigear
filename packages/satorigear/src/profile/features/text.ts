@@ -1,6 +1,6 @@
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { matchInlinePatternEnd } from "../../inline/tokenize.ts";
+import { matchInlinePatternEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import { isAsciiPunctuation, semanticText } from "../utils.ts";
 import type { InlineTextBuilder } from "../../fragment/inline.ts";

@@ -1,7 +1,7 @@
 import { BlockKind, BlockRole } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
-import { type BlockLines, lineContentEnd } from "./lines.ts";
+import type { BlockLines } from "./lines.ts";
 
 const enum BlockTokenField {
   Kind,
@@ -356,7 +356,21 @@ export class BlockTokenStream implements DefinitionLookup {
 
   /** Returns the semantic content end before its trailing physical line ending. */
   contentEnd(source: string, index: number): number {
-    return lineContentEnd(source, this.start(index), this.end(index));
+    const start = this.start(index);
+    const end = this.end(index);
+    if (end <= start) {
+      return end;
+    }
+    const code = source.charCodeAt(end - 1);
+    return code === Character.LineFeed
+      ? end - (
+        end > start + 1 && source.charCodeAt(end - 2) === Character.CarriageReturn
+          ? 2
+          : 1
+      )
+      : code === Character.CarriageReturn
+        ? end - 1
+        : end;
   }
 
   text(source: string, index: number): string {

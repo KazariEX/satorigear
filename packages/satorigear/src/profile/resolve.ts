@@ -3,6 +3,7 @@ import { InlineKind, InlineRole } from "../constants/inline.ts";
 import {
   appendResolvedRawToken,
   compileDelimiterConfigs,
+  type DelimiterConfig,
   type DelimiterReplacement,
   type DelimiterRun,
   delimiterRunAt,
@@ -25,12 +26,19 @@ import { attributesEnd } from "./features/attributes/shared.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
 import { isMarkdownWhitespace, normalizeIdentifier } from "./utils.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
-import type { InlineResolverFactory } from "../inline/profile.ts";
 
 interface InlineResolverOptions {
   component: boolean;
   footnote: boolean;
 }
+
+export type InlineResolver = (
+  source: string,
+  tokens: InlineTokenStream,
+  definitions: DefinitionLookup,
+) => InlineTokenStream;
+
+export type InlineResolverFactory = (delimiters: readonly DelimiterConfig[]) => InlineResolver;
 
 interface BracketFrame {
   open: number;

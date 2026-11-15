@@ -413,20 +413,6 @@ export class BlockLines implements SourceLocator {
   }
 }
 
-export function lineContentEnd(source: string, start: number, end: number): number {
-  if (end <= start) {
-    return end;
-  }
-  if (source.charCodeAt(end - 1) === Character.LineFeed) {
-    return end - (
-      end > start + 1 && source.charCodeAt(end - 2) === Character.CarriageReturn
-        ? 2
-        : 1
-    );
-  }
-  return source.charCodeAt(end - 1) === Character.CarriageReturn ? end - 1 : end;
-}
-
 /** Returns the offset after up to three indent columns; tabs exceed this limit. */
 export function indentOffset(source: string, lines: BlockLines, index: number): number {
   let offset = lines.start(index);
