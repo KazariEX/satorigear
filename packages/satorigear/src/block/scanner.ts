@@ -211,10 +211,11 @@ export class BlockScanner {
   }
 
   scan(source: string, indexed?: boolean): void {
-    const lines = this.#lines.scan(source);
     const context = this.#context;
+    const lines = this.#lines;
     const tokens = this.#tokens;
     context.resetLookahead();
+    lines.scan(source);
     tokens.reset();
 
     if (!indexed) {
