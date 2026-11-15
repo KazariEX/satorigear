@@ -9,7 +9,7 @@ import { type BlockLines, isBlankLine, lineIndentOffset, physicalColumnAt } from
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { inlineMarkerRunEnd } from "../../inline/tokenize.ts";
+import { inlineMarkerRunEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
 import { semanticText } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";

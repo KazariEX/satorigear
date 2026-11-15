@@ -3,13 +3,8 @@ import { InlineKind } from "../constants/inline.ts";
 import { emptyArray } from "../primitives.ts";
 import { inlineTokenCount, inlineTokenEnd, type InlineTokenStream } from "./tokens.ts";
 
-type InlineScanner = (
-  source: string,
-  start: number,
-  tokens: number[],
-) => number;
+type InlineScanner = (source: string, start: number, tokens: number[]) => number;
 
-// Features own marker recognition; the compiled lexer only dispatches scanners.
 export interface InlineScanRule {
   marker: number;
   scan: InlineScanner;

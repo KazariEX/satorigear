@@ -145,13 +145,7 @@ function scanLinkTail(source: string, start: number, tokens: number[]): number {
     }
   }
   const end = offset + 1;
-  appendInlineToken(
-    tokens,
-    InlineKind.LinkTail,
-    start,
-    end,
-    destinationEnd - start,
-  );
+  appendInlineToken(tokens, InlineKind.LinkTail, start, end, destinationEnd - start);
   return end;
 }
 

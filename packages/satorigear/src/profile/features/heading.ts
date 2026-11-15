@@ -3,6 +3,7 @@ import { type BlockLines, trimLineWhitespaceEnd, trimLineWhitespaceStart } from 
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
+import type { BlockNodeBuilder } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 function atxMarkerEnd(source: string, markerOffset: number, lineEnd: number): number {
@@ -42,6 +43,28 @@ export function setextMarkerAt(
   return offset === lineEnd ? marker : void 0;
 }
 
+function createBuildHeading(openKind: number): BlockNodeBuilder {
+  return (tokenStart, context) => {
+    const tokens = context.structure.tokens;
+    const kind = tokens.kind(tokenStart);
+    const start = context.locator.locationAt(tokens.start(tokenStart));
+    const inline = buildInlineFragment(tokenStart, false, context);
+    const result: Heading = {
+      type: "heading",
+      depth: kind - openKind + 1 as Heading["depth"],
+      children: inline.children,
+      position: {
+        start,
+        end: context.locator.locationAt(tokens.end(tokenStart)),
+      },
+    };
+    if (inline.attributes) {
+      result.attributes = inline.attributes;
+    }
+    return result;
+  };
+}
+
 export const feature: SyntaxFeature = {
   block: {
     builds: [
@@ -54,50 +77,14 @@ export const feature: SyntaxFeature = {
           BlockKind.AtxHeading5Open,
           BlockKind.AtxHeading6Open,
         ],
-        build(tokenStart, context) {
-          const tokens = context.structure.tokens;
-          const kind = tokens.kind(tokenStart);
-          const start = context.locator.locationAt(tokens.start(tokenStart));
-          const inline = buildInlineFragment(tokenStart, false, context);
-          const result: Heading = {
-            type: "heading",
-            depth: kind - BlockKind.AtxHeading1Open + 1 as Heading["depth"],
-            children: inline.children,
-            position: {
-              start,
-              end: context.locator.locationAt(tokens.end(tokenStart)),
-            },
-          };
-          if (inline.attributes) {
-            result.attributes = inline.attributes;
-          }
-          return result;
-        },
+        build: createBuildHeading(BlockKind.AtxHeading1Open),
       },
       {
         token: [
           BlockKind.SetextHeading1Open,
           BlockKind.SetextHeading2Open,
         ],
-        build(tokenStart, context) {
-          const tokens = context.structure.tokens;
-          const kind = tokens.kind(tokenStart);
-          const start = context.locator.locationAt(tokens.start(tokenStart));
-          const inline = buildInlineFragment(tokenStart, false, context);
-          const result: Heading = {
-            type: "heading",
-            depth: kind - BlockKind.SetextHeading1Open + 1 as Heading["depth"],
-            children: inline.children,
-            position: {
-              start,
-              end: context.locator.locationAt(tokens.end(tokenStart)),
-            },
-          };
-          if (inline.attributes) {
-            result.attributes = inline.attributes;
-          }
-          return result;
-        },
+        build: createBuildHeading(BlockKind.SetextHeading1Open),
       },
     ],
     starts: [

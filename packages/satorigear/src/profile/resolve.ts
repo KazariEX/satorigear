@@ -3,6 +3,7 @@ import { InlineKind, InlineRole } from "../constants/inline.ts";
 import {
   appendResolvedRawToken,
   compileDelimiterConfigs,
+  type DelimiterConfig,
   type DelimiterReplacement,
   type DelimiterRun,
   delimiterRunAt,
@@ -18,19 +19,25 @@ import {
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
-  rewriteInlineTokenTail,
 } from "../inline/tokens.ts";
 import { emptyArray } from "../primitives.ts";
 import { attributesEnd } from "./features/attributes/shared.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
 import { isMarkdownWhitespace, normalizeIdentifier } from "./utils.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
-import type { InlineResolverFactory } from "../inline/profile.ts";
 
 interface InlineResolverOptions {
   component: boolean;
   footnote: boolean;
 }
+
+export type InlineResolver = (
+  source: string,
+  tokens: InlineTokenStream,
+  definitions: DefinitionLookup,
+) => InlineTokenStream;
+
+export type InlineResolverFactory = (delimiters: readonly DelimiterConfig[]) => InlineResolver;
 
 interface BracketFrame {
   open: number;
@@ -505,11 +512,9 @@ function emitResolvedTokens(
           const openEnd = inlineTokenEnd(tokens, tokenIndex);
           // Nonempty labels promote the adjacent leaf and include `[` in the pair opener.
           if (openEnd < inlineTokenStart(tokens, closeToken)) {
-            rewriteInlineTokenTail(
-              result,
-              InlineKind.InlineComponentOpen,
-              openEnd,
-            );
+            const offset = result.length - InlineTokenField.Stride;
+            result[offset | InlineTokenField.Kind] = InlineKind.InlineComponentOpen;
+            result[offset | InlineTokenField.End] = openEnd;
           }
         }
         else if (claim >= FrameClaim.Span && claim <= FrameClaim.AttributedSpan) {

@@ -1,7 +1,7 @@
 import { BlockKind, BlockRole } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
-import { type BlockLines, lineContentEnd } from "./lines.ts";
+import type { BlockLines } from "./lines.ts";
 
 const enum BlockTokenField {
   Kind,
@@ -88,10 +88,10 @@ export class BlockTokenStream implements DefinitionLookup {
   ): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
-    this.#fields[field + BlockTokenField.Kind] = kind;
-    this.#fields[field + BlockTokenField.Start] = start;
-    this.#fields[field + BlockTokenField.End] = end;
-    this.#fields[field + BlockTokenField.Length] = kind < BlockRole.Open
+    this.#fields[field | BlockTokenField.Kind] = kind;
+    this.#fields[field | BlockTokenField.Start] = start;
+    this.#fields[field | BlockTokenField.End] = end;
+    this.#fields[field | BlockTokenField.Length] = kind < BlockRole.Open
       ? 0
       : this.#indexToken(field, kind);
     this.#fieldLength += BlockTokenField.Stride;
@@ -109,14 +109,12 @@ export class BlockTokenStream implements DefinitionLookup {
   closeRange(start: number, end: number): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
-    this.#fields[field + BlockTokenField.Kind] = start < end
-      ? BlockKind.InlineChunk
-      : BlockKind.None;
-    this.#fields[field + BlockTokenField.Start] = start;
-    this.#fields[field + BlockTokenField.End] = end;
-    this.#fields[field + BlockTokenField.Length] = 0;
+    this.#fields[field | BlockTokenField.Kind] = start < end ? BlockKind.InlineChunk : BlockKind.None;
+    this.#fields[field | BlockTokenField.Start] = start;
+    this.#fields[field | BlockTokenField.End] = end;
+    this.#fields[field | BlockTokenField.Length] = 0;
     const open = this.#opens.pop()!;
-    this.#fields[open + BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
+    this.#fields[open | BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
     this.#fieldLength += BlockTokenField.Stride;
   }
 
@@ -128,16 +126,14 @@ export class BlockTokenStream implements DefinitionLookup {
     }
     if (kind < BlockRole.Leaf) {
       const open = this.#opens.pop()!;
-      this.#fields[open + BlockTokenField.Length] = (
-        (field - open) / BlockTokenField.Stride + 1
-      );
+      this.#fields[open | BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
       return 0;
     }
     return 1;
   }
 
   nodeLength(index: number): number {
-    return this.#fields[index * BlockTokenField.Stride + BlockTokenField.Length];
+    return this.#fields[index * BlockTokenField.Stride | BlockTokenField.Length];
   }
 
   equalsAfterShift(
@@ -309,8 +305,8 @@ export class BlockTokenStream implements DefinitionLookup {
     if (sourceDelta !== 0 && newSuffixStart < this.length) {
       const suffixFieldStart = newSuffixStart * BlockTokenField.Stride;
       for (let field = suffixFieldStart; field < this.#fieldLength; field += BlockTokenField.Stride) {
-        this.#fields[field + BlockTokenField.Start] += sourceDelta;
-        this.#fields[field + BlockTokenField.End] += sourceDelta;
+        this.#fields[field | BlockTokenField.Start] += sourceDelta;
+        this.#fields[field | BlockTokenField.End] += sourceDelta;
       }
     }
     return change;
@@ -339,24 +335,38 @@ export class BlockTokenStream implements DefinitionLookup {
   }
 
   start(index: number): number {
-    return this.#fields[index * BlockTokenField.Stride + BlockTokenField.Start];
+    return this.#fields[index * BlockTokenField.Stride | BlockTokenField.Start];
   }
 
   setStart(index: number, start: number): void {
-    this.#fields[index * BlockTokenField.Stride + BlockTokenField.Start] = start;
+    this.#fields[index * BlockTokenField.Stride | BlockTokenField.Start] = start;
   }
 
   end(index: number): number {
-    return this.#fields[index * BlockTokenField.Stride + BlockTokenField.End];
+    return this.#fields[index * BlockTokenField.Stride | BlockTokenField.End];
   }
 
   setEnd(index: number, end: number): void {
-    this.#fields[index * BlockTokenField.Stride + BlockTokenField.End] = end;
+    this.#fields[index * BlockTokenField.Stride | BlockTokenField.End] = end;
   }
 
   /** Returns the semantic content end before its trailing physical line ending. */
   contentEnd(source: string, index: number): number {
-    return lineContentEnd(source, this.start(index), this.end(index));
+    const start = this.start(index);
+    const end = this.end(index);
+    if (end <= start) {
+      return end;
+    }
+    const code = source.charCodeAt(end - 1);
+    return code === Character.LineFeed
+      ? end - (
+        end > start + 1 && source.charCodeAt(end - 2) === Character.CarriageReturn
+          ? 2
+          : 1
+      )
+      : code === Character.CarriageReturn
+        ? end - 1
+        : end;
   }
 
   text(source: string, index: number): string {
