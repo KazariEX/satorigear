@@ -58,13 +58,13 @@ class Latin1 {
   static scratchLimit = 0;
 
   // eslint-disable-next-line node/prefer-global/buffer
-  static alloc = globalThis.Buffer?.allocUnsafeSlow;
+  static allocate = globalThis.Buffer?.allocUnsafeSlow;
 
   static scan(source: string, fields: Int32Array): ScanningResult {
     const limit = source.length;
     const wordLimit = limit + 7 & ~7;
     if (this.scratchLimit < wordLimit) {
-      const bytes = this.alloc(wordLimit);
+      const bytes = this.allocate(wordLimit);
       this.scratchBytes = bytes;
       this.scratchWords = new Uint32Array(bytes.buffer, bytes.byteOffset, wordLimit >>> 2);
       this.scratchLimit = wordLimit;
@@ -213,7 +213,7 @@ export class BlockLines implements SourceLocator {
     this.#locatorField = 0;
     this.#sourceLength = source.length;
     const fields = growLineFields(this.#fields, getLineCapacity(source.length) * BlockLineField.Stride);
-    const result = source.length >= Latin1.minimum && Latin1.alloc !== void 0
+    const result = source.length >= Latin1.minimum && Latin1.allocate !== void 0
       ? Latin1.scan(source, fields)
       : Index0.scan(source, fields);
     this.#fields = result.fields;
