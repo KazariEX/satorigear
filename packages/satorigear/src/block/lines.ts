@@ -82,10 +82,10 @@ class Latin1 {
         const mixed1 = word1 ^ (word1 & 0x01010101) * 7 ^ 0x0A0A0A0A;
         const mask1 = mixed1 - 0x01010101 & ~mixed1 & 0x80808080;
         if (mask0 !== 0) {
-          if (mask0 & 0x80) {
+          if (mask0 & 0x80 && cursor >= start) {
             const at = cursor;
             const code = source.charCodeAt(at);
-            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 normalized = false;
@@ -100,10 +100,10 @@ class Latin1 {
               start = next;
             }
           }
-          if (mask0 & 0x8000) {
+          if (mask0 & 0x8000 && cursor + 1 >= start) {
             const at = cursor + 1;
             const code = source.charCodeAt(at);
-            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 normalized = false;
@@ -118,10 +118,10 @@ class Latin1 {
               start = next;
             }
           }
-          if (mask0 & 0x800000) {
+          if (mask0 & 0x800000 && cursor + 2 >= start) {
             const at = cursor + 2;
             const code = source.charCodeAt(at);
-            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 normalized = false;
@@ -136,10 +136,10 @@ class Latin1 {
               start = next;
             }
           }
-          if (mask0 & 0x80000000) {
+          if (mask0 & 0x80000000 && cursor + 3 >= start) {
             const at = cursor + 3;
             const code = source.charCodeAt(at);
-            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 normalized = false;
@@ -156,10 +156,10 @@ class Latin1 {
           }
         }
         if (mask1 !== 0) {
-          if (mask1 & 0x80) {
+          if (mask1 & 0x80 && cursor + 4 >= start) {
             const at = cursor + 4;
             const code = source.charCodeAt(at);
-            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 normalized = false;
@@ -174,10 +174,10 @@ class Latin1 {
               start = next;
             }
           }
-          if (mask1 & 0x8000) {
+          if (mask1 & 0x8000 && cursor + 5 >= start) {
             const at = cursor + 5;
             const code = source.charCodeAt(at);
-            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 normalized = false;
@@ -192,10 +192,10 @@ class Latin1 {
               start = next;
             }
           }
-          if (mask1 & 0x800000) {
+          if (mask1 & 0x800000 && cursor + 6 >= start) {
             const at = cursor + 6;
             const code = source.charCodeAt(at);
-            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 normalized = false;
@@ -210,10 +210,10 @@ class Latin1 {
               start = next;
             }
           }
-          if (mask1 & 0x80000000) {
+          if (mask1 & 0x80000000 && cursor + 7 >= start) {
             const at = cursor + 7;
             const code = source.charCodeAt(at);
-            if (at >= start && (code === Character.LineFeed || code === Character.CarriageReturn)) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 normalized = false;
