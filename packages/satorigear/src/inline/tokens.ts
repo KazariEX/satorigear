@@ -18,33 +18,23 @@ export function inlineTokenCount(tokens: InlineTokenStream): number {
 }
 
 export function inlineTokenKind(tokens: InlineTokenStream, index: number): number {
-  return tokens[index * InlineTokenField.Stride + InlineTokenField.Kind];
+  return tokens[index * InlineTokenField.Stride | InlineTokenField.Kind];
 }
 
 export function inlineTokenStart(tokens: InlineTokenStream, index: number): number {
-  return tokens[index * InlineTokenField.Stride + InlineTokenField.Start];
+  return tokens[index * InlineTokenField.Stride | InlineTokenField.Start];
 }
 
 export function inlineTokenEnd(tokens: InlineTokenStream, index: number): number {
-  return tokens[index * InlineTokenField.Stride + InlineTokenField.End];
+  return tokens[index * InlineTokenField.Stride | InlineTokenField.End];
 }
 
 export function inlineTokenData(tokens: InlineTokenStream, index: number): number {
-  return tokens[index * InlineTokenField.Stride + InlineTokenField.Data];
+  return tokens[index * InlineTokenField.Stride | InlineTokenField.Data];
 }
 
 export function setInlineTokenData(tokens: number[], index: number, data: number): void {
-  tokens[index * InlineTokenField.Stride + InlineTokenField.Data] = data;
-}
-
-export function rewriteInlineTokenTail(
-  tokens: number[],
-  kind: number,
-  end: number,
-): void {
-  const offset = tokens.length - InlineTokenField.Stride;
-  tokens[offset + InlineTokenField.Kind] = kind;
-  tokens[offset + InlineTokenField.End] = end;
+  tokens[index * InlineTokenField.Stride | InlineTokenField.Data] = data;
 }
 
 export function inlineTokenText(
@@ -60,22 +50,16 @@ export function inlineTokenText(
   );
 }
 
-export function appendInlineToken(
-  target: number[],
-  kind: number,
-  start: number,
-  end: number,
-  data = 0,
-): void {
+export function appendInlineToken(target: number[], kind: number, start: number, end: number, data = 0): void {
   target.push(kind, start, end, data);
 }
 
 export function copyInlineToken(target: number[], tokens: InlineTokenStream, index: number): void {
   const offset = index * InlineTokenField.Stride;
   target.push(
-    tokens[offset],
-    tokens[offset + InlineTokenField.Start],
-    tokens[offset + InlineTokenField.End],
-    tokens[offset + InlineTokenField.Data],
+    tokens[offset | InlineTokenField.Kind],
+    tokens[offset | InlineTokenField.Start],
+    tokens[offset | InlineTokenField.End],
+    tokens[offset | InlineTokenField.Data],
   );
 }

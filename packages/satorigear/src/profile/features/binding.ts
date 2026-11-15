@@ -28,13 +28,7 @@ export const feature: SyntaxFeature = {
             return -1;
           }
           const end = close + 2;
-          appendInlineToken(
-            tokens,
-            InlineKind.Binding,
-            start,
-            end,
-            valueEnd - start,
-          );
+          appendInlineToken(tokens, InlineKind.Binding, start, end, valueEnd - start);
           return end;
         },
       },

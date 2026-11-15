@@ -115,23 +115,23 @@ export class BlockLines implements SourceLocator {
   }
 
   start(index: number): number {
-    return this.#fields[index * BlockLineField.Stride + BlockLineField.Start];
+    return this.#fields[index * BlockLineField.Stride | BlockLineField.Start];
   }
 
   end(index: number): number {
-    return this.#fields[index * BlockLineField.Stride + BlockLineField.End];
+    return this.#fields[index * BlockLineField.Stride | BlockLineField.End];
   }
 
   next(index: number): number {
-    return this.#fields[index * BlockLineField.Stride + BlockLineField.Next];
+    return this.#fields[index * BlockLineField.Stride | BlockLineField.Next];
   }
 
   prefixColumns(index: number): number {
-    return this.#fields[index * BlockLineField.Stride + BlockLineField.State] >>> 1;
+    return this.#fields[index * BlockLineField.Stride | BlockLineField.State] >>> 1;
   }
 
   lazy(index: number): boolean {
-    return (this.#fields[index * BlockLineField.Stride + BlockLineField.State] & BlockLineState.Lazy) !== 0;
+    return (this.#fields[index * BlockLineField.Stride | BlockLineField.State] & BlockLineState.Lazy) !== 0;
   }
 
   indexAtOrAfter(offset: number): number {
@@ -175,7 +175,7 @@ export class BlockLines implements SourceLocator {
     const sourceLength = this.#sourceLength;
     if (
       offset === sourceLength &&
-      fields[fieldLength - BlockLineField.Stride + BlockLineField.End] < sourceLength
+      fields[fieldLength - BlockLineField.Stride | BlockLineField.End] < sourceLength
     ) {
       return {
         line: fieldLength / BlockLineField.Stride + 1,
@@ -184,9 +184,9 @@ export class BlockLines implements SourceLocator {
       };
     }
     let field = this.#locatorField;
-    let start = fields[field + BlockLineField.Start];
+    let start = fields[field | BlockLineField.Start];
     while (field + BlockLineField.Stride < fieldLength) {
-      const nextStart = fields[field + BlockLineField.Stride + BlockLineField.Start];
+      const nextStart = fields[field + BlockLineField.Stride | BlockLineField.Start];
       if (nextStart > offset) {
         break;
       }
@@ -228,10 +228,10 @@ export class BlockLines implements SourceLocator {
       fields = this.#fields;
     }
     const state = prefixColumns * 2 + (lazy ? BlockLineState.Lazy : 0);
-    fields[field + BlockLineField.Start] = start;
-    fields[field + BlockLineField.End] = end;
-    fields[field + BlockLineField.Next] = next;
-    fields[field + BlockLineField.State] = state;
+    fields[field | BlockLineField.Start] = start;
+    fields[field | BlockLineField.End] = end;
+    fields[field | BlockLineField.Next] = next;
+    fields[field | BlockLineField.State] = state;
     this.#length++;
   }
 
@@ -406,9 +406,9 @@ export class BlockLines implements SourceLocator {
     const fields = this.#fields;
     const fieldLength = this.#length * BlockLineField.Stride;
     for (let field = start * BlockLineField.Stride; field < fieldLength; field += BlockLineField.Stride) {
-      fields[field + BlockLineField.Start] += delta;
-      fields[field + BlockLineField.End] += delta;
-      fields[field + BlockLineField.Next] += delta;
+      fields[field | BlockLineField.Start] += delta;
+      fields[field | BlockLineField.End] += delta;
+      fields[field | BlockLineField.Next] += delta;
     }
   }
 }
