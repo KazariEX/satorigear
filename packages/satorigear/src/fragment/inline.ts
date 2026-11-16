@@ -21,6 +21,9 @@ import type { BlockBuildContext } from "./block.ts";
 type InlineNonText = Exclude<PhrasingContent, Text>;
 
 export interface InlineBuildContext {
+  builders: InlineProfile["builders"];
+  // Recursive builders publish the next token here; a child range stops at its closer.
+  tokenIndex: number;
   locator: SourceLocator;
   // Table splitting preserves `\|`; inline code removes that structural escape.
   tableCell: boolean;
@@ -41,16 +44,6 @@ interface InlineOutput extends InlineFragment {
   pendingEnd: number;
   // Keep only the consecutive literal suffix; decoded whitespace is semantic text.
   pendingLiteral: string;
-}
-
-function createInlineOutput(children: PhrasingContent[], cursor: number): InlineOutput {
-  return {
-    children,
-    cursor,
-    pendingText: void 0,
-    pendingEnd: 0,
-    pendingLiteral: "",
-  };
 }
 
 export type InlineLeafBuilder = (
@@ -84,19 +77,6 @@ export type InlineBuilder =
   | InlinePairBuilder
   | InlineTextBuilder
   | InlineTokenDecorator;
-
-function createLiteralChildren(context: InlineBuildContext, start: number, end: number): PhrasingContent[] {
-  return start >= end
-    ? []
-    : [{
-      type: "text",
-      value: context.view.text.slice(start, end),
-      position: context.locator.positionAt(
-        context.view.mapOffset(start),
-        context.view.mapEnd(end),
-      ),
-    }];
-}
 
 function appendText(
   context: InlineBuildContext,
@@ -160,39 +140,12 @@ function appendGap(
   appendText(context, output, value, start, end, true);
 }
 
-function appendLeaf(
-  context: InlineBuildContext,
-  output: InlineOutput,
-  token: number,
-  start: number,
-  end: number,
-  build: InlineLeafBuilder,
-): void {
-  if (start > output.cursor) {
-    appendGap(context, output, output.cursor, start);
-  }
-  const sourceStart = context.view.mapOffset(start);
-  const sourceEnd = start === end ? sourceStart : context.view.mapEnd(end);
-  finishText(context, output);
-  output.children.push(build(
-    token,
-    context.locator.positionAt(sourceStart, sourceEnd),
-    context,
-  ));
-  output.pendingText = void 0;
-}
-
 // Resolution has already made semantic pairs unambiguous, so projection can consume that stream
 // directly instead of copying it into a second syntax arena.
-function appendRange(
-  profile: InlineProfile,
-  context: InlineBuildContext,
-  output: InlineOutput,
-  startToken: number,
-  endToken: number,
-): number {
-  let index = startToken;
-  while (index < endToken) {
+function appendRange(context: InlineBuildContext, output: InlineOutput, trimEnd: boolean): void {
+  let index = context.tokenIndex;
+  const end = inlineTokenCount(context.tokens);
+  while (index < end) {
     const kind = inlineTokenKind(context.tokens, index);
     // Newline has fixed semantic text, so it does not enter profile builder dispatch.
     if (kind === InlineKind.Newline) {
@@ -207,34 +160,30 @@ function appendRange(
       index++;
       continue;
     }
-    const build = profile.builders[kind]!;
     const childStart = inlineTokenStart(context.tokens, index);
-    if (kind < InlineRole.Pair) {
+    if (kind < InlineRole.Leaf) {
       const childEnd = inlineTokenEnd(context.tokens, index);
-      if (kind < InlineRole.Leaf) {
-        if (childStart > output.cursor) {
-          appendGap(context, output, output.cursor, childStart);
-        }
-        const value = (build as InlineTextBuilder)(index, context);
-        appendText(context, output, value, childStart, childEnd, kind === InlineKind.LiteralText);
+      if (childStart > output.cursor) {
+        appendGap(context, output, output.cursor, childStart);
       }
-      else {
-        appendLeaf(context, output, index, childStart, childEnd, build as InlineLeafBuilder);
-      }
+      const build = context.builders[kind] as InlineTextBuilder;
+      appendText(context, output, build(index, context), childStart, childEnd, kind === InlineKind.LiteralText);
       output.cursor = childEnd;
       index++;
       continue;
     }
     if (kind < InlineRole.Decorate) {
-      // Resolved pairs are properly nested; every close ends the current range.
-      if (kind & 1) {
+      if (kind >= InlineRole.Pair && kind & 1) {
         break;
       }
       if (childStart > output.cursor) {
         appendGap(context, output, output.cursor, childStart);
       }
       finishText(context, output);
-      index = appendPair(profile, context, output, index, endToken, build as InlinePairBuilder);
+      output.children.push(buildNode(context, index, kind));
+      output.pendingText = void 0;
+      index = context.tokenIndex;
+      output.cursor = inlineTokenEnd(context.tokens, index - 1);
       continue;
     }
     const childEnd = inlineTokenEnd(context.tokens, index);
@@ -244,7 +193,8 @@ function appendRange(
       start: sourceStart,
       end: childStart === childEnd ? sourceStart : context.view.mapEnd(childEnd),
     };
-    if ((build as InlineTokenDecorator)(index, sourceSpan, context, output)) {
+    const decorate = context.builders[kind] as InlineTokenDecorator;
+    if (decorate(index, sourceSpan, context, output)) {
       // Applied decorators may mutate the exposed child list, so refresh the cached projection.
       const previous = output.children.at(-1);
       output.pendingText = previous?.type === "text" ? previous as Text : void 0;
@@ -253,63 +203,100 @@ function appendRange(
     }
     index++;
   }
-  const contentEnd = index < endToken ? inlineTokenStart(context.tokens, index) : context.view.text.length;
+  const contentEnd = index < end ? inlineTokenStart(context.tokens, index) : context.view.text.length;
   if (contentEnd > output.cursor) {
     appendGap(context, output, output.cursor, contentEnd);
   }
   // Every range closes its own projection; only a fragment boundary owns final trimming.
-  if (startToken === 0) {
+  if (trimEnd) {
     trimTrailingText(context, output);
     if (output.pendingText && !output.pendingText.value) {
       output.children.pop();
     }
   }
   finishText(context, output);
-  return index;
+  context.tokenIndex = index;
 }
 
-function appendPair(
-  profile: InlineProfile,
-  context: InlineBuildContext,
-  output: InlineOutput,
-  openToken: number,
-  endToken: number,
-  build: InlinePairBuilder,
-): number {
-  const childStart = inlineTokenStart(context.tokens, openToken);
-  const positionStart = context.locator.locationAt(context.view.mapOffset(childStart));
-  const nextToken = openToken + 1;
-  const nextKind = inlineTokenKind(context.tokens, nextToken);
-  let children: PhrasingContent[];
-  let closeToken: number;
-  // Adjacent pair boundaries contain only an implicit literal source range.
-  if (nextKind >= InlineRole.Pair && nextKind < InlineRole.Decorate && nextKind & 1) {
-    children = createLiteralChildren(
-      context,
-      inlineTokenEnd(context.tokens, openToken),
-      inlineTokenStart(context.tokens, nextToken),
-    );
-    closeToken = nextToken;
+function buildLiteral(context: InlineBuildContext, start: number, end: number): PhrasingContent[] {
+  return start >= end
+    ? []
+    : [{
+      type: "text",
+      value: context.view.text.slice(start, end),
+      position: context.locator.positionAt(
+        context.view.mapOffset(start),
+        context.view.mapEnd(end),
+      ),
+    }];
+}
+
+function buildNode(context: InlineBuildContext, token: number, kind: number): InlineNonText {
+  const startOffset = inlineTokenStart(context.tokens, token);
+  const sourceStart = context.view.mapOffset(startOffset);
+  const start = context.locator.locationAt(sourceStart);
+  let close = token;
+  let children: PhrasingContent[] | undefined;
+  if (kind >= InlineRole.Pair) {
+    const next = token + 1;
+    const contentStart = inlineTokenEnd(context.tokens, token);
+    if (inlineTokenKind(context.tokens, next) === kind + 1) {
+      close = next;
+      children = buildLiteral(context, contentStart, inlineTokenStart(context.tokens, close));
+    }
+    else {
+      context.tokenIndex = next;
+      children = buildFragment(context, contentStart, kind + 1).children;
+      close = context.tokenIndex;
+    }
   }
-  else {
-    const output = createInlineOutput(children = [], inlineTokenEnd(context.tokens, openToken));
-    closeToken = appendRange(profile, context, output, nextToken, endToken);
+  context.tokenIndex = close + 1;
+  const endOffset = inlineTokenEnd(context.tokens, close);
+  const position = {
+    start,
+    end: context.locator.locationAt(
+      startOffset === endOffset ? sourceStart : context.view.mapEnd(endOffset),
+    ),
+  };
+  const build = context.builders[kind];
+  return children
+    ? (build as InlinePairBuilder)(token, close, position, children, context)
+    : (build as InlineLeafBuilder)(token, position, context);
+}
+
+function buildFragment(context: InlineBuildContext, cursor: number, closeKind: number): InlineFragment {
+  const trimEnd = closeKind === InlineKind.None;
+  const token = context.tokenIndex;
+  const kind = inlineTokenKind(context.tokens, token);
+  let children: PhrasingContent[] | undefined;
+  if (
+    kind >= InlineRole.Leaf &&
+    kind < InlineRole.Decorate &&
+    inlineTokenStart(context.tokens, token) === cursor
+  ) {
+    const node = buildNode(context, token, kind);
+    const atEnd = context.tokenIndex === inlineTokenCount(context.tokens);
+    cursor = inlineTokenEnd(context.tokens, context.tokenIndex - 1);
+    if (atEnd || inlineTokenKind(context.tokens, context.tokenIndex) === closeKind) {
+      const end = atEnd ? context.view.text.length : inlineTokenStart(context.tokens, context.tokenIndex);
+      if (
+        cursor === end ||
+        trimEnd && cursor === trimLineWhitespaceEnd(context.view.text, cursor, end)
+      ) {
+        return { children: [node] };
+      }
+    }
+    children = [node];
   }
-  const childEnd = inlineTokenEnd(context.tokens, closeToken);
-  const value = build(
-    openToken,
-    closeToken,
-    {
-      start: positionStart,
-      end: context.locator.locationAt(context.view.mapEnd(childEnd)),
-    },
-    children,
-    context,
-  );
-  output.children.push(value);
-  output.pendingText = void 0;
-  output.cursor = childEnd;
-  return closeToken + 1;
+  const output = {
+    children: children ?? [],
+    cursor,
+    pendingText: void 0,
+    pendingEnd: 0,
+    pendingLiteral: "",
+  };
+  appendRange(context, output, trimEnd);
+  return output;
 }
 
 export function buildInlineFragment(
@@ -348,6 +335,8 @@ export function buildInlineFragment(
   }
 
   const inlineContext = context.inlineContext ??= {
+    builders: context.profile.builders,
+    tokenIndex: 0,
     locator: context.locator,
     tableCell,
     tokens,
@@ -360,11 +349,9 @@ export function buildInlineFragment(
   if (tokens.length === 0) {
     const end = trimLineWhitespaceEnd(view.text, 0, view.text.length);
     return {
-      children: createLiteralChildren(inlineContext, 0, end),
+      children: buildLiteral(inlineContext, 0, end),
     };
   }
-
-  const output = createInlineOutput([], 0);
-  appendRange(context.profile, inlineContext, output, 0, inlineTokenCount(tokens));
-  return output;
+  inlineContext.tokenIndex = 0;
+  return buildFragment(inlineContext, 0, InlineKind.None);
 }
