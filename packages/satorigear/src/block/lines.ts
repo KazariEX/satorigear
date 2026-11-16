@@ -72,7 +72,6 @@ class Latin1 {
 
     const bytes = this.scratchBytes!;
     const words = this.scratchWords!;
-    // Clear the final block before copying so padding cannot emit newline events.
     words[(wordLimit >>> 2) - 2] = 0;
     words[(wordLimit >>> 2) - 1] = 0;
     bytes.write(source, 0, limit, "latin1");
@@ -81,8 +80,8 @@ class Latin1 {
     let cursor = 0;
     let crnext = -1;
     while (cursor < wordLimit) {
-      // Reserve at most one row per real input unit; padding needs no capacity.
-      // This bounds each segment without per-row growth checks.
+      // Worst case: <= 1 row per real byte; padding is zero and emits nothing.
+      // Reserving per segment keeps the inner loop free of growth checks.
       fields = growLineFields(fields, field + Math.min(8, limit - cursor) * BlockLineField.Stride);
       const available = (fields.length - field) / BlockLineField.Stride;
       const wordEnd = cursor > limit - available ? wordLimit : cursor + (available & ~7);
@@ -91,18 +90,20 @@ class Latin1 {
         // eslint-disable-next-line style/semi-style
         ; ; word0 = words[cursor >>> 2], word1 = words[(cursor >>> 2) + 1]
       ) {
+        // Fold {0x0A, 0x0D} -> 0, preserve the high bits for the zero-byte detection below.
         const mixed0 = word0 ^ (word0 & 0x01010101) * 7 ^ 0x0A0A0A0A;
         const mixed1 = word1 ^ (word1 & 0x01010101) * 7 ^ 0x0A0A0A0A;
-        // Folding preserves the high bits; the even folded bytes make this mask exact.
         const hits0 = mixed0 - 0x01010101 & ~word0 & 0x80808080;
         const hits1 = mixed1 - 0x01010101 & ~word1 & 0x80808080;
         if (hits0 | hits1) {
-          // Interleave both masks, then pack all eight positions with one multiply.
+          // 1. hits0 >>> 4 | hits1      => [3][7][11][15][19][23][27][31]
+          // 2. Math.imul(~, Mag) >>> 24 => [0][4][ 1][ 5][ 2][ 6][ 3][ 7]
           let events = Math.imul(hits0 >>> 4 | hits1, 0x00204081) >>> 24;
           do {
             const at = cursor + (~Math.clz32(events & -events) & 7);
             const code = source.charCodeAt(at);
-            // Latin1 copying retains low bytes, so exclude non-Latin1 aliases.
+            // Latin1 copying retains low bytes, so exclude non-Latin1 aliases:
+            // "上"(0x4E0A), "不"(0x4E0D), "č"(0x010D), ...
             if (code <= 0xFF) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
@@ -114,16 +115,16 @@ class Latin1 {
                 }
               }
               else if (at === crnext) {
-                fields[field - 2] = next;
+                // Absorb the cross-block LF into the previous row's next.
+                fields[field - BlockLineField.Stride | BlockLineField.Next] = next;
                 start = next;
                 continue;
               }
-              // Four fields per row fit in 31 bits under Node's string length limit.
               fields[field | BlockLineField.Start] = start;
               fields[field | BlockLineField.End] = at;
               fields[field | BlockLineField.Next] = next;
               fields[field | BlockLineField.State] = 0;
-              field = field + BlockLineField.Stride & 0x7FFFFFFF;
+              field += BlockLineField.Stride;
               start = next;
             }
           } while (events &= events - 1);
@@ -141,7 +142,7 @@ class Latin1 {
       fields[field | BlockLineField.End] = limit;
       fields[field | BlockLineField.Next] = limit;
       fields[field | BlockLineField.State] = 0;
-      field = field + BlockLineField.Stride & 0x7FFFFFFF;
+      field += BlockLineField.Stride;
     }
 
     return {
@@ -181,10 +182,11 @@ class Index0 {
       if (field >= fields.length) {
         fields = growLineFields(fields, field + BlockLineField.Stride);
       }
-      fields[field++] = start;
-      fields[field++] = end;
-      fields[field++] = next;
-      fields[field++] = 0;
+      fields[field | BlockLineField.Start] = start;
+      fields[field | BlockLineField.End] = end;
+      fields[field | BlockLineField.Next] = next;
+      fields[field | BlockLineField.State] = 0;
+      field += BlockLineField.Stride;
       start = next;
     }
 
