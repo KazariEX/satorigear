@@ -103,11 +103,11 @@ function tokenize(
 function generateInlineTokenizer(
   boundaryFast: RegExp,
   boundarySlow: RegExp,
-  boundaryCodes: readonly number[],
+  codes: readonly number[],
   scanners: readonly (InlineScanner | undefined)[],
 ): InlineTokenizer {
-  const names = boundaryCodes.map((code, index) => `s${index}`);
-  const cases = boundaryCodes
+  const names = codes.map((code, index) => `s${index}`);
+  const cases = codes
     .map((code, index) => `case ${code}:d=s${index}(s,o,t);break;`)
     .join("");
 
@@ -131,13 +131,13 @@ function generateInlineTokenizer(
     emptyArray,
     implicitSoftBreak,
     nextBoundaryOffset,
-    ...boundaryCodes.map((code) => scanners[code]!),
+    ...codes.map((code) => scanners[code]!),
   );
 }
 
 export function compileInlineTokenizer(rules: readonly InlineScanRule[]): InlineTokenizer {
   const scanners: (InlineScanner | undefined)[] = [];
-  const boundaryCodes: number[] = [];
+  const codes: number[] = [];
   for (const rule of rules) {
     const code = rule.marker;
     const previous = scanners[code];
@@ -148,16 +148,16 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
         return end > start ? end : rule.scan(source, start, tokens);
       };
     if (previous === void 0) {
-      boundaryCodes.push(code);
+      codes.push(code);
     }
   }
-  const boundaries = String.fromCharCode(...boundaryCodes).replaceAll(/[\\\]-]/g, "\\$&");
+  const boundaries = String.fromCharCode(...codes).replaceAll(/[\\\]-]/g, "\\$&");
   // Lookaround keeps V8 off the character-class scan. Only a whitespace-adjacent break uses it.
   const boundaryFast = new RegExp(`[\\r${boundaries}]`, "g");
   const boundarySlow = new RegExp(`[\\r${boundaries}]|\\n(?:(?<=[ \\t]\\n)|(?= ))`, "g");
 
   try {
-    return generateInlineTokenizer(boundaryFast, boundarySlow, boundaryCodes, scanners);
+    return generateInlineTokenizer(boundaryFast, boundarySlow, codes, scanners);
   }
   catch {
     return (source, withBoundaryBreak) => tokenize(

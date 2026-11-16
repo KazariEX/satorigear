@@ -11,7 +11,6 @@ import {
 } from "../inline/delimiter.ts";
 import {
   appendInlineToken,
-  copyInlineToken,
   inlineTokenCount,
   inlineTokenData,
   inlineTokenEnd,
@@ -41,17 +40,18 @@ export type InlineResolverFactory = (delimiters: readonly DelimiterConfig[]) => 
 
 interface BracketFrame {
   open: number;
-  close: number;
   parent: BracketFrame | undefined;
   next: BracketFrame | undefined;
   state: number;
-  candidateBottom: BracketFrame | undefined;
-  candidateNext: BracketFrame | undefined;
+  candidateStart: number;
   delimiterBottom: DelimiterRun | undefined;
-  resolvedEnd: number;
   logicalParent: BracketFrame | undefined;
-  // Link emitted at this raw closer; its opener may belong to another frame.
-  closingLink: BracketFrame | undefined;
+  // Concrete output boundaries; raw kinds retain lexer behavior and None consumes syntax.
+  openingKind: InlineKind;
+  openingEnd: number;
+  // The logical opener may later be consumed; retain the raw closer's decision.
+  closingKind: InlineKind;
+  closingEnd: number;
 }
 
 const enum FrameClaim {
@@ -61,9 +61,6 @@ const enum FrameClaim {
   Component,
   Span,
   AttributedSpan,
-  Link,
-  Reference,
-  Consumed,
   // Claims are exclusive low-bit discriminants; flags occupy the higher bits.
   Mask = 7,
 }
@@ -71,33 +68,24 @@ const enum FrameClaim {
 const enum FrameFlag {
   Image = 8,
   InLinkLabel = 16,
-  LiteralBracket = 32,
 }
 
 // Each frame keeps its syntax identity while analysis, pairing, and emission
 // establish their own links and boundaries without changing a field's meaning.
 
-function rewriteLinkCandidates(
-  top: BracketFrame | undefined,
-  bottom: BracketFrame | undefined,
-): BracketFrame | undefined {
-  // Only suffix membership matters, so retained links can be rebuilt in either order.
-  let candidate = top;
-  top = bottom;
-  while (candidate && candidate !== bottom) {
-    const next = candidate.candidateNext;
-    const state = candidate.state;
-    if (state === FrameClaim.Span) {
+function rewriteLinkCandidates(candidates: BracketFrame[], start: number): void {
+  let write = start;
+  for (let index = start; index < candidates.length; index++) {
+    const candidate = candidates[index];
+    if (candidate.state === FrameClaim.Span) {
       candidate.state = FrameClaim.Raw;
     }
     else {
-      candidate.state = state | FrameFlag.InLinkLabel;
-      candidate.candidateNext = top;
-      top = candidate;
+      candidate.state |= FrameFlag.InLinkLabel;
+      candidates[write++] = candidate;
     }
-    candidate = next;
   }
-  return top;
+  candidates.length = write;
 }
 
 function referenceLabelEnd(source: string, start: number): number {
@@ -167,23 +155,23 @@ function analyzeBrackets(
 ): BracketFrame | undefined {
   let first: BracketFrame | undefined;
   let last: BracketFrame | undefined;
-  let candidateTop: BracketFrame | undefined;
+  let candidates: BracketFrame[] | undefined;
   let stackTop: BracketFrame | undefined;
   for (let tokenIndex = start; tokenIndex < end; tokenIndex++) {
     const kind = inlineTokenKind(tokens, tokenIndex);
     if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
       const frame: BracketFrame = {
         open: tokenIndex,
-        close: -1,
         parent: stackTop,
         next: void 0,
         state: kind === InlineKind.ImageOpen ? FrameFlag.Image : FrameClaim.Raw,
-        candidateBottom: candidateTop,
-        candidateNext: void 0,
+        candidateStart: candidates?.length ?? 0,
         delimiterBottom: void 0,
-        resolvedEnd: 0,
         logicalParent: void 0,
-        closingLink: void 0,
+        openingKind: kind,
+        openingEnd: inlineTokenEnd(tokens, tokenIndex),
+        closingKind: InlineKind.None,
+        closingEnd: 0,
       };
       if (last) {
         last.next = frame;
@@ -204,7 +192,8 @@ function analyzeBrackets(
     }
     const frame = stackTop;
     stackTop = frame.parent;
-    frame.close = tokenIndex;
+    frame.closingKind = kind;
+    frame.closingEnd = inlineTokenEnd(tokens, tokenIndex);
     const image = (frame.state & FrameFlag.Image) !== 0;
 
     if (options.footnote && kind === InlineKind.BracketClose) {
@@ -216,7 +205,10 @@ function analyzeBrackets(
         definitions.hasDefinition(label.definitionKey)
       ) {
         frame.state = FrameClaim.Footnote;
-        candidateTop = frame.candidateBottom;
+        frame.openingEnd = frame.closingEnd;
+        if (candidates) {
+          candidates.length = frame.candidateStart;
+        }
         continue;
       }
     }
@@ -224,11 +216,8 @@ function analyzeBrackets(
     if (!options.component || image) {
       continue;
     }
-    if (kind === InlineKind.LinkTail) {
-      candidateTop = rewriteLinkCandidates(
-        candidateTop,
-        frame.candidateBottom,
-      );
+    if (kind === InlineKind.LinkTail && candidates) {
+      rewriteLinkCandidates(candidates, frame.candidateStart);
     }
     const openToken = frame.open;
     const componentToken = openToken - 1;
@@ -238,8 +227,11 @@ function analyzeBrackets(
       inlineTokenEnd(tokens, componentToken) === inlineTokenStart(tokens, openToken)
     ) {
       frame.state = FrameClaim.Component;
-      frame.candidateNext = candidateTop;
-      candidateTop = frame;
+      // Without an enclosing bracket, no later raw link can claim this candidate.
+      if (stackTop) {
+        candidates ??= [];
+        candidates.push(frame);
+      }
       continue;
     }
 
@@ -257,10 +249,18 @@ function analyzeBrackets(
       attributesEnd(source, suffixStart) !== void 0
     );
     frame.state = attributed ? FrameClaim.AttributedSpan : FrameClaim.Span;
-    frame.candidateNext = candidateTop;
-    candidateTop = frame;
+    if (stackTop) {
+      candidates ??= [];
+      candidates.push(frame);
+    }
   }
   return first;
+}
+
+function consumeFrame(frame: BracketFrame, end: number): void {
+  frame.state = FrameClaim.Raw;
+  frame.openingKind = InlineKind.None;
+  frame.openingEnd = end;
 }
 
 function resolvePairedSyntax(
@@ -316,7 +316,7 @@ function resolvePairedSyntax(
       rawTop = frame;
       if (consuming) {
         if (consumeFrames) {
-          frame.state = FrameClaim.Consumed;
+          consumeFrame(frame, consumedEnd);
         }
         continue;
       }
@@ -325,8 +325,9 @@ function resolvePairedSyntax(
       const state = frame.state;
       const claim = state & FrameClaim.Mask;
       if (claim === FrameClaim.Footnote) {
-        const closeToken = frame.close;
-        consumedEnd = inlineTokenEnd(tokens, closeToken);
+        consumedEnd = frame.openingEnd;
+        frame.openingKind = InlineKind.FootnoteReference;
+        frame.openingEnd = consumedEnd;
         continue;
       }
       if (claim >= FrameClaim.Component && claim <= FrameClaim.AttributedSpan) {
@@ -337,7 +338,8 @@ function resolvePairedSyntax(
       }
       const image = kind === InlineKind.ImageOpen;
       if (literalDepth > 0 && !image) {
-        frame.state = state | FrameFlag.LiteralBracket;
+        frame.openingKind = InlineKind.None;
+        frame.closingKind = InlineKind.None;
         continue;
       }
       frame.logicalParent = logicalTop;
@@ -355,7 +357,7 @@ function resolvePairedSyntax(
     }
     if (consuming) {
       if (consumeFrames && rawFrame !== void 0) {
-        rawFrame.state = FrameClaim.Consumed;
+        consumeFrame(rawFrame, inlineTokenEnd(tokens, tokenIndex));
       }
       continue;
     }
@@ -408,13 +410,10 @@ function resolvePairedSyntax(
           }
 
           if (matched) {
-            frame.state = (reference ? FrameClaim.Reference : FrameClaim.Link) | (
-              image ? FrameFlag.Image : 0
-            );
-            frame.close = tokenIndex;
-            frame.resolvedEnd = closeEnd;
-            // Pending logical openers remain in the raw stack until they match.
-            rawFrame!.closingLink = frame;
+            const openingKind = (reference ? InlineKind.ReferenceOpen : InlineKind.LinkOpen) + (image ? 2 : 0);
+            frame.openingKind = openingKind;
+            rawFrame!.closingKind = openingKind + 1;
+            rawFrame!.closingEnd = closeEnd;
             scopeFrame = frame;
             if (!image) {
               inactiveBefore = openToken + 1;
@@ -426,6 +425,20 @@ function resolvePairedSyntax(
           }
         }
       }
+    }
+
+    // Pairing lowers each feature once. The emitter only reads finalized token boundaries.
+    if (rawClaim === FrameClaim.Component) {
+      const openEnd = inlineTokenEnd(tokens, rawFrame!.open);
+      const nonempty = openEnd < tokenStart;
+      rawFrame!.openingKind = nonempty ? InlineKind.InlineComponentOpen : InlineKind.None;
+      rawFrame!.closingKind = nonempty ? InlineKind.InlineComponentClose : InlineKind.None;
+      rawFrame!.closingEnd = tokenStart + 1;
+    }
+    else if (rawClaim >= FrameClaim.Span && rawClaim <= FrameClaim.AttributedSpan) {
+      rawFrame!.openingKind = InlineKind.InlineSpanOpen;
+      rawFrame!.closingKind = InlineKind.InlineSpanClose;
+      rawFrame!.closingEnd = tokenStart + 1;
     }
 
     if (rawState & FrameFlag.InLinkLabel) {
@@ -451,29 +464,6 @@ function resolvePairedSyntax(
   return replacements ?? emptyArray;
 }
 
-function appendReferenceBoundary(
-  result: number[],
-  tokens: InlineTokenStream,
-  frame: BracketFrame,
-  close: boolean,
-): number {
-  const token = close ? frame.close : frame.open;
-  const state = frame.state;
-  const claim = state & FrameClaim.Mask;
-  const kind = (claim === FrameClaim.Reference ? InlineKind.ReferenceOpen : InlineKind.LinkOpen) +
-    (state & FrameFlag.Image ? 2 : 0) +
-    (close ? 1 : 0);
-  const end = close ? frame.resolvedEnd : inlineTokenEnd(tokens, token);
-  appendInlineToken(
-    result,
-    kind,
-    inlineTokenStart(tokens, token),
-    end,
-    inlineTokenData(tokens, token),
-  );
-  return end;
-}
-
 function emitResolvedTokens(
   tokens: InlineTokenStream,
   nextFrame: BracketFrame | undefined,
@@ -481,103 +471,51 @@ function emitResolvedTokens(
   start: number,
   end: number,
 ): InlineTokenStream {
-  // The complete semantic prefix is copied before any later component can promote its tail.
   const result = start ? tokens.slice(0, start * InlineTokenField.Stride) : [];
   let rawTop: BracketFrame | undefined;
   let skipEnd = -1;
-
-  for (let tokenIndex = start; tokenIndex < end; tokenIndex++) {
-    const kind = inlineTokenKind(tokens, tokenIndex);
-    const tokenStart = inlineTokenStart(tokens, tokenIndex);
-    if (skipEnd >= 0 && tokenStart >= skipEnd) {
-      skipEnd = -1;
-    }
-    const skipping = skipEnd >= 0;
-
+  for (let index = start; index < end; index++) {
+    const kind = inlineTokenKind(tokens, index);
+    const tokenStart = inlineTokenStart(tokens, index);
+    let outputKind = kind;
+    let outputEnd = inlineTokenEnd(tokens, index);
     if (kind >= InlineKind.ImageOpen && kind <= InlineKind.BracketOpen) {
       const frame = nextFrame!;
       nextFrame = frame.next;
       rawTop = frame;
-      const state = frame.state;
-      const claim = state & FrameClaim.Mask;
-      if (!skipping) {
-        if (claim === FrameClaim.Footnote) {
-          const closeToken = frame.close;
-          const start = inlineTokenStart(tokens, tokenIndex) + (kind === InlineKind.ImageOpen ? 1 : 0);
-          skipEnd = inlineTokenEnd(tokens, closeToken);
-          appendInlineToken(result, InlineKind.FootnoteReference, start, skipEnd);
-        }
-        else if (claim === FrameClaim.Component) {
-          const closeToken = frame.close;
-          const openEnd = inlineTokenEnd(tokens, tokenIndex);
-          // Nonempty labels promote the adjacent leaf and include `[` in the pair opener.
-          if (openEnd < inlineTokenStart(tokens, closeToken)) {
-            const offset = result.length - InlineTokenField.Stride;
-            result[offset | InlineTokenField.Kind] = InlineKind.InlineComponentOpen;
-            result[offset | InlineTokenField.End] = openEnd;
-          }
-        }
-        else if (claim >= FrameClaim.Span && claim <= FrameClaim.AttributedSpan) {
-          appendInlineToken(
-            result,
-            InlineKind.InlineSpanOpen,
-            inlineTokenStart(tokens, tokenIndex),
-            inlineTokenEnd(tokens, tokenIndex),
-          );
-        }
-        else if (claim === FrameClaim.Link || claim === FrameClaim.Reference) {
-          appendReferenceBoundary(result, tokens, frame, false);
-        }
-        else if (claim === FrameClaim.Consumed) {
-          skipEnd = inlineTokenEnd(tokens, frame.close);
-        }
-        else if (!(state & FrameFlag.LiteralBracket)) {
-          appendResolvedRawToken(result, tokens, tokenIndex, replacements);
-        }
+      outputKind = frame.openingKind;
+      outputEnd = frame.openingEnd;
+    }
+    else if (kind === InlineKind.LinkTail || kind === InlineKind.BracketClose) {
+      const frame = rawTop;
+      rawTop = frame?.parent;
+      if (frame) {
+        outputKind = frame.closingKind;
+        outputEnd = frame.closingEnd;
       }
+    }
+    // Track raw nesting even while a semantic replacement consumes source tokens.
+    if (tokenStart < skipEnd) {
       continue;
     }
-
-    if (kind === InlineKind.LinkTail || kind === InlineKind.BracketClose) {
-      const rawFrame = rawTop;
-      if (rawFrame !== void 0) {
-        rawTop = rawFrame.parent;
-      }
-      const closingLink = rawFrame?.closingLink;
-
-      if (skipping) {
-        continue;
-      }
-      if (closingLink) {
-        skipEnd = appendReferenceBoundary(result, tokens, closingLink, true);
-        continue;
-      }
-      const state = rawFrame === void 0 ? FrameClaim.Raw : rawFrame.state;
-      const claim = state & FrameClaim.Mask;
-      if (claim === FrameClaim.Component) {
-        const openToken = rawFrame!.open;
-        if (inlineTokenEnd(tokens, openToken) < tokenStart) {
-          appendInlineToken(result, InlineKind.InlineComponentClose, tokenStart, tokenStart + 1);
-        }
-        continue;
-      }
-      if (claim >= FrameClaim.Span && claim <= FrameClaim.AttributedSpan) {
-        appendInlineToken(result, InlineKind.InlineSpanClose, tokenStart, tokenStart + 1);
-        continue;
-      }
-      // Of the remaining claims, only a footnote replaces its entire source.
-      if (claim === FrameClaim.Footnote || state & FrameFlag.LiteralBracket) {
-        continue;
-      }
+    if (outputKind === InlineKind.InlineComponentOpen) {
+      // A nonempty label promotes its adjacent leaf instead of emitting `[`.
+      const field = result.length - InlineTokenField.Stride;
+      result[field | InlineTokenField.Kind] = outputKind;
+      result[field | InlineTokenField.End] = outputEnd;
     }
-
-    if (!skipping) {
-      if (kind >= InlineRole.Text) {
-        copyInlineToken(result, tokens, tokenIndex);
-      }
-      else {
-        appendResolvedRawToken(result, tokens, tokenIndex, replacements);
-      }
+    else if (outputKind >= InlineRole.Text) {
+      const sourceStart = tokenStart + (
+        outputKind === InlineKind.FootnoteReference && kind === InlineKind.ImageOpen ? 1 : 0
+      );
+      appendInlineToken(result, outputKind, sourceStart, outputEnd, inlineTokenData(tokens, index));
+      skipEnd = outputEnd;
+    }
+    else if (outputKind === InlineKind.None) {
+      skipEnd = outputEnd;
+    }
+    else {
+      appendResolvedRawToken(result, tokens, index, replacements);
     }
   }
   return result;
@@ -595,6 +533,18 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
       }
       if (start === end) {
         return tokens;
+      }
+      // A lone opener and a validated resource tail form a complete pair.
+      // There are no nested brackets, delimiters or component prefixes to resolve.
+      if (start === 0 && end === 2 && inlineTokenKind(tokens, 1) === InlineKind.LinkTail) {
+        const opener = inlineTokenKind(tokens, 0);
+        if (opener === InlineKind.BracketOpen || opener === InlineKind.ImageOpen) {
+          const kind = opener === InlineKind.ImageOpen ? InlineKind.ImageLinkOpen : InlineKind.LinkOpen;
+          const result = tokens.slice();
+          result[InlineTokenField.Kind] = kind;
+          result[InlineTokenField.Stride | InlineTokenField.Kind] = kind + 1;
+          return result;
+        }
       }
       const frames = analyzeBrackets(source, tokens, definitions, options, start, end);
       const replacements = resolvePairedSyntax(source, tokens, frames, definitions, delimiterByKind, start, end);

@@ -53,13 +53,3 @@ export function inlineTokenText(
 export function appendInlineToken(target: number[], kind: number, start: number, end: number, data = 0): void {
   target.push(kind, start, end, data);
 }
-
-export function copyInlineToken(target: number[], tokens: InlineTokenStream, index: number): void {
-  const offset = index * InlineTokenField.Stride;
-  target.push(
-    tokens[offset | InlineTokenField.Kind],
-    tokens[offset | InlineTokenField.Start],
-    tokens[offset | InlineTokenField.End],
-    tokens[offset | InlineTokenField.Data],
-  );
-}
