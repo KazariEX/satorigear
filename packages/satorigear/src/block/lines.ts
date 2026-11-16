@@ -1,3 +1,4 @@
+import type { Buffer } from "node:buffer";
 import { Character } from "../constants/character.ts";
 import type { SourceLocation, SourceLocator, SourcePosition } from "../source-view.ts";
 
@@ -24,82 +25,161 @@ export const enum IndentedLine {
   Appended,
 }
 
-export class BlockLines implements SourceLocator {
-  #fields: Int32Array;
-  #length = 0;
-  #locatorField = 0;
-  // Projected views omit source ownership, so a positive length also proves physical contiguity.
-  #sourceLength: number;
-  // Once false, edits keep this conservative rather than rescanning retained source.
-  #lineEndingsNormalized = true;
+interface ScanningResult {
+  fields: Int32Array;
+  length: number;
+  normalized: boolean;
+}
 
-  constructor(sourceLength = 0, lineCapacity: number = BlockLineCapacity.Initial) {
-    this.#sourceLength = sourceLength;
-    this.#fields = new Int32Array(lineCapacity * BlockLineField.Stride);
+// Typical Markdown lines exceed 16 characters; cap the hint at 16,384 lines.
+function getLineCapacity(sourceLength: number): number {
+  return Math.min((sourceLength + 15) >>> 4, 16384);
+}
+
+function growLineFields(fields: Int32Array, fieldLength: number): Int32Array {
+  if (fieldLength <= fields.length) {
+    return fields;
   }
-
-  static from(source: string, start: number, limit: number): BlockLines {
-    const sourceLength = source.length;
-    // Scan partial ranges in isolation because String#indexOf cannot take an end bound.
-    if (start > 0 || limit < sourceLength) {
-      source = source.slice(start, limit);
-    }
-    // Typical Markdown lines exceed 16 characters; cap the capacity hint at 16,384 lines.
-    const lines = new BlockLines(
-      sourceLength,
-      Math.min((source.length + 15) >>> 4, 16384),
-    );
-    lines.#length = BlockLines.#scan(source, lines);
-    if (start !== 0) {
-      lines.#shiftPositions(0, start);
-    }
-    return lines;
+  let capacity = fields.length / BlockLineField.Stride;
+  while (capacity < fieldLength / BlockLineField.Stride) {
+    capacity += capacity < BlockLineCapacity.DoublingLimit
+      ? Math.max(BlockLineCapacity.Initial, capacity)
+      : capacity >>> 1;
   }
+  const next = new Int32Array(capacity * BlockLineField.Stride);
+  next.set(fields);
+  return next;
+}
 
-  /** Rebuilds the physical line index while retaining its backing store. */
-  scan(source: string): this {
-    this.#sourceLength = source.length;
-    this.#locatorField = 0;
-    const lineCapacity = Math.min((source.length + 15) >>> 4, 16384);
-    this.#ensureCapacity(lineCapacity * BlockLineField.Stride);
-    this.#length = BlockLines.#scan(source, this);
-    return this;
-  }
+class Latin1 {
+  static minimum = 2048;
+  static scratchBytes: Buffer | undefined;
+  static scratchWords: Uint32Array | undefined;
+  static scratchLimit = 0;
 
-  /**
-   * Fills packed physical lines from a zero-based source segment.
-   * Range setup and coordinate rebasing remain in {@link BlockLines.from}, outside this hot loop.
-   */
-  static #scan(source: string, lines: BlockLines): number {
+  // eslint-disable-next-line node/prefer-global/buffer
+  static allocate = globalThis.Buffer?.allocUnsafeSlow;
+
+  static scan(source: string, fields: Int32Array): ScanningResult {
     const limit = source.length;
-    let start = 0;
-    let lineFeed = source.indexOf("\n");
-    let carriageReturn = source.indexOf("\r");
-    lines.#lineEndingsNormalized = carriageReturn < 0;
-    // Physical lines initialize all packed fields in one sequential write run.
+    const wordLimit = limit + 7 & ~7;
+    if (this.scratchLimit < wordLimit) {
+      const bytes = this.allocate(wordLimit);
+      this.scratchBytes = bytes;
+      this.scratchWords = new Uint32Array(bytes.buffer, bytes.byteOffset, wordLimit >>> 2);
+      this.scratchLimit = wordLimit;
+    }
+
+    const bytes = this.scratchBytes!;
+    const words = this.scratchWords!;
+    // Clear the final block before copying so padding cannot emit newline events.
+    words[(wordLimit >>> 2) - 2] = 0;
+    words[(wordLimit >>> 2) - 1] = 0;
+    bytes.write(source, 0, limit, "latin1");
     let field = 0;
-    let fields = lines.#fields;
-    while (start < limit) {
-      // Default to the LF-only path; only CR-bearing input pays for mixed-ending selection.
-      let end = lineFeed;
-      let next = end + 1;
-      if (carriageReturn !== -1 && (end < 0 || carriageReturn < end)) {
-        end = carriageReturn;
-        next = end + (source.charCodeAt(end + 1) === Character.LineFeed ? 2 : 1);
-        carriageReturn = source.indexOf("\r", next);
-        if (lineFeed !== -1 && lineFeed < next) {
-          lineFeed = source.indexOf("\n", next);
+    let start = 0;
+    let cursor = 0;
+    let crnext = -1;
+    while (cursor < wordLimit) {
+      // Reserve at most one row per real input unit; padding needs no capacity.
+      // This bounds each segment without per-row growth checks.
+      fields = growLineFields(fields, field + Math.min(8, limit - cursor) * BlockLineField.Stride);
+      const available = (fields.length - field) / BlockLineField.Stride;
+      const wordEnd = cursor > limit - available ? wordLimit : cursor + (available & ~7);
+      for (
+        let word0 = words[cursor >>> 2], word1 = words[(cursor >>> 2) + 1]
+        // eslint-disable-next-line style/semi-style
+        ; ; word0 = words[cursor >>> 2], word1 = words[(cursor >>> 2) + 1]
+      ) {
+        const mixed0 = word0 ^ (word0 & 0x01010101) * 7 ^ 0x0A0A0A0A;
+        const mixed1 = word1 ^ (word1 & 0x01010101) * 7 ^ 0x0A0A0A0A;
+        // Folding preserves the high bits; the even folded bytes make this mask exact.
+        const hits0 = mixed0 - 0x01010101 & ~word0 & 0x80808080;
+        const hits1 = mixed1 - 0x01010101 & ~word1 & 0x80808080;
+        if (hits0 | hits1) {
+          // Interleave both masks, then pack all eight positions with one multiply.
+          let events = Math.imul(hits0 >>> 4 | hits1, 0x00204081) >>> 24;
+          do {
+            const at = cursor + (~Math.clz32(events & -events) & 7);
+            const code = source.charCodeAt(at);
+            // Latin1 copying retains low bytes, so exclude non-Latin1 aliases.
+            if (code <= 0xFF) {
+              let next = at + 1;
+              if (code === Character.CarriageReturn) {
+                crnext = next;
+                // Consume an adjacent LF in this block; cross-block LF uses the carry below.
+                if (events >>> (at & 7) & 2 && source.charCodeAt(next) === Character.LineFeed) {
+                  next++;
+                  events &= events - 1;
+                }
+              }
+              else if (at === crnext) {
+                fields[field - 2] = next;
+                start = next;
+                continue;
+              }
+              // Four fields per row fit in 31 bits under Node's string length limit.
+              fields[field | BlockLineField.Start] = start;
+              fields[field | BlockLineField.End] = at;
+              fields[field | BlockLineField.Next] = next;
+              fields[field | BlockLineField.State] = 0;
+              field = field + BlockLineField.Stride & 0x7FFFFFFF;
+              start = next;
+            }
+          } while (events &= events - 1);
+        }
+        cursor += 8;
+        if (cursor >= wordEnd) {
+          break;
         }
       }
-      else if (lineFeed < 0) {
+    }
+
+    if (start < limit) {
+      fields = growLineFields(fields, field + BlockLineField.Stride);
+      fields[field | BlockLineField.Start] = start;
+      fields[field | BlockLineField.End] = limit;
+      fields[field | BlockLineField.Next] = limit;
+      fields[field | BlockLineField.State] = 0;
+      field = field + BlockLineField.Stride & 0x7FFFFFFF;
+    }
+
+    return {
+      fields,
+      length: field / BlockLineField.Stride,
+      normalized: crnext < 0,
+    };
+  }
+}
+
+class Index0 {
+  static scan(source: string, fields: Int32Array): ScanningResult {
+    let field = 0;
+    let start = 0;
+    let lf = source.indexOf("\n");
+    let cr = source.indexOf("\r");
+    const normalized = cr < 0;
+    const limit = source.length;
+
+    while (start < limit) {
+      let end = lf;
+      let next = end + 1;
+      if (cr !== -1 && (end < 0 || cr < end)) {
+        end = cr;
+        next = end + (source.charCodeAt(end + 1) === Character.LineFeed ? 2 : 1);
+        cr = source.indexOf("\r", next);
+        if (lf !== -1 && lf < next) {
+          lf = source.indexOf("\n", next);
+        }
+      }
+      else if (lf < 0) {
         end = next = limit;
       }
       else {
-        lineFeed = source.indexOf("\n", next);
+        lf = source.indexOf("\n", next);
       }
       if (field >= fields.length) {
-        lines.#ensureCapacity(field + BlockLineField.Stride);
-        fields = lines.#fields;
+        fields = growLineFields(fields, field + BlockLineField.Stride);
       }
       fields[field++] = start;
       fields[field++] = end;
@@ -107,7 +187,38 @@ export class BlockLines implements SourceLocator {
       fields[field++] = 0;
       start = next;
     }
-    return field / BlockLineField.Stride;
+
+    return {
+      fields,
+      length: field / BlockLineField.Stride,
+      normalized,
+    };
+  }
+}
+
+export class BlockLines implements SourceLocator {
+  #fields: Int32Array;
+  #length = 0;
+  #locatorField = 0;
+  #normalized = true;
+  #sourceLength: number;
+
+  constructor(sourceLength = 0, capacity: number = BlockLineCapacity.Initial) {
+    this.#sourceLength = sourceLength;
+    this.#fields = new Int32Array(capacity * BlockLineField.Stride);
+  }
+
+  /** Rebuilds the physical line index while retaining its backing store. */
+  scan(source: string): void {
+    this.#locatorField = 0;
+    this.#sourceLength = source.length;
+    const fields = growLineFields(this.#fields, getLineCapacity(source.length) * BlockLineField.Stride);
+    const result = source.length >= Latin1.minimum && Latin1.allocate !== void 0
+      ? Latin1.scan(source, fields)
+      : Index0.scan(source, fields);
+    this.#fields = result.fields;
+    this.#length = result.length;
+    this.#normalized = result.normalized;
   }
 
   get length(): number {
@@ -157,7 +268,7 @@ export class BlockLines implements SourceLocator {
 
   /** Normalizes a fragment only when retained source may contain carriage returns. */
   normalizeLineEndings(value: string): string {
-    return this.#lineEndingsNormalized || !value.includes("\r")
+    return this.#normalized || !value.includes("\r")
       ? value
       : value.replace(/\r\n|\r/g, "\n");
   }
@@ -224,7 +335,7 @@ export class BlockLines implements SourceLocator {
     const field = this.#length * BlockLineField.Stride;
     let fields = this.#fields;
     if (field >= fields.length) {
-      this.#ensureCapacity(field + BlockLineField.Stride);
+      this.#fields = growLineFields(this.#fields, field + BlockLineField.Stride);
       fields = this.#fields;
     }
     const state = prefixColumns * 2 + (lazy ? BlockLineState.Lazy : 0);
@@ -303,7 +414,7 @@ export class BlockLines implements SourceLocator {
       end * BlockLineField.Stride,
     );
     result.#length = end - start;
-    result.#lineEndingsNormalized = this.#lineEndingsNormalized;
+    result.#normalized = this.#normalized;
     return result;
   }
 
@@ -312,7 +423,7 @@ export class BlockLines implements SourceLocator {
     const next = new BlockLines(this.#sourceLength, 0);
     next.#fields = this.#fields.slice(0, this.#length * BlockLineField.Stride);
     next.#length = this.#length;
-    next.#lineEndingsNormalized = this.#lineEndingsNormalized;
+    next.#normalized = this.#normalized;
     return next;
   }
 
@@ -336,7 +447,13 @@ export class BlockLines implements SourceLocator {
     ) {
       restartOffset = this.start(--prefixEnd);
     }
-    const changed = BlockLines.from(nextSource, restartOffset, newSuffixOffset);
+    // Isolate the rebuilt range so a trailing CR cannot consume an LF outside it.
+    const changedSource = nextSource.slice(restartOffset, newSuffixOffset);
+    const changed = new BlockLines(0, getLineCapacity(changedSource.length));
+    changed.scan(changedSource);
+    if (restartOffset !== 0) {
+      changed.#shiftPositions(0, restartOffset);
+    }
     // Equal-length edits preserve line slots, so only overwrite the rebuilt window.
     if (delta === 0 && changed.length === suffix - prefixEnd) {
       const next = this.#copy();
@@ -345,7 +462,7 @@ export class BlockLines implements SourceLocator {
       for (let field = 0; field < fieldLength; field++) {
         next.#fields[target + field] = changed.#fields[field];
       }
-      next.#lineEndingsNormalized &&= changed.#lineEndingsNormalized;
+      next.#normalized &&= changed.#normalized;
       return next;
     }
     const next = new BlockLines(
@@ -360,7 +477,7 @@ export class BlockLines implements SourceLocator {
     if (delta !== 0) {
       next.#shiftPositions(suffixStart, delta);
     }
-    next.#lineEndingsNormalized = this.#lineEndingsNormalized && changed.#lineEndingsNormalized;
+    next.#normalized = this.#normalized && changed.#normalized;
     return next;
   }
 
@@ -379,27 +496,9 @@ export class BlockLines implements SourceLocator {
     const sourceEnd = end * BlockLineField.Stride;
     const targetStart = this.#length * BlockLineField.Stride;
     const targetEnd = targetStart + sourceEnd - sourceStart;
-    this.#ensureCapacity(targetEnd);
+    this.#fields = growLineFields(this.#fields, targetEnd);
     this.#fields.set(lines.#fields.subarray(sourceStart, sourceEnd), targetStart);
     this.#length += end - start;
-  }
-
-  #ensureCapacity(fieldLength: number): void {
-    const fields = this.#fields;
-    if (fieldLength <= fields.length) {
-      return;
-    }
-    let lineCapacity = fields.length / BlockLineField.Stride;
-    const requiredLines = fieldLength / BlockLineField.Stride;
-    // Allocate four lines initially, double through 16, then grow by 50%.
-    while (lineCapacity < requiredLines) {
-      lineCapacity += lineCapacity < BlockLineCapacity.DoublingLimit
-        ? Math.max(BlockLineCapacity.Initial, lineCapacity)
-        : lineCapacity >>> 1;
-    }
-    const nextFields = new Int32Array(lineCapacity * BlockLineField.Stride);
-    nextFields.set(fields);
-    this.#fields = nextFields;
   }
 
   #shiftPositions(start: number, delta: number): void {
