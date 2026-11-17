@@ -62,7 +62,7 @@ class Latin1 {
 
   static scan(source: string, fields: Int32Array): ScanningResult {
     const limit = source.length;
-    const wordLimit = limit + 7 & ~7;
+    const wordLimit = limit + 31 & ~31;
     if (this.scratchLimit < wordLimit) {
       const bytes = this.allocate(wordLimit);
       this.scratchBytes = bytes;
@@ -72,8 +72,10 @@ class Latin1 {
 
     const bytes = this.scratchBytes!;
     const words = this.scratchWords!;
-    words[(wordLimit >>> 2) - 2] = 0;
-    words[(wordLimit >>> 2) - 1] = 0;
+    // Clear the trailing padding to avoid cross-round data pollution.
+    for (let i = 1; i <= 8; i++) {
+      words[(wordLimit >>> 2) - i] = 0;
+    }
     bytes.write(source, 0, limit, "latin1");
     let field = 0;
     let start = 0;
@@ -82,25 +84,48 @@ class Latin1 {
     while (cursor < wordLimit) {
       // Worst case: <= 1 row per real byte; padding is zero and emits nothing.
       // Reserving per segment keeps the inner loop free of growth checks.
-      fields = growLineFields(fields, field + Math.min(8, limit - cursor) * BlockLineField.Stride);
+      fields = growLineFields(fields, field + Math.min(32, limit - cursor) * BlockLineField.Stride);
       const available = (fields.length - field) / BlockLineField.Stride;
-      const wordEnd = cursor > limit - available ? wordLimit : cursor + (available & ~7);
-      for (
-        let word0 = words[cursor >>> 2], word1 = words[(cursor >>> 2) + 1]
-        // eslint-disable-next-line style/semi-style
-        ; ; word0 = words[cursor >>> 2], word1 = words[(cursor >>> 2) + 1]
-      ) {
+      const wordEnd = cursor > limit - available ? wordLimit : cursor + (available & ~31);
+      for (; ;) {
+        const offset = cursor >>> 2;
+        const word0 = words[offset];
+        const word1 = words[offset | 1];
+        const word2 = words[offset | 2];
+        const word3 = words[offset | 3];
+        const word4 = words[offset | 4];
+        const word5 = words[offset | 5];
+        const word6 = words[offset | 6];
+        const word7 = words[offset | 7];
+
         // Fold {0x0A, 0x0D} -> 0, preserve the high bits for the zero-byte detection below.
-        const mixed0 = word0 ^ (word0 & 0x01010101) * 7 ^ 0x0A0A0A0A;
-        const mixed1 = word1 ^ (word1 & 0x01010101) * 7 ^ 0x0A0A0A0A;
-        const hits0 = mixed0 - 0x01010101 & ~word0 & 0x80808080;
-        const hits1 = mixed1 - 0x01010101 & ~word1 & 0x80808080;
-        if (hits0 | hits1) {
+        const mixed0 = (word0 ^ word0 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
+        const mixed1 = (word1 ^ word1 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
+        const mixed2 = (word2 ^ word2 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
+        const mixed3 = (word3 ^ word3 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
+        const mixed4 = (word4 ^ word4 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
+        const mixed5 = (word5 ^ word5 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
+        const mixed6 = (word6 ^ word6 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
+        const mixed7 = (word7 ^ word7 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
+        // Mixed bytes fit in seven bits, so adding 0x7F cannot carry between bytes.
+        const hits0 = ~(mixed0 + 0x7F7F7F7F | word0) & 0x80808080;
+        const hits1 = ~(mixed1 + 0x7F7F7F7F | word1) & 0x80808080;
+        const hits2 = ~(mixed2 + 0x7F7F7F7F | word2) & 0x80808080;
+        const hits3 = ~(mixed3 + 0x7F7F7F7F | word3) & 0x80808080;
+        const hits4 = ~(mixed4 + 0x7F7F7F7F | word4) & 0x80808080;
+        const hits5 = ~(mixed5 + 0x7F7F7F7F | word5) & 0x80808080;
+        const hits6 = ~(mixed6 + 0x7F7F7F7F | word6) & 0x80808080;
+        const hits7 = ~(mixed7 + 0x7F7F7F7F | word7) & 0x80808080;
+
+        if (hits0 | hits1 | hits2 | hits3 | hits4 | hits5 | hits6 | hits7) {
           // 1. hits0 >>> 4 | hits1      => [3][7][11][15][19][23][27][31]
           // 2. Math.imul(~, Mag) >>> 24 => [0][4][ 1][ 5][ 2][ 6][ 3][ 7]
-          let events = Math.imul(hits0 >>> 4 | hits1, 0x00204081) >>> 24;
+          let events = Math.imul(hits0 >>> 4 | hits1, 0x00204081) >>> 24
+          /* .... */ | Math.imul(hits2 >>> 4 | hits3, 0x00204081) >>> 24 << 8
+          /* .... */ | Math.imul(hits4 >>> 4 | hits5, 0x00204081) >>> 24 << 16
+          /* .... */ | Math.imul(hits6 >>> 4 | hits7, 0x00204081) >>> 24 << 24;
           do {
-            const at = cursor + (~Math.clz32(events & -events) & 7);
+            const at = cursor + (~Math.clz32(events & -events) & 31);
             const code = source.charCodeAt(at);
             // Latin1 copying retains low bytes, so exclude non-Latin1 aliases:
             // "上"(0x4E0A), "不"(0x4E0D), "č"(0x010D), ...
@@ -109,7 +134,7 @@ class Latin1 {
               if (code === Character.CarriageReturn) {
                 crnext = next;
                 // Consume an adjacent LF in this block; cross-block LF uses the carry below.
-                if (events >>> (at & 7) & 2 && source.charCodeAt(next) === Character.LineFeed) {
+                if (events >>> (at & 31) & 2 && source.charCodeAt(next) === Character.LineFeed) {
                   next++;
                   events &= events - 1;
                 }
@@ -129,7 +154,7 @@ class Latin1 {
             }
           } while (events &= events - 1);
         }
-        cursor += 8;
+        cursor += 32;
         if (cursor >= wordEnd) {
           break;
         }
