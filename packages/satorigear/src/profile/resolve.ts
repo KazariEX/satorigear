@@ -40,48 +40,44 @@ export type InlineResolverFactory = (delimiters: readonly DelimiterConfig[]) => 
 
 interface BracketFrame {
   open: number;
+  // Enclosing bracket in the token stream.
   parent: BracketFrame | undefined;
+  // Next opener in source order.
   next: BracketFrame | undefined;
   state: number;
   candidateStart: number;
+  // Last delimiter before this bracket's content.
   delimiterBottom: DelimiterRun | undefined;
+  // Previous opener in the link-matching stack.
   logicalParent: BracketFrame | undefined;
-  // Concrete output boundaries; raw kinds retain lexer behavior and None consumes syntax.
+  // Output for the opener; None skips its source tokens.
   openingKind: InlineKind;
   openingEnd: number;
-  // The logical opener may later be consumed; retain the raw closer's decision.
+  // The raw closer may finish a different frame's link.
   closingKind: InlineKind;
   closingEnd: number;
 }
 
-const enum FrameClaim {
-  Raw,
-  // Feature boundaries stay contiguous for close-path range checks.
-  Footnote,
-  Component,
-  Span,
-  AttributedSpan,
-  // Claims are exclusive low-bit discriminants; flags occupy the higher bits.
-  Mask = 7,
-}
-
-const enum FrameFlag {
+const enum FrameState {
+  // Analysis sets this together with openingKind; ordinary link matches leave it unset.
+  Claimed = 1,
+  BareSpan = 2,
   Image = 8,
   InLinkLabel = 16,
 }
 
-// Each frame keeps its syntax identity while analysis, pairing, and emission
-// establish their own links and boundaries without changing a field's meaning.
-
+// A link tail cancels bare spans but keeps components and spans with attributes.
 function rewriteLinkCandidates(candidates: BracketFrame[], start: number): void {
   let write = start;
   for (let index = start; index < candidates.length; index++) {
     const candidate = candidates[index];
-    if (candidate.state === FrameClaim.Span) {
-      candidate.state = FrameClaim.Raw;
+    if (candidate.state & FrameState.BareSpan) {
+      // Bare spans come from `[`. Analysis has not changed their boundary offsets.
+      candidate.state = 0;
+      candidate.openingKind = InlineKind.BracketOpen;
     }
     else {
-      candidate.state |= FrameFlag.InLinkLabel;
+      candidate.state |= FrameState.InLinkLabel;
       candidates[write++] = candidate;
     }
   }
@@ -164,7 +160,7 @@ function analyzeBrackets(
         open: tokenIndex,
         parent: stackTop,
         next: void 0,
-        state: kind === InlineKind.ImageOpen ? FrameFlag.Image : FrameClaim.Raw,
+        state: kind === InlineKind.ImageOpen ? FrameState.Image : 0,
         candidateStart: candidates?.length ?? 0,
         delimiterBottom: void 0,
         logicalParent: void 0,
@@ -194,17 +190,18 @@ function analyzeBrackets(
     stackTop = frame.parent;
     frame.closingKind = kind;
     frame.closingEnd = inlineTokenEnd(tokens, tokenIndex);
-    const image = (frame.state & FrameFlag.Image) !== 0;
+    const image = frame.state & FrameState.Image;
+    const openToken = frame.open;
 
     if (options.footnote && kind === InlineKind.BracketClose) {
-      const openToken = frame.open;
       const labelStart = inlineTokenStart(tokens, openToken) + (image ? 1 : 0);
       const label = footnoteLabelAt(source, labelStart, source.length);
       if (
-        label?.end === inlineTokenEnd(tokens, tokenIndex) &&
+        label?.end === frame.closingEnd &&
         definitions.hasDefinition(label.definitionKey)
       ) {
-        frame.state = FrameClaim.Footnote;
+        frame.state = FrameState.Claimed;
+        frame.openingKind = InlineKind.FootnoteReference;
         frame.openingEnd = frame.closingEnd;
         if (candidates) {
           candidates.length = frame.candidateStart;
@@ -219,36 +216,31 @@ function analyzeBrackets(
     if (kind === InlineKind.LinkTail && candidates) {
       rewriteLinkCandidates(candidates, frame.candidateStart);
     }
-    const openToken = frame.open;
     const componentToken = openToken - 1;
     if (
       componentToken >= 0 &&
       inlineTokenKind(tokens, componentToken) === InlineKind.InlineComponent &&
       inlineTokenEnd(tokens, componentToken) === inlineTokenStart(tokens, openToken)
     ) {
-      frame.state = FrameClaim.Component;
-      // Without an enclosing bracket, no later raw link can claim this candidate.
-      if (stackTop) {
-        candidates ??= [];
-        candidates.push(frame);
+      frame.state = FrameState.Claimed;
+      frame.openingKind = InlineKind.InlineComponentOpen;
+    }
+    else {
+      const suffixStart = inlineTokenStart(tokens, tokenIndex) + 1;
+      const trailing = source.charCodeAt(suffixStart);
+      if (
+        trailing === Character.LeftParenthesis ||
+        trailing === Character.LeftSquareBracket
+      ) {
+        continue;
       }
-      continue;
+      const attributed = (
+        trailing === Character.LeftCurlyBracket && attributesEnd(source, suffixStart) !== void 0
+      );
+      frame.state = FrameState.Claimed | (attributed ? 0 : FrameState.BareSpan);
+      frame.openingKind = InlineKind.InlineSpanOpen;
     }
-
-    const close = inlineTokenStart(tokens, tokenIndex);
-    const suffixStart = close + 1;
-    const trailing = source.charCodeAt(suffixStart);
-    if (
-      trailing === Character.LeftParenthesis ||
-      trailing === Character.LeftSquareBracket
-    ) {
-      continue;
-    }
-    const attributed = (
-      trailing === Character.LeftCurlyBracket &&
-      attributesEnd(source, suffixStart) !== void 0
-    );
-    frame.state = attributed ? FrameClaim.AttributedSpan : FrameClaim.Span;
+    // Only nested labels need to be revisited when a link tail appears.
     if (stackTop) {
       candidates ??= [];
       candidates.push(frame);
@@ -258,7 +250,7 @@ function analyzeBrackets(
 }
 
 function consumeFrame(frame: BracketFrame, end: number): void {
-  frame.state = FrameClaim.Raw;
+  frame.state = 0;
   frame.openingKind = InlineKind.None;
   frame.openingEnd = end;
 }
@@ -272,9 +264,8 @@ function resolvePairedSyntax(
   start: number,
   end: number,
 ): readonly DelimiterReplacement[][] {
-  // An empty definition table makes every non-resource bracket candidate literal.
+  // Reference links need definitions; inline link tails are already validated.
   const hasDefinitions = nextFrame !== void 0 && definitions.hasDefinitions();
-  // Frames retain the last run outside their scope; closing detaches only its suffix.
   let firstRun: DelimiterRun | undefined;
   let lastRun: DelimiterRun | undefined;
   let replacements: DelimiterReplacement[][] | undefined;
@@ -323,15 +314,11 @@ function resolvePairedSyntax(
       frame.delimiterBottom = lastRun;
 
       const state = frame.state;
-      const claim = state & FrameClaim.Mask;
-      if (claim === FrameClaim.Footnote) {
-        consumedEnd = frame.openingEnd;
-        frame.openingKind = InlineKind.FootnoteReference;
-        frame.openingEnd = consumedEnd;
-        continue;
-      }
-      if (claim >= FrameClaim.Component && claim <= FrameClaim.AttributedSpan) {
-        if (state & FrameFlag.InLinkLabel) {
+      if (state & FrameState.Claimed) {
+        if (frame.openingKind === InlineKind.FootnoteReference) {
+          consumedEnd = frame.openingEnd;
+        }
+        else if (state & FrameState.InLinkLabel) {
           literalDepth++;
         }
         continue;
@@ -362,41 +349,44 @@ function resolvePairedSyntax(
       continue;
     }
 
-    const rawState = rawFrame === void 0 ? FrameClaim.Raw : rawFrame.state;
-    const rawClaim = rawState & FrameClaim.Mask;
-    let scopeFrame = rawClaim >= FrameClaim.Footnote && rawClaim <= FrameClaim.AttributedSpan
-      ? rawFrame
-      : void 0;
-    const visible = scopeFrame === void 0 && (
-      literalDepth <= 0 || rawFrame === void 0 || (rawState & FrameFlag.Image) !== 0
-    );
-
-    if (visible) {
+    const rawState = rawFrame?.state ?? 0;
+    let scopeFrame: BracketFrame | undefined;
+    // Footnotes consume their closing bracket, which was skipped above.
+    // Only component and span claims reach this branch.
+    if (rawState & FrameState.Claimed) {
+      const frame = scopeFrame = rawFrame!;
+      if (frame.openingKind !== InlineKind.InlineComponentOpen || inlineTokenEnd(tokens, frame.open) < tokenStart) {
+        frame.closingKind = frame.openingKind + 1;
+      }
+      else {
+        frame.openingKind = InlineKind.None;
+        frame.closingKind = InlineKind.None;
+      }
+      frame.closingEnd = tokenStart + 1;
+    }
+    else if (literalDepth <= 0 || rawFrame === void 0 || rawState & FrameState.Image) {
       const frame = logicalTop;
       if (frame !== void 0) {
         logicalTop = frame.logicalParent;
       }
       if (frame !== void 0 && (kind === InlineKind.LinkTail || hasDefinitions)) {
         const openToken = frame.open;
-        const image = (frame.state & FrameFlag.Image) !== 0;
-        // A successful inner ordinary link deactivates each earlier non-image opener.
+        const image = frame.state & FrameState.Image;
+        // An inner link prevents outer links from matching; images remain allowed.
         if (image || openToken + 1 >= inactiveBefore) {
-          const contentStart = inlineTokenEnd(tokens, openToken);
-          const contentEnd = tokenStart;
           const tokenEnd = inlineTokenEnd(tokens, tokenIndex);
           let closeEnd = tokenEnd;
-          let reference = false;
-          let matched = kind === InlineKind.LinkTail;
-
-          if (!matched) {
+          let openingKind = kind === InlineKind.LinkTail ? InlineKind.LinkOpen : InlineKind.None;
+          if (!openingKind) {
+            const contentStart = inlineTokenEnd(tokens, openToken);
+            const contentEnd = tokenStart;
             const labelEnd = referenceLabelEnd(source, closeEnd);
             if (labelEnd > 0) {
               const explicit = source.slice(closeEnd + 1, labelEnd - 1);
               const label = explicit || source.slice(contentStart, contentEnd);
-              matched = definitions.hasDefinition(normalizeIdentifier(label));
-              if (matched) {
+              if (definitions.hasDefinition(normalizeIdentifier(label))) {
+                openingKind = InlineKind.ReferenceOpen;
                 closeEnd = labelEnd;
-                reference = true;
               }
             }
             else if (
@@ -404,13 +394,12 @@ function resolvePairedSyntax(
               acceptsShortcutLabel(source, contentStart, contentEnd) &&
               definitions.hasDefinition(normalizeIdentifier(source.slice(contentStart, contentEnd)))
             ) {
-              matched = true;
-              reference = true;
+              openingKind = InlineKind.ReferenceOpen;
             }
           }
 
-          if (matched) {
-            const openingKind = (reference ? InlineKind.ReferenceOpen : InlineKind.LinkOpen) + (image ? 2 : 0);
+          if (openingKind) {
+            openingKind += image ? 2 : 0;
             frame.openingKind = openingKind;
             rawFrame!.closingKind = openingKind + 1;
             rawFrame!.closingEnd = closeEnd;
@@ -427,23 +416,10 @@ function resolvePairedSyntax(
       }
     }
 
-    // Pairing lowers each feature once. The emitter only reads finalized token boundaries.
-    if (rawClaim === FrameClaim.Component) {
-      const openEnd = inlineTokenEnd(tokens, rawFrame!.open);
-      const nonempty = openEnd < tokenStart;
-      rawFrame!.openingKind = nonempty ? InlineKind.InlineComponentOpen : InlineKind.None;
-      rawFrame!.closingKind = nonempty ? InlineKind.InlineComponentClose : InlineKind.None;
-      rawFrame!.closingEnd = tokenStart + 1;
-    }
-    else if (rawClaim >= FrameClaim.Span && rawClaim <= FrameClaim.AttributedSpan) {
-      rawFrame!.openingKind = InlineKind.InlineSpanOpen;
-      rawFrame!.closingKind = InlineKind.InlineSpanClose;
-      rawFrame!.closingEnd = tokenStart + 1;
-    }
-
-    if (rawState & FrameFlag.InLinkLabel) {
+    if (rawState & FrameState.InLinkLabel) {
       literalDepth--;
     }
+    // Resolve only the delimiters inside this label.
     if (scopeFrame && lastRun !== scopeFrame.delimiterBottom) {
       const bottom = scopeFrame.delimiterBottom;
       const first = bottom ? bottom.next! : firstRun!;
@@ -494,12 +470,12 @@ function emitResolvedTokens(
         outputEnd = frame.closingEnd;
       }
     }
-    // Track raw nesting even while a semantic replacement consumes source tokens.
+    // Even skipped tokens must update the raw bracket stack.
     if (tokenStart < skipEnd) {
       continue;
     }
     if (outputKind === InlineKind.InlineComponentOpen) {
-      // A nonempty label promotes its adjacent leaf instead of emitting `[`.
+      // Use the preceding component token as the label's opener.
       const field = result.length - InlineTokenField.Stride;
       result[field | InlineTokenField.Kind] = outputKind;
       result[field | InlineTokenField.End] = outputEnd;
@@ -525,7 +501,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
   return (delimiterConfigs) => {
     const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
     return (source, tokens, definitions) => {
-      // The first raw candidate starts structural resolution; its semantic prefix is complete.
+      // Start matching at the first raw token; the emitter copies the prefix.
       let start = 0;
       const end = inlineTokenCount(tokens);
       while (start < end && inlineTokenKind(tokens, start) >= InlineRole.Text) {
@@ -534,8 +510,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
       if (start === end) {
         return tokens;
       }
-      // A lone opener and a validated resource tail form a complete pair.
-      // There are no nested brackets, delimiters or component prefixes to resolve.
+      // A single opener followed by a validated link tail needs no bracket analysis.
       if (start === 0 && end === 2 && inlineTokenKind(tokens, 1) === InlineKind.LinkTail) {
         const opener = inlineTokenKind(tokens, 0);
         if (opener === InlineKind.BracketOpen || opener === InlineKind.ImageOpen) {
