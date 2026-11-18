@@ -108,18 +108,18 @@ function linkTitleEnd(source: string, start: number): number {
   return -1;
 }
 
-const simpleLinkTail = /\([^<\\()\t\n\r ]+\)/y;
+const simpleLinkTail = /[^<\\()\t\n\r ]+\)/y;
 
 function scanLinkTail(source: string, start: number, tokens: number[]): number {
-  simpleLinkTail.lastIndex = start + 1;
-  // Fast path for simple inline link tails such as `](destination)`.
+  if (source.charCodeAt(start + 1) !== Character.LeftParenthesis) {
+    return -1;
+  }
+  simpleLinkTail.lastIndex = start + 2;
+  // Match an unescaped destination and its closing parenthesis together.
   if (simpleLinkTail.test(source)) {
     const end = simpleLinkTail.lastIndex;
     appendInlineToken(tokens, InlineKind.LinkTail, start, end, end - start - 1);
     return end;
-  }
-  if (source.charCodeAt(start + 1) !== Character.LeftParenthesis) {
-    return -1;
   }
   let offset = skipWhitespace(source, start + 2);
   let destinationEnd = offset;
