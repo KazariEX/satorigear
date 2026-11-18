@@ -57,7 +57,7 @@ function createOpening(marker: number, options: FenceOptions): RegExp {
   const escaped = "\\u" + marker.toString(16).padStart(4, "0");
   const pattern = escaped + "{" + Math.max(0, options.minimumLength - 2) + ",}" + (
     marker === options.forbiddenInfoMarker
-      ? "(?!" + escaped + ")(?=[^" + escaped + "\\r\\n]*(?:\\r|\\n|$))"
+      ? "(?=[^" + escaped + "\\r\\n]*(?:\\r|\\n|$))"
       : ""
   );
   return new RegExp(pattern, "y");
