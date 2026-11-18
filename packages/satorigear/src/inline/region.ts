@@ -10,14 +10,17 @@ const definitionAny = Symbol();
 
 class TrackedDefinitionLookup implements DefinitionLookup {
   readonly definitions: DefinitionLookup;
-  dependencies?: Set<string | typeof definitionAny>;
+  dependencies?: Set<string> | typeof definitionAny;
 
   constructor(definitions: DefinitionLookup) {
     this.definitions = definitions;
   }
 
   hasDefinition(key: string): boolean {
-    (this.dependencies ??= new Set()).add(key);
+    if (this.dependencies !== definitionAny) {
+      this.dependencies ??= new Set();
+      this.dependencies.add(key);
+    }
     return this.definitions.hasDefinition(key);
   }
 
@@ -25,7 +28,7 @@ class TrackedDefinitionLookup implements DefinitionLookup {
     const hasAny = this.definitions.hasDefinitions();
     if (!hasAny) {
       // Without keys to consult, any later definition can change a bracket candidate.
-      (this.dependencies ??= new Set()).add(definitionAny);
+      this.dependencies = definitionAny;
     }
     return hasAny;
   }
@@ -39,7 +42,7 @@ export interface ResolvedInlineRegion {
 
 class InlineRegion implements ResolvedInlineRegion {
   // Track consulted definitions, or all future definitions when no concrete key can be consulted.
-  #definitionDependencies!: ReadonlySet<string | typeof definitionAny>;
+  #definitionDependencies!: ReadonlySet<string> | typeof definitionAny;
   // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
   #rawTokens?: InlineTokenStream;
   #profile: InlineProfile;
@@ -85,14 +88,12 @@ class InlineRegion implements ResolvedInlineRegion {
 
   #dependenciesChanged(definitionMembershipChanges: ReadonlySet<string>): boolean {
     const dependencies = this.#definitionDependencies;
-    if (dependencies.has(definitionAny)) {
+    if (dependencies === definitionAny) {
       return definitionMembershipChanges.size > 0;
     }
-    // The sentinel case returned above, so all remaining dependencies are labels.
-    const labels = dependencies as ReadonlySet<string>;
     // Definition-heavy edits stay linear in the smaller side of the intersection.
-    if (labels.size < definitionMembershipChanges.size) {
-      for (const key of labels) {
+    if (dependencies.size < definitionMembershipChanges.size) {
+      for (const key of dependencies) {
         if (definitionMembershipChanges.has(key)) {
           return true;
         }
