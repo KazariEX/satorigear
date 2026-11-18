@@ -72,9 +72,9 @@ class Latin1 {
 
     const bytes = this.scratchBytes!;
     const words = this.scratchWords!;
-    // Clear the trailing padding to avoid cross-round data pollution.
+    // Pad the final word group with spaces so it cannot emit line endings.
     for (let i = 1; i <= 8; i++) {
-      words[(wordLimit >>> 2) - i] = 0;
+      words[(wordLimit >>> 2) - i] = 0x20202020;
     }
     bytes.write(source, 0, limit, "latin1");
     let field = 0;
@@ -82,7 +82,7 @@ class Latin1 {
     let cursor = 0;
     let crnext = -1;
     while (cursor < wordLimit) {
-      // Worst case: <= 1 row per real byte; padding is zero and emits nothing.
+      // Worst case: <= 1 row per real byte; padding emits nothing.
       // Reserving per segment keeps the inner loop free of growth checks.
       fields = growLineFields(fields, field + Math.min(32, limit - cursor) * BlockLineField.Stride);
       const available = (fields.length - field) / BlockLineField.Stride;
@@ -98,24 +98,15 @@ class Latin1 {
         const word6 = words[offset | 6];
         const word7 = words[offset | 7];
 
-        // Fold {0x0A, 0x0D} -> 0, preserve the high bits for the zero-byte detection below.
-        const mixed0 = (word0 ^ word0 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
-        const mixed1 = (word1 ^ word1 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
-        const mixed2 = (word2 ^ word2 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
-        const mixed3 = (word3 ^ word3 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
-        const mixed4 = (word4 ^ word4 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
-        const mixed5 = (word5 ^ word5 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
-        const mixed6 = (word6 ^ word6 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
-        const mixed7 = (word7 ^ word7 >>> 1) & 0x7B7B7B7B ^ 0x0B0B0B0B;
-        // Mixed bytes fit in seven bits, so adding 0x7F cannot carry between bytes.
-        const hits0 = ~(mixed0 + 0x7F7F7F7F | word0) & 0x80808080;
-        const hits1 = ~(mixed1 + 0x7F7F7F7F | word1) & 0x80808080;
-        const hits2 = ~(mixed2 + 0x7F7F7F7F | word2) & 0x80808080;
-        const hits3 = ~(mixed3 + 0x7F7F7F7F | word3) & 0x80808080;
-        const hits4 = ~(mixed4 + 0x7F7F7F7F | word4) & 0x80808080;
-        const hits5 = ~(mixed5 + 0x7F7F7F7F | word5) & 0x80808080;
-        const hits6 = ~(mixed6 + 0x7F7F7F7F | word6) & 0x80808080;
-        const hits7 = ~(mixed7 + 0x7F7F7F7F | word7) & 0x80808080;
+        // Find potential line endings four bytes at a time.
+        const hits0 = word0 - 0x10101010 & ~word0 & 0x80808080;
+        const hits1 = word1 - 0x10101010 & ~word1 & 0x80808080;
+        const hits2 = word2 - 0x10101010 & ~word2 & 0x80808080;
+        const hits3 = word3 - 0x10101010 & ~word3 & 0x80808080;
+        const hits4 = word4 - 0x10101010 & ~word4 & 0x80808080;
+        const hits5 = word5 - 0x10101010 & ~word5 & 0x80808080;
+        const hits6 = word6 - 0x10101010 & ~word6 & 0x80808080;
+        const hits7 = word7 - 0x10101010 & ~word7 & 0x80808080;
 
         if (hits0 | hits1 | hits2 | hits3 | hits4 | hits5 | hits6 | hits7) {
           // 1. hits0 >>> 4 | hits1      => [3][7][11][15][19][23][27][31]
@@ -129,7 +120,7 @@ class Latin1 {
             const code = source.charCodeAt(at);
             // Latin1 copying retains low bytes, so exclude non-Latin1 aliases:
             // "上"(0x4E0A), "不"(0x4E0D), "č"(0x010D), ...
-            if (code <= 0xFF) {
+            if (code === Character.LineFeed || code === Character.CarriageReturn) {
               let next = at + 1;
               if (code === Character.CarriageReturn) {
                 crnext = next;
