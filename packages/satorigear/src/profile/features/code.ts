@@ -1,12 +1,23 @@
 import { decodeString } from "micromark-util-decode-string";
 import { appendFencedToken, closesFence, createFenceAt } from "../../block/fence.ts";
-import { type BlockLines, isBlankLine, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
+import {
+  type BlockLines,
+  isBlankLine,
+  lineIndentOffset,
+  physicalColumnAt,
+  trimLineWhitespaceStart,
+} from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { inlineMarkerRunEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
+import { semanticText } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";
+
+const complexInfo = /[\\& \t]/;
+const separator = /[ \t]/;
+const paddingSpace = /^[\n ]+[^\n ].*[ \n]$/s;
 
 export const codeFenceAt = createFenceAt({
   alternateMarker: Character.Tilde,
@@ -51,16 +62,22 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           let info = tokens.value<string>(tokenStart) ?? "";
-          let langEnd = info ? info.search(/[\\& \t]/) : -1;
+          let langEnd = info.search(complexInfo);
           if (langEnd >= 0) {
-            info = decodeString(info);
-            langEnd = info.search(/[ \t]/);
+            const code = info.charCodeAt(langEnd);
+            if (code === Character.Space || code === Character.CharacterTabulation) {
+              // Decoding the suffix leaves the first delimiter at its original offset.
+              info = semanticText(info);
+            }
+            else {
+              info = decodeString(info);
+              langEnd = info.search(separator);
+            }
           }
-          const metaStart = langEnd < 0 ? -1 : info.slice(langEnd).search(/[^ \t]/);
           return {
             type: "code",
             lang: langEnd >= 0 ? info.slice(0, langEnd) : info || null,
-            meta: metaStart >= 0 ? info.slice(langEnd + metaStart) : null,
+            meta: langEnd >= 0 && info.slice(trimLineWhitespaceStart(info, langEnd, info.length)) || null,
             value: tokens.text(context.source, tokenStart),
             position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
           };
@@ -161,12 +178,12 @@ export const feature: SyntaxFeature = {
           let value = context.locator.normalizeLineEndings(
             inlineTokenText(context.view.text, context.tokens, tokenIndex, markerLength),
           );
-          if (/^[ \n]/.test(value) && /[ \n]$/.test(value) && /[^ \n]/.test(value)) {
+          if (paddingSpace.test(value)) {
             value = value.slice(1, -1);
           }
           return {
             type: "inlineCode",
-            value: context.tableCell ? value.replace(/\\\|/g, "|") : value,
+            value: context.tableCell ? value.replaceAll("\\|", "|") : value,
             position,
           };
         },
