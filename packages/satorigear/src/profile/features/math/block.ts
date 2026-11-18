@@ -1,14 +1,14 @@
-import { appendFencedToken, closesFence, fenceAt, type FenceRule } from "../../../block/fence.ts";
+import { appendFencedToken, closesFence, createFenceAt } from "../../../block/fence.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { semanticText } from "../../utils.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 
-const mathFenceRule: FenceRule = {
+const mathFenceAt = createFenceAt({
   forbiddenInfoMarker: Character.DollarSign,
   marker: Character.DollarSign,
   minimumLength: 2,
-};
+});
 
 export const blockBuilds: BlockFeature["builds"] = [
   {
@@ -32,10 +32,10 @@ export const blockStarts: BlockFeature["starts"] = [
       Character.DollarSign,
     ],
     interrupt(source, lines, index, contentOffset) {
-      return fenceAt(source, lines, index, mathFenceRule, contentOffset) !== void 0;
+      return mathFenceAt(source, lines, index, contentOffset) !== void 0;
     },
     start(source, lines, tokens, start, contentOffset) {
-      const fence = fenceAt(source, lines, start, mathFenceRule, contentOffset);
+      const fence = mathFenceAt(source, lines, start, contentOffset);
       if (!fence) {
         return;
       }

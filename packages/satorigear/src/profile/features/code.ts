@@ -1,10 +1,4 @@
-import {
-  appendFencedToken,
-  closesFence,
-  type Fence,
-  fenceAt,
-  type FenceRule,
-} from "../../block/fence.ts";
+import { appendFencedToken, closesFence, createFenceAt } from "../../block/fence.ts";
 import { type BlockLines, isBlankLine, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
@@ -14,21 +8,12 @@ import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inlin
 import { semanticText } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-const codeFenceRule: FenceRule = {
+export const codeFenceAt = createFenceAt({
   alternateMarker: Character.Tilde,
   forbiddenInfoMarker: Character.GraveAccent,
   marker: Character.GraveAccent,
   minimumLength: 3,
-};
-
-export function codeFenceAt(
-  source: string,
-  lines: BlockLines,
-  index: number,
-  markerOffset: number,
-): Fence | undefined {
-  return fenceAt(source, lines, index, codeFenceRule, markerOffset);
-}
+});
 
 /** Consume structural code indentation before publishing the literal body. */
 function indentedContent(source: string, lines: BlockLines, start: number, end: number): string {

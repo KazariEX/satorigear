@@ -8,48 +8,63 @@ export interface Fence {
   length: number;
   marker: number;
   offset: number;
+  closingPattern: RegExp;
 }
 
-export interface FenceRule {
+export interface FenceOptions {
   alternateMarker?: number;
   forbiddenInfoMarker: number;
   marker: number;
   minimumLength: number;
 }
 
-export function fenceAt(
+export function createFenceAt(options: FenceOptions): (
   source: string,
   lines: BlockLines,
   index: number,
-  rule: FenceRule,
   markerOffset: number,
-): Fence | undefined {
-  const marker = source.charCodeAt(markerOffset);
-  if (marker !== rule.marker && marker !== rule.alternateMarker) {
-    return;
-  }
-  let offset = markerOffset + 1;
-  while (source.charCodeAt(offset) === marker) {
-    offset++;
-  }
-  const length = offset - markerOffset;
-  if (length < rule.minimumLength) {
-    return;
-  }
-  if (marker === rule.forbiddenInfoMarker) {
-    const lineEnd = lines.end(index);
-    while (offset < lineEnd) {
-      if (source.charCodeAt(offset++) === marker) {
-        return;
-      }
+) => Fence | undefined {
+  const opening = createOpening(options.marker, options);
+  const closing = createClosing(options.marker);
+  const alternateOpening = options.alternateMarker && createOpening(options.alternateMarker, options) || void 0;
+  const alternateClosing = options.alternateMarker && createClosing(options.alternateMarker) || void 0;
+
+  return (source, lines, index, markerOffset) => {
+    const marker = source.charCodeAt(markerOffset);
+    if (marker !== options.marker && marker !== options.alternateMarker) {
+      return;
     }
-  }
-  return {
-    indent: lines.prefixColumns(index) + markerOffset - lines.start(index),
-    marker,
-    length,
-    offset: markerOffset,
+    const pattern = marker === options.marker ? opening : alternateOpening!;
+    const headLength = options.minimumLength > 1 ? 2 : 1;
+    if (headLength === 2 && source.charCodeAt(markerOffset + 1) !== marker) {
+      return;
+    }
+    pattern.lastIndex = markerOffset + headLength;
+    if (!pattern.test(source)) {
+      return;
+    }
+    return {
+      indent: lines.prefixColumns(index) + markerOffset - lines.start(index),
+      length: pattern.lastIndex - markerOffset,
+      marker,
+      offset: markerOffset,
+      closingPattern: marker === options.marker ? closing : alternateClosing!,
+    };
   };
+}
+
+function createOpening(marker: number, options: FenceOptions): RegExp {
+  const escaped = "\\u" + marker.toString(16).padStart(4, "0");
+  const pattern = escaped + "{" + Math.max(0, options.minimumLength - 2) + ",}" + (
+    marker === options.forbiddenInfoMarker
+      ? "(?!" + escaped + ")(?=[^" + escaped + "\\r\\n]*(?:\\r|\\n|$))"
+      : ""
+  );
+  return new RegExp(pattern, "y");
+}
+
+function createClosing(marker: number): RegExp {
+  return new RegExp(`\\u${marker.toString(16).padStart(4, "0")}+[ \t]*`, "y");
 }
 
 export function closesFence(source: string, lines: BlockLines, index: number, fence: Fence): boolean {
@@ -66,17 +81,15 @@ export function closesFence(source: string, lines: BlockLines, index: number, fe
     }
     offset = contentOffset;
   }
-  const markerEnd = offset + fence.length;
-  // The first marker has already matched.
-  offset++;
-  while (source.charCodeAt(offset) === fence.marker) {
-    offset++;
-  }
-  if (offset < markerEnd) {
+  const lineEnd = lines.end(index);
+  // The pattern accepts markers then whitespace; this probe enforces the minimum count.
+  const lastRequired = offset + fence.length - 1;
+  if (lastRequired >= lineEnd || source.charCodeAt(lastRequired) !== fence.marker) {
     return false;
   }
-  const lineEnd = lines.end(index);
-  return trimLineWhitespaceStart(source, offset, lineEnd) === lineEnd;
+  const closing = fence.closingPattern;
+  closing.lastIndex = offset;
+  return closing.test(source) && closing.lastIndex === lineEnd;
 }
 
 // Multiline anchors also recognize Unicode separators, which remain literal content.
