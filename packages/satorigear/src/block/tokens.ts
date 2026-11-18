@@ -11,6 +11,10 @@ const enum BlockTokenField {
   Stride,
 }
 
+const enum BlockTokenCapacity {
+  Initial = 16,
+}
+
 interface BlockTokenMeta {
   definitionKey?: string;
   text?: string;
@@ -54,8 +58,6 @@ export class BlockTokenStream implements DefinitionLookup {
   #metadata?: (BlockTokenMeta | undefined)[];
   #opens: number[] = [];
 
-  constructor() {}
-
   reset(): void {
     this.#definitionCounts?.clear();
     this.#definitionMembershipChanges?.clear();
@@ -80,12 +82,7 @@ export class BlockTokenStream implements DefinitionLookup {
   }
 
   /** Appends a token and derives its structural role from its kind. */
-  push(
-    kind: BlockKind,
-    start: number,
-    end: number,
-    meta?: BlockTokenMeta,
-  ): void {
+  push(kind: BlockKind, start: number, end: number, meta?: BlockTokenMeta): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
     this.#fields[field | BlockTokenField.Kind] = kind;
@@ -96,8 +93,12 @@ export class BlockTokenStream implements DefinitionLookup {
       : this.#indexToken(field, kind);
     this.#fieldLength += BlockTokenField.Stride;
     if (meta) {
-      this.#metadata ??= [];
-      this.#metadata[field / BlockTokenField.Stride] = meta;
+      const index = field / BlockTokenField.Stride;
+      const metadata = this.#metadata ??= new Array(Math.max(index + 1, BlockTokenCapacity.Initial));
+      if (index >= metadata.length) {
+        metadata.length = Math.max(index + 1, metadata.length * 2);
+      }
+      metadata[index] = meta;
       const definitionKey = meta.definitionKey;
       if (definitionKey !== void 0) {
         this.#updateDefinitionCount(definitionKey, 1, false);
@@ -274,7 +275,7 @@ export class BlockTokenStream implements DefinitionLookup {
       const replacementMetadata = replacement.#metadata;
       if (replacementMetadata) {
         const target = this.#metadata ??= [];
-        copyMetadata(target, replacementMetadata, 0, replacementMetadata.length, start);
+        copyMetadata(target, replacementMetadata, 0, replacementLength, start);
       }
       if (end === previousLength && this.#metadata) {
         this.#metadata.length = Math.min(this.#metadata.length, start + replacementLength);
@@ -295,7 +296,7 @@ export class BlockTokenStream implements DefinitionLookup {
       }
       const replacementMetadata = replacement.#metadata;
       if (replacementMetadata) {
-        copyMetadata(metadata, replacementMetadata, 0, replacementMetadata.length, start);
+        copyMetadata(metadata, replacementMetadata, 0, replacementLength, start);
       }
       this.#metadata = metadata.length > 0 ? metadata : void 0;
     }
@@ -416,7 +417,7 @@ export class BlockTokenStream implements DefinitionLookup {
     if (length <= this.#fields.length) {
       return;
     }
-    let capacity = Math.max(64, this.#fields.length * 2);
+    let capacity = Math.max(BlockTokenCapacity.Initial * BlockTokenField.Stride, this.#fields.length * 2);
     while (capacity < length) {
       capacity *= 2;
     }
