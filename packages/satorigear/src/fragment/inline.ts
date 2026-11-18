@@ -140,50 +140,31 @@ function appendGap(
   appendText(context, output, value, start, end, true);
 }
 
-// Resolution has already made semantic pairs unambiguous, so projection can consume that stream
-// directly instead of copying it into a second syntax arena.
-function appendRange(context: InlineBuildContext, output: InlineOutput, trimEnd: boolean): void {
+// Text builders and decorators can change the preceding text. Finish their run at the next node boundary.
+function appendTextRange(context: InlineBuildContext, output: InlineOutput, trimEnd: boolean): void {
   let index = context.tokenIndex;
   const end = inlineTokenCount(context.tokens);
   while (index < end) {
     const kind = inlineTokenKind(context.tokens, index);
-    // Newline has fixed semantic text, so it does not enter profile builder dispatch.
-    if (kind === InlineKind.Newline) {
-      const endingStart = inlineTokenStart(context.tokens, index);
-      const contentStart = inlineTokenEnd(context.tokens, index);
-      if (endingStart > output.cursor) {
-        appendGap(context, output, output.cursor, endingStart);
-      }
-      trimTrailingText(context, output);
-      appendText(context, output, "\n", endingStart, contentStart, false);
-      output.cursor = contentStart;
-      index++;
-      continue;
+    if (kind >= InlineRole.Leaf && kind < InlineRole.Decorate) {
+      break;
     }
     const childStart = inlineTokenStart(context.tokens, index);
     if (kind < InlineRole.Leaf) {
-      const childEnd = inlineTokenEnd(context.tokens, index);
       if (childStart > output.cursor) {
         appendGap(context, output, output.cursor, childStart);
       }
-      const build = context.builders[kind] as InlineTextBuilder;
-      appendText(context, output, build(index, context), childStart, childEnd, kind === InlineKind.LiteralText);
+      const childEnd = inlineTokenEnd(context.tokens, index);
+      if (kind === InlineKind.Newline) {
+        trimTrailingText(context, output);
+        appendText(context, output, "\n", childStart, childEnd, false);
+      }
+      else {
+        const build = context.builders[kind] as InlineTextBuilder;
+        appendText(context, output, build(index, context), childStart, childEnd, kind === InlineKind.LiteralText);
+      }
       output.cursor = childEnd;
       index++;
-      continue;
-    }
-    if (kind < InlineRole.Decorate) {
-      if (kind >= InlineRole.Pair && kind & 1) {
-        break;
-      }
-      if (childStart > output.cursor) {
-        appendGap(context, output, output.cursor, childStart);
-      }
-      finishText(context, output);
-      output.children.push(buildNode(context, index, kind));
-      output.pendingText = void 0;
-      index = context.tokenIndex;
-      output.cursor = inlineTokenEnd(context.tokens, index - 1);
       continue;
     }
     const childEnd = inlineTokenEnd(context.tokens, index);
@@ -207,28 +188,24 @@ function appendRange(context: InlineBuildContext, output: InlineOutput, trimEnd:
   if (contentEnd > output.cursor) {
     appendGap(context, output, output.cursor, contentEnd);
   }
-  // Every range closes its own projection; only a fragment boundary owns final trimming.
-  if (trimEnd) {
+  // Trailing whitespace is trimmed only at the end of the outer fragment.
+  if (trimEnd && index === end) {
     trimTrailingText(context, output);
     if (output.pendingText && !output.pendingText.value) {
       output.children.pop();
     }
   }
   finishText(context, output);
+  output.cursor = contentEnd;
   context.tokenIndex = index;
 }
 
-function buildLiteral(context: InlineBuildContext, start: number, end: number): PhrasingContent[] {
-  return start >= end
-    ? []
-    : [{
-      type: "text",
-      value: context.view.text.slice(start, end),
-      position: context.locator.positionAt(
-        context.view.mapOffset(start),
-        context.view.mapEnd(end),
-      ),
-    }];
+function buildLiteral(context: InlineBuildContext, start: number, end: number): Text {
+  return {
+    type: "text",
+    value: context.view.text.slice(start, end),
+    position: context.locator.positionAt(context.view.mapOffset(start), context.view.mapEnd(end)),
+  };
 }
 
 function buildNode(context: InlineBuildContext, token: number, kind: number): InlineNonText {
@@ -241,8 +218,11 @@ function buildNode(context: InlineBuildContext, token: number, kind: number): In
     const next = token + 1;
     const contentStart = inlineTokenEnd(context.tokens, token);
     if (inlineTokenKind(context.tokens, next) === kind + 1) {
+      const contentEnd = inlineTokenStart(context.tokens, next);
+      children = contentEnd <= contentStart ? [] : [
+        buildLiteral(context, contentStart, contentEnd),
+      ];
       close = next;
-      children = buildLiteral(context, contentStart, inlineTokenStart(context.tokens, close));
     }
     else {
       context.tokenIndex = next;
@@ -264,39 +244,53 @@ function buildNode(context: InlineBuildContext, token: number, kind: number): In
     : (build as InlineLeafBuilder)(token, position, context);
 }
 
-function buildFragment(context: InlineBuildContext, cursor: number, closeKind: number): InlineFragment {
-  const trimEnd = closeKind === InlineKind.None;
-  const token = context.tokenIndex;
-  const kind = inlineTokenKind(context.tokens, token);
-  let children: PhrasingContent[] | undefined;
-  if (
-    kind >= InlineRole.Leaf &&
-    kind < InlineRole.Decorate &&
-    inlineTokenStart(context.tokens, token) === cursor
-  ) {
-    const node = buildNode(context, token, kind);
-    const atEnd = context.tokenIndex === inlineTokenCount(context.tokens);
-    cursor = inlineTokenEnd(context.tokens, context.tokenIndex - 1);
-    if (atEnd || inlineTokenKind(context.tokens, context.tokenIndex) === closeKind) {
-      const end = atEnd ? context.view.text.length : inlineTokenStart(context.tokens, context.tokenIndex);
-      if (
-        cursor === end ||
-        trimEnd && cursor === trimLineWhitespaceEnd(context.view.text, cursor, end)
-      ) {
-        return { children: [node] };
-      }
+function buildFragment(context: InlineBuildContext, cursor: number, closer: InlineKind): InlineFragment {
+  const trimEnd = closer === InlineKind.None;
+  const children: PhrasingContent[] = [];
+  const tokens = context.tokens;
+  const end = inlineTokenCount(tokens);
+  let output: InlineOutput | undefined;
+  while (context.tokenIndex < end) {
+    const index = context.tokenIndex;
+    const kind = inlineTokenKind(tokens, index);
+    if (kind === closer) {
+      break;
     }
-    children = [node];
+    if (kind < InlineRole.Leaf || kind >= InlineRole.Decorate) {
+      if (output) {
+        output.cursor = cursor;
+        output.pendingText = void 0;
+      }
+      else {
+        output = {
+          children,
+          cursor,
+          pendingText: void 0,
+          pendingEnd: 0,
+          pendingLiteral: "",
+        };
+      }
+      appendTextRange(context, output, trimEnd);
+      cursor = output.cursor;
+      continue;
+    }
+    // A gap between resolved nodes is a complete text child.
+    const start = inlineTokenStart(tokens, index);
+    if (cursor < start) {
+      children.push(buildLiteral(context, cursor, start));
+    }
+    const node = buildNode(context, index, kind);
+    children.push(node);
+    cursor = inlineTokenEnd(tokens, context.tokenIndex - 1);
   }
-  const output = {
-    children: children ?? [],
-    cursor,
-    pendingText: void 0,
-    pendingEnd: 0,
-    pendingLiteral: "",
-  };
-  appendRange(context, output, trimEnd);
-  return output;
+  let tail = context.tokenIndex < end ? inlineTokenStart(tokens, context.tokenIndex) : context.view.text.length;
+  if (cursor < tail && trimEnd) {
+    tail = trimLineWhitespaceEnd(context.view.text, cursor, tail);
+  }
+  if (cursor < tail) {
+    children.push(buildLiteral(context, cursor, tail));
+  }
+  return output ?? { children };
 }
 
 export function buildInlineFragment(
@@ -349,7 +343,9 @@ export function buildInlineFragment(
   if (tokens.length === 0) {
     const end = trimLineWhitespaceEnd(view.text, 0, view.text.length);
     return {
-      children: buildLiteral(inlineContext, 0, end),
+      children: end <= 0 ? [] : [
+        buildLiteral(inlineContext, 0, end),
+      ],
     };
   }
   inlineContext.tokenIndex = 0;
