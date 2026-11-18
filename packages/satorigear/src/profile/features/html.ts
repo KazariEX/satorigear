@@ -15,11 +15,13 @@ interface HtmlStart {
 }
 
 const htmlBlockTags = new Set(htmlBlockNames);
+const htmlRawTags = new Set(htmlRawNames);
 const htmlTagName = "[a-z][a-z0-9-]*";
 const htmlAttributeName = "[a-z_:][\\w.:-]*";
 const htmlUnquotedValue = `[^\\s"'=<>\`]+`;
 const htmlAttributeValue = `(?:${htmlUnquotedValue}|'[^']*'|"[^"]*")`;
 const htmlAttribute = `\\s+${htmlAttributeName}(?:\\s*=\\s*${htmlAttributeValue})?`;
+const htmlTag = /^<\/?([a-z][a-z0-9-]*)(?=[ \t\n\r/>]|$)/i;
 const completeHtmlTag = new RegExp(`^(?:<${htmlTagName}(?:${htmlAttribute})*\\s*/?>|</${htmlTagName}\\s*>)[ \\t]*$`, "i");
 const htmlComment = /<!-->|<!--->|<!--[\s\S]*?(?:-->|$)/y;
 const autolink = /<(?:[A-Z][A-Z0-9+.\-]{1,31}:[^ \t\n\r<>]+|[\w!#$%&'*+\-/=?^`{|}~.]+@[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*(?:\.[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*)+)>/iy;
@@ -49,13 +51,14 @@ function htmlStartAt(
       break;
     }
   }
-  const lower = body.toLowerCase();
-  for (const tag of htmlRawNames) {
-    if (lower.startsWith(`<${tag}`) && (lower.length === tag.length + 1 || /[ \t>]/.test(lower[tag.length + 1]))) {
-      return { interruptParagraph: true, terminator: `</${tag}>` };
-    }
+  const tag = htmlTag.exec(body)?.[1].toLowerCase();
+  if (
+    tag && body[1] !== "/" && htmlRawTags.has(tag) && (
+      body.length === tag.length + 1 || /[ \t>]/.test(body[tag.length + 1])
+    )
+  ) {
+    return { interruptParagraph: true, terminator: `</${tag}>` };
   }
-  const tag = /^<\/?([a-z][a-z0-9-]*)(?=[ \t\n\r/>]|$)/i.exec(body)?.[1].toLowerCase();
   if (tag && htmlBlockTags.has(tag)) {
     return { interruptParagraph: true };
   }
