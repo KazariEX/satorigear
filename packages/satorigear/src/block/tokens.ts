@@ -61,8 +61,19 @@ export class BlockTokenStream implements DefinitionLookup {
   reset(): void {
     this.#definitionCounts?.clear();
     this.#definitionMembershipChanges?.clear();
+    const metadata = this.#metadata;
+    if (metadata) {
+      const used = Math.min(metadata.length, this.length);
+      for (let index = 0; index < used; index++) {
+        metadata[index] = void 0;
+      }
+      // The metadata array grows by doubling. Keep one growth step of slack.
+      const reserve = Math.max(used, BlockTokenCapacity.Initial);
+      if (metadata.length > reserve * 2) {
+        metadata.length = reserve;
+      }
+    }
     this.#fieldLength = 0;
-    this.#metadata = void 0;
     // Completed scans already emptied the stack; only a partial scan needs clearing.
     if (this.#opens.length) {
       this.#opens.length = 0;
