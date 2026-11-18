@@ -1,3 +1,4 @@
+import { decodeString } from "micromark-util-decode-string";
 import { appendFencedToken, closesFence, createFenceAt } from "../../block/fence.ts";
 import { type BlockLines, isBlankLine, lineIndentOffset, physicalColumnAt } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
@@ -5,7 +6,6 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { inlineMarkerRunEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
-import { semanticText } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export const codeFenceAt = createFenceAt({
@@ -50,14 +50,17 @@ export const feature: SyntaxFeature = {
         ],
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const rawInfo = semanticText(tokens.value<string>(tokenStart) ?? "");
-          const langEnd = rawInfo.search(/[ \t]/);
-          const lang = rawInfo ? langEnd < 0 ? rawInfo : rawInfo.slice(0, langEnd) : null;
-          const metaStart = langEnd < 0 ? -1 : rawInfo.slice(langEnd).search(/[^ \t]/);
+          let info = tokens.value<string>(tokenStart) ?? "";
+          let langEnd = info ? info.search(/[\\& \t]/) : -1;
+          if (langEnd >= 0) {
+            info = decodeString(info);
+            langEnd = info.search(/[ \t]/);
+          }
+          const metaStart = langEnd < 0 ? -1 : info.slice(langEnd).search(/[^ \t]/);
           return {
             type: "code",
-            lang,
-            meta: metaStart < 0 ? null : rawInfo.slice(langEnd + metaStart),
+            lang: langEnd >= 0 ? info.slice(0, langEnd) : info || null,
+            meta: metaStart >= 0 ? info.slice(langEnd + metaStart) : null,
             value: tokens.text(context.source, tokenStart),
             position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
           };
