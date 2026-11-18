@@ -69,6 +69,10 @@ function createClosing(marker: number): RegExp {
 
 export function closesFence(source: string, lines: BlockLines, index: number, fence: Fence): boolean {
   const lineStart = lines.start(index);
+  const lineEnd = lines.end(index);
+  if (lineEnd - lineStart < fence.length) {
+    return false;
+  }
   const first = source.charCodeAt(lineStart);
   if (first !== fence.marker && first !== Character.Space) {
     return false;
@@ -81,7 +85,6 @@ export function closesFence(source: string, lines: BlockLines, index: number, fe
     }
     offset = contentOffset;
   }
-  const lineEnd = lines.end(index);
   // The pattern accepts markers then whitespace; this probe enforces the minimum count.
   const lastRequired = offset + fence.length - 1;
   if (lastRequired >= lineEnd || source.charCodeAt(lastRequired) !== fence.marker) {
