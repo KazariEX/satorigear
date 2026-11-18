@@ -1,7 +1,7 @@
 import { Character } from "../constants/character.ts";
 import { InlineKind } from "../constants/inline.ts";
 import { emptyArray } from "../primitives.ts";
-import { inlineTokenCount, inlineTokenEnd, type InlineTokenStream } from "./tokens.ts";
+import type { InlineTokenStream } from "./tokens.ts";
 
 type InlineScanner = (source: string, start: number, tokens: number[]) => number;
 
@@ -26,22 +26,27 @@ export function inlineMarkerRunEnd(source: string, start: number): number {
   return end;
 }
 
-function implicitSoftBreak(source: string, start: number, tokens: InlineTokenStream): boolean {
-  // A nonempty literal gap proves the text before LF needs no semantic trimming.
-  // A token ending at LF may have decoded whitespace or attached attributes.
-  if (start <= (tokens.length ? inlineTokenEnd(tokens, inlineTokenCount(tokens) - 1) : 0)) {
-    return false;
+function scanLineEnding(source: string, start: number, tokens: number[]): number {
+  let next = start + 1;
+  if (source.charCodeAt(start) === Character.CarriageReturn && source.charCodeAt(next) === Character.LineFeed) {
+    next++;
   }
-  const previous = source.charCodeAt(start - 1);
-  return previous !== Character.Space && previous !== Character.CharacterTabulation;
-}
-
-function nextBoundaryOffset(source: string, boundary: RegExp, offset: number): number {
-  if (offset >= source.length) {
-    return -1;
+  // A hard break spans its indentation, while its position ends at the next line start.
+  const lineStart = next;
+  while (source.charCodeAt(next) === Character.Space) {
+    next++;
   }
-  boundary.lastIndex = offset;
-  return boundary.test(source) ? boundary.lastIndex - 1 : -1;
+  if (source.charCodeAt(start - 1) === Character.Space && source.charCodeAt(start - 2) === Character.Space) {
+    let spaces = start - 2;
+    while (source.charCodeAt(spaces - 1) === Character.Space) {
+      spaces--;
+    }
+    tokens.push(InlineKind.HardBreak, spaces, next, lineStart);
+  }
+  else {
+    tokens.push(InlineKind.Newline, start, next, 0);
+  }
+  return next;
 }
 
 function tokenize(
@@ -50,53 +55,19 @@ function tokenize(
   scanners: readonly (InlineScanner | undefined)[],
 ): InlineTokenStream {
   // Ordinary source text stays implicit between semantic tokens; the builder reads those gaps.
-  let offset = 0;
-  while (source.charCodeAt(offset) === Character.Space) {
-    offset++;
-  }
-  offset = nextBoundaryOffset(source, boundary, offset);
-  if (offset < 0) {
+  boundary.lastIndex = 0;
+  if (!boundary.test(source)) {
     return emptyArray;
   }
   const tokens: number[] = [];
-  for (; offset >= 0; offset = nextBoundaryOffset(source, boundary, offset)) {
+  do {
+    const offset = boundary.lastIndex - 1;
     const code = source.charCodeAt(offset);
-    if (code === Character.LineFeed || code === Character.CarriageReturn) {
-      const spacesBreak = (
-        source.charCodeAt(offset - 1) === Character.Space &&
-        source.charCodeAt(offset - 2) === Character.Space
-      );
-      const endingStart = offset++;
-      if (code === Character.CarriageReturn && source.charCodeAt(offset) === Character.LineFeed) {
-        offset++;
-      }
-      // Block scanning excludes blank lines; continuation indentation is omitted from inline text.
-      const lineStart = offset;
-      while (source.charCodeAt(offset) === Character.Space) {
-        offset++;
-      }
-      if (spacesBreak) {
-        let spaces = endingStart - 2;
-        while (source.charCodeAt(spaces - 1) === Character.Space) {
-          spaces--;
-        }
-        // The break absorbs its line ending, so projection spans one token.
-        tokens.push(InlineKind.HardBreak, spaces, offset, lineStart);
-      }
-      else if (
-        code !== Character.LineFeed ||
-        lineStart !== offset ||
-        !implicitSoftBreak(source, endingStart, tokens)
-      ) {
-        tokens.push(InlineKind.Newline, endingStart, offset, 0);
-      }
-      continue;
-    }
-
-    const scannedEnd = scanners[code]?.(source, offset, tokens) ?? offset;
+    const scannedEnd = scanners[code]!(source, offset, tokens);
     // Rejected markers and ordinary characters remain implicit source text.
-    offset = scannedEnd > offset ? scannedEnd : offset + 1;
+    boundary.lastIndex = scannedEnd > offset ? scannedEnd : offset + 1;
   }
+  while (boundary.lastIndex < source.length && boundary.test(source));
   return tokens;
 }
 
@@ -112,25 +83,15 @@ function generateInlineTokenizer(
     .join("");
 
   /** Mirrors {@link tokenize} with short aliases for its generated hot loop. */
-  return Function("f", "b", "a", "i", "n", ...names, [
-    `return(s,u)=>{const x=u?b:f;let o=0;while(s.charCodeAt(o)===${Character.Space})o++;`,
-    `o=n(s,x,o);if(o<0)return a;const t=[];for(;o>=0;o=n(s,x,o)){`,
-    `const c=s.charCodeAt(o);`,
-    `if(c===${Character.LineFeed}||c===${Character.CarriageReturn}){`,
-    `const k=s.charCodeAt(o-1)===${Character.Space}&&s.charCodeAt(o-2)===${Character.Space};`,
-    `const r=o++;if(c===${Character.CarriageReturn}&&s.charCodeAt(o)===${Character.LineFeed})o++;`,
-    `const l=o;while(s.charCodeAt(o)===${Character.Space})o++;`,
-    `if(k){let h=r-2;while(s.charCodeAt(h-1)===${Character.Space})h--;t.push(${InlineKind.HardBreak},h,o,l)}`,
-    `else if(c!==${Character.LineFeed}||l!==o||!i(s,r,t))t.push(${InlineKind.Newline},r,o,0);continue}`,
-    `let d;switch(c){${cases}default:d=o}`,
-    `o=d>o?d:o+1}`,
+  return Function("f", "b", "a", ...names, [
+    `return(s,u)=>{const x=u?b:f;x.lastIndex=0;if(!x.test(s))return a;`,
+    `const t=[];do{const o=x.lastIndex-1;let d;switch(s.charCodeAt(o)){${cases}default:d=o}`,
+    `x.lastIndex=d>o?d:o+1}while(x.lastIndex<s.length&&x.test(s));`,
     `return t}`,
   ].join(""))(
     boundaryFast,
     boundarySlow,
     emptyArray,
-    implicitSoftBreak,
-    nextBoundaryOffset,
     ...codes.map((code) => scanners[code]!),
   );
 }
@@ -155,6 +116,10 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
   // Lookaround keeps V8 off the character-class scan. Only a whitespace-adjacent break uses it.
   const boundaryFast = new RegExp(`[\\r${boundaries}]`, "g");
   const boundarySlow = new RegExp(`[\\r${boundaries}]|\\n(?:(?<=[ \\t]\\n)|(?= ))`, "g");
+  // The boundary search reports every CR and only whitespace-adjacent LF.
+  scanners[Character.LineFeed] = scanLineEnding;
+  scanners[Character.CarriageReturn] = scanLineEnding;
+  codes.push(Character.LineFeed, Character.CarriageReturn);
 
   try {
     return generateInlineTokenizer(boundaryFast, boundarySlow, codes, scanners);
