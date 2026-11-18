@@ -1,18 +1,20 @@
 # 性能研究报告
 
-整理日期：2026-11-16。近期测量均为 **Node 26.13.0 / Apple M1 Pro**；之后的测试只使用 Node 26。百分比默认表示耗时变化，负数更快。不同冻结基线之间不能直接串联收益，也不能把区间跨零解释为已证明没有回退。
+整理日期：2026-11-18。近期测量均为 **Node 26.13.0 / Apple M1 Pro**；之后的测试只使用 Node 26。百分比默认表示耗时变化，负数更快。不同冻结基线之间不能直接串联收益，也不能把区间跨零解释为已证明没有回退。
 
-## 最近五个主题
+## 最近研究
 
 | 报告 | 比较范围 | 已有结论 |
 | --- | --- | --- |
+| [Fence 后续策略](fence-followup-node26.md) | 后续策略、快照回放与完整流程占比 | 已采用四项改进，最新按需根字面块输出独立确认 spec −2.60%；计入迁移工作后完整范围约 15.9%～16.5%，5% 目标未达到。69 个实验目录已回放。 |
+| [Fence 路径模型](fence-path-model-node26.md) | 六个初始候选对比冻结 sticky 实现 | 条件概率、语法证明、实际 arm64 机器码；六个候选未获稳定收益。examples 计数错误已独立重跑并注明勘误。 |
 | [writeLine 提取](write-line-perf-node26.md) | 同一份改动，helper 对比手工展开；另测整体对暂存版 | 已内联仍残留函数目标检查；饱和换行扫描约慢 2.7%～5.7%。整体 parse 未检出明确变化。 |
 | [字段索引掩码](latin1-field-mask-perf-node26.md) | 仅删除两处 `& 0x7FFFFFFF` | 没有证明掩码有稳定吞吐优势；更少检查指令不足以决定是否保留。 |
 | [尾部纳入 SWAR](latin1-tail-only-node26.md) | segment 对比此前标量尾扫 | 通过行为和精确容量校验，减少一组写行代码；不能声称所有场景无回退。 |
 | [Latin1 与 Index0](latin1-vs-index0-alias-node26.md) | 相同接口、容量与 19 类输入，正反顺序 | 连续 Unicode 别名上 Latin1 更快；无换行和长行 ASCII 上 Index0 明显更快。 |
 | [事件循环候选](latin1-candidates-node26.md) | fused 等候选对比更早的八路展开版 | fused 的 spec 约 −6.32%；连续别名有回退。这不是最新 writeLine 版本对暂存版的收益。 |
 
-每份 Markdown 配套同名 JSON，保留所有该轮配对观测、顺序、统计区间、输入哈希和验证结果，包括不利或未完成的结果。源码与 harness 按内容去重到 [reproduction.json](reproduction.json)：`{"$text":"<sha256>"}` 对应 `texts[sha256]`，UTF-8 内容保持原样。这些是测量快照，不保证在后续依赖或其他源码变化后仍能直接重建相同 bundle。
+每份 Markdown 配套同名 JSON，保留所有该轮配对观测、顺序、统计区间、输入哈希和验证结果，包括不利或未完成的结果。Latin1/writeLine 五项研究的源码与 harness 按内容去重到 [reproduction.json](reproduction.json)；fence 的源码和回放材料保存在各自 JSON。`{"$text":"<sha256>"}` 对应 `texts[sha256]`，UTF-8 内容保持原样。这些是测量快照，不保证在后续依赖或其他源码变化后仍能直接重建相同 bundle。
 
 ## 历史与测量方法
 
@@ -22,6 +24,6 @@
 
 ## 保留边界
 
-最近五个主题保留完整配对观测；完整反汇编裁剪为摘要、关键片段和原内容哈希。较早 JSON 合并为 `history/data.json`，保留比较范围、统计汇总、反例和处置；有汇总的逐次观测、重复源码/bundle、测试明细及诊断日志已裁剪。`omitted` 表示内容不在报告树中，哈希不能替代内容，也不代表已完整保留复现材料。
+Latin1/writeLine 五项研究保留完整配对观测；完整反汇编裁剪为摘要、关键片段和原内容哈希。较早 JSON 合并为 `history/data.json`，保留比较范围、统计汇总、反例和处置；有汇总的逐次观测、重复源码/bundle、测试明细及诊断日志已裁剪。`omitted` 表示内容不在报告树中，哈希不能替代内容，也不代表已完整保留复现材料。
 
 本次整理前的全部 199 个文件另有**本机备份**：`node_modules/.cache/report-cleanup-20261116/reference-before.tar.gz`，文件清单和 SHA-256 在同目录的 `manifest.json`。缓存不纳入 Git，清除缓存后不能用它恢复；已跟踪的旧报告还可从整理前提交 `8f60cb4` 读取。
