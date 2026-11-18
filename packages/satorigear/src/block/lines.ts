@@ -301,40 +301,35 @@ export class BlockLines implements SourceLocator {
   }
 
   /**
-   * After {@link locator} resets the monotonic cursor, this stable method keeps projection
-   * monomorphic across documents; per-parse closures would invalidate its optimized call target.
+   * Locates an offset in the physical line table after {@link locator} resets the cursor.
+   * The next offset of each physical line is the start of its successor, or the source length.
    */
   locationAt(offset: number): SourceLocation {
-    const fieldLength = this.#length * BlockLineField.Stride;
-    if (fieldLength === 0) {
+    const length = this.#length;
+    if (length === 0) {
       return { line: 1, column: 1, offset };
     }
     const fields = this.#fields;
-    const sourceLength = this.#sourceLength;
-    if (
-      offset === sourceLength &&
-      fields[fieldLength - BlockLineField.Stride | BlockLineField.End] < sourceLength
-    ) {
-      return {
-        line: fieldLength / BlockLineField.Stride + 1,
-        column: 1,
-        offset,
-      };
-    }
     let field = this.#locatorField;
-    let start = fields[field | BlockLineField.Start];
-    while (field + BlockLineField.Stride < fieldLength) {
-      const nextStart = fields[field + BlockLineField.Stride | BlockLineField.Start];
-      if (nextStart > offset) {
-        break;
+    if (fields[field | BlockLineField.Next] <= offset) {
+      const sourceLength = this.#sourceLength;
+      if (offset < sourceLength) {
+        do {
+          field += BlockLineField.Stride;
+        }
+        while (fields[field | BlockLineField.Next] <= offset);
       }
-      field += BlockLineField.Stride;
-      start = nextStart;
+      else {
+        field = (length - 1) * BlockLineField.Stride;
+        if (offset === sourceLength && fields[field | BlockLineField.End] < offset) {
+          return { line: length + 1, column: 1, offset };
+        }
+      }
+      this.#locatorField = field;
     }
-    this.#locatorField = field;
     return {
       line: field / BlockLineField.Stride + 1,
-      column: offset - start + 1,
+      column: offset - fields[field | BlockLineField.Start] + 1,
       offset,
     };
   }
