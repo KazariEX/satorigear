@@ -15,6 +15,7 @@ export const feature: SyntaxFeature = {
         tokens.push(BlockKind.ParagraphOpen, contentOffset, contentOffset);
         // Keep one chunk across contiguous lines; split only where source has a gap.
         let chunkOffset = contentOffset;
+        let chunkEnd = lines.end(start);
         let withBoundaryBreak = false;
         let index = start + 1;
         while (index < lines.length) {
@@ -33,7 +34,7 @@ export const feature: SyntaxFeature = {
                 setext === Character.EqualsSign ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
               );
               tokens.setEnd(openToken, lineEnd);
-              tokens.closeRange(chunkOffset, lines.end(index - 1));
+              tokens.closeRange(chunkOffset, chunkEnd);
               return index + 1;
             }
             if (context.startsInterruptingBlock(source, lines, index, contentStart)) {
@@ -41,14 +42,14 @@ export const feature: SyntaxFeature = {
             }
           }
           const previousEnd = lines.next(index - 1);
-          const newline = lines.end(index - 1);
-          if (!withBoundaryBreak && source.charCodeAt(newline) === Character.LineFeed) {
-            const previous = source.charCodeAt(newline - 1);
-            if (
+          if (!withBoundaryBreak) {
+            const previous = source.charCodeAt(chunkEnd - 1);
+            const padded = (
               previous === Character.Space ||
               previous === Character.CharacterTabulation ||
-              source.charCodeAt(chunkStart) === Character.Space
-            ) {
+              chunkStart < contentStart && source.charCodeAt(chunkStart) === Character.Space
+            );
+            if (padded && source.charCodeAt(chunkEnd) === Character.LineFeed) {
               withBoundaryBreak = true;
               tokens.setValue(openToken, boundaryBreak);
             }
@@ -57,10 +58,10 @@ export const feature: SyntaxFeature = {
             tokens.push(BlockKind.InlineChunk, chunkOffset, previousEnd);
             chunkOffset = chunkStart;
           }
+          chunkEnd = lineEnd;
           index++;
         }
-        const close = lines.end(index - 1);
-        tokens.closeRange(chunkOffset, close);
+        tokens.closeRange(chunkOffset, chunkEnd);
         return index;
       },
     ],
