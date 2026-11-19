@@ -48,12 +48,9 @@ function listMarkerAt(
   ) {
     const following = source.charCodeAt(markerEnd);
     if (
-      (
-        markerEnd !== lineEnd &&
-        following !== Character.Space &&
-        following !== Character.CharacterTabulation
-      ) ||
-      isThematicBreak(source, lines, index, contentOffset)
+      markerEnd !== lineEnd &&
+      following !== Character.Space &&
+      following !== Character.CharacterTabulation
     ) {
       return;
     }
@@ -102,6 +99,10 @@ function listMarkerAt(
         column += 4 - (column % 4);
       }
       else {
+        // After list padding, a thematic break must continue with the same marker.
+        if (code === marker && isThematicBreak(source, lines, index, contentOffset)) {
+          return;
+        }
         break;
       }
       contentStart++;
