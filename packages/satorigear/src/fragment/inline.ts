@@ -208,42 +208,6 @@ function buildLiteral(context: InlineBuildContext, start: number, end: number): 
   };
 }
 
-function buildNode(context: InlineBuildContext, token: number, kind: number): InlineNonText {
-  const startOffset = inlineTokenStart(context.tokens, token);
-  const sourceStart = context.view.mapOffset(startOffset);
-  const start = context.locator.locationAt(sourceStart);
-  let close = token;
-  let children: PhrasingContent[] | undefined;
-  if (kind >= InlineRole.Pair) {
-    const next = token + 1;
-    const contentStart = inlineTokenEnd(context.tokens, token);
-    if (inlineTokenKind(context.tokens, next) === kind + 1) {
-      const contentEnd = inlineTokenStart(context.tokens, next);
-      children = contentEnd <= contentStart ? [] : [
-        buildLiteral(context, contentStart, contentEnd),
-      ];
-      close = next;
-    }
-    else {
-      context.tokenIndex = next;
-      children = buildFragment(context, contentStart, kind + 1).children;
-      close = context.tokenIndex;
-    }
-  }
-  context.tokenIndex = close + 1;
-  const endOffset = inlineTokenEnd(context.tokens, close);
-  const position = {
-    start,
-    end: context.locator.locationAt(
-      startOffset === endOffset ? sourceStart : context.view.mapEnd(endOffset),
-    ),
-  };
-  const build = context.builders[kind];
-  return children
-    ? (build as InlinePairBuilder)(token, close, position, children, context)
-    : (build as InlineLeafBuilder)(token, position, context);
-}
-
 function buildFragment(context: InlineBuildContext, cursor: number, closer: InlineKind): InlineFragment {
   const trimEnd = closer === InlineKind.None;
   const children: PhrasingContent[] = [];
@@ -274,14 +238,41 @@ function buildFragment(context: InlineBuildContext, cursor: number, closer: Inli
       cursor = output.cursor;
       continue;
     }
-    // A gap between resolved nodes is a complete text child.
-    const start = inlineTokenStart(tokens, index);
-    if (cursor < start) {
-      children.push(buildLiteral(context, cursor, start));
+    const startOffset = inlineTokenStart(tokens, index);
+    if (cursor < startOffset) {
+      children.push(buildLiteral(context, cursor, startOffset));
     }
-    const node = buildNode(context, index, kind);
+    const sourceStart = context.view.mapOffset(startOffset);
+    const start = context.locator.locationAt(sourceStart);
+    let nested: PhrasingContent[] | undefined;
+    if (kind >= InlineRole.Pair) {
+      const start = inlineTokenEnd(tokens, index);
+      const next = index + 1;
+      context.tokenIndex = next;
+      if (inlineTokenKind(tokens, next) === kind + 1) {
+        const end = inlineTokenStart(tokens, next);
+        nested = end <= start ? [] : [
+          buildLiteral(context, start, end),
+        ];
+      }
+      else {
+        nested = buildFragment(context, start, kind + 1).children;
+      }
+    }
+    const close = context.tokenIndex++;
+    const endOffset = inlineTokenEnd(tokens, close);
+    const position = {
+      start,
+      end: context.locator.locationAt(
+        startOffset === endOffset ? sourceStart : context.view.mapEnd(endOffset),
+      ),
+    };
+    const build = context.builders[kind];
+    const node = nested
+      ? (build as InlinePairBuilder)(index, close, position, nested, context)
+      : (build as InlineLeafBuilder)(index, position, context);
     children.push(node);
-    cursor = inlineTokenEnd(tokens, context.tokenIndex - 1);
+    cursor = endOffset;
   }
   let tail = context.tokenIndex < end ? inlineTokenStart(tokens, context.tokenIndex) : context.view.text.length;
   if (cursor < tail && trimEnd) {
