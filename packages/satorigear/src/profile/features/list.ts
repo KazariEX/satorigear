@@ -17,7 +17,6 @@ interface ListMarker {
   contentIndent: number;
   contentPrefixColumns: number;
   delimiter: number;
-  startNumber: number;
 }
 
 const enum ParagraphLeafState {
@@ -25,6 +24,9 @@ const enum ParagraphLeafState {
   Yes,
   Unknown,
 }
+
+// Interrupting list items require content. Ordered items must also start at one.
+const interruptingMarker = /(?:[*+-]|0{0,8}1[.)])[ \t]+[^ \t\r\n]/y;
 
 function listMarkerAt(
   source: string,
@@ -40,7 +42,6 @@ function listMarkerAt(
   const lineEnd = lines.end(index);
   let delimiter: number;
   let markerEnd = contentOffset + 1;
-  let startNumber = 0;
   if (
     marker === Character.HyphenMinus ||
     marker === Character.PlusSign ||
@@ -67,7 +68,6 @@ function listMarkerAt(
       if (digit < 0 || digit > 9) {
         break;
       }
-      startNumber = startNumber * 10 + digit;
       orderedEnd++;
     }
     delimiter = source.charCodeAt(orderedEnd);
@@ -127,7 +127,6 @@ function listMarkerAt(
     contentIndent,
     contentPrefixColumns: prefixColumns,
     delimiter,
-    startNumber,
   };
 }
 
@@ -421,13 +420,8 @@ export function feature(taskList = false): SyntaxFeature {
             return true;
           },
           interrupt(source, lines, index, contentOffset) {
-            const marker = listMarkerAt(source, lines, index, contentOffset);
-            return marker?.hasContent === true && (
-              marker.startNumber === 1 || (
-                marker.delimiter !== Character.FullStop &&
-                marker.delimiter !== Character.RightParenthesis
-              )
-            );
+            interruptingMarker.lastIndex = contentOffset;
+            return interruptingMarker.test(source) && interruptingMarker.lastIndex <= lines.end(index);
           },
           start: taskList ? taskListStart : listStart,
         },
