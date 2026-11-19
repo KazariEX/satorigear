@@ -115,8 +115,9 @@ class Latin1 {
           /* .... */ | Math.imul(hits2 >>> 4 | hits3, 0x00204081) >>> 24 << 8
           /* .... */ | Math.imul(hits4 >>> 4 | hits5, 0x00204081) >>> 24 << 16
           /* .... */ | Math.imul(hits6 >>> 4 | hits7, 0x00204081) >>> 24 << 24;
+          const last = cursor + 31;
           do {
-            const at = cursor + (~Math.clz32(events & -events) & 31);
+            const at = last - Math.clz32(events & -events);
             const code = source.charCodeAt(at);
             // Latin1 copying retains low bytes, so exclude non-Latin1 aliases:
             // "上"(0x4E0A), "不"(0x4E0D), "č"(0x010D), ...
