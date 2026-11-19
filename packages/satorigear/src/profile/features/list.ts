@@ -1,5 +1,5 @@
 import type { List, ListItem } from "mdast";
-import { type BlockLines, IndentedLine, lineIndentOffset } from "../../block/lines.ts";
+import { type BlockLines, IndentedLine, isBlankLine, lineIndentOffset } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
@@ -325,7 +325,15 @@ const listStart: BlockStart = (source, lines, tokens, start, contentOffset, cont
       itemLines.pushLazy(lines, index);
       index++;
     }
-    const itemSpread = context.scanLines(source, itemLines, tokens);
+    let itemSpread = false;
+    let previousEnd = -1;
+    context.scanBlockLines(source, itemLines, tokens, (lineStart, lineEnd) => {
+      // Adjacent ranges can still be separated if the previous child consumed a trailing blank.
+      itemSpread ||= previousEnd >= 0 && (
+        lineStart > previousEnd || isBlankLine(source, itemLines, previousEnd - 1)
+      );
+      previousEnd = lineEnd;
+    });
     // Close positions exclude the terminal line ending; outer list scans retain it.
     const itemEnd = itemLines.length ? itemLines.end(itemLines.length - 1) : marker.end;
     // A frame's blank-separation summary is known only when its close is emitted.

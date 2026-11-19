@@ -104,7 +104,7 @@ export const feature: SyntaxFeature = {
             quoteLines.pushLazy(lines, index);
           }
           tokens.push(BlockKind.BlockQuoteOpen, contentOffset, contentOffset + 1);
-          context.scanLines(source, quoteLines, tokens);
+          context.scanBlockLines(source, quoteLines, tokens);
           const end = quoteLines.end(quoteLines.length - 1);
           tokens.push(BlockKind.BlockQuoteClose, end, end);
           return index;

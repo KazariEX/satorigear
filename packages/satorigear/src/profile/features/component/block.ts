@@ -274,11 +274,11 @@ function emitComponentBody(
   }
   let slot = nextSlot(source, lines, cursor, end);
   if (!slot) {
-    context.scanLines(source, lines.view(cursor, end), tokens);
+    context.scanBlockLines(source, lines.view(cursor, end), tokens);
     return;
   }
   if (slot.index > cursor) {
-    context.scanLines(source, lines.view(cursor, slot.index), tokens);
+    context.scanBlockLines(source, lines.view(cursor, slot.index), tokens);
   }
   while (slot) {
     const following = nextSlot(source, lines, slot.index + 1, end);
@@ -288,7 +288,7 @@ function emitComponentBody(
     if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
       tokens.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
     }
-    context.scanLines(source, lines.view(slot.index + 1, next), tokens);
+    context.scanBlockLines(source, lines.view(slot.index + 1, next), tokens);
     const slotEnd = following ? following.opening.offset : closingOffset;
     tokens.push(BlockKind.BlockComponentSlotClose, slotEnd, slotEnd);
     slot = following;

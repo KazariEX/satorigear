@@ -132,7 +132,7 @@ export const blockStarts: BlockFeature["starts"] = [
           },
         },
       );
-      context.scanLines(source, definitionLines, tokens);
+      context.scanBlockLines(source, definitionLines, tokens);
       const end = definitionLines.length > 0
         ? definitionLines.next(definitionLines.length - 1)
         : match.markerEnd;

@@ -1,5 +1,5 @@
 import { Character } from "../constants/character.ts";
-import { BlockLines, isBlankLine, lineIndentOffset } from "./lines.ts";
+import { BlockLines, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { SourceLocator, SourceSpan } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
@@ -54,8 +54,8 @@ function sameShiftedBlock(
 }
 
 export class BlockScanContext {
-  #lineViewDepth = 0;
   #lineViews: BlockLines[] = [];
+  #scanDepth = 0;
   #lookaheadEnd = 0;
   #profile: BlockProfile;
   #unwrappedLine = new BlockLines();
@@ -102,14 +102,14 @@ export class BlockScanContext {
     return end;
   }
 
-  /** Starts a depth-owned projected view; {@link scanLines} releases it after recursive scanning. */
+  /** Borrows the projected view for children of the active scan. */
   createLineView(
     lines: BlockLines,
     index: number,
     start: number,
     prefixColumns: number,
   ): BlockLines {
-    const depth = this.#lineViewDepth++;
+    const depth = this.#scanDepth - 1;
     const view = this.#lineViews[depth] ??= new BlockLines();
     view.resetFrom(lines, index, start, prefixColumns);
     return view;
@@ -122,54 +122,39 @@ export class BlockScanContext {
     tokens: BlockTokenStream,
     visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
   ): void {
-    const profile = this.#profile;
-    for (let index = 0; index < lines.length;) {
-      // Scan leading whitespace once to distinguish blank lines from block indent.
-      let contentOffset = lines.start(index);
-      const lineEnd = lines.end(index);
-      let columns = lines.prefixColumns(index);
-      while (contentOffset < lineEnd) {
-        const code = source.charCodeAt(contentOffset);
-        if (code !== Character.Space && code !== Character.CharacterTabulation) {
-          break;
+    this.#scanDepth++;
+    try {
+      for (let index = 0; index < lines.length;) {
+        // Scan leading whitespace once to distinguish blank lines from block indent.
+        let contentOffset = lines.start(index);
+        const lineEnd = lines.end(index);
+        let columns = lines.prefixColumns(index);
+        while (contentOffset < lineEnd) {
+          const code = source.charCodeAt(contentOffset);
+          if (code !== Character.Space && code !== Character.CharacterTabulation) {
+            break;
+          }
+          columns += code === Character.Space ? 1 : 4 - columns % 4;
+          contentOffset++;
         }
-        columns += code === Character.Space ? 1 : 4 - columns % 4;
-        contentOffset++;
-      }
-      if (contentOffset === lineEnd) {
-        index++;
-        continue;
-      }
-      if (columns > 3) {
-        contentOffset = -1;
-      }
-      const lineStart = index;
-      const tokenStart = tokens.length;
-      index = profile.dispatch(source, lines, tokens, index, contentOffset, this);
-      if (visit?.(lineStart, index, tokenStart, tokens.length)) {
-        return;
+        if (contentOffset === lineEnd) {
+          index++;
+          continue;
+        }
+        if (columns > 3) {
+          contentOffset = -1;
+        }
+        const lineStart = index;
+        const tokenStart = tokens.length;
+        index = this.#profile.dispatch(source, lines, tokens, index, contentOffset, this);
+        if (visit?.(lineStart, index, tokenStart, tokens.length)) {
+          return;
+        }
       }
     }
-  }
-
-  /**
-   * Wraps {@link scanBlockLines} to report blank separation between direct blocks.
-   * Releases the line view after scanning when it is owned by this context.
-   */
-  scanLines(source: string, lines: BlockLines, tokens: BlockTokenStream): boolean {
-    let blankSeparated = false;
-    let previousEnd = -1;
-    this.scanBlockLines(source, lines, tokens, (lineStart, lineEnd) => {
-      // Adjacent ranges can still be separated if the previous child consumed a trailing blank.
-      blankSeparated ||= previousEnd >= 0 && (
-        lineStart > previousEnd || isBlankLine(source, lines, previousEnd - 1)
-      );
-      previousEnd = lineEnd;
-    });
-    if (lines === this.#lineViews[this.#lineViewDepth - 1]) {
-      this.#lineViewDepth--;
+    finally {
+      this.#scanDepth--;
     }
-    return blankSeparated;
   }
 
   startsInterruptingBlock(
