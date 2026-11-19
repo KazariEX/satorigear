@@ -443,24 +443,19 @@ export class BlockLines implements SourceLocator {
 
   update(
     nextSource: string,
-    restartOffset: number,
+    damageStart: number,
     oldDamageEnd: number,
     delta: number,
   ): BlockLines {
-    // Rebuild one following line so edits at line-ending boundaries cannot retain stale geometry.
-    const suffix = Math.min(this.length, this.indexAtOrAfter(oldDamageEnd + 1) + 1);
+    // The first line starting strictly after the old edit end has an unchanged left boundary.
+    const suffix = this.indexAtOrAfter(oldDamageEnd + 1);
     const oldSuffixOffset = suffix < this.length
       ? this.start(suffix)
       : nextSource.length - delta;
     const newSuffixOffset = oldSuffixOffset + delta;
-    let prefixEnd = this.indexAtOrAfter(restartOffset);
-    // A newly formed CRLF also changes the retained physical line before the block restart.
-    if (
-      nextSource.charCodeAt(restartOffset - 1) === Character.CarriageReturn &&
-      nextSource.charCodeAt(restartOffset) === Character.LineFeed
-    ) {
-      restartOffset = this.start(--prefixEnd);
-    }
+    // Include the preceding line at an exact boundary so CR and LF can join across the edit.
+    const prefixEnd = Math.max(0, this.indexAtOrAfter(damageStart) - 1);
+    const restartOffset = prefixEnd === 0 ? 0 : this.start(prefixEnd);
     // Isolate the rebuilt range so a trailing CR cannot consume an LF outside it.
     const changedSource = nextSource.slice(restartOffset, newSuffixOffset);
     const changed = new BlockLines(0, getLineCapacity(changedSource.length));

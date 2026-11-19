@@ -268,7 +268,7 @@ export class BlockScanner {
     );
     const restartRecord = previousRecords[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
-    const nextLines = this.#lines.update(nextSource, restartOffset, oldChangedEnd, offsetDelta);
+    const nextLines = this.#lines.update(nextSource, changedSpan.start, oldChangedEnd, offsetDelta);
     const scanLineStart = nextLines.indexAtOrAfter(restartOffset);
     const stableBlockCount = Math.max(0, restartIndex);
     const oldTokenStart = restartRecord?.tokenStart ?? 0;
