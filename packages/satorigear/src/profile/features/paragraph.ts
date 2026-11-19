@@ -1,5 +1,5 @@
 import type { Paragraph } from "mdast";
-import { indentOffset, trimLineWhitespaceStart } from "../../block/lines.ts";
+import { trimLineWhitespaceStart } from "../../block/lines.ts";
 import { BlockKind, boundaryBreak } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -19,12 +19,20 @@ export const feature: SyntaxFeature = {
         let withBoundaryBreak = false;
         let index = start + 1;
         while (index < lines.length) {
+          const lineStart = lines.start(index);
           const lineEnd = lines.end(index);
-          const contentStart = trimLineWhitespaceStart(source, lines.start(index), lineEnd);
+          let spaceEnd = lineStart;
+          let first = source.charCodeAt(spaceEnd);
+          while (spaceEnd < lineEnd && first === Character.Space) {
+            first = source.charCodeAt(++spaceEnd);
+          }
+          const contentStart = spaceEnd < lineEnd && first === Character.CharacterTabulation
+            ? trimLineWhitespaceStart(source, spaceEnd + 1, lineEnd)
+            : spaceEnd;
           if (contentStart === lineEnd) {
             break;
           }
-          const chunkStart = indentOffset(source, lines, index);
+          const chunkStart = Math.min(spaceEnd, lineStart + Math.max(0, 3 - lines.prefixColumns(index)));
           const canInterrupt = !lines.lazy(index) && chunkStart === contentStart;
           if (canInterrupt) {
             const setext = setextMarkerAt(source, lines, index, contentStart);
