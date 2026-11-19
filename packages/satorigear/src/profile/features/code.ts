@@ -117,9 +117,9 @@ export const feature: SyntaxFeature = {
           while (end < lines.length && lineIndentOffset(source, lines, end) < 0) {
             end++;
           }
-          // The block consumes trailing blank lines, but its code value and position do not include them.
+          // Trailing blanks are consumed outside the code span. Its opening line already has content.
           let contentEnd = end;
-          while (contentEnd > start && isBlankLine(source, lines, contentEnd - 1)) {
+          while (contentEnd > start + 1 && isBlankLine(source, lines, contentEnd - 1)) {
             contentEnd--;
           }
           tokens.push(BlockKind.IndentedCodeBlock, lines.start(start), lines.end(contentEnd - 1), {
