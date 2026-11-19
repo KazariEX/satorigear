@@ -6,7 +6,6 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
-import type { InlineLeafBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface HtmlStart {
@@ -66,15 +65,6 @@ function htmlStartAt(
     return { interruptParagraph: false };
   }
 }
-
-const buildInlineHtml: InlineLeafBuilder = (tokenIndex, position, context) => {
-  const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  return {
-    type: "html",
-    value: text,
-    position,
-  };
-};
 
 export const feature: SyntaxFeature = {
   block: {
@@ -151,7 +141,7 @@ export const feature: SyntaxFeature = {
         marker: Character.LessThanSign,
         scan(source, start, tokens) {
           let end = matchInlinePatternEnd(htmlComment, source, start);
-          let kind = InlineKind.HtmlComment;
+          let kind = InlineKind.InlineHtml;
           if (end < 0) {
             end = matchInlinePatternEnd(autolink, source, start);
             kind = InlineKind.Autolink;
@@ -169,8 +159,18 @@ export const feature: SyntaxFeature = {
       },
     ],
     builds: [
-      { kind: "leaf", token: InlineKind.InlineHtml, build: buildInlineHtml },
-      { kind: "leaf", token: InlineKind.HtmlComment, build: buildInlineHtml },
+      {
+        kind: "leaf",
+        token: InlineKind.InlineHtml,
+        build(tokenIndex, position, context) {
+          const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
+          return {
+            type: "html",
+            value: text,
+            position,
+          };
+        },
+      },
     ],
   },
 };

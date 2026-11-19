@@ -27,7 +27,6 @@ export const enum InlineKind {
 
   HardBreak = InlineRole.Leaf,
   CodeSpan,
-  HtmlComment,
   InlineHtml,
   Autolink,
   FootnoteReference,
