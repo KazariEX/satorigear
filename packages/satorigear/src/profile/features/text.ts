@@ -1,8 +1,9 @@
+import { decodeString } from "micromark-util-decode-string";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
-import { isAsciiPunctuation, semanticText } from "../utils.ts";
+import { isAsciiPunctuation } from "../utils.ts";
 import type { InlineTextBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
 
@@ -18,7 +19,7 @@ export const buildEscapedInlineText: InlineTextBuilder = (tokenIndex, context) =
 
 export const buildDecodedInlineText: InlineTextBuilder = (tokenIndex, context) => {
   const text = inlineTokenText(context.view.text, context.tokens, tokenIndex);
-  return semanticText(text);
+  return decodeString(text);
 };
 
 export const feature: SyntaxFeature = {
