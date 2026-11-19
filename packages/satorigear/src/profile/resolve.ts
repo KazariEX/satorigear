@@ -61,27 +61,15 @@ function referenceLabelEnd(source: string, start: number): number {
   return -1;
 }
 
-function acceptsShortcutLabel(source: string, start: number, end: number): boolean {
-  let hasContent = false;
-  let characters = 0;
-  for (let offset = start; offset < end; offset++) {
-    const code = source.charCodeAt(offset);
-    hasContent ||= !isMarkdownWhitespace(code);
-    if (
-      code >= Character.HighSurrogateStart &&
-      code <= Character.HighSurrogateEnd &&
-      offset + 1 < end
-    ) {
-      const trailing = source.charCodeAt(offset + 1);
-      if (trailing >= Character.LowSurrogateStart && trailing <= Character.LowSurrogateEnd) {
-        offset++;
-      }
-    }
-    if (++characters > 999) {
-      return false;
-    }
-  }
-  return hasContent;
+// Unicode mode counts surrogate pairs once; dotAll includes line endings in the label.
+const withinLabelLimit = /^.{1,999}$/su;
+const acceptedLabel = /[^ \t\r\n]/;
+
+function acceptsShortcutLabel(label: string): boolean {
+  // Above 999 code units a valid label necessarily contains a nonblank surrogate pair.
+  return label.length > 999
+    ? label.length <= 2 * 999 && withinLabelLimit.test(label)
+    : acceptedLabel.test(label);
 }
 
 function opensComponentLabel(tokens: InlineTokenStream, open: number): boolean {
@@ -156,10 +144,11 @@ function matchedLinkEnd(
       : source.slice(end + 1, labelEnd - 1);
     return definitions.hasDefinition(normalizeIdentifier(label)) ? labelEnd : -1;
   }
-  if (lastVisibleOpener > open || !acceptsShortcutLabel(source, contentStart, contentEnd)) {
+  if (lastVisibleOpener > open) {
     return -1;
   }
-  return definitions.hasDefinition(normalizeIdentifier(source.slice(contentStart, contentEnd))) ? end : -1;
+  const label = source.slice(contentStart, contentEnd);
+  return acceptsShortcutLabel(label) && definitions.hasDefinition(normalizeIdentifier(label)) ? end : -1;
 }
 
 function setBoundary(tokens: number[], index: number, kind: InlineKind, end: number): void {
