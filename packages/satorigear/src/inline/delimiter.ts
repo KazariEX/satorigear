@@ -3,6 +3,7 @@ import { InlineKind, InlineRole } from "../constants/inline.ts";
 import { isAsciiPunctuation } from "../profile/utils.ts";
 import {
   appendInlineToken,
+  inlineTokenCount,
   inlineTokenEnd,
   InlineTokenField,
   inlineTokenKind,
@@ -256,7 +257,40 @@ export class DelimiterStack {
     this.#replacements[index].push({ start, end, kind });
   }
 
-  appendMatches(result: number[], tokens: InlineTokenStream, tokenIndex: number): void {
+  emitResolvedTokens(tokens: InlineTokenStream): InlineTokenStream {
+    let end = inlineTokenCount(tokens);
+    let index = 0;
+    while (index < end && inlineTokenKind(tokens, index) >= InlineRole.Text) {
+      index++;
+    }
+    if (index === end) {
+      return tokens;
+    }
+    // Past the last partial match, trailing raw markers remain implicit source text.
+    const limit = Math.max(index, this.#replacements.length);
+    while (end > limit && inlineTokenKind(tokens, end - 1) < InlineRole.Text) {
+      end--;
+    }
+    const result = tokens.slice(0, index * InlineTokenField.Stride);
+    for (; index < end; index++) {
+      const kind = inlineTokenKind(tokens, index);
+      if (kind >= InlineRole.Text) {
+        const field = index * InlineTokenField.Stride;
+        result.push(
+          kind,
+          tokens[field + InlineTokenField.Start],
+          tokens[field + InlineTokenField.End],
+          tokens[field + InlineTokenField.Data],
+        );
+      }
+      else if (kind !== InlineKind.None) {
+        this.#appendMatches(result, tokens, index);
+      }
+    }
+    return result;
+  }
+
+  #appendMatches(result: number[], tokens: InlineTokenStream, tokenIndex: number): void {
     const matched = this.#replacements[tokenIndex];
     let last: DelimiterReplacement | undefined;
     if (matched) {

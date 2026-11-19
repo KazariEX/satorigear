@@ -288,34 +288,7 @@ function resolvePairs(
     scopes.close(tokens, open);
   }
   scopes.close(tokens);
-  return emitResolvedTokens(tokens, scopes, end);
-}
-
-function emitResolvedTokens(tokens: InlineTokenStream, scopes: DelimiterStack, end: number): InlineTokenStream {
-  let index = 0;
-  while (index < end && inlineTokenKind(tokens, index) >= InlineRole.Text) {
-    index++;
-  }
-  if (index === end) {
-    return tokens;
-  }
-  const result = tokens.slice(0, index * InlineTokenField.Stride);
-  for (; index < end; index++) {
-    const kind = inlineTokenKind(tokens, index);
-    if (kind >= InlineRole.Text) {
-      const field = index * InlineTokenField.Stride;
-      result.push(
-        kind,
-        tokens[field + InlineTokenField.Start],
-        tokens[field + InlineTokenField.End],
-        tokens[field + InlineTokenField.Data],
-      );
-    }
-    else if (kind !== InlineKind.None) {
-      scopes.appendMatches(result, tokens, index);
-    }
-  }
-  return result;
+  return scopes.emitResolvedTokens(tokens);
 }
 
 export function compileInlineResolver(options: InlineResolverOptions): InlineResolverFactory {
@@ -371,7 +344,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
       }
       if (start === end) {
         const settled = resolved ?? tokens;
-        return hasLiteralBrackets ? emitResolvedTokens(settled, new DelimiterStack(), end) : settled;
+        return hasLiteralBrackets ? new DelimiterStack().emitResolvedTokens(settled) : settled;
       }
       return resolvePairs(source, resolved ?? tokens.slice(), definitions, options, delimiterByKind, start);
     };
