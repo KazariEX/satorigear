@@ -4,6 +4,7 @@ import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
 import { cloneLocation, type SourceLocation } from "../../source-view.ts";
+import { isAsciiDigit, isAsciiWhitespace } from "../utils.ts";
 import { isThematicBreak } from "./break.ts";
 import type { BlockStart } from "../../block/profile.ts";
 import type { BlockTokenStream } from "../../block/tokens.ts";
@@ -58,16 +59,16 @@ function listMarkerAt(
     delimiter = marker;
   }
   else {
-    if (marker < Character.DigitZero || marker > Character.DigitNine) {
+    if (!isAsciiDigit(marker)) {
       return;
     }
-    let orderedEnd = contentOffset;
+    let orderedEnd = contentOffset + 1;
     // CommonMark caps ordered markers at nine digits, so the prefix is cheaper to scan than to slice and match.
-    while (orderedEnd < lineEnd && orderedEnd - contentOffset < 9) {
-      const digit = source.charCodeAt(orderedEnd) - Character.DigitZero;
-      if (digit < 0 || digit > 9) {
-        break;
-      }
+    while (
+      orderedEnd < lineEnd &&
+      orderedEnd - contentOffset < 9 &&
+      isAsciiDigit(source.charCodeAt(orderedEnd))
+    ) {
       orderedEnd++;
     }
     delimiter = source.charCodeAt(orderedEnd);
@@ -135,12 +136,6 @@ interface TaskListMarker {
   contentStart: number;
 }
 
-function isTaskListWhitespace(code: number): boolean {
-  return code === Character.Space || (
-    code >= Character.CharacterTabulation && code <= Character.CarriageReturn
-  );
-}
-
 function taskListMarkerAt(source: string, start: number, end: number): TaskListMarker | undefined {
   while (source.charCodeAt(start) === Character.Space) {
     start++;
@@ -150,7 +145,7 @@ function taskListMarkerAt(source: string, start: number, end: number): TaskListM
   }
   const state = source.charCodeAt(start++);
   const checked = state === Character.LatinCapitalLetterX || state === Character.LatinSmallLetterX;
-  if (!checked && !isTaskListWhitespace(state)) {
+  if (!checked && !isAsciiWhitespace(state)) {
     return;
   }
   if (source.charCodeAt(start++) !== Character.RightSquareBracket) {
@@ -160,7 +155,7 @@ function taskListMarkerAt(source: string, start: number, end: number): TaskListM
     return;
   }
   const whitespace = source.charCodeAt(start++);
-  if (!isTaskListWhitespace(whitespace)) {
+  if (!isAsciiWhitespace(whitespace)) {
     return;
   }
   if (
@@ -186,7 +181,7 @@ function hasTaskListContent(
     const start = token === firstChunk ? contentStart : tokens.start(token);
     const end = tokens.end(token);
     for (let offset = start; offset < end; offset++) {
-      if (!isTaskListWhitespace(source.charCodeAt(offset))) {
+      if (!isAsciiWhitespace(source.charCodeAt(offset))) {
         return true;
       }
     }

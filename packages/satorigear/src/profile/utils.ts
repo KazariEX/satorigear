@@ -2,6 +2,7 @@ import { decodeString } from "micromark-util-decode-string";
 import { Character } from "../constants/character.ts";
 
 const inlineColonBoundary = /[ \t\n\r\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}\p{P}]/u;
+const nonSpaceAndLineEnding = /[^ \r\n]/;
 
 export function isAsciiDigit(code: number): boolean {
   return code >= Character.DigitZero && code <= Character.DigitNine;
@@ -23,12 +24,27 @@ export function isAsciiPunctuation(code: number): boolean {
   );
 }
 
-export function isMarkdownWhitespace(code: number): boolean {
+export function isAsciiWhitespace(code: number): boolean {
   return (
-    code === Character.CharacterTabulation ||
+    code === Character.Space ||
+    code >= Character.CharacterTabulation && code <= Character.CarriageReturn
+  );
+}
+
+export function isSpaceOrLineEnding(code: number): boolean {
+  return (
+    code === Character.Space ||
+    code === Character.LineFeed ||
+    code === Character.CarriageReturn
+  );
+}
+
+export function isSpaceTabOrLineEnding(code: number): boolean {
+  return (
+    code === Character.Space ||
     code === Character.LineFeed ||
     code === Character.CarriageReturn ||
-    code === Character.Space
+    code === Character.CharacterTabulation
   );
 }
 
@@ -38,6 +54,14 @@ export function hasInlineColonBoundary(source: string, start: number): boolean {
   }
   const previous = source[start - 1];
   return previous !== ":" && inlineColonBoundary.test(previous);
+}
+
+export function hasInlinePadding(value: string): boolean {
+  return (
+    isSpaceOrLineEnding(value.charCodeAt(0)) &&
+    isSpaceOrLineEnding(value.charCodeAt(value.length - 1)) &&
+    nonSpaceAndLineEnding.test(value)
+  );
 }
 
 export function semanticText(value: string): string {

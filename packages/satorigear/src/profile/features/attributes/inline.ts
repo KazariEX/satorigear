@@ -1,3 +1,4 @@
+import { trimLineWhitespaceStart } from "../../../block/lines.ts";
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
 import {
@@ -9,7 +10,7 @@ import {
   inlineTokenStart,
   setInlineTokenData,
 } from "../../../inline/tokens.ts";
-import { isMarkdownWhitespace } from "../../utils.ts";
+import { isSpaceTabOrLineEnding } from "../../utils.ts";
 import { attributesEnd, mergeAttributes, parseAttributes } from "./shared.ts";
 import type { InlineFeature } from "../../../inline/profile.ts";
 import type { Attributes } from "./types.ts";
@@ -29,7 +30,7 @@ declare module "../../../fragment/inline.ts" {
 
 function hasVisibleText(source: string, start: number, end: number): boolean {
   for (let offset = start; offset < end; offset++) {
-    if (!isMarkdownWhitespace(source.charCodeAt(offset))) {
+    if (!isSpaceTabOrLineEnding(source.charCodeAt(offset))) {
       return true;
     }
   }
@@ -59,13 +60,7 @@ export const inlineScans: InlineFeature["scans"] = [
         // cannot mistake an earlier literal bag for attachable content.
         let textEnd = end;
         while (true) {
-          let next = textEnd;
-          while (
-            source.charCodeAt(next) === Character.CharacterTabulation ||
-            source.charCodeAt(next) === Character.Space
-          ) {
-            next++;
-          }
+          const next = trimLineWhitespaceStart(source, textEnd, source.length);
           const nextEnd = source.charCodeAt(next) === Character.LeftCurlyBracket
             ? attributeEndAt(source, next)
             : void 0;
@@ -94,13 +89,13 @@ export const inlineScans: InlineFeature["scans"] = [
         InlineKind.Attributes,
         start,
         end,
-        start > 0 && isMarkdownWhitespace(source.charCodeAt(start - 1))
+        start > 0 && isSpaceTabOrLineEnding(source.charCodeAt(start - 1))
           ? AttributeFlag.Detached
           : 0,
       );
 
       let next = end;
-      while (isMarkdownWhitespace(source.charCodeAt(next))) {
+      while (isSpaceTabOrLineEnding(source.charCodeAt(next))) {
         next++;
       }
       if (next === source.length) {

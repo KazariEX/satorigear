@@ -12,12 +12,11 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { inlineMarkerRunEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
-import { semanticText } from "../utils.ts";
+import { hasInlinePadding, semanticText } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const complexInfo = /[\\& \t]/;
 const separator = /[ \t]/;
-const paddingSpace = /^[\n ]+[^\n ].*[ \n]$/s;
 
 const backtickFence = createFencedBlock({
   kind: BlockKind.FencedCodeBlock,
@@ -165,12 +164,10 @@ export const feature: SyntaxFeature = {
         token: InlineKind.CodeSpan,
         build: (tokenIndex, position, context) => {
           const markerLength = inlineTokenData(context.tokens, tokenIndex);
-          let value = context.locator.normalizeLineEndings(
+          const text = context.locator.normalizeLineEndings(
             inlineTokenText(context.view.text, context.tokens, tokenIndex, markerLength),
           );
-          if (paddingSpace.test(value)) {
-            value = value.slice(1, -1);
-          }
+          const value = hasInlinePadding(text) ? text.slice(1, -1) : text;
           return {
             type: "inlineCode",
             value: context.tableCell ? value.replaceAll("\\|", "|") : value,

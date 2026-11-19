@@ -1,11 +1,8 @@
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
 import { inlineMarkerRunEnd, type InlineScanRule } from "../../../inline/tokenizer.ts";
-import {
-  appendInlineToken,
-  inlineTokenData,
-  inlineTokenText,
-} from "../../../inline/tokens.ts";
+import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../../inline/tokens.ts";
+import { hasInlinePadding } from "../../utils.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
 
 export function createMathScanRule(singleDollarTextMath: boolean): InlineScanRule {
@@ -47,15 +44,12 @@ export const inlineBuilds: readonly InlineBuildRule[] = [
     token: InlineKind.MathText,
     build(tokenIndex, position, context) {
       const markerLength = inlineTokenData(context.tokens, tokenIndex);
-      let value = inlineTokenText(context.view.text, context.tokens, tokenIndex, markerLength);
-      const startPadding = value.startsWith("\r\n") ? 2 : /^[ \r\n]/.test(value) ? 1 : 0;
-      const endPadding = value.endsWith("\r\n") ? 2 : /[ \r\n]$/.test(value) ? 1 : 0;
-      if (startPadding > 0 && endPadding > 0 && /[^ \r\n]/.test(value)) {
-        value = value.slice(startPadding, -endPadding);
-      }
+      const text = inlineTokenText(context.view.text, context.tokens, tokenIndex, markerLength);
       return {
         type: "inlineMath",
-        value,
+        value: hasInlinePadding(text)
+          ? text.slice(text.startsWith("\r\n") ? 2 : 1, text.endsWith("\r\n") ? -2 : -1)
+          : text,
         position,
       };
     },

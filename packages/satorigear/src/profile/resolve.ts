@@ -11,7 +11,7 @@ import {
 } from "../inline/tokens.ts";
 import { attributesEnd } from "./features/attributes/shared.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
-import { isMarkdownWhitespace, normalizeIdentifier } from "./utils.ts";
+import { isSpaceTabOrLineEnding, normalizeIdentifier } from "./utils.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
 
 interface InlineResolverOptions {
@@ -53,7 +53,7 @@ function referenceLabelEnd(source: string, start: number): number {
       offset += 2;
     }
     else {
-      hasContent ||= !isMarkdownWhitespace(code);
+      hasContent ||= !isSpaceTabOrLineEnding(code);
       offset++;
     }
     characters++;

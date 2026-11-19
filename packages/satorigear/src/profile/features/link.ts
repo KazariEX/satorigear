@@ -8,7 +8,7 @@ import {
   inlineTokenStart,
   inlineTokenText,
 } from "../../inline/tokens.ts";
-import { isMarkdownWhitespace, normalizeIdentifier, semanticText } from "../utils.ts";
+import { isSpaceTabOrLineEnding, normalizeIdentifier, semanticText } from "../utils.ts";
 import { buildDecodedInlineText } from "./text.ts";
 import type { InlinePairBuilder } from "../../fragment/inline.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -16,7 +16,7 @@ import type { SyntaxFeature } from "../types.ts";
 function skipWhitespace(source: string, start: number, end = source.length): number {
   while (start < end) {
     const code = source.charCodeAt(start);
-    if (!isMarkdownWhitespace(code)) {
+    if (!isSpaceTabOrLineEnding(code)) {
       break;
     }
     start++;
@@ -75,7 +75,7 @@ function linkDestinationEnd(source: string, start: number): number {
       end++;
       continue;
     }
-    if (isMarkdownWhitespace(code)) {
+    if (isSpaceTabOrLineEnding(code)) {
       break;
     }
     consumed = true;
@@ -219,7 +219,7 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
         url = semanticText(context.view.text.slice(start, destinationEnd));
         start = skipWhitespace(context.view.text, resourceEnd, end);
         if (start < end) {
-          while (end > start && isMarkdownWhitespace(context.view.text.charCodeAt(end - 1))) {
+          while (end > start && isSpaceTabOrLineEnding(context.view.text.charCodeAt(end - 1))) {
             end--;
           }
           title = semanticText(context.view.text.slice(start + 1, end - 1));

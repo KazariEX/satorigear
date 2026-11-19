@@ -1,5 +1,5 @@
 import { Character } from "../../../constants/character.ts";
-import { isMarkdownWhitespace, normalizeIdentifier } from "../../utils.ts";
+import { isSpaceTabOrLineEnding, normalizeIdentifier } from "../../utils.ts";
 
 const footnoteDefinitionPrefix = "footnote\0";
 
@@ -22,11 +22,11 @@ export function footnoteLabelAt(source: string, start: number, limit: number): F
   let length = 0;
   while (offset < limit) {
     const code = source.charCodeAt(offset);
-    if (isMarkdownWhitespace(code)) {
+    if (isSpaceTabOrLineEnding(code)) {
       return;
     }
     if (code === Character.ReverseSolidus && offset + 1 < limit) {
-      if (isMarkdownWhitespace(source.charCodeAt(offset + 1))) {
+      if (isSpaceTabOrLineEnding(source.charCodeAt(offset + 1))) {
         return;
       }
       offset += 2;

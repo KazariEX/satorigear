@@ -1,6 +1,6 @@
 import { Character } from "../constants/character.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
-import { isAsciiPunctuation } from "../profile/utils.ts";
+import { isAsciiPunctuation, isAsciiWhitespace } from "../profile/utils.ts";
 import {
   appendInlineToken,
   inlineTokenCount,
@@ -87,9 +87,9 @@ const enum DelimiterClass {
 }
 
 const delimiterClasses = Uint8Array.from({ length: 128 }, (value, code) => (
-  code === Character.Space || code >= Character.CharacterTabulation && code <= Character.CarriageReturn
-    ? DelimiterClass.Whitespace : isAsciiPunctuation(code)
-      ? DelimiterClass.Punctuation : DelimiterClass.Other
+  isAsciiWhitespace(code) ? DelimiterClass.Whitespace
+    : isAsciiPunctuation(code) ? DelimiterClass.Punctuation
+      : DelimiterClass.Other
 ));
 
 function delimiterCharacterClass(source: string, index: number): DelimiterClass {
