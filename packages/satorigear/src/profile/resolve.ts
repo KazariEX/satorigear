@@ -167,11 +167,9 @@ function resolvePairs(
 ): InlineTokenStream {
   // This suffix is owned by resolution. The lexer stream retained for edits stays reusable.
   const end = inlineTokenCount(tokens);
-  const mates = options.component || options.footnote && source.includes("[^")
-    ? pairBrackets(tokens, start, end)
-    : void 0;
   const openers: number[] = [];
   const scopes = new DelimiterStack();
+  let mates: number[] | undefined;
   let lastVisibleOpener = -1;
   let lastLinkOpener = -1;
   let literalLabelEnd = -1;
@@ -181,6 +179,14 @@ function resolvePairs(
   for (let index = start; index < end; index++) {
     const kind = inlineTokenKind(tokens, index);
     const opener = kind === InlineKind.BracketOpen || kind === InlineKind.ImageOpen;
+    if (
+      opener && (
+        options.component ||
+        options.footnote && source.charCodeAt(inlineTokenEnd(tokens, index)) === Character.CircumflexAccent
+      )
+    ) {
+      mates ??= pairBrackets(tokens, index, end);
+    }
     const close = opener ? mates?.[index] : void 0;
     const component = options.component && kind === InlineKind.BracketOpen && close !== void 0;
     // Physical link labels nest. Remember the furthest closer, including when a
@@ -201,7 +207,7 @@ function resolvePairs(
     if (opener) {
       if (options.footnote && close !== void 0 && inlineTokenKind(tokens, close) === InlineKind.BracketClose) {
         const label = footnoteLabelAt(source, inlineTokenEnd(tokens, index) - 1, source.length);
-        if (label?.end === inlineTokenEnd(tokens, close) && definitions.hasDefinition(label.definitionKey)) {
+        if (label && label.end === inlineTokenEnd(tokens, close) && definitions.hasDefinition(label.definitionKey)) {
           consumedEnd = label.end;
           setBoundary(tokens, index, InlineKind.FootnoteReference, consumedEnd);
           if (kind === InlineKind.ImageOpen) {
