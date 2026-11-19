@@ -44,38 +44,17 @@ export function semanticText(value: string): string {
   return value.includes("\\") || value.includes("&") ? decodeString(value) : value;
 }
 
+const identifierNeedsCleanup = /[^\x20-\x7E]|^ | $| {2}/;
+const identifierWhitespace = /[ \t\r\n]+/g;
+
 /**
  * Fast replacement of [`micromark-util-normalize-identifier`](
  *   https://github.com/micromark/micromark/tree/main/packages/micromark-util-normalize-identifier
  * ).
  */
 export function normalizeIdentifier(identifier: string): string {
-  // Already-clean identifiers skip the pipeline: nothing to trim, and over pure ASCII
-  // lowercase is the final folded form expected by mdast identifiers.
-  scan: {
-    let hasUppercase = false;
-    for (let index = 0; index < identifier.length; index++) {
-      const code = identifier.charCodeAt(index);
-      if (code === Character.Space) {
-        // Leading, trailing, or doubled spaces need the full pipeline.
-        if (
-          index === 0 ||
-          index + 1 === identifier.length ||
-          identifier.charCodeAt(index + 1) === Character.Space
-        ) {
-          break scan;
-        }
-        continue;
-      }
-      // Non-printable or non-ASCII characters need the full pipeline.
-      if (code < Character.Space || code > Character.Tilde) {
-        break scan;
-      }
-      if (code >= Character.LatinCapitalLetterA && code <= Character.LatinCapitalLetterZ) {
-        hasUppercase = true;
-      }
-    }
-    return hasUppercase ? identifier.toLowerCase() : identifier;
-  }
-  return identifier.trim().replace(/[ \t\r\n]+/g, " ").toLowerCase().toUpperCase().toLowerCase();
+  // Printable ASCII with single interior spaces needs only lowercase folding.
+  return identifierNeedsCleanup.test(identifier)
+    ? identifier.trim().replace(identifierWhitespace, " ").toLowerCase().toUpperCase().toLowerCase()
+    : identifier.toLowerCase();
 }
