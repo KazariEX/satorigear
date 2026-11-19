@@ -4,6 +4,7 @@ import { isAsciiPunctuation } from "../profile/utils.ts";
 import {
   appendInlineToken,
   inlineTokenEnd,
+  InlineTokenField,
   inlineTokenKind,
   inlineTokenStart,
   type InlineTokenStream,
@@ -38,17 +39,15 @@ export interface CompiledDelimiterConfig {
   bits: number;
 }
 
-export interface DelimiterRun {
+interface DelimiterRun {
   tokenIndex: number;
   config: CompiledDelimiterConfig;
   start: number;
   remaining: number;
-  previous: DelimiterRun | undefined;
-  next: DelimiterRun | undefined;
   state: number;
 }
 
-export interface DelimiterReplacement extends SourceSpan {
+interface DelimiterReplacement extends SourceSpan {
   kind: InlineKind;
 }
 
@@ -77,71 +76,60 @@ const enum DelimiterRunLayout {
   LengthModuloCount = 3,
 }
 
-const whitespace = /\s/u;
-const punctuation = /[\p{P}\p{S}]/u;
+const whitespace = /\s/uy;
+const punctuation = /[\p{P}\p{S}]/uy;
 
-const enum DelimiterCharacterClass {
-  Whitespace = 1,
-  Punctuation = 2,
+const enum DelimiterClass {
+  Whitespace,
+  Punctuation,
+  Other,
 }
 
-function codePointBefore(source: string, offset: number): number {
-  if (offset <= 0) {
-    return Character.LineFeed;
-  }
-  const trailing = source.charCodeAt(offset - 1);
-  if (trailing >= Character.LowSurrogateStart && trailing <= Character.LowSurrogateEnd && offset > 1) {
-    const leading = source.charCodeAt(offset - 2);
-    if (leading >= Character.HighSurrogateStart && leading <= Character.HighSurrogateEnd) {
-      return source.codePointAt(offset - 2)!;
-    }
-  }
-  return trailing;
-}
+const delimiterClasses = Uint8Array.from({ length: 128 }, (value, code) => (
+  code === Character.Space || code >= Character.CharacterTabulation && code <= Character.CarriageReturn
+    ? DelimiterClass.Whitespace : isAsciiPunctuation(code)
+      ? DelimiterClass.Punctuation : DelimiterClass.Other
+));
 
-// Delimiter boundaries are predominantly ASCII. Keep this classification local to the hot
-// flanking path; non-ASCII code points retain the complete Unicode whitespace/punctuation rules.
-function delimiterCharacterClass(code: number): number {
+function delimiterCharacterClass(source: string, index: number): DelimiterClass {
+  if (index < 0 || index >= source.length) {
+    return DelimiterClass.Whitespace;
+  }
+  const code = source.charCodeAt(index);
   if (code <= 0x7F) {
-    if (
-      code === Character.Space ||
-      code >= Character.CharacterTabulation && code <= Character.CarriageReturn
-    ) {
-      return DelimiterCharacterClass.Whitespace;
-    }
-    return isAsciiPunctuation(code) ? DelimiterCharacterClass.Punctuation : 0;
+    return delimiterClasses[code];
   }
-  const character = String.fromCodePoint(code);
-  return (
-    whitespace.test(character) ? DelimiterCharacterClass.Whitespace
-      : punctuation.test(character) ? DelimiterCharacterClass.Punctuation
-        : 0
-  );
+  // A trailing surrogate belongs to the preceding code point only for a valid pair.
+  if (code >= Character.LowSurrogateStart && code <= Character.LowSurrogateEnd) {
+    const leading = source.charCodeAt(index - 1);
+    if (leading >= Character.HighSurrogateStart && leading <= Character.HighSurrogateEnd) {
+      index--;
+    }
+  }
+  if (whitespace.lastIndex = index, whitespace.test(source)) {
+    return DelimiterClass.Whitespace;
+  }
+  if (punctuation.lastIndex = index, punctuation.test(source)) {
+    return DelimiterClass.Punctuation;
+  }
+  return DelimiterClass.Other;
 }
 
-// A bit mask avoids allocating a { canOpen, canClose } result for every delimiter run.
 function flanking(source: string, start: number, end: number, config: CompiledDelimiterConfig): number {
-  const before = delimiterCharacterClass(codePointBefore(source, start));
-  const after = delimiterCharacterClass(source.codePointAt(end) ?? Character.LineFeed);
-  // Other characters always flank; punctuation needs whitespace or punctuation on the opposite side.
-  const left = after === 0 || (
-    after === DelimiterCharacterClass.Punctuation && before !== 0
-  );
-  const right = before === 0 || (
-    before === DelimiterCharacterClass.Punctuation && after !== 0
-  );
-  if (config.bits & DelimiterConfigFlag.AllowIntraword) {
-    return (left ? DelimiterRunState.CanOpen : 0) | (right ? DelimiterRunState.CanClose : 0);
+  const before = delimiterCharacterClass(source, start - 1);
+  const after = delimiterCharacterClass(source, end);
+  // The higher class is inside the span.
+  if (before !== after) {
+    return before < after ? DelimiterRunState.CanOpen : DelimiterRunState.CanClose;
   }
-  const canOpen = left && (!right || before === DelimiterCharacterClass.Punctuation);
-  const canClose = right && (!left || after === DelimiterCharacterClass.Punctuation);
-  return (canOpen ? DelimiterRunState.CanOpen : 0) | (canClose ? DelimiterRunState.CanClose : 0);
+  // Equal punctuation admits both directions, as do ordinary characters for intraword delimiters.
+  return before === DelimiterClass.Punctuation ||
+    before === DelimiterClass.Other && (config.bits & DelimiterConfigFlag.AllowIntraword)
+    ? DelimiterRunState.CanOpen | DelimiterRunState.CanClose
+    : 0;
 }
 
 function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
-  if (!(opener.state & DelimiterRunState.CanOpen)) {
-    return false;
-  }
   if (
     closer.config.bits & DelimiterConfigFlag.MatchWholeRun &&
     (opener.state & DelimiterRunState.LengthModuloMask) !==
@@ -150,142 +138,149 @@ function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
     return false;
   }
   if (
-    !(closer.config.bits & DelimiterConfigFlag.RuleOfThree) || (
-      !(opener.state & DelimiterRunState.CanClose) &&
-      !(closer.state & DelimiterRunState.CanOpen)
+    closer.config.bits & DelimiterConfigFlag.RuleOfThree && (
+      opener.state & DelimiterRunState.CanClose || closer.state & DelimiterRunState.CanOpen
     )
   ) {
-    return true;
+    // Encoded modulo 1 and 2 are the only invalid rule-of-three sum.
+    return (
+      (opener.state & DelimiterRunState.LengthModuloMask) +
+      (closer.state & DelimiterRunState.LengthModuloMask) !== DelimiterRunState.LengthModuloMask
+    );
   }
-  // Encoded modulo 1 and 2 are the only invalid rule-of-three sum.
-  return (
-    (opener.state & DelimiterRunState.LengthModuloMask) +
-    (closer.state & DelimiterRunState.LengthModuloMask) !== DelimiterRunState.LengthModuloMask
-  );
+  return true;
 }
 
-function unlinkRun(run: DelimiterRun): void {
-  if (run.previous) {
-    run.previous.next = run.next;
-  }
-  if (run.next) {
-    run.next.previous = run.previous;
-  }
-}
+export class DelimiterStack {
+  readonly #replacements: DelimiterReplacement[][] = [];
+  readonly #runs: DelimiterRun[] = [];
+  #length = 0;
 
-export function resolveDelimiterScope(
-  first: DelimiterRun,
-  replacements: DelimiterReplacement[][] = [],
-): DelimiterReplacement[][] {
-  const openersBottom: number[] = [];
-  let closer: DelimiterRun | undefined = first;
-  // Matching unlinks exhausted runs, so every active run has remaining source.
-  while (closer) {
-    if (!(closer.state & DelimiterRunState.CanClose)) {
-      closer = closer.next;
-      continue;
+  add(source: string, tokens: InlineTokenStream, tokenIndex: number, config: CompiledDelimiterConfig): void {
+    const offset = inlineTokenStart(tokens, tokenIndex);
+    const end = inlineTokenEnd(tokens, tokenIndex);
+    const length = end - offset;
+    if (
+      config.bits & DelimiterConfigFlag.MatchWholeRun && (
+        length > 2 || !(length === 1 ? config.single : config.double)
+      )
+    ) {
+      return;
     }
-    const bottomSlotBase: number = closer.config.bits >>> DelimiterConfigLayout.BottomSlotBaseShift;
-    // Each config owns two groups of three remainder classes; can-open selects the second group.
-    const bottomSlot = bottomSlotBase +
-      (closer.state & DelimiterRunState.CanOpen ? DelimiterRunLayout.LengthModuloCount : 0) +
-      (closer.state >> DelimiterRunLayout.OriginalLengthModuloShift);
-    // A source-order bound survives removal of the node that established it.
-    const bottom = openersBottom[bottomSlot] ?? 0;
-    let opener = closer.previous;
-    while (opener && opener.tokenIndex >= bottom) {
-      if (opener.config === closer.config && canPair(opener, closer)) {
-        break;
+    const delimiterFlanking = flanking(source, offset, end, config);
+    if (delimiterFlanking !== 0) {
+      this.#runs[this.#length++] = {
+        tokenIndex,
+        config,
+        start: offset,
+        remaining: length,
+        state: delimiterFlanking | (
+          (length % DelimiterRunLayout.LengthModuloCount) << DelimiterRunLayout.OriginalLengthModuloShift
+        ),
+      };
+    }
+  }
+
+  close(tokens: number[], afterToken = -1): void {
+    const runs = this.#runs;
+    const end = this.#length;
+    let start = 0;
+    // Runs from a closed label form a suffix. Each run is removed when its scope closes.
+    if (afterToken >= 0) {
+      start = end;
+      while (start && runs[start - 1].tokenIndex > afterToken) {
+        start--;
       }
-      opener = opener.previous;
     }
-    if (!opener || opener.tokenIndex < bottom) {
-      // Earlier candidates failed this class; the current run may still open a later pair.
-      openersBottom[bottomSlot] = closer.tokenIndex;
-      if (!(closer.state & DelimiterRunState.CanOpen)) {
-        unlinkRun(closer);
+    if (start === end) {
+      return;
+    }
+    const openersBottom: number[] = [];
+    // Consumed slots in this scope hold unmatched openers in source order.
+    let top = start;
+    for (let index = start; index < end; index++) {
+      const closer = runs[index];
+      if (!(closer.state & DelimiterRunState.CanClose)) {
+        runs[top++] = closer;
+        continue;
       }
-      closer = closer.next;
-      continue;
+      const bottomSlotBase: number = closer.config.bits >>> DelimiterConfigLayout.BottomSlotBaseShift;
+      // Each config owns two groups of three remainder classes; can-open selects the second group.
+      const bottomSlot = bottomSlotBase +
+        (closer.state & DelimiterRunState.CanOpen ? DelimiterRunLayout.LengthModuloCount : 0) +
+        (closer.state >> DelimiterRunLayout.OriginalLengthModuloShift);
+      // Keep failure bounds in token order because stack slots can be reused.
+      const bottom = openersBottom[bottomSlot] ?? 0;
+      while (closer.remaining) {
+        let candidate = top - 1;
+        while (candidate >= start && runs[candidate].tokenIndex >= bottom) {
+          const opener = runs[candidate];
+          if (opener.config === closer.config && canPair(opener, closer)) {
+            break;
+          }
+          candidate--;
+        }
+        if (candidate < start || runs[candidate].tokenIndex < bottom) {
+          openersBottom[bottomSlot] = closer.tokenIndex;
+          if (closer.state & DelimiterRunState.CanOpen) {
+            runs[top++] = closer;
+          }
+          break;
+        }
+        const opener = runs[candidate];
+        const use = opener.remaining >= 2 && closer.remaining >= 2 && closer.config.double ? 2 : 1;
+        const openEnd = opener.start + opener.remaining;
+        const openStart = openEnd - use;
+        const closeStart = closer.start;
+        const closeEnd = closeStart + use;
+        // Partial delimiters always define a single replacement; unsupported whole runs were filtered before matching.
+        const pair = use === 2 ? closer.config.double! : closer.config.single!;
+        this.#record(tokens, opener.tokenIndex, openStart, openEnd, pair.open);
+        this.#record(tokens, closer.tokenIndex, closeStart, closeEnd, pair.close);
+        opener.remaining -= use;
+        closer.start += use;
+        closer.remaining -= use;
+        top = candidate + (opener.remaining ? 1 : 0);
+      }
     }
-
-    const use = opener.remaining >= 2 && closer.remaining >= 2 && closer.config.double ? 2 : 1;
-    const openEnd = opener.start + opener.remaining;
-    const openStart = openEnd - use;
-    const closeStart = closer.start;
-    const closeEnd = closeStart + use;
-    // Partial delimiters always define a single replacement; unsupported whole runs were filtered before matching.
-    const pair = use === 2 ? closer.config.double! : closer.config.single!;
-    (replacements[opener.tokenIndex] ??= []).push({ start: openStart, end: openEnd, kind: pair.open });
-    (replacements[closer.tokenIndex] ??= []).push({ start: closeStart, end: closeEnd, kind: pair.close });
-    opener.remaining -= use;
-    closer.start += use;
-    closer.remaining -= use;
-    opener.next = closer;
-    closer.previous = opener;
-    if (opener.remaining === 0) {
-      unlinkRun(opener);
-    }
-    if (closer.remaining === 0) {
-      unlinkRun(closer);
-      closer = closer.next;
-    }
+    this.#length = start;
   }
-  return replacements;
+
+  #record(tokens: number[], index: number, start: number, end: number, kind: InlineKind): void {
+    // A boundary covering the whole run fits in the original token record.
+    if (start === inlineTokenStart(tokens, index) && end === inlineTokenEnd(tokens, index)) {
+      tokens[index * InlineTokenField.Stride | InlineTokenField.Kind] = kind;
+      return;
+    }
+    this.#replacements[index] ??= [];
+    this.#replacements[index].push({ start, end, kind });
+  }
+
+  appendMatches(result: number[], tokens: InlineTokenStream, tokenIndex: number): void {
+    const matched = this.#replacements[tokenIndex];
+    let last: DelimiterReplacement | undefined;
+    if (matched) {
+      // Closing matches arrive in source order, followed by opening matches in reverse.
+      let left = 0;
+      let right = matched.length;
+      while (left < right) {
+        last = matched[left].kind & 1 ? matched[left++] : matched[--right];
+        appendInlineToken(result, last.kind, last.start, last.end);
+      }
+    }
+    appendMarkerText(result, tokens, tokenIndex, last?.end);
+  }
 }
 
-export function delimiterRunAt(
-  source: string,
-  tokens: InlineTokenStream,
-  tokenIndex: number,
-  config: CompiledDelimiterConfig,
-): DelimiterRun | undefined {
-  const offset = inlineTokenStart(tokens, tokenIndex);
-  const end = inlineTokenEnd(tokens, tokenIndex);
-  const length = end - offset;
-  if (
-    config.bits & DelimiterConfigFlag.MatchWholeRun && (
-      length > 2 || (length === 1 ? !config.single : !config.double)
-    )
-  ) {
-    return;
-  }
-  const delimiterFlanking = flanking(source, offset, end, config);
-  if (delimiterFlanking !== 0) {
-    return {
-      tokenIndex,
-      config,
-      start: offset,
-      remaining: length,
-      previous: void 0,
-      next: void 0,
-      state: delimiterFlanking | (
-        (length % DelimiterRunLayout.LengthModuloCount) << DelimiterRunLayout.OriginalLengthModuloShift
-      ),
-    };
-  }
-}
-
-/** Lowers a raw candidate; the resolver copies semantic tokens directly. */
-export function appendResolvedRawToken(
+/** A decorator may attach to the literal portion left after a marker run. */
+function appendMarkerText(
   result: number[],
   tokens: InlineTokenStream,
   tokenIndex: number,
-  replacements: readonly DelimiterReplacement[][],
+  afterMatch?: number,
 ): void {
-  const matched = replacements[tokenIndex];
-  if (matched) {
-    if (matched.length > 1) {
-      matched.sort((left, right) => left.start - right.start);
-    }
-    for (const replacement of matched) {
-      appendInlineToken(result, replacement.kind, replacement.start, replacement.end);
-    }
-  }
-  // A decorator needs its preceding literal text materialized before it runs.
-  // All other unmatched ranges remain implicit source gaps.
   if (inlineTokenKind(tokens, tokenIndex + 1) >= InlineRole.Decorate) {
-    const start = matched ? matched[matched.length - 1].end : inlineTokenStart(tokens, tokenIndex);
+    const start = afterMatch ?? inlineTokenStart(tokens, tokenIndex);
     const end = inlineTokenEnd(tokens, tokenIndex);
     if (start < end) {
       appendInlineToken(result, InlineKind.LiteralText, start, end);
