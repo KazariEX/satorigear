@@ -234,8 +234,10 @@ export class DocumentImpl implements Document {
     const start = locator.locationAt(0);
     const tokens = blockScanner.tokens;
     const children: TopLevelContent[] = [];
-    for (let token = 0; token < tokens.length; token += tokens.nodeLength(token)) {
+    for (let token = 0; token < tokens.length;) {
+      const next = token + tokens.nodeLength(token);
       children.push(buildBlockNode(token, context));
+      token = next;
     }
 
     return {
