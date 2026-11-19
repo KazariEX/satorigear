@@ -1,5 +1,5 @@
 import { decodeString } from "micromark-util-decode-string";
-import { appendFencedToken, closesFence, createFenceAt } from "../../block/fence.ts";
+import { createFencedBlock } from "../../block/fence.ts";
 import {
   type BlockLines,
   isBlankLine,
@@ -19,12 +19,35 @@ const complexInfo = /[\\& \t]/;
 const separator = /[ \t]/;
 const paddingSpace = /^[\n ]+[^\n ].*[ \n]$/s;
 
-export const codeFenceAt = createFenceAt({
-  alternateMarker: Character.Tilde,
-  forbiddenInfoMarker: Character.GraveAccent,
+const backtickFence = createFencedBlock({
+  kind: BlockKind.FencedCodeBlock,
   marker: Character.GraveAccent,
   minimumLength: 3,
+  allowMarkerInInfo: false,
 });
+
+const tildeFence = createFencedBlock({
+  kind: BlockKind.FencedCodeBlock,
+  marker: Character.Tilde,
+  minimumLength: 3,
+  allowMarkerInInfo: true,
+});
+
+export function codeFenceClosingLine(
+  source: string,
+  lines: BlockLines,
+  open: number,
+  limit: number,
+  offset: number,
+): number | undefined {
+  const marker = source.charCodeAt(offset);
+  if (marker === Character.GraveAccent) {
+    return backtickFence.closingLineAt(source, lines, open, limit, offset);
+  }
+  if (marker === Character.Tilde) {
+    return tildeFence.closingLineAt(source, lines, open, limit, offset);
+  }
+}
 
 /** Consume structural code indentation before publishing the literal body. */
 function indentedContent(source: string, lines: BlockLines, start: number, end: number): string {
@@ -105,41 +128,8 @@ export const feature: SyntaxFeature = {
           return end;
         },
       },
-      {
-        codes: [
-          Character.GraveAccent,
-          Character.Tilde,
-        ],
-        interrupt(source, lines, index, contentOffset) {
-          return !!codeFenceAt(source, lines, index, contentOffset);
-        },
-        start(source, lines, tokens, start, contentOffset) {
-          const fence = codeFenceAt(source, lines, start, contentOffset);
-          if (!fence) {
-            return;
-          }
-          let end = start + 1;
-          while (end < lines.length && !closesFence(source, lines, end, fence)) {
-            end++;
-          }
-          const closed = end < lines.length;
-          if (end < lines.length) {
-            end++;
-          }
-          appendFencedToken(
-            source,
-            lines,
-            tokens,
-            BlockKind.FencedCodeBlock,
-            start,
-            end,
-            fence,
-            closed,
-            true,
-          );
-          return end;
-        },
-      },
+      backtickFence,
+      tildeFence,
     ],
   },
   inline: {

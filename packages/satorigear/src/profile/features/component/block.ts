@@ -1,5 +1,4 @@
 import type { Paragraph } from "mdast";
-import { closesFence, type Fence } from "../../../block/fence.ts";
 import { type BlockLines, lineIndentOffset, trimLineWhitespaceStart } from "../../../block/lines.ts";
 import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
 import { BlockKind } from "../../../constants/block.ts";
@@ -7,7 +6,7 @@ import { Character } from "../../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../../fragment/block.ts";
 import { buildInlineFragment } from "../../../fragment/inline.ts";
 import { attributesEnd, parseAttributes } from "../attributes/shared.ts";
-import { codeFenceAt } from "../code.ts";
+import { codeFenceClosingLine } from "../code.ts";
 import { buildYamlBlock } from "../frontmatter.ts";
 import { componentNameEnd, normalizeComponentName } from "./shared.ts";
 import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
@@ -198,21 +197,15 @@ function blockClose(
   start: number,
   opening: BlockOpening,
 ): BlockClosing | undefined {
-  let codeFence: Fence | undefined;
   let depth = 0;
   for (let index = start + 1; index < lines.length; index++) {
-    if (codeFence) {
-      if (closesFence(source, lines, index, codeFence)) {
-        codeFence = void 0;
-      }
-      continue;
-    }
     const contentOffset = lineIndentOffset(source, lines, index);
     if (contentOffset < 0) {
       continue;
     }
-    codeFence = codeFenceAt(source, lines, index, contentOffset);
-    if (codeFence) {
+    const close = codeFenceClosingLine(source, lines, index, lines.length, contentOffset);
+    if (close !== void 0) {
+      index = close;
       continue;
     }
     let markerEnd = contentOffset;
@@ -243,20 +236,14 @@ function nextSlot(
   start: number,
   end: number,
 ): { index: number; opening: SlotOpening } | undefined {
-  let codeFence: Fence | undefined;
   for (let index = start; index < end; index++) {
-    if (codeFence) {
-      if (closesFence(source, lines, index, codeFence)) {
-        codeFence = void 0;
-      }
-      continue;
-    }
     const contentOffset = lineIndentOffset(source, lines, index);
     if (contentOffset < 0) {
       continue;
     }
-    codeFence = codeFenceAt(source, lines, index, contentOffset);
-    if (codeFence) {
+    const close = codeFenceClosingLine(source, lines, index, end, contentOffset);
+    if (close !== void 0) {
+      index = close;
       continue;
     }
     const slot = slotOpeningAt(source, lines, index, contentOffset);

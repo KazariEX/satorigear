@@ -1,13 +1,14 @@
-import { appendFencedToken, closesFence, createFenceAt } from "../../../block/fence.ts";
+import { createFencedBlock } from "../../../block/fence.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { semanticText } from "../../utils.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 
-const mathFenceAt = createFenceAt({
-  forbiddenInfoMarker: Character.DollarSign,
+const mathFence = createFencedBlock({
+  kind: BlockKind.MathBlock,
   marker: Character.DollarSign,
   minimumLength: 2,
+  allowMarkerInInfo: false,
 });
 
 export const blockBuilds: BlockFeature["builds"] = [
@@ -27,38 +28,5 @@ export const blockBuilds: BlockFeature["builds"] = [
 ];
 
 export const blockStarts: BlockFeature["starts"] = [
-  {
-    codes: [
-      Character.DollarSign,
-    ],
-    interrupt(source, lines, index, contentOffset) {
-      return mathFenceAt(source, lines, index, contentOffset) !== void 0;
-    },
-    start(source, lines, tokens, start, contentOffset) {
-      const fence = mathFenceAt(source, lines, start, contentOffset);
-      if (!fence) {
-        return;
-      }
-      let end = start + 1;
-      while (end < lines.length && !closesFence(source, lines, end, fence)) {
-        end++;
-      }
-      const closed = end < lines.length;
-      if (end < lines.length) {
-        end++;
-      }
-      appendFencedToken(
-        source,
-        lines,
-        tokens,
-        BlockKind.MathBlock,
-        start,
-        end,
-        fence,
-        closed,
-        false,
-      );
-      return end;
-    },
-  },
+  mathFence,
 ];

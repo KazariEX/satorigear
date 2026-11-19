@@ -1,62 +1,63 @@
+import { BlockKind } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
-import { type BlockLines, lineIndentOffset, physicalColumnAt, trimLineWhitespaceStart } from "./lines.ts";
-import type { BlockKind } from "../constants/block.ts";
+import { type BlockLines, physicalColumnAt, trimLineWhitespaceStart } from "./lines.ts";
+import type { BlockFeature } from "./profile.ts";
 import type { BlockTokenStream } from "./tokens.ts";
 
-export interface Fence {
-  indent: number;
-  length: number;
+interface FenceOptions {
+  kind: BlockKind.FencedCodeBlock | BlockKind.MathBlock;
   marker: number;
-  offset: number;
-  closingPattern: RegExp;
+  minimumLength: 2 | 3;
+  allowMarkerInInfo: boolean;
 }
 
-export interface FenceOptions {
-  alternateMarker?: number;
-  forbiddenInfoMarker: number;
-  marker: number;
-  minimumLength: number;
-}
+type FencedBlock = NonNullable<BlockFeature["starts"]>[number] & {
+  closingLineAt: (source: string, lines: BlockLines, open: number, limit: number, offset: number) => number | undefined;
+};
 
-export function createFenceAt(options: FenceOptions): (
-  source: string,
-  lines: BlockLines,
-  index: number,
-  markerOffset: number,
-) => Fence | undefined {
-  const opening = createOpening(options.marker, options);
-  const closing = createClosing(options.marker);
-  const alternateOpening = options.alternateMarker && createOpening(options.alternateMarker, options) || void 0;
-  const alternateClosing = options.alternateMarker && createClosing(options.alternateMarker) || void 0;
+export function createFencedBlock(options: FenceOptions): FencedBlock {
+  const { marker, kind } = options;
+  const normalizeEndings = kind === BlockKind.FencedCodeBlock;
+  const opening = createOpening(marker, options);
+  const closing = createClosing(marker);
 
-  return (source, lines, index, markerOffset) => {
-    const marker = source.charCodeAt(markerOffset);
-    if (marker !== options.marker && marker !== options.alternateMarker) {
-      return;
+  // Block dispatch already matched the first marker.
+  function openingEnd(source: string, markerOffset: number): number {
+    if (
+      source.charCodeAt(markerOffset + 1) === marker && (
+        opening.lastIndex = markerOffset + 2, opening.test(source)
+      )
+    ) {
+      return opening.lastIndex;
     }
-    const pattern = marker === options.marker ? opening : alternateOpening!;
-    const headLength = options.minimumLength > 1 ? 2 : 1;
-    if (headLength === 2 && source.charCodeAt(markerOffset + 1) !== marker) {
-      return;
-    }
-    pattern.lastIndex = markerOffset + headLength;
-    if (!pattern.test(source)) {
-      return;
-    }
-    return {
-      indent: lines.prefixColumns(index) + markerOffset - lines.start(index),
-      length: pattern.lastIndex - markerOffset,
-      marker,
-      offset: markerOffset,
-      closingPattern: marker === options.marker ? closing : alternateClosing!,
-    };
+    return -1;
+  }
+
+  return {
+    codes: [marker],
+    interrupt(source, lines, index, offset) {
+      return openingEnd(source, offset) >= 0;
+    },
+    closingLineAt(source, lines, open, limit, offset) {
+      const markerEnd = openingEnd(source, offset);
+      if (markerEnd >= 0) {
+        return findFenceClose(source, lines, open, limit, marker, markerEnd - offset, closing);
+      }
+    },
+    start(source, lines, tokens, start, offset) {
+      const markerEnd = openingEnd(source, offset);
+      if (markerEnd >= 0) {
+        const close = findFenceClose(source, lines, start, lines.length, marker, markerEnd - offset, closing);
+        return emitFencedBlock(source, lines, tokens, kind, start, close, offset, markerEnd, normalizeEndings);
+      }
+    },
   };
 }
 
 function createOpening(marker: number, options: FenceOptions): RegExp {
   const escaped = "\\u" + marker.toString(16).padStart(4, "0");
-  const pattern = escaped + "{" + Math.max(0, options.minimumLength - 2) + ",}" + (
-    marker === options.forbiddenInfoMarker
+  const pattern = escaped + "{" + (options.minimumLength - 2) + ",}" + (
+    !options.allowMarkerInInfo
       ? "(?=[^" + escaped + "\\r\\n]*(?:\\r|\\n|$))"
       : ""
   );
@@ -64,35 +65,46 @@ function createOpening(marker: number, options: FenceOptions): RegExp {
 }
 
 function createClosing(marker: number): RegExp {
-  return new RegExp(`\\u${marker.toString(16).padStart(4, "0")}+[ \t]*`, "y");
+  const escaped = "\\u" + marker.toString(16).padStart(4, "0");
+  return new RegExp(escaped + "*[ \t]*", "y");
 }
 
-export function closesFence(source: string, lines: BlockLines, index: number, fence: Fence): boolean {
-  const lineStart = lines.start(index);
-  const lineEnd = lines.end(index);
-  if (lineEnd - lineStart < fence.length) {
-    return false;
-  }
-  const first = source.charCodeAt(lineStart);
-  if (first !== fence.marker && first !== Character.Space) {
-    return false;
-  }
-  let offset = lineStart;
-  if (first !== fence.marker) {
-    const contentOffset = lineIndentOffset(source, lines, index);
-    if (contentOffset < 0 || source.charCodeAt(contentOffset) !== fence.marker) {
-      return false;
+/** Returns the closing line, or the exclusive search limit for an unclosed fence. */
+function findFenceClose(
+  source: string,
+  lines: BlockLines,
+  open: number,
+  limit: number,
+  marker: number,
+  length: number,
+  closing: RegExp,
+): number {
+  for (let line = open + 1; line < limit; line++) {
+    let offset = lines.start(line);
+    const end = lines.end(line);
+    if (end - offset < length) {
+      continue;
     }
-    offset = contentOffset;
+    let first = source.charCodeAt(offset);
+    if (first === Character.Space) {
+      const lastStart = Math.min(end - length, offset + 3 - lines.prefixColumns(line));
+      while (first === Character.Space && offset < lastStart) {
+        first = source.charCodeAt(++offset);
+      }
+    }
+    if (first !== marker) {
+      continue;
+    }
+    // The pattern accepts any run width. Check the last required marker first.
+    if (source.charCodeAt(offset + length - 1) !== marker) {
+      continue;
+    }
+    closing.lastIndex = offset + 1;
+    if (closing.test(source) && closing.lastIndex === end) {
+      return line;
+    }
   }
-  // The pattern accepts markers then whitespace; this probe enforces the minimum count.
-  const lastRequired = offset + fence.length - 1;
-  if (lastRequired >= lineEnd || source.charCodeAt(lastRequired) !== fence.marker) {
-    return false;
-  }
-  const closing = fence.closingPattern;
-  closing.lastIndex = offset;
-  return closing.test(source) && closing.lastIndex === lineEnd;
+  return limit;
 }
 
 // Multiline anchors also recognize Unicode separators, which remain literal content.
@@ -107,33 +119,37 @@ const fenceTabIndent = [
   /^(?<![\u2028\u2029]) {0,2}\t/gm,
 ];
 
-/** Publish literal body, info and source position; scan records retain consumed coverage. */
-export function appendFencedToken(
+/** Consumes the fenced block and returns the first line after it. */
+function emitFencedBlock(
   source: string,
   lines: BlockLines,
   tokens: BlockTokenStream,
   kind: BlockKind,
   start: number,
-  end: number,
-  fence: Fence,
-  closed: boolean,
+  close: number,
+  offset: number,
+  markerEnd: number,
   normalizeEndings: boolean,
-): void {
+): number {
+  const indent = lines.prefixColumns(start) + offset - lines.start(start);
+  const closed = close < lines.length;
+  const end = closed ? close + 1 : close;
   const content = lines.physicallyContiguous()
-    ? physicalFenceContent(source, lines, start, end - (closed ? 2 : 1), fence.indent, normalizeEndings)
-    : logicalFenceContent(source, lines, start, end, closed, fence.indent, normalizeEndings);
+    ? physicalFenceContent(source, lines, start, close - 1, indent, normalizeEndings)
+    : logicalFenceContent(source, lines, start, close - 1, closed, indent, normalizeEndings);
   const lineEnd = lines.end(start);
-  const infoStart = trimLineWhitespaceStart(source, fence.offset + fence.length, lineEnd);
+  const infoStart = trimLineWhitespaceStart(source, markerEnd, lineEnd);
   const consumedEnd = lines.next(end - 1);
   tokens.push(
     kind,
-    fence.offset,
+    offset,
     closed || consumedEnd < source.length ? lines.end(end - 1) : consumedEnd,
     {
       text: content,
       value: source.slice(infoStart, lineEnd),
     },
   );
+  return end;
 }
 
 function physicalFenceContent(
@@ -162,12 +178,11 @@ function logicalFenceContent(
   source: string,
   lines: BlockLines,
   start: number,
-  end: number,
+  last: number,
   closed: boolean,
   indent: number,
   normalizeEndings: boolean,
 ): string {
-  let last = end - (closed ? 2 : 1);
   // A final empty projected row without an ending contributes no body line.
   if (!closed && last > start && lines.start(last) === lines.next(last) && !lines.prefixColumns(last)) {
     last--;
