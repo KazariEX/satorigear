@@ -4,6 +4,18 @@ import { createParser } from "../packages/satorigear/src/index.ts";
 const parser = createParser();
 
 describe("markdown document", () => {
+  it("keeps direct resource pairs independent of later definitions", () => {
+    const fresh = createParser({ features: { component: true, footnote: true, attributes: true } });
+    for (const body of ["[label](/direct \"title\")", "![alt](/image)"]) {
+      const source = body + "\n\nseparator\n\nlast\n";
+      const document = fresh.createDocument(source);
+      const first = document.tree.children[0];
+      document.edit([{ start: source.length, end: source.length, text: "\n[label]: /reference\n[^note]: note\n" }]);
+      expect(document.tree).toEqual(fresh.parse(document.source));
+      expect(document.tree.children[0]).toBe(first);
+    }
+  });
+
   it("edits the body of a labeled block component", () => {
     const fresh = createParser({ features: { component: true } });
     const document = fresh.createDocument("::Card[title]\nbody\n::\n");

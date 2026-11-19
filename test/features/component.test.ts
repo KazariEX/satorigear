@@ -512,6 +512,17 @@ End
     });
   });
 
+  it("keeps bare brackets literal through the end of an inactive outer link label", () => {
+    expect(componentParser.parse("[[a](inner) [b]](outer) [c]").children[0]).toMatchObject({
+      children: [
+        { type: "text", value: "[" },
+        { type: "link", url: "inner", children: [{ type: "text", value: "a" }] },
+        { type: "text", value: " [b]](outer) " },
+        { type: "inlineComponent", name: "span", children: [{ type: "text", value: "c" }] },
+      ],
+    });
+  });
+
   it("does not activate nested links through component labels", () => {
     expect(parser.parse("[:Badge[[nested](inner)]](outer)\n").children[0]).toMatchObject({
       type: "paragraph",

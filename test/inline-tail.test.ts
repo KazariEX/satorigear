@@ -51,6 +51,47 @@ describe("inline text boundaries", () => {
     });
   });
 
+  it("keeps multiline pair positions when edits add and remove nested syntax", () => {
+    const source = "[first\nsecond](/u)";
+    const document = parser.createDocument(source);
+    expect(document.tree.children[0]).toMatchObject({
+      children: [{
+        type: "link",
+        children: [{
+          type: "text",
+          value: "first\nsecond",
+          position: { start: { line: 1, column: 2, offset: 1 }, end: { line: 2, column: 7, offset: 13 } },
+        }],
+        position: { start: { line: 1, column: 1, offset: 0 }, end: { line: 2, column: 12, offset: 18 } },
+      }],
+    });
+    document.edit([{ start: 0, end: 0, text: "prefix\n\n" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    const start = document.source.indexOf("second");
+    document.edit([{ start, end: start + 6, text: "**second**" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[1]).toMatchObject({
+      children: [{ type: "link", children: [{ type: "text", value: "first\n" }, { type: "strong" }] }],
+    });
+    document.edit([{ start, end: start + 10, text: "second" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+  });
+
+  it("preserves literal text after reassociated reference closers", () => {
+    const source = "[![][`x]`]()]\n\n[`x]:/";
+    const document = parser.createDocument(source);
+    expect(document.tree).toEqual(parser.parse(source));
+    expect(document.tree.children[0]).toMatchObject({
+      children: [
+        { type: "link", children: [{ type: "imageReference", identifier: "`x" }, { type: "text", value: "`" }] },
+        { type: "text", value: "]" },
+      ],
+    });
+    document.edit([{ start: source.length, end: source.length, text: "\n[r]: /unused\n" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    expect(document.tree.children[0]).toMatchObject({ children: [{ type: "link" }, { type: "text", value: "]" }] });
+  });
+
   it("preserves trailing decoded whitespace inside nested pairs", () => {
     expect(parse("[*x&#32;*](/u)")).toMatchObject({
       children: [{ type: "link", children: [{ type: "emphasis", children: [{ type: "text", value: "x " }] }] }],

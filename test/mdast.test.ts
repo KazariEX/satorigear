@@ -29,6 +29,18 @@ describe("markdown mdast conversion", () => {
     });
   });
 
+  it("counts shortcut label code points before folding whitespace", () => {
+    const spaces = " ".repeat(997);
+    const source = `p [A${spaces}🙂] [A${spaces} 🙂]\n\n[a 🙂]: /url`;
+    expect(parser.parse(source).children[0]).toMatchObject({
+      children: [
+        { type: "text", value: "p " },
+        { type: "linkReference", identifier: "a 🙂", referenceType: "shortcut" },
+        { type: "text", value: ` [A${spaces} 🙂]` },
+      ],
+    });
+  });
+
   it("reassociates overlapping references", () => {
     expect(parser.parse("[foo][bar][baz]\n\n[baz]: /url\n").children[0]).toMatchObject({
       type: "paragraph",
@@ -108,6 +120,14 @@ describe("markdown mdast conversion", () => {
       start: 1,
     });
     expect(parser.parse("1234567890. item\n").children[0]).toMatchObject({ type: "paragraph" });
+  });
+
+  it("interrupts paragraphs with nonempty ordered items starting at one", () => {
+    const blocks = (line: string) => parser.parse(`before\n${line}`).children.map((node) => node.type);
+    expect(blocks("000000001)\titem")).toEqual(["paragraph", "list"]);
+    expect(blocks("000000002) item")).toEqual(["paragraph"]);
+    expect(blocks("0000000001) item")).toEqual(["paragraph"]);
+    expect(blocks("1. \t")).toEqual(["paragraph"]);
   });
 
   it.each(["\n", "\r", "\r\n"])("detects list spread across %j line endings", (ending) => {
