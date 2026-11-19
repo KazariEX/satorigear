@@ -158,14 +158,13 @@ export class BlockScanContext {
    */
   scanLines(source: string, lines: BlockLines, tokens: BlockTokenStream): boolean {
     let blankSeparated = false;
-    let previousContentEnd = -1;
+    let previousEnd = -1;
     this.scanBlockLines(source, lines, tokens, (lineStart, lineEnd) => {
-      blankSeparated ||= previousContentEnd >= 0 && lineStart > previousContentEnd;
-      previousContentEnd = lineEnd;
-      // A child may consume trailing blank lines that still separate the following direct block.
-      while (previousContentEnd > lineStart && isBlankLine(source, lines, previousContentEnd - 1)) {
-        previousContentEnd--;
-      }
+      // Adjacent ranges can still be separated if the previous child consumed a trailing blank.
+      blankSeparated ||= previousEnd >= 0 && (
+        lineStart > previousEnd || isBlankLine(source, lines, previousEnd - 1)
+      );
+      previousEnd = lineEnd;
     });
     if (lines === this.#lineViews[this.#lineViewDepth - 1]) {
       this.#lineViewDepth--;
