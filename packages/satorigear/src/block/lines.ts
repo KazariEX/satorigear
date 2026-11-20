@@ -1,5 +1,5 @@
-import type { Buffer } from "node:buffer";
 import { Character } from "../constants/character.ts";
+import { ScratchView } from "./scratch.ts";
 import type { SourceLocation, SourceLocator, SourcePosition } from "../source-view.ts";
 
 const enum BlockLineField {
@@ -52,30 +52,11 @@ function growLineFields(fields: Int32Array, fieldLength: number): Int32Array {
 }
 
 class Latin1 {
-  static minimum = 2048;
-  static scratchBytes: Buffer | undefined;
-  static scratchWords: Uint32Array | undefined;
-  static scratchLimit = 0;
-
-  // eslint-disable-next-line node/prefer-global/buffer
-  static allocate = globalThis.Buffer?.allocUnsafeSlow;
-
   static scan(source: string, fields: Int32Array): ScanningResult {
     const limit = source.length;
-    const wordLimit = limit + 31 & ~31;
-    if (this.scratchLimit < wordLimit) {
-      const bytes = this.allocate(wordLimit);
-      this.scratchBytes = bytes;
-      this.scratchWords = new Uint32Array(bytes.buffer, bytes.byteOffset, wordLimit >>> 2);
-      this.scratchLimit = wordLimit;
-    }
-
-    const bytes = this.scratchBytes!;
-    const words = this.scratchWords!;
-    // Pad the final word group with spaces so it cannot emit line endings.
-    for (let i = 1; i <= 8; i++) {
-      words[(wordLimit >>> 2) - i] = 0x20202020;
-    }
+    const wordLimit = ScratchView.prepare(limit);
+    const bytes = ScratchView.bytes;
+    const words = ScratchView.words;
     bytes.write(source, 0, limit, "latin1");
     let field = 0;
     let start = 0;
@@ -228,11 +209,11 @@ export class BlockLines implements SourceLocator {
   }
 
   /** Rebuilds the physical line index while retaining its backing store. */
-  scan(source: string): void {
+  scan(source: string, scratch = false): void {
     this.#locatorField = 0;
     this.#sourceLength = source.length;
     const fields = growLineFields(this.#fields, getLineCapacity(source.length) * BlockLineField.Stride);
-    const result = source.length >= Latin1.minimum && Latin1.allocate !== void 0
+    const result = scratch && ScratchView.supports
       ? Latin1.scan(source, fields)
       : Index0.scan(source, fields);
     this.#fields = result.fields;

@@ -1,5 +1,7 @@
 import { BlockKind, boundaryBreak } from "./constants/block.ts";
 import type { BlockTokenStream } from "./block/tokens.ts";
+import type { InlineTokenizer } from "./inline/tokenizer.ts";
+import type { InlineTokenStream } from "./inline/tokens.ts";
 
 export interface SourceLocation {
   line: number;
@@ -51,16 +53,12 @@ export class SourceView {
   // Segmented views store sourceStart - viewStart and cumulative view end pairs;
   // contiguous views need only the offset above.
   #segments: number[] | undefined;
+  #withBoundaryBreak = false;
   text = "";
-  withBoundaryBreak = false;
 
   /** Projects the consecutive inline chunks owned by a block token. */
-  constructor(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number) {
-    this.reset(source, tokens, tokenStart, nodeLength);
-  }
-
   reset(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number): void {
-    this.withBoundaryBreak = tokens.value(tokenStart) === boundaryBreak;
+    this.#withBoundaryBreak = tokens.value(tokenStart) === boundaryBreak;
     let token = tokenStart + 1;
     const firstStart = tokens.start(token);
     const tokenEnd = tokenStart + nodeLength;
@@ -83,6 +81,16 @@ export class SourceView {
     this.#offset = firstStart;
     this.#segments = void 0;
     this.text = source.slice(firstStart, end);
+  }
+
+  tokenize(tokenize: InlineTokenizer, scartch = false): InlineTokenStream {
+    return tokenize(
+      this.text,
+      this.#withBoundaryBreak,
+      !scartch || this.#segments || this.#withBoundaryBreak
+        ? void 0
+        : this.#offset,
+    );
   }
 
   /** Maps an offset at an internal gap to the following source segment. */

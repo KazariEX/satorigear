@@ -1,5 +1,6 @@
 import type { PhrasingContent, Text } from "mdast";
 import { trimLineWhitespaceEnd } from "../block/lines.ts";
+import { ScratchView } from "../block/scratch.ts";
 import { BlockKind } from "../constants/block.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
 import {
@@ -307,13 +308,9 @@ export function buildInlineFragment(
       return { children: [] };
     }
 
-    const previousView = context.inlineContext?.view;
-    view = (
-      previousView?.reset(context.source, blockTokens, tokenStart, nodeLength),
-      previousView
-    ) ?? new SourceView(context.source, blockTokens, tokenStart, nodeLength);
-
-    tokens = context.profile.tokenize(view.text, view.withBoundaryBreak);
+    view = context.inlineContext?.view ?? new SourceView();
+    view.reset(context.source, blockTokens, tokenStart, nodeLength);
+    tokens = view.tokenize(context.profile.tokenize, ScratchView.supports);
     if (tokens.length) {
       tokens = context.profile.resolve(view.text, tokens, blockTokens);
     }
