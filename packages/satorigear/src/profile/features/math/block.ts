@@ -16,12 +16,13 @@ export const blockBuilds: BlockFeature["builds"] = [
     token: BlockKind.MathBlock,
     build(tokenStart, context) {
       const tokens = context.structure.tokens;
-      const meta = semanticText(tokens.value<string>(tokenStart)!);
+      const literal = tokens.literal(tokenStart);
+      const meta = semanticText(literal.value ?? "");
       return {
         type: "math",
         meta: meta || null,
-        value: tokens.text(context.source, tokenStart),
-        position: tokens.positionOf(tokenStart, context.locator),
+        value: literal.text,
+        position: tokens.positionOf(tokenStart, context.locator, literal.lineSpan),
       };
     },
   },

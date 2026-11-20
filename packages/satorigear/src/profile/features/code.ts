@@ -83,7 +83,8 @@ export const feature: SyntaxFeature = {
         ],
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          let info = tokens.value<string>(tokenStart) ?? "";
+          const literal = tokens.literal(tokenStart);
+          let info = literal.value ?? "";
           complexInfo.lastIndex = 0;
           // Each match consumes one code unit.
           let langEnd = complexInfo.test(info) ? complexInfo.lastIndex - 1 : -1;
@@ -102,8 +103,8 @@ export const feature: SyntaxFeature = {
             type: "code",
             lang: langEnd >= 0 ? info.slice(0, langEnd) : info || null,
             meta: langEnd >= 0 && info.slice(trimLineWhitespaceStart(info, langEnd, info.length)) || null,
-            value: tokens.text(context.source, tokenStart),
-            position: tokens.positionOf(tokenStart, context.locator),
+            value: literal.text,
+            position: tokens.positionOf(tokenStart, context.locator, literal.lineSpan),
           };
         },
       },

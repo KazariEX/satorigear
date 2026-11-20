@@ -23,6 +23,12 @@ interface BlockTokenMeta {
   value?: unknown;
 }
 
+interface BlockLiteral {
+  readonly text: string;
+  readonly value?: string;
+  readonly lineSpan?: number;
+}
+
 function copyMetadata(
   target: (BlockTokenMeta | undefined)[],
   source: Readonly<typeof target>,
@@ -404,13 +410,17 @@ export class BlockTokenStream implements DefinitionLookup {
     return this.#metadata?.[index]?.text ?? source.slice(this.start(index), this.end(index));
   }
 
+  /** Borrows the text and geometry retained by a literal block. */
+  literal(index: number): BlockLiteral {
+    return this.#metadata?.[index] as BlockLiteral;
+  }
+
   /** Locates the stored span using its physical row distance when available. */
-  positionOf(index: number, locator: SourceLocator): SourcePosition {
+  positionOf(index: number, locator: SourceLocator, lineSpan: number | undefined): SourcePosition {
     const field = index * BlockTokenField.Stride;
     const fields = this.#fields;
     const start = fields[field | BlockTokenField.Start];
     const end = fields[field | BlockTokenField.End];
-    const lineSpan = this.#metadata?.[index]?.lineSpan;
     return lineSpan === void 0
       ? locator.positionAt(start, end)
       : locator.positionAfterLines(start, end, lineSpan);
