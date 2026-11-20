@@ -1,5 +1,4 @@
 // Block features compile into the immutable scanner, structure, and node builders shared by a parser.
-import { Character } from "../constants/character.ts";
 import type { BlockKind } from "../constants/block.ts";
 import type { BlockNodeBuilder } from "../fragment/block.ts";
 import type { BlockLines } from "./lines.ts";
@@ -14,8 +13,6 @@ export type BlockStart = (
   contentOffset: number,
   context: BlockScanContext,
 ) => number | undefined;
-
-type BlockDispatch = (...args: Parameters<BlockStart>) => number;
 
 type BlockInterrupt = (
   source: string,
@@ -59,7 +56,8 @@ export interface BlockFeature {
 
 export interface BlockProfile {
   builds: readonly (BlockNodeBuilder | undefined)[];
-  dispatch: BlockDispatch;
+  starts: readonly (BlockStart | undefined)[];
+  fallback: BlockStart | undefined;
   interrupts: readonly (BlockInterrupt | undefined)[];
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
 }
@@ -77,27 +75,6 @@ function composeStarts(starts: readonly BlockStart[]): BlockStart | undefined {
       : start;
   }
   return chain;
-}
-
-function compileBlockDispatch(
-  starts: readonly (readonly BlockStart[] | undefined)[],
-  fallbacks: readonly BlockStart[],
-): BlockDispatch {
-  // Shift the marker index so the virtual indent code at -1 has an array slot.
-  const chains = Array.from({ length: starts.length + 1 }, (_, index) => {
-    const candidates = starts[index - 1];
-    return candidates && composeStarts(candidates);
-  });
-  const fallback = composeStarts(fallbacks);
-  return (source, lines, tokens, index, offset, context) => {
-    const code = offset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(offset);
-    const end = chains[code + 1]?.(source, lines, tokens, index, offset, context) ??
-      fallback?.(source, lines, tokens, index, offset, context);
-    if (end === void 0) {
-      throw new Error("No block fallback");
-    }
-    return end;
-  };
 }
 
 export function compileBlockProfile(features: readonly BlockFeature[]): BlockProfile {
@@ -157,7 +134,12 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
 
   return {
     builds,
-    dispatch: compileBlockDispatch(starts, fallbacks),
+    // Shift the marker index so the virtual indent code at -1 has an array slot.
+    starts: Array.from({ length: starts.length + 1 }, (_, index) => {
+      const candidates = starts[index - 1];
+      return candidates && composeStarts(candidates);
+    }),
+    fallback: composeStarts(fallbacks),
     interrupts: Array.from(interrupts),
     lazyContinuationUnwrappers,
   };
