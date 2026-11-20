@@ -199,7 +199,7 @@ export class BlockScanner {
     const lines = this.#lines;
     const tokens = this.#tokens;
     context.resetLookahead();
-    lines.scan(source);
+    lines.scan(source, true);
     tokens.reset();
 
     if (!indexed) {

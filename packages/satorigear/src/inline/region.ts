@@ -122,7 +122,7 @@ class InlineRegion implements ResolvedInlineRegion {
 
     // Incremental regions retain exactly the definition lookups that can invalidate them.
     definitions.dependencies = void 0;
-    const rawTokens = sourceUnchanged ? previousTokens : this.#profile.tokenize(view.text, view.withBoundaryBreak);
+    const rawTokens = sourceUnchanged ? previousTokens : view.tokenize(this.#profile.tokenize);
     const tokens = this.#profile.resolve(view.text, rawTokens, definitions);
 
     this.#definitionDependencies = definitions.dependencies ?? emptySet;
@@ -211,7 +211,8 @@ export class InlineRegionState {
             candidate = displacedRegions[displacedIndex++];
           }
         }
-        const view = new SourceView(source, tokens, token, nodeLength);
+        const view = new SourceView();
+        view.reset(source, tokens, token, nodeLength);
         regions.push(
           candidate?.update(token, view, this.#lookup, definitionMembershipChanges) ??
           new InlineRegion(this.#profile, token, view, this.#lookup),
