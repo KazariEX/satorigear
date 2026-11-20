@@ -68,7 +68,7 @@ function scanLineEnding(source: string, start: number, tokens: number[]): number
   return next;
 }
 
-function markerBits(words: Uint32Array, masks: Uint8Array, group: number): number {
+function createBitmap(words: Uint32Array, masks: Uint8Array, group: number): number {
   const i = group >>> 2;
   const word0 = words[i];
   const word1 = words[i | 1];
@@ -82,7 +82,7 @@ function markerBits(words: Uint32Array, masks: Uint8Array, group: number): numbe
   );
 }
 
-function tokenizeIndexed(
+function tokenizeLatin1(
   source: string,
   base: number,
   masks: Uint8Array,
@@ -98,11 +98,11 @@ function tokenizeIndexed(
     const aligned = absolute & ~15;
     if (group !== aligned) {
       group = aligned;
-      bitmap = markerBits(words, masks, group);
+      bitmap = createBitmap(words, masks, group);
     }
     let bits = bitmap & (-1 << (absolute & 15));
     while (!bits && (group += 16) < limit) {
-      bits = bitmap = markerBits(words, masks, group);
+      bits = bitmap = createBitmap(words, masks, group);
     }
     if (!bits) {
       break;
@@ -126,7 +126,7 @@ function createInlineTokenizer(
 ): InlineTokenizer {
   return (source, withBoundaryBreak, base) => {
     if (masks && base !== void 0) {
-      return tokenizeIndexed(source, base, masks, scanners);
+      return tokenizeLatin1(source, base, masks, scanners);
     }
     const boundary = withBoundaryBreak ? boundarySlow : boundaryFast;
     let tokens: number[] | undefined;
@@ -157,26 +157,28 @@ function generateInlineTokenizer(
 
   // Low-byte matches can alias markers. Dispatch checks the original UTF-16 code unit.
   const dispatch = `if(t===a)t=[];let d;switch(s.charCodeAt(o)){${cases}default:d=o}p=d>o?d:o+1`;
-  // Within a group, mask out positions that the last scanner consumed.
-  // Search later groups directly when the current bitmap is exhausted.
-  const indexed = masks && [
-    `if(base!==void 0){const words=w.words,end=base+s.length;let g=-16,h=0;`,
-    `while(p<s.length){const k=base+p,q=k&~15;if(q!==g){g=q;h=v(words,m,g)}`,
-    `let bits=h&-1<<(k&15);while(!bits&&(g+=16)<end)bits=h=v(words,m,g);if(!bits)break;`,
-    `const o=g+31-Math.clz32(bits&-bits)-base;if(o>=s.length)break;${dispatch}}return t}`,
-  ].join("");
 
-  return Function("f", "b", "a", "m", "v", "w", ...names, [
-    `return(s,u,base)=>{let t=a,p=0;`,
-    indexed,
-    `const x=u?b:f;while(p<s.length){x.lastIndex=p;if(!x.test(s))break;const o=x.lastIndex-1;${dispatch}}return t}`,
+  return Function("b1", "b2", "v", "a", "m", "c", ...names, [
+    `return(s,u,z)=>{let t=a,p=0;`,
+    masks && [
+      /** Mirror {@link tokenizeLatin1}. */
+      `if(z!==void 0){`,
+      `const w=v.words,e=z+s.length;let g=-16,h=0;`,
+      `while(p<s.length){const k=z+p,q=k&~15;if(q!==g){g=q;h=c(w,m,g)}`,
+      `let b=h&-1<<(k&15);while(!b&&(g+=16)<e)b=h=c(w,m,g);if(!b)break;`,
+      `const o=g+31-Math.clz32(b&-b)-z;if(o>=s.length)break;`,
+      `${dispatch}}return t}`,
+    ].join(""),
+    `const x=u?b2:b1;while(p<s.length){x.lastIndex=p;if(!x.test(s))break;`,
+    `const o=x.lastIndex-1;`,
+    `${dispatch}}return t}`,
   ].join(""))(
     boundaryFast,
     boundarySlow,
+    ScratchView,
     emptyArray,
     masks,
-    markerBits,
-    ScratchView,
+    createBitmap,
     ...codes.map((code) => scanners[code]),
   );
 }
