@@ -134,7 +134,8 @@ function emitFencedBlock(
   const indent = lines.prefixColumns(start) + offset - lines.start(start);
   const closed = close < lines.length;
   const end = closed ? close + 1 : close;
-  const content = lines.physicallyContiguous()
+  const physical = lines.physicallyContiguous();
+  const content = physical
     ? physicalFenceContent(source, lines, start, close - 1, indent, normalizeEndings)
     : logicalFenceContent(source, lines, start, close - 1, closed, indent, normalizeEndings);
   const lineEnd = lines.end(start);
@@ -147,6 +148,7 @@ function emitFencedBlock(
     {
       text: content,
       value: source.slice(infoStart, lineEnd),
+      lineSpan: physical ? end - 1 - start : void 0,
     },
   );
   return end;

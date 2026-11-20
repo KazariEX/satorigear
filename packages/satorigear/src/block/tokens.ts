@@ -1,6 +1,7 @@
 import { BlockKind, BlockRole } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
+import type { SourceLocator, SourcePosition } from "../source-view.ts";
 import type { BlockLines } from "./lines.ts";
 
 const enum BlockTokenField {
@@ -17,6 +18,7 @@ const enum BlockTokenCapacity {
 
 interface BlockTokenMeta {
   definitionKey?: string;
+  lineSpan?: number;
   text?: string;
   value?: unknown;
 }
@@ -400,6 +402,18 @@ export class BlockTokenStream implements DefinitionLookup {
 
   text(source: string, index: number): string {
     return this.#metadata?.[index]?.text ?? source.slice(this.start(index), this.end(index));
+  }
+
+  /** Locates the stored span using its physical row distance when available. */
+  positionOf(index: number, locator: SourceLocator): SourcePosition {
+    const field = index * BlockTokenField.Stride;
+    const fields = this.#fields;
+    const start = fields[field | BlockTokenField.Start];
+    const end = fields[field | BlockTokenField.End];
+    const lineSpan = this.#metadata?.[index]?.lineSpan;
+    return lineSpan === void 0
+      ? locator.positionAt(start, end)
+      : locator.positionAfterLines(start, end, lineSpan);
   }
 
   value<T>(index: number): T | undefined {

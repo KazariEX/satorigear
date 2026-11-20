@@ -21,7 +21,7 @@ export const blockBuilds: BlockFeature["builds"] = [
         type: "math",
         meta: meta || null,
         value: tokens.text(context.source, tokenStart),
-        position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
+        position: tokens.positionOf(tokenStart, context.locator),
       };
     },
   },

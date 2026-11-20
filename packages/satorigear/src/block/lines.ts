@@ -335,6 +335,25 @@ export class BlockLines implements SourceLocator {
     };
   }
 
+  /** Uses a retained row distance after confirming the target row contains the end. */
+  positionAfterLines(start: number, end: number, lineSpan: number): SourcePosition {
+    const first = this.locationAt(start);
+    const field = this.#locatorField + lineSpan * BlockLineField.Stride;
+    const fields = this.#fields;
+    const lineStart = fields[field | BlockLineField.Start];
+    const next = fields[(field + BlockLineField.Stride) | BlockLineField.Start];
+    if (end >= lineStart && end < next) {
+      this.#locatorField = field;
+      this.#locatorStart = lineStart;
+      this.#locatorNext = next;
+      return {
+        start: first,
+        end: { line: field / BlockLineField.Stride + 1, column: end - lineStart + 1, offset: end },
+      };
+    }
+    return { start: first, end: this.locationAt(end) };
+  }
+
   /** Whether this view retains physically adjacent source lines. */
   physicallyContiguous(): boolean {
     return this.#sourceLength > 0;

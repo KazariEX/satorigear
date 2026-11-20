@@ -103,7 +103,7 @@ export const feature: SyntaxFeature = {
             lang: langEnd >= 0 ? info.slice(0, langEnd) : info || null,
             meta: langEnd >= 0 && info.slice(trimLineWhitespaceStart(info, langEnd, info.length)) || null,
             value: tokens.text(context.source, tokenStart),
-            position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
+            position: tokens.positionOf(tokenStart, context.locator),
           };
         },
       },
