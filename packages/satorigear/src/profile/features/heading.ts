@@ -114,8 +114,14 @@ export const feature: SyntaxFeature = {
           ) {
             contentEnd = trimLineWhitespaceEnd(source, contentStart, closer);
           }
-          tokens.push(BlockKind.AtxHeading1Open + markerEnd - contentOffset - 1, contentOffset, lineEnd);
-          tokens.closeRange(contentStart, contentEnd);
+          const kind = BlockKind.AtxHeading1Open + markerEnd - contentOffset - 1;
+          if (contentStart === contentEnd) {
+            tokens.push(kind, contentOffset, lineEnd);
+            tokens.closeRange(contentStart, contentEnd);
+          }
+          else {
+            tokens.pushInlineFrame(kind, contentOffset, lineEnd, contentStart, contentEnd);
+          }
           return start + 1;
         },
       },
