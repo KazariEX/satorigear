@@ -64,52 +64,40 @@ export interface BlockProfile {
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
 }
 
-function generateBlockDispatch(
+function composeStarts(starts: readonly BlockStart[]): BlockStart | undefined {
+  let chain: BlockStart | undefined;
+  for (let index = starts.length - 1; index >= 0; index--) {
+    const start = starts[index];
+    const next = chain;
+    chain = next
+      ? (source, lines, tokens, index, offset, context) => (
+        start(source, lines, tokens, index, offset, context) ??
+        next(source, lines, tokens, index, offset, context)
+      )
+      : start;
+  }
+  return chain;
+}
+
+function compileBlockDispatch(
   starts: readonly (readonly BlockStart[] | undefined)[],
   fallbacks: readonly BlockStart[],
 ): BlockDispatch {
-  try {
-    const resolvers: BlockStart[] = [];
-    const call = (resolve: BlockStart): string => {
-      const index = resolvers.push(resolve) - 1;
-      return `e=r${index}(s,l,t,i,o,c);if(e!==void 0)return e;`;
-    };
-    let cases = "";
-    for (const code in starts) {
-      cases += `case ${code}:${starts[code]!.map(call).join("")}break;`;
-    }
-    // Generated aliases denote source, lines, tokens, start, offset, and context.
-    const source = [
-      `return(s,l,t,i,o,c)=>{`,
-      `let e;switch(o<0?${Character.VirtualBlockIndent}:s.charCodeAt(o)){${cases}}`,
-      ...fallbacks.map(call),
-      `throw new Error("No block fallback")}`,
-    ].join("");
-    const names = resolvers.map((resolver, index) => `r${index}`);
-    return Function(...names, source)(...resolvers);
-  }
-  catch {
-    return (source, lines, tokens, start, contentOffset, context) => {
-      const resolvers = starts[
-        contentOffset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(contentOffset)
-      ];
-      if (resolvers) {
-        for (const resolve of resolvers) {
-          const end = resolve(source, lines, tokens, start, contentOffset, context);
-          if (end !== void 0) {
-            return end;
-          }
-        }
-      }
-      for (const fallback of fallbacks) {
-        const end = fallback(source, lines, tokens, start, contentOffset, context);
-        if (end !== void 0) {
-          return end;
-        }
-      }
+  // Shift the marker index so the virtual indent code at -1 has an array slot.
+  const chains = Array.from({ length: starts.length + 1 }, (_, index) => {
+    const candidates = starts[index - 1];
+    return candidates && composeStarts(candidates);
+  });
+  const fallback = composeStarts(fallbacks);
+  return (source, lines, tokens, index, offset, context) => {
+    const code = offset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(offset);
+    const end = chains[code + 1]?.(source, lines, tokens, index, offset, context) ??
+      fallback?.(source, lines, tokens, index, offset, context);
+    if (end === void 0) {
       throw new Error("No block fallback");
-    };
-  }
+    }
+    return end;
+  };
 }
 
 export function compileBlockProfile(features: readonly BlockFeature[]): BlockProfile {
@@ -169,7 +157,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
 
   return {
     builds,
-    dispatch: generateBlockDispatch(starts, fallbacks),
+    dispatch: compileBlockDispatch(starts, fallbacks),
     interrupts: Array.from(interrupts),
     lazyContinuationUnwrappers,
   };
