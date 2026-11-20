@@ -68,29 +68,54 @@ function scanLineEnding(source: string, start: number, tokens: number[]): number
   return next;
 }
 
-// The low bytes can alias ASCII markers. Dispatch checks the original UTF-16 code unit.
-function nextIndexedMarker(masks: Uint8Array, offset: number, limit: number): number {
+function markerBits(words: Uint32Array, masks: Uint8Array, group: number): number {
+  const i = group >>> 2;
+  const word0 = words[i];
+  const word1 = words[i | 1];
+  const word2 = words[i | 2];
+  const word3 = words[i | 3];
+  return (
+    (masks[word0 & 0xffff] | masks[word0 >>> 16] << 2) |
+    (masks[word1 & 0xffff] | masks[word1 >>> 16] << 2) << 4 |
+    (masks[word2 & 0xffff] | masks[word2 >>> 16] << 2) << 8 |
+    (masks[word3 & 0xffff] | masks[word3 >>> 16] << 2) << 12
+  );
+}
+
+function tokenizeIndexed(
+  source: string,
+  base: number,
+  masks: Uint8Array,
+  scanners: InlineScanRule["scan"][],
+): InlineTokenStream {
   const words = ScratchView.words;
-  while (offset < limit) {
-    const group = offset & ~15;
-    const i = group >>> 2;
-    const word0 = words[i];
-    const word1 = words[i | 1];
-    const word2 = words[i | 2];
-    const word3 = words[i | 3];
-    const bits = -1 << (offset & 15) & (
-      (masks[word0 & 0xffff] | masks[word0 >>> 16] << 2) |
-      (masks[word1 & 0xffff] | masks[word1 >>> 16] << 2) << 4 |
-      (masks[word2 & 0xffff] | masks[word2 >>> 16] << 2) << 8 |
-      (masks[word3 & 0xffff] | masks[word3 >>> 16] << 2) << 12
-    );
-    if (bits) {
-      const hit = group + 31 - Math.clz32(bits & -bits);
-      return hit < limit ? hit : -1;
+  const limit = base + source.length;
+  let group = -16;
+  let bitmap = 0;
+  let tokens: number[] | undefined;
+  for (let cursor = 0; cursor < source.length;) {
+    const absolute = base + cursor;
+    const aligned = absolute & ~15;
+    if (group !== aligned) {
+      group = aligned;
+      bitmap = markerBits(words, masks, group);
     }
-    offset = group + 16;
+    let bits = bitmap & (-1 << (absolute & 15));
+    while (!bits && (group += 16) < limit) {
+      bits = bitmap = markerBits(words, masks, group);
+    }
+    if (!bits) {
+      break;
+    }
+    const offset = group + 31 - Math.clz32(bits & -bits) - base;
+    if (offset >= source.length) {
+      break;
+    }
+    const scan = scanners[source.charCodeAt(offset)];
+    const end = scan?.(source, offset, tokens ??= []) ?? offset;
+    cursor = end > offset ? end : offset + 1;
   }
-  return -1;
+  return tokens ?? emptyArray;
 }
 
 function createInlineTokenizer(
@@ -100,12 +125,13 @@ function createInlineTokenizer(
   scanners: InlineScanRule["scan"][],
 ): InlineTokenizer {
   return (source, withBoundaryBreak, base) => {
+    if (masks && base !== void 0) {
+      return tokenizeIndexed(source, base, masks, scanners);
+    }
     const boundary = withBoundaryBreak ? boundarySlow : boundaryFast;
     let tokens: number[] | undefined;
     for (let cursor = 0; cursor < source.length;) {
-      const offset = base !== void 0 && masks
-        ? nextIndexedMarker(masks, base + cursor, base + source.length) - base
-        : matchInlinePatternEnd(boundary, source, cursor) - 1;
+      const offset = matchInlinePatternEnd(boundary, source, cursor) - 1;
       if (offset < 0) {
         break;
       }
@@ -129,19 +155,28 @@ function generateInlineTokenizer(
     .map((code, index) => `case ${code}:d=s${index}(s,o,t);break;`)
     .join("");
 
-  /** Mirrors CSP fallback with short aliases for its generated hot loop. */
-  return Function("f", "b", "a", "m", "v", ...names, [
-    `return(s,u,base)=>{const x=u?b:f;`,
-    `let t=a,p=0;while(p<s.length){let o;`,
-    masks && `if(base!==void 0){o=v(m,base+p,base+s.length)-base;if(o<0)break}else`,
-    `{x.lastIndex=p;if(!x.test(s))break;o=x.lastIndex-1}`,
-    `if(t===a)t=[];let d;switch(s.charCodeAt(o)){${cases}default:d=o}p=d>o?d:o+1}return t}`,
+  // Low-byte matches can alias markers. Dispatch checks the original UTF-16 code unit.
+  const dispatch = `if(t===a)t=[];let d;switch(s.charCodeAt(o)){${cases}default:d=o}p=d>o?d:o+1`;
+  // Within a group, mask out positions that the last scanner consumed.
+  // Search later groups directly when the current bitmap is exhausted.
+  const indexed = masks && [
+    `if(base!==void 0){const words=w.words,end=base+s.length;let g=-16,h=0;`,
+    `while(p<s.length){const k=base+p,q=k&~15;if(q!==g){g=q;h=v(words,m,g)}`,
+    `let bits=h&-1<<(k&15);while(!bits&&(g+=16)<end)bits=h=v(words,m,g);if(!bits)break;`,
+    `const o=g+31-Math.clz32(bits&-bits)-base;if(o>=s.length)break;${dispatch}}return t}`,
+  ].join("");
+
+  return Function("f", "b", "a", "m", "v", "w", ...names, [
+    `return(s,u,base)=>{let t=a,p=0;`,
+    indexed,
+    `const x=u?b:f;while(p<s.length){x.lastIndex=p;if(!x.test(s))break;const o=x.lastIndex-1;${dispatch}}return t}`,
   ].join(""))(
     boundaryFast,
     boundarySlow,
     emptyArray,
     masks,
-    nextIndexedMarker,
+    markerBits,
+    ScratchView,
     ...codes.map((code) => scanners[code]),
   );
 }
@@ -164,7 +199,7 @@ export function compileInlineTokenizer(rules: readonly InlineScanRule[]): Inline
   }
 
   const markers = String.fromCharCode(...[Character.CarriageReturn, ...codes].sort((a, b) => a - b));
-  const masks = codes.every((code) => code >= 0 && code <= 0xff)
+  const masks = ScratchView.supports && codes.every((code) => code >= 0 && code <= 0xff)
     ? createMasks(markers)
     : void 0;
 
