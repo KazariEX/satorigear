@@ -20,10 +20,11 @@ const enum BlockLineCapacity {
   DoublingLimit = 16,
 }
 
+// Nonnegative projection results are source offsets.
 export const enum IndentedLine {
-  Underindented = -1,
+  Appended = -3,
   Blank,
-  Appended,
+  Indented,
 }
 
 interface ScanningResult {
@@ -362,8 +363,8 @@ export class BlockLines implements SourceLocator {
     this.push(start, lines.end(index), lines.next(index), prefixColumns, lazy);
   }
 
-  /** Appends projected content, or reports why the source line was not appended. */
-  pushAfterColumns(source: string, lines: BlockLines, index: number, columns: number): IndentedLine {
+  /** Appends an indented line, or reports its block start offset when underindented. */
+  pushAfterColumns(source: string, lines: BlockLines, index: number, columns: number): number {
     let offset = lines.start(index);
     let consumed = lines.prefixColumns(index);
     const end = lines.end(index);
@@ -384,7 +385,7 @@ export class BlockLines implements SourceLocator {
       return IndentedLine.Blank;
     }
     if (consumed < columns) {
-      return IndentedLine.Underindented;
+      return consumed <= 3 ? offset : IndentedLine.Indented;
     }
     const contentOffset = offset;
     const prefixColumns = consumed - columns;
