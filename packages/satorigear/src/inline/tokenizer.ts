@@ -90,30 +90,32 @@ function tokenizeLatin1(
 ): InlineTokenStream {
   const words = ScratchView.words;
   const limit = base + source.length;
-  let group = -16;
-  let bitmap = 0;
+  let cursor = base;
   let tokens: number[] | undefined;
-  for (let cursor = 0; cursor < source.length;) {
-    const absolute = base + cursor;
-    const aligned = absolute & ~15;
-    if (group !== aligned) {
-      group = aligned;
-      bitmap = createBitmap(words, masks, group);
-    }
-    let bits = bitmap & (-1 << (absolute & 15));
+  for (let group = base & ~15; cursor < limit;) {
+    let bits = createBitmap(words, masks, group) & (-1 << (cursor & 15));
     while (!bits && (group += 16) < limit) {
-      bits = bitmap = createBitmap(words, masks, group);
+      bits = createBitmap(words, masks, group);
     }
     if (!bits) {
       break;
     }
-    const offset = group + 31 - Math.clz32(bits & -bits) - base;
-    if (offset >= source.length) {
-      break;
-    }
-    const scan = scanners[source.charCodeAt(offset)];
-    const end = scan?.(source, offset, tokens ??= []) ?? offset;
-    cursor = end > offset ? end : offset + 1;
+    const groupEnd = group + 16;
+    do {
+      const offset = group + 31 - Math.clz32(bits & -bits) - base;
+      if (offset >= source.length) {
+        return tokens ?? emptyArray;
+      }
+      const scan = scanners[source.charCodeAt(offset)];
+      const end = scan?.(source, offset, tokens ??= []) ?? offset;
+      cursor = base + (end > offset ? end : offset + 1);
+      if (cursor >= groupEnd) {
+        break;
+      }
+      bits &= -1 << (cursor & 15);
+    } while (bits);
+    cursor = Math.max(cursor, groupEnd);
+    group = cursor & ~15;
   }
   return tokens ?? emptyArray;
 }
@@ -163,11 +165,11 @@ function generateInlineTokenizer(
     masks && [
       /** Mirror {@link tokenizeLatin1}. */
       `if(z!==void 0){`,
-      `const w=v.words,e=z+s.length;let g=-16,h=0;`,
-      `while(p<s.length){const k=z+p,q=k&~15;if(q!==g){g=q;h=c(w,m,g)}`,
-      `let b=h&-1<<(k&15);while(!b&&(g+=16)<e)b=h=c(w,m,g);if(!b)break;`,
-      `const o=g+31-Math.clz32(b&-b)-z;if(o>=s.length)break;`,
-      `${dispatch}}return t}`,
+      `const w=v.words,e=z+s.length;let k=z;`,
+      `for(let g=z&~15;k<e;){let b=c(w,m,g)&-1<<(k&15);while(!b&&(g+=16)<e)b=c(w,m,g);if(!b)break;const q=g+16;`,
+      `do{const o=g+31-Math.clz32(b&-b)-z;if(o>=s.length)return t;`,
+      `${dispatch};k=z+p;if(k>=q)break;b&=-1<<(k&15)}while(b);`,
+      `k=Math.max(k,q);g=k&~15}return t}`,
     ].join(""),
     `const x=u?b2:b1;while(p<s.length){x.lastIndex=p;if(!x.test(s))break;`,
     `const o=x.lastIndex-1;`,
