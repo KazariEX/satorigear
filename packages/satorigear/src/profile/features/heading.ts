@@ -1,5 +1,5 @@
 import type { Heading } from "mdast";
-import { type BlockLines, trimLineWhitespaceEnd, trimLineWhitespaceStart } from "../../block/lines.ts";
+import { trimLineWhitespaceEnd, trimLineWhitespaceStart } from "../../block/lines.ts";
 import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { buildInlineFragment } from "../../fragment/inline.ts";
@@ -26,15 +26,13 @@ function atxMarkerEnd(source: string, markerOffset: number, lineEnd: number): nu
 
 export function setextMarkerAt(
   source: string,
-  lines: BlockLines,
-  index: number,
   markerOffset: number,
+  lineEnd: number,
+  marker: number,
 ): number | undefined {
-  const marker = source.charCodeAt(markerOffset);
   if (marker !== Character.EqualsSign && marker !== Character.HyphenMinus) {
     return;
   }
-  const lineEnd = lines.end(index);
   let offset = markerOffset + 1;
   while (offset < lineEnd && source.charCodeAt(offset) === marker) {
     offset++;

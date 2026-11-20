@@ -161,12 +161,13 @@ export class BlockScanContext {
     source: string,
     lines: BlockLines,
     index: number,
-    contentOffset = lineIndentOffset(source, lines, index),
+    contentOffset: number,
+    marker?: number,
   ): boolean {
     if (contentOffset < 0) {
       return false;
     }
-    const interrupt = this.#profile.interrupts[source.charCodeAt(contentOffset)];
+    const interrupt = this.#profile.interrupts[marker ?? source.charCodeAt(contentOffset)];
     return interrupt?.(source, lines, index, contentOffset) ?? false;
   }
 }

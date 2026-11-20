@@ -37,14 +37,15 @@ export const feature: SyntaxFeature = {
           const chunkStart = Math.min(spaceEnd, lineStart + Math.max(0, 3 - lines.prefixColumns(index)));
           const canInterrupt = !lines.lazy(index) && chunkStart === contentStart;
           if (canInterrupt) {
-            const setext = setextMarkerAt(source, lines, index, contentStart);
+            // An interruptible line starts at the character already read at spaceEnd.
+            const setext = setextMarkerAt(source, contentStart, lineEnd, first);
             if (setext) {
               kind = setext === Character.EqualsSign ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open;
               end = lineEnd;
               index++;
               break;
             }
-            if (context.startsInterruptingBlock(source, lines, index, contentStart)) {
+            if (context.startsInterruptingBlock(source, lines, index, contentStart, first)) {
               break;
             }
           }
