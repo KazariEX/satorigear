@@ -11,8 +11,10 @@ export const feature: SyntaxFeature = {
     fallbacks: [
       (source, lines, tokens, start, contentOffset, context) => {
         // Earlier fallbacks rejected this nonblank line, so it begins the paragraph.
-        const openToken = tokens.length;
-        tokens.push(BlockKind.ParagraphOpen, contentOffset, contentOffset);
+        const firstToken = tokens.length;
+        let opened = false;
+        let kind = BlockKind.ParagraphOpen;
+        let end = contentOffset;
         // Keep one chunk across contiguous lines; split only where source has a gap.
         let chunkOffset = contentOffset;
         let chunkEnd = lines.end(start);
@@ -37,13 +39,10 @@ export const feature: SyntaxFeature = {
           if (canInterrupt) {
             const setext = setextMarkerAt(source, lines, index, contentStart);
             if (setext) {
-              tokens.setKind(
-                openToken,
-                setext === Character.EqualsSign ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open,
-              );
-              tokens.setEnd(openToken, lineEnd);
-              tokens.closeRange(chunkOffset, chunkEnd);
-              return index + 1;
+              kind = setext === Character.EqualsSign ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open;
+              end = lineEnd;
+              index++;
+              break;
             }
             if (context.startsInterruptingBlock(source, lines, index, contentStart)) {
               break;
@@ -59,17 +58,32 @@ export const feature: SyntaxFeature = {
             );
             if (padded && source.charCodeAt(chunkEnd) === Character.LineFeed) {
               withBoundaryBreak = true;
-              tokens.setValue(openToken, boundaryBreak);
             }
           }
           if (chunkStart !== previousEnd) {
+            if (!opened) {
+              opened = true;
+              tokens.push(BlockKind.ParagraphOpen, contentOffset, contentOffset);
+            }
             tokens.push(BlockKind.InlineChunk, chunkOffset, previousEnd);
             chunkOffset = chunkStart;
           }
           chunkEnd = lineEnd;
           index++;
         }
-        tokens.closeRange(chunkOffset, chunkEnd);
+        if (opened) {
+          if (kind !== BlockKind.ParagraphOpen) {
+            tokens.setKind(firstToken, kind);
+            tokens.setEnd(firstToken, end);
+          }
+          tokens.closeRange(chunkOffset, chunkEnd);
+        }
+        else {
+          tokens.pushInlineFrame(kind, contentOffset, end, chunkOffset, chunkEnd);
+        }
+        if (withBoundaryBreak) {
+          tokens.setValue(firstToken, boundaryBreak);
+        }
         return index;
       },
     ],

@@ -117,6 +117,23 @@ export class BlockTokenStream implements DefinitionLookup {
     }
   }
 
+  /** Publishes a complete frame containing one inline range without touching open frames. */
+  pushInlineFrame(kind: BlockKind, start: number, end: number, contentStart: number, contentEnd: number): void {
+    const field = this.#fieldLength;
+    const content = field + BlockTokenField.Stride;
+    this.#ensureCapacity(content + BlockTokenField.Stride);
+    const fields = this.#fields;
+    fields[field | BlockTokenField.Kind] = kind;
+    fields[field | BlockTokenField.Start] = start;
+    fields[field | BlockTokenField.End] = end;
+    fields[field | BlockTokenField.Length] = 2;
+    fields[content | BlockTokenField.Kind] = contentStart < contentEnd ? BlockKind.InlineChunk : BlockKind.None;
+    fields[content | BlockTokenField.Start] = contentStart;
+    fields[content | BlockTokenField.End] = contentEnd;
+    fields[content | BlockTokenField.Length] = 0;
+    this.#fieldLength = content + BlockTokenField.Stride;
+  }
+
   /** The final inline range also closes the current frame. */
   closeRange(start: number, end: number): void {
     const field = this.#fieldLength;
