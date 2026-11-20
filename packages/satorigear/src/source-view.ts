@@ -49,10 +49,8 @@ function containingSegment(segments: number[], offset: number): number {
 }
 
 export class SourceView {
-  #offset = 0;
-  // Segmented views store sourceStart - viewStart and cumulative view end pairs;
-  // contiguous views need only the offset above.
-  #segments: number[] | undefined;
+  // Contiguous views store one offset, segmented views store offset/end pairs.
+  #projection: number | number[] = 0;
   #withBoundaryBreak = false;
   text = "";
 
@@ -74,12 +72,11 @@ export class SourceView {
         segments.push(start - viewEnd, viewEnd += end - start);
       }
       while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk);
-      this.#segments = segments;
+      this.#projection = segments;
       this.text = parts.join("");
       return;
     }
-    this.#offset = firstStart;
-    this.#segments = void 0;
+    this.#projection = firstStart;
     this.text = source.slice(firstStart, end);
   }
 
@@ -87,17 +84,17 @@ export class SourceView {
     return tokenize(
       this.text,
       this.#withBoundaryBreak,
-      !scratch || this.#segments || this.#withBoundaryBreak
+      !scratch || typeof this.#projection !== "number" || this.#withBoundaryBreak
         ? void 0
-        : this.#offset,
+        : this.#projection,
     );
   }
 
   /** Maps an offset at an internal gap to the following source segment. */
   mapOffset(offset: number): number {
-    const segments = this.#segments;
-    if (!segments) {
-      return this.#offset + offset;
+    const segments = this.#projection;
+    if (typeof segments === "number") {
+      return segments + offset;
     }
     if (offset === this.text.length) {
       return segments[segments.length - 2] + offset;
@@ -108,18 +105,18 @@ export class SourceView {
 
   /** Maps an exclusive end at an internal gap to the preceding source segment. */
   mapEnd(offset: number): number {
-    const segments = this.#segments;
-    if (!segments) {
-      return this.#offset + offset;
+    const segments = this.#projection;
+    if (typeof segments === "number") {
+      return segments + offset;
     }
     const segment = containingSegment(segments, Math.max(0, offset - 1));
     return segments[segment] + offset;
   }
 
   shift(delta: number): void {
-    const segments = this.#segments;
-    if (!segments) {
-      this.#offset += delta;
+    const segments = this.#projection;
+    if (typeof segments === "number") {
+      this.#projection = segments + delta;
       return;
     }
     for (let index = 0; index < segments.length; index += 2) {
