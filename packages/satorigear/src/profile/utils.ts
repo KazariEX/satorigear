@@ -64,8 +64,10 @@ export function hasInlinePadding(value: string): boolean {
   );
 }
 
+const semanticMarker = /[\\&]/;
+
 export function semanticText(value: string): string {
-  return value.includes("\\") || value.includes("&") ? decodeString(value) : value;
+  return semanticMarker.test(value) ? decodeString(value) : value;
 }
 
 const identifierNeedsCleanup = /[^\x20-\x7E]|^ | $| {2}/;
