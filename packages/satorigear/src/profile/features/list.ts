@@ -38,7 +38,6 @@ function listMarkerAt(
   if (contentOffset < 0) {
     return;
   }
-  const indent = lines.prefixColumns(index) + contentOffset - lines.start(index);
   const marker = source.charCodeAt(contentOffset);
   const lineEnd = lines.end(index);
   let delimiter: number;
@@ -84,6 +83,7 @@ function listMarkerAt(
     markerEnd = orderedEnd + 1;
   }
 
+  const indent = lines.prefixColumns(index) + contentOffset - lines.start(index);
   const markerColumn = indent + markerEnd - contentOffset;
   let contentIndent = markerColumn + 1;
   let contentStart = markerEnd;
