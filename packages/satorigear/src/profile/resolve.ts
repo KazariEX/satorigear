@@ -299,6 +299,7 @@ function resolvePairs(
 }
 
 export function compileInlineResolver(options: InlineResolverOptions): InlineResolverFactory {
+  const { component, footnote } = options;
   return (delimiterConfigs) => {
     const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
     return (source, tokens, definitions) => {
@@ -315,7 +316,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
         if (kind !== InlineKind.BracketOpen && kind !== InlineKind.ImageOpen) {
           break;
         }
-        if (kind === InlineKind.BracketOpen && options.component && opensComponentLabel(tokens, start)) {
+        if (kind === InlineKind.BracketOpen && component && opensComponentLabel(tokens, start)) {
           break;
         }
         let close = start + 1;
@@ -331,8 +332,8 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
         if (
           closing !== InlineKind.None && !resource && (
             closing !== InlineKind.BracketClose ||
-            options.component ||
-            options.footnote && source.charCodeAt(inlineTokenEnd(tokens, start)) === Character.CircumflexAccent || definitions.hasDefinitions()
+            component ||
+            footnote && source.charCodeAt(inlineTokenEnd(tokens, start)) === Character.CircumflexAccent || definitions.hasDefinitions()
           )
         ) {
           break;
