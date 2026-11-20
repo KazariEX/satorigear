@@ -57,7 +57,7 @@ export class SourceView {
 
   /** Projects the consecutive inline chunks owned by a block token. */
   reset(source: string, tokens: BlockTokenStream, tokenStart: number, nodeLength: number): void {
-    this.#withBoundaryBreak = tokens.value(tokenStart) === boundaryBreak;
+    const withBoundaryBreak = tokens.value(tokenStart) === boundaryBreak;
     let token = tokenStart + 1;
     const firstStart = tokens.start(token);
     const tokenEnd = tokenStart + nodeLength;
@@ -74,11 +74,17 @@ export class SourceView {
       }
       while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk);
       this.#projection = segments;
+      this.#withBoundaryBreak = withBoundaryBreak;
       this.text = parts.join("");
       return;
     }
-    this.#projection = firstStart;
-    this.text = source.slice(firstStart, end);
+    this.resetContiguous(source.slice(firstStart, end), firstStart, withBoundaryBreak);
+  }
+
+  resetContiguous(text: string, start: number, withBoundaryBreak: boolean): void {
+    this.#projection = start;
+    this.#withBoundaryBreak = withBoundaryBreak;
+    this.text = text;
   }
 
   tokenize(tokenize: InlineTokenizer, scratch = false): InlineTokenStream {

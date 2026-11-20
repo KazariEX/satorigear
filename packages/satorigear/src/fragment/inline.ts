@@ -1,7 +1,7 @@
 import type { PhrasingContent, Text } from "mdast";
 import { trimLineWhitespaceEnd } from "../block/lines.ts";
 import { ScratchView } from "../block/scratch.ts";
-import { BlockKind } from "../constants/block.ts";
+import { BlockKind, boundaryBreak } from "../constants/block.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
 import {
   inlineTokenCount,
@@ -308,9 +308,33 @@ export function buildInlineFragment(
       return { children: [] };
     }
 
-    view = context.inlineContext?.view ?? new SourceView();
-    view.reset(context.source, blockTokens, tokenStart, nodeLength);
-    tokens = view.tokenize(context.profile.tokenize, ScratchView.supports);
+    const { tokenize } = context.profile;
+    if (nodeLength === 2) {
+      const chunk = tokenStart + 1;
+      const start = blockTokens.start(chunk);
+      const text = context.source.slice(start, blockTokens.end(chunk));
+      const withBoundaryBreak = blockTokens.value(tokenStart) === boundaryBreak;
+      tokens = tokenize(text, withBoundaryBreak, ScratchView.supports && !withBoundaryBreak ? start : void 0);
+      if (tokens.length === 0) {
+        const end = trimLineWhitespaceEnd(text, 0, text.length);
+        return {
+          children: end <= 0 ? [] : [
+            {
+              type: "text",
+              value: text.slice(0, end),
+              position: context.locator.positionAt(start, start + end),
+            },
+          ],
+        };
+      }
+      view = context.inlineContext?.view ?? new SourceView();
+      view.resetContiguous(text, start, withBoundaryBreak);
+    }
+    else {
+      view = context.inlineContext?.view ?? new SourceView();
+      view.reset(context.source, blockTokens, tokenStart, nodeLength);
+      tokens = view.tokenize(tokenize, ScratchView.supports);
+    }
     if (tokens.length) {
       tokens = context.profile.resolve(view.text, tokens, blockTokens);
     }
