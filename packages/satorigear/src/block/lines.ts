@@ -359,20 +359,13 @@ export class BlockLines implements SourceLocator {
     return this.#sourceLength > 0;
   }
 
-  push(
-    start: number,
-    end: number,
-    next: number,
-    prefixColumns: number,
-    lazy: boolean,
-  ): void {
+  #pushRow(start: number, end: number, next: number, state: number): void {
     const field = this.#length * BlockLineField.Stride;
     let fields = this.#fields;
     if (field >= fields.length) {
       this.#fields = growLineFields(this.#fields, field + BlockLineField.Stride);
       fields = this.#fields;
     }
-    const state = prefixColumns * 2 + (lazy ? BlockLineState.Lazy : 0);
     fields[field | BlockLineField.Start] = start;
     fields[field | BlockLineField.End] = end;
     fields[field | BlockLineField.Next] = next;
@@ -387,14 +380,22 @@ export class BlockLines implements SourceLocator {
     prefixColumns = lines.prefixColumns(index),
     lazy = lines.lazy(index),
   ): void {
-    this.push(start, lines.end(index), lines.next(index), prefixColumns, lazy);
+    this.#pushRow(
+      start,
+      lines.end(index),
+      lines.next(index),
+      prefixColumns * 2 + (lazy ? BlockLineState.Lazy : 0),
+    );
   }
 
   /** Appends an indented line, or reports its block start offset when underindented. */
   pushAfterColumns(source: string, lines: BlockLines, index: number, columns: number): number {
-    let offset = lines.start(index);
-    let consumed = lines.prefixColumns(index);
-    const end = lines.end(index);
+    const field = index * BlockLineField.Stride;
+    const fields = lines.#fields;
+    const state = fields[field | BlockLineField.State];
+    let offset = fields[field | BlockLineField.Start];
+    let consumed = state >>> 1;
+    const end = fields[field | BlockLineField.End];
     while (offset < end && consumed < columns) {
       const code = source.charCodeAt(offset);
       if (code === Character.Space) {
@@ -414,10 +415,13 @@ export class BlockLines implements SourceLocator {
     if (consumed < columns) {
       return consumed <= 3 ? offset : IndentedLine.Indented;
     }
-    const contentOffset = offset;
-    const prefixColumns = consumed - columns;
     if (trimLineWhitespaceStart(source, offset, end) < end) {
-      this.pushFrom(lines, index, contentOffset, prefixColumns);
+      this.#pushRow(
+        offset,
+        end,
+        fields[field | BlockLineField.Next],
+        (consumed - columns) * 2 + (state & BlockLineState.Lazy),
+      );
       return IndentedLine.Appended;
     }
     return IndentedLine.Blank;
@@ -437,7 +441,7 @@ export class BlockLines implements SourceLocator {
     const end = lines.end(index);
     const next = lines.next(index);
     this.#length = 0;
-    this.push(start, end, next, prefixColumns, lazy);
+    this.#pushRow(start, end, next, prefixColumns * 2 + (lazy ? BlockLineState.Lazy : 0));
   }
 
   /** Borrows a range for reading; the owner retains the backing store. */
