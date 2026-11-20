@@ -7,11 +7,11 @@
 <pre align="center">🧪 Working in Progress</pre>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/satorigear"><img
+  <a href="https://npmx.dev/package/satorigear"><img
     src="https://img.shields.io/npm/v/satorigear?color=EA7FA0&labelColor=232122"
     alt="[version]"
   ></a>
-  <a href="https://www.npmjs.com/package/satorigear"><img
+  <a href="https://npmx.dev/package/satorigear"><img
     src="https://img.shields.io/npm/dm/satorigear?color=EA7FA0&labelColor=232122"
     alt="[downloads]"
   ></a>
