@@ -112,7 +112,8 @@ function tokenizeLatin1(
       if (cursor >= groupEnd) {
         break;
       }
-      bits &= -1 << (cursor & 15);
+      // A single step only removes the hit just dispatched.
+      bits &= end <= offset + 1 ? bits - 1 : -1 << (cursor & 15);
     } while (bits);
     cursor = Math.max(cursor, groupEnd);
     group = cursor & ~15;
@@ -168,7 +169,7 @@ function generateInlineTokenizer(
       `const w=v.words,e=z+s.length;let k=z;`,
       `for(let g=z&~15;k<e;){let b=c(w,m,g)&-1<<(k&15);while(!b&&(g+=16)<e)b=c(w,m,g);if(!b)break;const q=g+16;`,
       `do{const o=g+31-Math.clz32(b&-b)-z;if(o>=s.length)return t;`,
-      `${dispatch};k=z+p;if(k>=q)break;b&=-1<<(k&15)}while(b);`,
+      `${dispatch};k=z+p;if(k>=q)break;b&=d<=o+1?b-1:-1<<(k&15)}while(b);`,
       `k=Math.max(k,q);g=k&~15}return t}`,
     ].join(""),
     `const x=u?b2:b1;while(p<s.length){x.lastIndex=p;if(!x.test(s))break;`,
