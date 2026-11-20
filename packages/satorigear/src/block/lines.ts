@@ -201,6 +201,8 @@ export class BlockLines implements SourceLocator {
   #fields: Int32Array;
   #length = 0;
   #locatorField = 0;
+  #locatorNext = 0;
+  #locatorStart = 0;
   #normalized = true;
   #sourceLength: number;
 
@@ -277,6 +279,8 @@ export class BlockLines implements SourceLocator {
       field += BlockLineField.Stride;
     }
     fields[field | BlockLineField.Start] = this.#sourceLength + 1;
+    this.#locatorNext = fields[BlockLineField.Stride | BlockLineField.Start];
+    this.#locatorStart = fields[BlockLineField.Start];
     return this;
   }
 
@@ -292,18 +296,24 @@ export class BlockLines implements SourceLocator {
    * Each successor's start is the exclusive boundary of the current line.
    */
   locationAt(offset: number): SourceLocation {
-    const fields = this.#fields;
     let field = this.#locatorField;
-    if (fields[(field + BlockLineField.Stride) | BlockLineField.Start] <= offset) {
+    let start = this.#locatorStart;
+    let next = this.#locatorNext;
+    if (next <= offset) {
+      const fields = this.#fields;
       do {
         field += BlockLineField.Stride;
+        start = next;
+        next = fields[(field + BlockLineField.Stride) | BlockLineField.Start];
       }
-      while (fields[(field + BlockLineField.Stride) | BlockLineField.Start] <= offset);
+      while (next <= offset);
       this.#locatorField = field;
+      this.#locatorStart = start;
+      this.#locatorNext = next;
     }
     return {
       line: field / BlockLineField.Stride + 1,
-      column: offset - fields[field | BlockLineField.Start] + 1,
+      column: offset - start + 1,
       offset,
     };
   }
