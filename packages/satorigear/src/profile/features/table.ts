@@ -141,8 +141,10 @@ function emitTableRow(
     // The possibly empty inline chunk closes the cell frame. The next cell or
     // row-close token marks its outer end, so no separate close token is needed.
     const start = cells[cell];
-    tokens.push(BlockKind.TableCellOpen, start, start);
-    tokens.closeRange(
+    tokens.pushInlineFrame(
+      BlockKind.TableCellOpen,
+      start,
+      start,
       cells[cell + CellSlot.ContentStart],
       cells[cell + CellSlot.ContentEnd],
     );
