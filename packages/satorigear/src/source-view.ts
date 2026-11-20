@@ -83,11 +83,11 @@ export class SourceView {
     this.text = source.slice(firstStart, end);
   }
 
-  tokenize(tokenize: InlineTokenizer, scartch = false): InlineTokenStream {
+  tokenize(tokenize: InlineTokenizer, scratch = false): InlineTokenStream {
     return tokenize(
       this.text,
       this.#withBoundaryBreak,
-      !scartch || this.#segments || this.#withBoundaryBreak
+      !scratch || this.#segments || this.#withBoundaryBreak
         ? void 0
         : this.#offset,
     );
