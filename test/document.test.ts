@@ -379,6 +379,22 @@ describe("markdown document", () => {
     expect(boundary.tree.children[0].position?.start.line).toBe(2);
   });
 
+  it("keeps the root end position across edits to the final line ending", () => {
+    const document = parser.createDocument("");
+    const cases = [
+      ["last", { line: 1, column: 5, offset: 4 }],
+      ["last\n", { line: 2, column: 1, offset: 5 }],
+      ["last\r\n", { line: 2, column: 1, offset: 6 }],
+      ["\r\n", { line: 2, column: 1, offset: 2 }],
+      ["", { line: 1, column: 1, offset: 0 }],
+    ] as const;
+    for (const [source, end] of cases) {
+      document.edit([{ start: 0, end: document.source.length, text: source }]);
+      expect(document.tree.position?.end).toEqual(end);
+      expect(parser.parse(source).position?.end).toEqual(end);
+    }
+  });
+
   it("rebuilds the block touching a stable-prefix boundary", () => {
     const document = parser.createDocument("-1<.  \r\n>> ");
     document.edit([
