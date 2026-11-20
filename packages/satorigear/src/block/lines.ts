@@ -321,6 +321,14 @@ export class BlockLines implements SourceLocator {
 
   /** Locates both boundaries when no nested projection must occur between them. */
   positionAt(start: number, end: number): SourcePosition {
+    if (end < this.#locatorNext && start < this.#locatorNext) {
+      const line = this.#locatorField / BlockLineField.Stride + 1;
+      const lineStart = this.#locatorStart;
+      return {
+        start: { line, column: start - lineStart + 1, offset: start },
+        end: { line, column: end - lineStart + 1, offset: end },
+      };
+    }
     return {
       start: this.locationAt(start),
       end: this.locationAt(end),
