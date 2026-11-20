@@ -166,16 +166,8 @@ export class BlockScanContext {
     if (contentOffset < 0) {
       return false;
     }
-    const interrupts = this.#profile.interrupts[source.charCodeAt(contentOffset)];
-    if (!interrupts) {
-      return false;
-    }
-    for (const interrupt of interrupts) {
-      if (interrupt(source, lines, index, contentOffset)) {
-        return true;
-      }
-    }
-    return false;
+    const interrupt = this.#profile.interrupts[source.charCodeAt(contentOffset)];
+    return interrupt?.(source, lines, index, contentOffset) ?? false;
   }
 }
 

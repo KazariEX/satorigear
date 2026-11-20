@@ -60,7 +60,7 @@ export interface BlockFeature {
 export interface BlockProfile {
   builds: readonly (BlockNodeBuilder | undefined)[];
   dispatch: BlockDispatch;
-  interrupts: readonly (readonly BlockInterrupt[] | undefined)[];
+  interrupts: readonly (BlockInterrupt | undefined)[];
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
 }
 
@@ -116,7 +116,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
   const builds: (BlockNodeBuilder | undefined)[] = [];
   const decorators: BlockDecoratorRegistration[] = [];
   const fallbacks: BlockStart[] = [];
-  const interrupts: BlockInterrupt[][] = [];
+  const interrupts: (BlockInterrupt | undefined)[] = [];
   const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
   const starts: BlockStart[][] = [];
 
@@ -143,8 +143,12 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
         }
         for (const code of registration.codes) {
           (starts[code] ??= []).push(registration.start);
-          if (registration.interrupt) {
-            (interrupts[code] ??= []).push(registration.interrupt);
+          const interrupt = registration.interrupt;
+          if (interrupt) {
+            const previous = interrupts[code];
+            interrupts[code] = previous
+              ? (source, lines, index, offset) => previous(source, lines, index, offset) || interrupt(source, lines, index, offset)
+              : interrupt;
           }
         }
       }
@@ -166,7 +170,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
   return {
     builds,
     dispatch: generateBlockDispatch(starts, fallbacks),
-    interrupts,
+    interrupts: Array.from(interrupts),
     lazyContinuationUnwrappers,
   };
 }
