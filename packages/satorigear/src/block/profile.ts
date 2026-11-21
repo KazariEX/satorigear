@@ -1,5 +1,4 @@
 // Block features compile into the immutable scanner, structure, and node builders shared by a parser.
-import { Character } from "../constants/character.ts";
 import type { BlockKind } from "../constants/block.ts";
 import type { BlockNodeBuilder } from "../fragment/block.ts";
 import type { BlockLines } from "./lines.ts";
@@ -14,8 +13,6 @@ export type BlockStart = (
   contentOffset: number,
   context: BlockScanContext,
 ) => number | undefined;
-
-type BlockDispatch = (...args: Parameters<BlockStart>) => number;
 
 type BlockInterrupt = (
   source: string,
@@ -59,7 +56,8 @@ export interface BlockFeature {
 
 export interface BlockProfile {
   builds: readonly (BlockNodeBuilder | undefined)[];
-  dispatch: BlockDispatch;
+  starts: readonly (BlockStart | undefined)[];
+  fallback: BlockStart | undefined;
   interrupt: BlockInterrupt;
   lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
 }
@@ -79,27 +77,7 @@ function composeStarts(starts: readonly BlockStart[]): BlockStart | undefined {
   return chain;
 }
 
-function compileBlockDispatch(starts: BlockStart[][], fallbacks: BlockStart[]): BlockDispatch {
-  // Shift the marker index so the virtual indent code at -1 has an array slot.
-  const chains = Array.from({ length: starts.length + 1 }, (value, index) => {
-    const candidates = starts[index - 1];
-    return candidates && composeStarts(candidates);
-  });
-  const fallback = composeStarts(fallbacks);
-  return (source, lines, tokens, index, offset, context) => {
-    const code = offset < 0 ? Character.VirtualBlockIndent : source.charCodeAt(offset);
-    const end = (
-      chains[code + 1]?.(source, lines, tokens, index, offset, context) ??
-      fallback?.(source, lines, tokens, index, offset, context)
-    );
-    if (end === void 0) {
-      throw new Error("No block fallback");
-    }
-    return end;
-  };
-}
-
-function compileBlockInterrupt(interrupts: BlockInterrupt[][]): BlockInterrupt {
+function composeInterrupts(interrupts: BlockInterrupt[][]): BlockInterrupt {
   const chains = interrupts.map((candidates) => {
     let chain: BlockInterrupt | undefined;
     for (let index = candidates.length - 1; index >= 0; index--) {
@@ -171,8 +149,12 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
 
   return {
     builds,
-    dispatch: compileBlockDispatch(starts, fallbacks),
-    interrupt: compileBlockInterrupt(interrupts),
+    starts: Array.from({ length: starts.length + 1 }, (val, index) => {
+      const candidates = starts[index - 1];
+      return candidates && composeStarts(candidates);
+    }),
+    fallback: composeStarts(fallbacks),
+    interrupt: composeInterrupts(interrupts),
     lazyContinuationUnwrappers,
   };
 }

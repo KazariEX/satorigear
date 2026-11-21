@@ -124,6 +124,7 @@ export class BlockScanContext {
     tokens: BlockTokenStream,
     visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
   ): void {
+    const { starts, fallback } = this.#profile;
     this.#scanDepth++;
     try {
       for (let index = 0; index < lines.length;) {
@@ -131,8 +132,9 @@ export class BlockScanContext {
         let contentOffset = lines.start(index);
         const lineEnd = lines.end(index);
         let columns = lines.prefixColumns(index);
+        let code = Character.VirtualBlockIndent;
         while (contentOffset < lineEnd) {
-          const code = source.charCodeAt(contentOffset);
+          code = source.charCodeAt(contentOffset);
           if (code !== Character.Space && code !== Character.CharacterTabulation) {
             break;
           }
@@ -145,10 +147,18 @@ export class BlockScanContext {
         }
         if (columns > 3) {
           contentOffset = -1;
+          code = Character.VirtualBlockIndent;
         }
         const lineStart = index;
         const tokenStart = tokens.length;
-        index = this.#profile.dispatch(source, lines, tokens, index, contentOffset, this);
+        const end = (
+          starts[code + 1]?.(source, lines, tokens, index, contentOffset, this) ??
+          fallback?.(source, lines, tokens, index, contentOffset, this)
+        );
+        if (end === void 0) {
+          throw new Error("No block fallback");
+        }
+        index = end;
         if (visit?.(lineStart, index, tokenStart, tokens.length)) {
           return;
         }
