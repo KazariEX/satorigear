@@ -59,9 +59,11 @@ export class BlockScanContext {
   #lookaheadEnd = 0;
   #profile: BlockProfile;
   #unwrappedLine = new BlockLines();
+  startsInterruptingBlock: BlockProfile["interrupt"];
 
   constructor(profile: BlockProfile) {
     this.#profile = profile;
+    this.startsInterruptingBlock = profile.interrupt;
   }
 
   endsWithParagraphLeaf(source: string, lines: BlockLines, index: number): boolean {
@@ -155,27 +157,6 @@ export class BlockScanContext {
     finally {
       this.#scanDepth--;
     }
-  }
-
-  startsInterruptingBlock(
-    source: string,
-    lines: BlockLines,
-    index: number,
-    contentOffset = lineIndentOffset(source, lines, index),
-  ): boolean {
-    if (contentOffset < 0) {
-      return false;
-    }
-    const interrupts = this.#profile.interrupts[source.charCodeAt(contentOffset)];
-    if (!interrupts) {
-      return false;
-    }
-    for (const interrupt of interrupts) {
-      if (interrupt(source, lines, index, contentOffset)) {
-        return true;
-      }
-    }
-    return false;
   }
 }
 
