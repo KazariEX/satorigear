@@ -49,10 +49,7 @@ function containingSegment(segments: number[], offset: number): number {
 }
 
 export class SourceView {
-  #offset = 0;
-  // Segmented views store sourceStart - viewStart and cumulative view end pairs;
-  // contiguous views need only the offset above.
-  #segments: number[] | undefined;
+  #mappings: number | number[] = 0;
   #withBoundaryBreak = false;
   text = "";
 
@@ -74,12 +71,11 @@ export class SourceView {
         segments.push(start - viewEnd, viewEnd += end - start);
       }
       while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk);
-      this.#segments = segments;
+      this.#mappings = segments;
       this.text = parts.join("");
       return;
     }
-    this.#offset = firstStart;
-    this.#segments = void 0;
+    this.#mappings = firstStart;
     this.text = source.slice(firstStart, end);
   }
 
@@ -87,43 +83,43 @@ export class SourceView {
     return tokenize(
       this.text,
       this.#withBoundaryBreak,
-      !scratch || this.#segments || this.#withBoundaryBreak
+      !scratch || typeof this.#mappings !== "number" || this.#withBoundaryBreak
         ? void 0
-        : this.#offset,
+        : this.#mappings,
     );
   }
 
   /** Maps an offset at an internal gap to the following source segment. */
   mapOffset(offset: number): number {
-    const segments = this.#segments;
-    if (!segments) {
-      return this.#offset + offset;
+    const mappings = this.#mappings;
+    if (typeof mappings === "number") {
+      return mappings + offset;
     }
     if (offset === this.text.length) {
-      return segments[segments.length - 2] + offset;
+      return mappings[mappings.length - 2] + offset;
     }
-    const segment = containingSegment(segments, offset);
-    return segments[segment] + offset;
+    const segment = containingSegment(mappings, offset);
+    return mappings[segment] + offset;
   }
 
   /** Maps an exclusive end at an internal gap to the preceding source segment. */
   mapEnd(offset: number): number {
-    const segments = this.#segments;
-    if (!segments) {
-      return this.#offset + offset;
+    const mappings = this.#mappings;
+    if (typeof mappings === "number") {
+      return mappings + offset;
     }
-    const segment = containingSegment(segments, Math.max(0, offset - 1));
-    return segments[segment] + offset;
+    const segment = containingSegment(mappings, Math.max(0, offset - 1));
+    return mappings[segment] + offset;
   }
 
   shift(delta: number): void {
-    const segments = this.#segments;
-    if (!segments) {
-      this.#offset += delta;
+    const mappings = this.#mappings;
+    if (typeof mappings === "number") {
+      this.#mappings = mappings + delta;
       return;
     }
-    for (let index = 0; index < segments.length; index += 2) {
-      segments[index] += delta;
+    for (let index = 0; index < mappings.length; index += 2) {
+      mappings[index] += delta;
     }
   }
 }
