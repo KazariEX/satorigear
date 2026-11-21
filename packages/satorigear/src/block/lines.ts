@@ -16,6 +16,7 @@ const enum BlockLineState {
 
 const enum BlockLineCapacity {
   Initial = 4,
+  LocatorTail = 2,
   DoublingLimit = 16,
 }
 
@@ -263,6 +264,21 @@ export class BlockLines implements SourceLocator {
   /** Resets and returns the line-owned locator for monotonically increasing source offsets. */
   locator(): SourceLocator {
     this.#locatorField = 0;
+    let field = this.#length * BlockLineField.Stride;
+    const emptyLast = (
+      field === 0 ||
+      this.#fields[field - BlockLineField.Stride | BlockLineField.End] < this.#sourceLength
+    );
+    const fields = this.#fields = growLineFields(
+      this.#fields,
+      field + (emptyLast ? BlockLineCapacity.LocatorTail : 1) * BlockLineField.Stride,
+    );
+    // These boundaries belong to the locator and do not add scanned rows.
+    if (emptyLast) {
+      fields[field | BlockLineField.Start] = this.#sourceLength;
+      field += BlockLineField.Stride;
+    }
+    fields[field | BlockLineField.Start] = this.#sourceLength + 1;
     return this;
   }
 
@@ -274,30 +290,17 @@ export class BlockLines implements SourceLocator {
   }
 
   /**
-   * Locates an offset in the physical line table after {@link locator} resets the cursor.
-   * The next offset of each physical line is the start of its successor, or the source length.
+   * Locates an offset in the source after {@link locator} resets the cursor.
+   * Each successor's start is the exclusive boundary of the current line.
    */
   locationAt(offset: number): SourceLocation {
-    const length = this.#length;
-    if (length === 0) {
-      return { line: 1, column: 1, offset };
-    }
     const fields = this.#fields;
     let field = this.#locatorField;
-    if (fields[field | BlockLineField.Next] <= offset) {
-      const sourceLength = this.#sourceLength;
-      if (offset < sourceLength) {
-        do {
-          field += BlockLineField.Stride;
-        }
-        while (fields[field | BlockLineField.Next] <= offset);
+    if (fields[field + BlockLineField.Stride | BlockLineField.Start] <= offset) {
+      do {
+        field += BlockLineField.Stride;
       }
-      else {
-        field = (length - 1) * BlockLineField.Stride;
-        if (offset === sourceLength && fields[field | BlockLineField.End] < offset) {
-          return { line: length + 1, column: 1, offset };
-        }
-      }
+      while (fields[field + BlockLineField.Stride | BlockLineField.Start] <= offset);
       this.#locatorField = field;
     }
     return {
@@ -416,7 +419,7 @@ export class BlockLines implements SourceLocator {
   #copy(): BlockLines {
     // Editing owns an independent copy of the geometry it will overwrite.
     const next = new BlockLines(this.#sourceLength, 0);
-    next.#fields = this.#fields.slice(0, this.#length * BlockLineField.Stride);
+    next.#fields = this.#fields.slice(0, (this.#length + BlockLineCapacity.LocatorTail) * BlockLineField.Stride);
     next.#length = this.#length;
     next.#normalized = this.#normalized;
     return next;
@@ -457,7 +460,7 @@ export class BlockLines implements SourceLocator {
     }
     const next = new BlockLines(
       nextSource.length,
-      prefixEnd + changed.length + this.length - suffix,
+      prefixEnd + changed.length + this.length - suffix + BlockLineCapacity.LocatorTail,
     );
     // Stored coordinates stay absolute. The retained suffix moves once with the edit.
     next.#appendRawRange(this, 0, prefixEnd);
