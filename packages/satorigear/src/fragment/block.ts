@@ -19,6 +19,7 @@ export interface BlockBuildContext {
 export type BlockNodeBuilder<T extends object = Node> = (
   tokenStart: number,
   context: BlockBuildContext,
+  tokenEnd: number,
 ) => T;
 
 export function leafBlockPosition(
@@ -35,26 +36,28 @@ export function leafBlockPosition(
 export function buildBlockNode<T extends object = TopLevelContent>(
   tokenStart: number,
   context: BlockBuildContext,
+  tokenEnd: number,
 ): T {
   const kind = context.structure.tokens.kind(tokenStart);
-  return context.structure.builds[kind]!(tokenStart, context) as T;
+  return context.structure.builds[kind]!(tokenStart, context, tokenEnd) as T;
 }
 
 export function buildBlockChildren<T extends object = RootContent>(
   tokenStart: number,
   context: BlockBuildContext,
+  tokenEnd: number,
 ): T[] {
   const builds = context.structure.builds;
   const tokens = context.structure.tokens;
-  const tokenEnd = tokenStart + tokens.nodeLength(tokenStart) - 1;
+  const close = tokenEnd - 1;
   // Avoid the capacity allocation overhead of push() on a single child node.
   let children: T[] | undefined;
-  for (let child = tokenStart + 1; child < tokenEnd;) {
+  for (let child = tokenStart + 1; child < close;) {
     const length = tokens.nodeLength(child);
     if (length > 0) {
       const build = builds[tokens.kind(child)];
       if (build) {
-        const node = build(child, context) as T;
+        const node = build(child, context, child + length) as T;
         if (children) {
           children.push(node);
         }

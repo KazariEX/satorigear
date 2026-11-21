@@ -289,6 +289,7 @@ export function buildInlineFragment(
   tokenStart: number,
   tableCell: boolean,
   context: BlockBuildContext,
+  tokenEnd: number,
 ): InlineFragment {
   let tokens: InlineTokenStream;
   let view: SourceView;
@@ -303,7 +304,7 @@ export function buildInlineFragment(
   }
   else {
     const blockTokens = context.structure.tokens;
-    const nodeLength = blockTokens.nodeLength(tokenStart);
+    const nodeLength = tokenEnd - tokenStart;
     if (nodeLength <= 1 || blockTokens.kind(tokenStart + 1) !== BlockKind.InlineChunk) {
       return { children: [] };
     }

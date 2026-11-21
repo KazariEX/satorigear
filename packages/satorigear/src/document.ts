@@ -60,7 +60,8 @@ function buildTreeBlock(
   context: BlockBuildContext,
 ): TopLevelContent {
   context.cursor!.reset(regions);
-  return buildBlockNode(record.tokenStart, context);
+  const tokenStart = record.tokenStart;
+  return buildBlockNode(tokenStart, context, tokenStart + context.structure.tokens.nodeLength(tokenStart));
 }
 
 function shiftLocation(location: SourceLocation, shift: PositionShift): void {
@@ -236,7 +237,7 @@ export class DocumentImpl implements Document {
     const children: TopLevelContent[] = [];
     for (let token = 0; token < tokens.length;) {
       const next = token + tokens.nodeLength(token);
-      children.push(buildBlockNode(token, context));
+      children.push(buildBlockNode(token, context, next));
       token = next;
     }
 

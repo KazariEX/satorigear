@@ -153,9 +153,9 @@ function emitTableRow(
   tokens.push(BlockKind.TableRowClose, lineEnd, lineEnd);
 }
 
-function buildTableRow(tokenStart: number, context: BlockBuildContext): TableRow {
+function buildTableRow(tokenStart: number, context: BlockBuildContext, tokenEnd: number): TableRow {
   const tokens = context.structure.tokens;
-  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+  const close = tokenEnd - 1;
   const start = context.locator.locationAt(tokens.start(tokenStart));
   const children: TableCell[] = [];
   for (let cell = tokenStart + 1; cell < close;) {
@@ -163,7 +163,7 @@ function buildTableRow(tokenStart: number, context: BlockBuildContext): TableRow
     const start = context.locator.locationAt(tokens.start(cell));
     children.push({
       type: "tableCell",
-      children: buildInlineFragment(cell, true, context).children,
+      children: buildInlineFragment(cell, true, context, next).children,
       position: {
         start,
         end: context.locator.locationAt(tokens.start(next)),
@@ -264,17 +264,19 @@ export const feature: SyntaxFeature = {
     builds: [
       {
         token: BlockKind.TableOpen,
-        build(tokenStart, context) {
+        build(tokenStart, context, tokenEnd) {
           const tokens = context.structure.tokens;
-          const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+          const close = tokenEnd - 1;
           const start = context.locator.locationAt(tokens.start(tokenStart));
           // Tables are emitted as a header row, delimiter leaves, then body rows.
           const header = tokenStart + 1;
           const delimiter = header + tokens.nodeLength(header);
           const align = tableAlignment(delimiter, context);
-          const rows = [buildTableRow(header, context)];
-          for (let row = delimiter + align.length; row < close; row += tokens.nodeLength(row)) {
-            rows.push(buildTableRow(row, context));
+          const rows = [buildTableRow(header, context, delimiter)];
+          for (let row = delimiter + align.length; row < close;) {
+            const next = row + tokens.nodeLength(row);
+            rows.push(buildTableRow(row, context, next));
+            row = next;
           }
           return {
             type: "table",

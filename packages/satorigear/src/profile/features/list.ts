@@ -189,12 +189,12 @@ function hasTaskListContent(
   return false;
 }
 
-const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context) => {
+const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context, tokenEnd) => {
   const tokens = context.structure.tokens;
   const markerKind = tokens.kind(tokenStart);
-  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+  const close = tokenEnd - 1;
   const start = context.locator.locationAt(tokens.start(tokenStart));
-  const children = buildBlockChildren<ListItem["children"][number]>(tokenStart, context);
+  const children = buildBlockChildren<ListItem["children"][number]>(tokenStart, context, tokenEnd);
   return {
     type: "listItem",
     spread: tokens.kind(close) === BlockKind.ListItemSpreadClose,
@@ -222,11 +222,11 @@ function listStartNumber(
 }
 
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
-  return (tokenStart, context) => {
+  return (tokenStart, context, tokenEnd) => {
     const tokens = context.structure.tokens;
-    const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+    const close = tokenEnd - 1;
     const start = context.locator.locationAt(tokens.start(tokenStart));
-    const children = buildBlockChildren<ListItem>(tokenStart, context);
+    const children = buildBlockChildren<ListItem>(tokenStart, context, tokenEnd);
     return {
       type: "list",
       ordered,

@@ -91,11 +91,11 @@ export const feature: SyntaxFeature = {
     builds: [
       {
         token: BlockKind.ParagraphOpen,
-        build(tokenStart, context) {
+        build(tokenStart, context, tokenEnd) {
           const tokens = context.structure.tokens;
-          const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+          const close = tokenEnd - 1;
           const start = context.locator.locationAt(tokens.start(tokenStart));
-          const inline = buildInlineFragment(tokenStart, false, context);
+          const inline = buildInlineFragment(tokenStart, false, context, tokenEnd);
           const result: Paragraph = {
             type: "paragraph",
             children: inline.children,

@@ -42,11 +42,11 @@ export function setextMarkerAt(
 }
 
 function createBuildHeading(openKind: number): BlockNodeBuilder {
-  return (tokenStart, context) => {
+  return (tokenStart, context, tokenEnd) => {
     const tokens = context.structure.tokens;
     const kind = tokens.kind(tokenStart);
     const start = context.locator.locationAt(tokens.start(tokenStart));
-    const inline = buildInlineFragment(tokenStart, false, context);
+    const inline = buildInlineFragment(tokenStart, false, context, tokenEnd);
     const result: Heading = {
       type: "heading",
       depth: kind - openKind + 1 as Heading["depth"],

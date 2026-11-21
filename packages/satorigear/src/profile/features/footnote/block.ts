@@ -45,11 +45,11 @@ function definitionAt(
 export const blockBuilds: BlockFeature["builds"] = [
   {
     token: BlockKind.FootnoteDefinitionOpen,
-    build(tokenStart, context) {
+    build(tokenStart, context, tokenEnd) {
       const tokens = context.structure.tokens;
-      const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+      const close = tokenEnd - 1;
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      const children = buildBlockChildren<FootnoteDefinition["children"][number]>(tokenStart, context);
+      const children = buildBlockChildren<FootnoteDefinition["children"][number]>(tokenStart, context, tokenEnd);
       // This rule only builds openers emitted with their parsed definition fields.
       const fields = tokens.value<FootnoteDefinitionFields>(tokenStart)!;
       return {

@@ -9,8 +9,8 @@ export const blockDecorators: BlockFeature["decorators"] = [
       BlockKind.OrderedListOpen,
     ],
     decorate(build) {
-      return (tokenStart, context) => {
-        const result = build(tokenStart, context) as List;
+      return (tokenStart, context, tokenEnd) => {
+        const result = build(tokenStart, context, tokenEnd) as List;
         if (!result.spread) {
           for (const item of result.children) {
             const paragraph = !item.spread && item.children.length === 1 && item.children[0].type === "paragraph"
@@ -29,8 +29,8 @@ export const blockDecorators: BlockFeature["decorators"] = [
   {
     token: BlockKind.BlockQuoteOpen,
     decorate(build) {
-      return (tokenStart, context) => {
-        const result = build(tokenStart, context) as Blockquote;
+      return (tokenStart, context, tokenEnd) => {
+        const result = build(tokenStart, context, tokenEnd) as Blockquote;
         const paragraph = result.children.length === 1 && result.children[0].type === "paragraph"
           ? result.children[0]
           : void 0;

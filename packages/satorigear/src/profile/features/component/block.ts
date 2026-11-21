@@ -313,11 +313,11 @@ function emitOpening(
   }
 }
 
-const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
+const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context, tokenEnd) => {
   const tokens = context.structure.tokens;
-  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+  const close = tokenEnd - 1;
   const start = context.locator.locationAt(tokens.start(tokenStart));
-  const children = buildInlineFragment(tokenStart, false, context).children;
+  const children = buildInlineFragment(tokenStart, false, context, tokenEnd).children;
   return {
     type: "paragraph",
     children,
@@ -373,9 +373,9 @@ export const blockBuilds: BlockFeature["builds"] = [
   },
   {
     token: BlockKind.BlockComponentOpen,
-    build(tokenStart, context) {
+    build(tokenStart, context, tokenEnd) {
       const tokens = context.structure.tokens;
-      const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+      const close = tokenEnd - 1;
       // Component header fields are emitted in this fixed order before any body syntax.
       let openingToken = tokenStart + 1;
       let parsed: Attributes | undefined;
@@ -387,7 +387,7 @@ export const blockBuilds: BlockFeature["builds"] = [
         openingToken++;
       }
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      const children = buildBlockChildren(tokenStart, context);
+      const children = buildBlockChildren(tokenStart, context, tokenEnd);
       const opening = tokens.text(context.source, tokenStart);
       return {
         type: "blockComponent",
@@ -403,9 +403,9 @@ export const blockBuilds: BlockFeature["builds"] = [
   },
   {
     token: BlockKind.BlockComponentSlotOpen,
-    build(tokenStart, context) {
+    build(tokenStart, context, tokenEnd) {
       const tokens = context.structure.tokens;
-      const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
+      const close = tokenEnd - 1;
       const attributesToken = tokens.kind(tokenStart + 1) === BlockKind.BlockComponentAttributes
         ? tokenStart + 1
         : void 0;
@@ -413,7 +413,7 @@ export const blockBuilds: BlockFeature["builds"] = [
         ? parseAttributes(context.source, tokens.start(attributesToken))
         : void 0;
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      const children = buildBlockChildren(tokenStart, context);
+      const children = buildBlockChildren(tokenStart, context, tokenEnd);
       return {
         type: "blockComponent",
         name: "template",
