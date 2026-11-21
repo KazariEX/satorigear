@@ -107,7 +107,7 @@ export const blockStarts: BlockFeature["starts"] = [
         if (
           !lazyParagraph ||
           !lines.lazy(index) &&
-          context.startsInterruptingBlock(source, lines, index)
+          context.startsInterruptingBlock(source, lines, index, line)
         ) {
           break;
         }
