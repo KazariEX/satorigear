@@ -49,7 +49,7 @@ export const blockBuilds: BlockFeature["builds"] = [
       const tokens = context.structure.tokens;
       const close = tokenEnd - 1;
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      const children = buildBlockChildren<FootnoteDefinition["children"][number]>(tokenStart, context, tokenEnd);
+      const children = buildBlockChildren<FootnoteDefinition["children"][number]>(tokenStart + 1, close, context);
       // This rule only builds openers emitted with their parsed definition fields.
       const fields = tokens.value<FootnoteDefinitionFields>(tokenStart)!;
       return {

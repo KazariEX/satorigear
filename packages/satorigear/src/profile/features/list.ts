@@ -1,6 +1,6 @@
 import type { List, ListItem } from "mdast";
 import { type BlockLines, IndentedLine, isBlankLine, lineIndentOffset } from "../../block/lines.ts";
-import { BlockKind } from "../../constants/block.ts";
+import { BlockFlag, BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../fragment/block.ts";
 import { cloneLocation, type SourceLocation } from "../../source-view.ts";
@@ -191,13 +191,13 @@ function hasTaskListContent(
 
 const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context, tokenEnd) => {
   const tokens = context.structure.tokens;
-  const markerKind = tokens.kind(tokenStart);
-  const close = tokenEnd - 1;
+  const kind = tokens.kind(tokenStart);
+  const markerKind = kind & ~BlockFlag.ListSpread;
   const start = context.locator.locationAt(tokens.start(tokenStart));
-  const children = buildBlockChildren<ListItem["children"][number]>(tokenStart, context, tokenEnd);
+  const children = buildBlockChildren<ListItem["children"][number]>(tokenStart + 1, tokenEnd, context);
   return {
     type: "listItem",
-    spread: tokens.kind(close) === BlockKind.ListItemSpreadClose,
+    spread: Boolean(kind & BlockFlag.ListSpread),
     checked: markerKind === BlockKind.CheckedTaskItemOpen
       ? true
       : markerKind === BlockKind.UncheckedTaskItemOpen ? false : null,
@@ -206,7 +206,7 @@ const buildListItem: BlockNodeBuilder<ListItem> = (tokenStart, context, tokenEnd
       start,
       end: children.length
         ? cloneLocation(children.at(-1)!.position!.end as SourceLocation)
-        : context.locator.locationAt(tokens.end(close)),
+        : context.locator.locationAt(tokens.end(tokenStart)),
     },
   };
 };
@@ -226,7 +226,7 @@ function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
     const tokens = context.structure.tokens;
     const close = tokenEnd - 1;
     const start = context.locator.locationAt(tokens.start(tokenStart));
-    const children = buildBlockChildren<ListItem>(tokenStart, context, tokenEnd);
+    const children = buildBlockChildren<ListItem>(tokenStart + 1, close, context);
     return {
       type: "list",
       ordered,
@@ -325,8 +325,7 @@ const listStart: BlockStart = (source, lines, tokens, start, contentOffset, cont
     });
     // Close positions exclude the terminal line ending; outer list scans retain it.
     const itemEnd = itemLines.length ? itemLines.end(itemLines.length - 1) : marker.end;
-    // A frame's blank-separation summary is known only when its close is emitted.
-    tokens.push(itemSpread ? BlockKind.ListItemSpreadClose : BlockKind.ListItemClose, itemEnd, itemEnd);
+    tokens.finishFrame(itemSpread ? BlockKind.SpreadListItemOpen : BlockKind.ListItemOpen, itemEnd);
     listEnd = itemEnd;
     marker = sibling;
   }
@@ -342,14 +341,13 @@ const taskListStart: BlockStart = (source, lines, tokens, start, contentOffset, 
   }
   // List node lengths jump over nested frames; task variants refine direct item kinds in place.
   for (let item = listToken + 1; item < tokens.length - 1; item += tokens.nodeLength(item)) {
+    const itemEnd = item + tokens.nodeLength(item);
     let paragraph = item + 1;
-    let contentKind = tokens.kind(paragraph);
     // Link definition leaves do not count as the item's first content block.
-    while (contentKind === BlockKind.LinkDefinition) {
+    while (paragraph < itemEnd && tokens.kind(paragraph) === BlockKind.LinkDefinition) {
       paragraph += tokens.nodeLength(paragraph);
-      contentKind = tokens.kind(paragraph);
     }
-    if (contentKind !== BlockKind.ParagraphOpen) {
+    if (paragraph >= itemEnd || tokens.kind(paragraph) !== BlockKind.ParagraphOpen) {
       continue;
     }
     const firstChunk = paragraph + 1;
@@ -363,7 +361,7 @@ const taskListStart: BlockStart = (source, lines, tokens, start, contentOffset, 
     }
     tokens.setKind(
       item,
-      marker.checked ? BlockKind.CheckedTaskItemOpen : BlockKind.UncheckedTaskItemOpen,
+      (tokens.kind(item) & BlockFlag.ListSpread) | (marker.checked ? BlockKind.CheckedTaskItemOpen : BlockKind.UncheckedTaskItemOpen),
     );
     tokens.setStart(firstChunk, marker.contentStart);
   }
@@ -379,6 +377,9 @@ export function feature(taskList = false): SyntaxFeature {
             BlockKind.ListItemOpen,
             BlockKind.UncheckedTaskItemOpen,
             BlockKind.CheckedTaskItemOpen,
+            BlockKind.SpreadListItemOpen,
+            BlockKind.UncheckedSpreadTaskItemOpen,
+            BlockKind.CheckedSpreadTaskItemOpen,
           ],
           build: buildListItem,
         },

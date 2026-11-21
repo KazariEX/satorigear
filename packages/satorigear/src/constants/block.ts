@@ -6,6 +6,10 @@ export const enum BlockRole {
   Leaf = 4 << 6,
 }
 
+export const enum BlockFlag {
+  ListSpread = 1 << 5,
+}
+
 export const enum BlockKind {
   None,
   InlineChunk,
@@ -34,9 +38,11 @@ export const enum BlockKind {
   BlockComponentSlotOpen,
   BlockComponentLabelOpen,
 
+  SpreadListItemOpen = ListItemOpen | BlockFlag.ListSpread,
+  UncheckedSpreadTaskItemOpen = UncheckedTaskItemOpen | BlockFlag.ListSpread,
+  CheckedSpreadTaskItemOpen = CheckedTaskItemOpen | BlockFlag.ListSpread,
+
   BlockQuoteClose = BlockRole.Close,
-  ListItemClose,
-  ListItemSpreadClose,
   ListClose,
   ListSpreadClose,
   FootnoteDefinitionClose,

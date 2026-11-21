@@ -157,6 +157,15 @@ export class BlockTokenStream implements DefinitionLookup {
     this.#fieldLength += BlockTokenField.Stride;
   }
 
+  /** Finishes a frame whose terminal facts belong to its opening token. */
+  finishFrame(kind: BlockKind, end: number): void {
+    const open = this.#opens.pop()!;
+    const fields = this.#fields;
+    fields[open | BlockTokenField.Kind] = kind;
+    fields[open | BlockTokenField.End] = end;
+    fields[open | BlockTokenField.Length] = (this.#fieldLength - open) / BlockTokenField.Stride;
+  }
+
   /** Indexes an open or closing structural token. */
   #indexToken(field: number, kind: number): number {
     if (kind < BlockRole.Close) {

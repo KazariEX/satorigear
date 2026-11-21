@@ -387,7 +387,7 @@ export const blockBuilds: BlockFeature["builds"] = [
         openingToken++;
       }
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      const children = buildBlockChildren(tokenStart, context, tokenEnd);
+      const children = buildBlockChildren(tokenStart + 1, close, context);
       const opening = tokens.text(context.source, tokenStart);
       return {
         type: "blockComponent",
@@ -413,7 +413,7 @@ export const blockBuilds: BlockFeature["builds"] = [
         ? parseAttributes(context.source, tokens.start(attributesToken))
         : void 0;
       const start = context.locator.locationAt(tokens.start(tokenStart));
-      const children = buildBlockChildren(tokenStart, context, tokenEnd);
+      const children = buildBlockChildren(tokenStart + 1, close, context);
       return {
         type: "blockComponent",
         name: "template",

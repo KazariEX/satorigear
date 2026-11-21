@@ -41,7 +41,7 @@ function sameShiftedBlock(
   // Convergence only considers the unchanged source suffix, so matching geometry
   // also proves that each token covers the same text after the shift.
   for (let index = 0; index < length; index++) {
-    if (!previous.equalsAfterShift(
+    if (previous.nodeLength(record.tokenStart + index) !== next.nodeLength(tokenStart + index) || !previous.equalsAfterShift(
       record.tokenStart + index,
       next,
       tokenStart + index,

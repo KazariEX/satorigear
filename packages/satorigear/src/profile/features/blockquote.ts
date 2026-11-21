@@ -45,7 +45,7 @@ export const feature: SyntaxFeature = {
           const tokens = context.structure.tokens;
           const close = tokenEnd - 1;
           const start = context.locator.locationAt(tokens.start(tokenStart));
-          const children = buildBlockChildren<Blockquote["children"][number]>(tokenStart, context, tokenEnd);
+          const children = buildBlockChildren<Blockquote["children"][number]>(tokenStart + 1, close, context);
           return {
             type: "blockquote",
             children,
