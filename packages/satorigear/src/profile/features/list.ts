@@ -224,14 +224,13 @@ function listStartNumber(
 function createBuildList(ordered: boolean): BlockNodeBuilder<List> {
   return (tokenStart, context, tokenEnd) => {
     const tokens = context.structure.tokens;
-    const close = tokenEnd - 1;
     const start = context.locator.locationAt(tokens.start(tokenStart));
-    const children = buildBlockChildren<ListItem>(tokenStart + 1, close, context);
+    const children = buildBlockChildren<ListItem>(tokenStart + 1, tokenEnd, context);
     return {
       type: "list",
       ordered,
       start: ordered ? listStartNumber(context.source, tokens, tokenStart) : null,
-      spread: tokens.kind(close) === BlockKind.ListSpreadClose,
+      spread: Boolean(tokens.kind(tokenStart) & BlockFlag.ListSpread),
       children,
       position: {
         start,
@@ -251,7 +250,7 @@ const listStart: BlockStart = (source, lines, tokens, start, contentOffset, cont
   const listOpen = ordered ? BlockKind.OrderedListOpen : BlockKind.UnorderedListOpen;
   tokens.push(listOpen, marker.offset, marker.end);
   let index = start;
-  let listEnd = marker.end;
+  const markerEnd = marker.end;
   let listSpread = false;
   let trailingBlank = false;
   while (marker?.delimiter === delimiter) {
@@ -326,10 +325,9 @@ const listStart: BlockStart = (source, lines, tokens, start, contentOffset, cont
     // Close positions exclude the terminal line ending; outer list scans retain it.
     const itemEnd = itemLines.length ? itemLines.end(itemLines.length - 1) : marker.end;
     tokens.finishFrame(itemSpread ? BlockKind.SpreadListItemOpen : BlockKind.ListItemOpen, itemEnd);
-    listEnd = itemEnd;
     marker = sibling;
   }
-  tokens.push(listSpread ? BlockKind.ListSpreadClose : BlockKind.ListClose, listEnd, listEnd);
+  tokens.finishFrame(listSpread ? listOpen | BlockFlag.ListSpread : listOpen, markerEnd);
   return index;
 };
 
@@ -340,7 +338,7 @@ const taskListStart: BlockStart = (source, lines, tokens, start, contentOffset, 
     return;
   }
   // List node lengths jump over nested frames; task variants refine direct item kinds in place.
-  for (let item = listToken + 1; item < tokens.length - 1; item += tokens.nodeLength(item)) {
+  for (let item = listToken + 1; item < tokens.length; item += tokens.nodeLength(item)) {
     const itemEnd = item + tokens.nodeLength(item);
     let paragraph = item + 1;
     // Link definition leaves do not count as the item's first content block.
@@ -384,11 +382,11 @@ export function feature(taskList = false): SyntaxFeature {
           build: buildListItem,
         },
         {
-          token: BlockKind.UnorderedListOpen,
+          token: [BlockKind.UnorderedListOpen, BlockKind.SpreadUnorderedListOpen],
           build: createBuildList(false),
         },
         {
-          token: BlockKind.OrderedListOpen,
+          token: [BlockKind.OrderedListOpen, BlockKind.SpreadOrderedListOpen],
           build: createBuildList(true),
         },
       ],

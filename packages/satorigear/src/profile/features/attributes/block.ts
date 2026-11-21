@@ -7,6 +7,8 @@ export const blockDecorators: BlockFeature["decorators"] = [
     token: [
       BlockKind.UnorderedListOpen,
       BlockKind.OrderedListOpen,
+      BlockKind.SpreadUnorderedListOpen,
+      BlockKind.SpreadOrderedListOpen,
     ],
     decorate(build) {
       return (tokenStart, context, tokenEnd) => {

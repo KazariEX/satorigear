@@ -38,13 +38,13 @@ export const enum BlockKind {
   BlockComponentSlotOpen,
   BlockComponentLabelOpen,
 
+  SpreadUnorderedListOpen = UnorderedListOpen | BlockFlag.ListSpread,
+  SpreadOrderedListOpen = OrderedListOpen | BlockFlag.ListSpread,
   SpreadListItemOpen = ListItemOpen | BlockFlag.ListSpread,
   UncheckedSpreadTaskItemOpen = UncheckedTaskItemOpen | BlockFlag.ListSpread,
   CheckedSpreadTaskItemOpen = CheckedTaskItemOpen | BlockFlag.ListSpread,
 
   BlockQuoteClose = BlockRole.Close,
-  ListClose,
-  ListSpreadClose,
   FootnoteDefinitionClose,
   TableClose,
   TableRowClose,
