@@ -9,6 +9,7 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
 } from "../inline/tokens.ts";
+import { emptyArray } from "../primitives.ts";
 import { attributesEnd } from "./features/attributes/shared.ts";
 import { footnoteLabelAt } from "./features/footnote/shared.ts";
 import { isSpaceTabOrLineEnding, normalizeIdentifier } from "./utils.ts";
@@ -303,7 +304,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
     return (source, tokens, definitions) => {
       let start = 0;
       let resolved: number[] | undefined;
-      let hasLiteralBrackets = false;
+      let literalBrackets = 0;
       const end = inlineTokenCount(tokens);
       while (start < end) {
         const kind = inlineTokenKind(tokens, start);
@@ -337,7 +338,8 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
           break;
         }
         if (!resource) {
-          hasLiteralBrackets = true;
+          // The opener and any closer remain literal. The tokens between them are semantic.
+          literalBrackets += close < end ? 2 : 1;
           start = close < end ? close + 1 : end;
           continue;
         }
@@ -350,7 +352,11 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
       }
       if (start === end) {
         const settled = resolved ?? tokens;
-        return hasLiteralBrackets ? new DelimiterStack().emitResolvedTokens(settled) : settled;
+        switch (literalBrackets) {
+          case 0: return settled;
+          case end: return emptyArray;
+          default: return new DelimiterStack().emitResolvedTokens(settled);
+        }
       }
       return resolvePairs(source, resolved ?? tokens.slice(), definitions, options, delimiterByKind, start);
     };
