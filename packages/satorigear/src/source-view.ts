@@ -53,6 +53,7 @@ export class SourceView {
   // Contiguous views store one offset, segmented views store offset/end pairs.
   #projection: number | number[] = 0;
   #withBoundaryBreak = false;
+  #segment = 0;
   text = "";
 
   /** Projects the consecutive inline chunks owned by a block token. */
@@ -74,6 +75,7 @@ export class SourceView {
       }
       while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk);
       this.#projection = segments;
+      this.#segment = 0;
       this.#withBoundaryBreak = withBoundaryBreak;
       this.text = parts.join("");
       return;
@@ -106,7 +108,7 @@ export class SourceView {
     if (offset === this.text.length) {
       return segments[segments.length - 2] + offset;
     }
-    const segment = containingSegment(segments, offset);
+    const segment = this.#segmentAt(segments, offset);
     return segments[segment] + offset;
   }
 
@@ -116,8 +118,24 @@ export class SourceView {
     if (typeof segments === "number") {
       return segments + offset;
     }
-    const segment = containingSegment(segments, Math.max(0, offset - 1));
+    const segment = this.#segmentAt(segments, Math.max(0, offset - 1));
     return segments[segment] + offset;
+  }
+
+  // Projected positions usually advance. Use binary search when an offset looks back.
+  #segmentAt(segments: number[], offset: number): number {
+    const active = this.#segment;
+    if (offset < segments[active + 1] && (active === 0 || offset >= segments[active - 1])) {
+      return active;
+    }
+    if (offset < segments[active + 1]) {
+      return this.#segment = containingSegment(segments, offset);
+    }
+    let segment = active + 2;
+    while (offset >= segments[segment + 1]) {
+      segment += 2;
+    }
+    return this.#segment = segment;
   }
 
   shift(delta: number): void {
