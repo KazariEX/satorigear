@@ -35,7 +35,7 @@ export const feature: SyntaxFeature = {
           const chunkStart = Math.min(spaceEnd, lineStart + Math.max(0, 3 - lines.prefixColumns(index)));
           const canInterrupt = !lines.lazy(index) && chunkStart === contentStart;
           if (canInterrupt) {
-            const setext = setextMarkerAt(source, lines, index, contentStart);
+            const setext = setextMarkerAt(source, first, contentStart, lineEnd);
             if (setext) {
               tokens.setKind(
                 openToken,
