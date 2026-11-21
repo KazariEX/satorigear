@@ -99,9 +99,11 @@ export class BlockTokenStream implements DefinitionLookup {
     this.#fields[field | BlockTokenField.Kind] = kind;
     this.#fields[field | BlockTokenField.Start] = start;
     this.#fields[field | BlockTokenField.End] = end;
-    this.#fields[field | BlockTokenField.Length] = kind < BlockRole.Open
-      ? 0
-      : this.#indexToken(field, kind);
+    this.#fields[field | BlockTokenField.Length] = kind >= BlockRole.Leaf
+      ? 1
+      : kind < BlockRole.Open
+        ? 0
+        : this.#indexToken(field, kind);
     this.#fieldLength += BlockTokenField.Stride;
     if (meta) {
       const index = field / BlockTokenField.Stride;
@@ -130,18 +132,16 @@ export class BlockTokenStream implements DefinitionLookup {
     this.#fieldLength += BlockTokenField.Stride;
   }
 
-  /** Updates structural indexes and returns the current token's traversal length. */
+  /** Indexes an open or closing structural token. */
   #indexToken(field: number, kind: number): number {
     if (kind < BlockRole.Close) {
       this.#opens.push(field);
-      return 0;
     }
-    if (kind < BlockRole.Leaf) {
+    else {
       const open = this.#opens.pop()!;
       this.#fields[open | BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
-      return 0;
     }
-    return 1;
+    return 0;
   }
 
   nodeLength(index: number): number {
