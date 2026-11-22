@@ -142,14 +142,14 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.LessThanSign,
         scan(source, start, tokens) {
-          let end = matchInlinePatternEnd(htmlComment, source, start);
+          let end = matchInlinePatternEnd(source, start, htmlComment);
           let kind = InlineKind.InlineHtml;
           if (end < 0) {
-            end = matchInlinePatternEnd(autolink, source, start);
+            end = matchInlinePatternEnd(source, start, autolink);
             kind = InlineKind.Autolink;
           }
           if (end < 0) {
-            end = matchInlinePatternEnd(inlineHtml, source, start);
+            end = matchInlinePatternEnd(source, start, inlineHtml);
             kind = InlineKind.InlineHtml;
           }
           if (end < 0) {

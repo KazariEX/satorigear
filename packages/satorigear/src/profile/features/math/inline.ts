@@ -11,7 +11,7 @@ export function createMathScanRule(singleDollarTextMath: boolean): InlineScanRul
     marker: Character.DollarSign,
     scan(source, start, tokens) {
       // Math must claim its closer before ordinary tokens can span across that boundary.
-      const openEnd = inlineMarkerRunEnd(source, start);
+      const openEnd = inlineMarkerRunEnd(source, start, Character.DollarSign);
       const markerLength = openEnd - start;
       let end = -1;
       if (markerLength >= minimum) {
@@ -21,7 +21,7 @@ export function createMathScanRule(singleDollarTextMath: boolean): InlineScanRul
           if (close < 0) {
             break;
           }
-          const closeEnd = inlineMarkerRunEnd(source, close);
+          const closeEnd = inlineMarkerRunEnd(source, close, Character.DollarSign);
           if (closeEnd - close === markerLength) {
             end = closeEnd;
             break;

@@ -28,7 +28,7 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.Ampersand,
         scan(source, start, tokens) {
-          const matchEnd = matchInlinePatternEnd(entity, source, start);
+          const matchEnd = matchInlinePatternEnd(source, start, entity);
           if (matchEnd < 0) {
             return start + 1;
           }

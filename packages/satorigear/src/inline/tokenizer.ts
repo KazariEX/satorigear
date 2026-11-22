@@ -31,13 +31,12 @@ function createMasks(chars: string): Uint8Array {
   return masks;
 }
 
-export function matchInlinePatternEnd(pattern: RegExp, source: string, start: number): number {
+export function matchInlinePatternEnd(source: string, start: number, pattern: RegExp): number {
   pattern.lastIndex = start;
   return pattern.test(source) ? pattern.lastIndex : -1;
 }
 
-export function inlineMarkerRunEnd(source: string, start: number): number {
-  const marker = source.charCodeAt(start);
+export function inlineMarkerRunEnd(source: string, start: number, marker: number): number {
   let end = start + 1;
   while (source.charCodeAt(end) === marker) {
     end++;
@@ -134,7 +133,7 @@ function createInlineTokenizer(
     const boundary = withBoundaryBreak ? boundarySlow : boundaryFast;
     let tokens: number[] | undefined;
     for (let cursor = 0; cursor < source.length;) {
-      const offset = matchInlinePatternEnd(boundary, source, cursor) - 1;
+      const offset = matchInlinePatternEnd(source, cursor, boundary) - 1;
       if (offset < 0) {
         break;
       }

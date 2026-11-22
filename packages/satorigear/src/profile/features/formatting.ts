@@ -23,7 +23,7 @@ function createFormatting(
     scanner: {
       marker,
       scan(source, start, tokens) {
-        const end = inlineMarkerRunEnd(source, start);
+        const end = inlineMarkerRunEnd(source, start, marker);
         appendInlineToken(tokens, delimiter.token, start, end);
         return end;
       },
