@@ -6,6 +6,7 @@ import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
+import { isAsciiLetter } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 interface HtmlStart {
@@ -21,10 +22,11 @@ const htmlUnquotedValue = `[^\\s"'=<>\`]+`;
 const htmlAttributeValue = `(?:${htmlUnquotedValue}|'[^']*'|"[^"]*")`;
 const htmlAttribute = `\\s+${htmlAttributeName}(?:\\s*=\\s*${htmlAttributeValue})?`;
 const htmlTag = /^<\/?([a-z][a-z0-9-]*)(?=[ \t\n\r/>]|$)/i;
+const htmlTagDelimiter = /[ \t>]/;
 const completeHtmlTag = new RegExp(`^(?:<${htmlTagName}(?:${htmlAttribute})*\\s*/?>|</${htmlTagName}\\s*>)[ \\t]*$`, "i");
 const htmlComment = /<!--(?:-?>|.*?-->|.*)/sy;
 const autolink = /<(?:[A-Z][A-Z0-9+.\-]{1,31}:[^ \t\n\r<>]+|[\w!#$%&'*+\-/=?^`{|}~.]+@[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*(?:\.[A-Z0-9](?:[A-Z0-9]|-(?=[A-Z0-9]))*)+)>/iy;
-const inlineHtml = /<[A-Za-z][A-Za-z0-9-]*(?:[ \t\n\r]+[A-Za-z_:][\w.:-]*(?:[ \t\n\r]*=[ \t\n\r]*(?:[^ \t\n\r"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t\n\r]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t\n\r]*>|<\?[\s\S]*?\?>|<![A-Z][\s\S]*?>|<!\[CDATA\[[\s\S]*?\]\]>/y;
+const inlineHtml = /<[A-Za-z][A-Za-z0-9-]*(?:[ \t\n\r]+[A-Za-z_:][\w.:-]*(?:[ \t\n\r]*=[ \t\n\r]*(?:[^ \t\n\r"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t\n\r]*\/?>|<\/[A-Za-z][A-Za-z0-9-]*[ \t\n\r]*>|<\?[\s\S]*?\?>|<![A-Za-z][\s\S]*?>|<!\[CDATA\[[\s\S]*?\]\]>/y;
 
 function htmlStartAt(
   source: string,
@@ -44,7 +46,7 @@ function htmlStartAt(
       if (body.startsWith("<![CDATA[")) {
         return { interruptParagraph: true, terminator: "]]>" };
       }
-      if (/[A-Z]/.test(body[2] ?? "")) {
+      if (isAsciiLetter(body.charCodeAt(2))) {
         return { interruptParagraph: true, terminator: ">" };
       }
       break;
@@ -53,7 +55,7 @@ function htmlStartAt(
   const tag = htmlTag.exec(body)?.[1].toLowerCase();
   if (
     tag && body[1] !== "/" && htmlRawTags.has(tag) && (
-      body.length === tag.length + 1 || /[ \t>]/.test(body[tag.length + 1])
+      body.length === tag.length + 1 || htmlTagDelimiter.test(body[tag.length + 1])
     )
   ) {
     return { interruptParagraph: true, terminator: `</${tag}>` };
