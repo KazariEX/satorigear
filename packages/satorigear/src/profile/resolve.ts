@@ -24,6 +24,7 @@ export type InlineResolver = (
   source: string,
   tokens: InlineTokenStream,
   definitions: DefinitionLookup,
+  consume?: boolean,
 ) => InlineTokenStream;
 
 export type InlineResolverFactory = (delimiters: readonly DelimiterConfig[]) => InlineResolver;
@@ -301,9 +302,9 @@ function resolvePairs(
 export function compileInlineResolver(options: InlineResolverOptions): InlineResolverFactory {
   return (delimiterConfigs) => {
     const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
-    return (source, tokens, definitions) => {
+    return (source, tokens, definitions, consume) => {
       let start = 0;
-      let resolved: number[] | undefined;
+      let resolved = consume ? tokens as number[] : void 0;
       let literalBrackets = 0;
       const end = inlineTokenCount(tokens);
       while (start < end) {

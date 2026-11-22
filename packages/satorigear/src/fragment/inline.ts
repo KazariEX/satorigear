@@ -312,7 +312,7 @@ export function buildInlineFragment(
     view.reset(context.source, blockTokens, tokenStart, nodeLength);
     tokens = view.tokenize(context.profile.tokenize, ScratchView.supports);
     if (tokens.length) {
-      tokens = context.profile.resolve(view.text, tokens, blockTokens);
+      tokens = context.profile.resolve(view.text, tokens, blockTokens, true);
     }
   }
 
