@@ -43,7 +43,6 @@ export const enum BlockKind {
   TableClose,
   TableRowClose,
   BlockComponentClose,
-  BlockComponentLabelClose,
   BlockComponentSlotClose,
 
   ThematicBreak = BlockRole.Leaf,

@@ -119,17 +119,34 @@ export class BlockTokenStream implements DefinitionLookup {
     }
   }
 
+  /** Publish a complete frame containing one inline range without touching open frames. */
+  pushInlineFrame(kind: BlockKind, start: number, end: number, contentStart: number, contentEnd: number): void {
+    const field = this.#fieldLength;
+    const content = field + BlockTokenField.Stride;
+    this.#ensureCapacity(content + BlockTokenField.Stride);
+    this.#fields[field | BlockTokenField.Kind] = kind;
+    this.#fields[field | BlockTokenField.Start] = start;
+    this.#fields[field | BlockTokenField.End] = end;
+    this.#fields[field | BlockTokenField.Length] = 2;
+    this.#writeInlineRange(content, contentStart, contentEnd);
+    this.#fieldLength = content + BlockTokenField.Stride;
+  }
+
   /** The final inline range also closes the current frame. */
-  closeRange(start: number, end: number): void {
+  closeInlineFrame(start: number, end: number): void {
     const field = this.#fieldLength;
     this.#ensureCapacity(field + BlockTokenField.Stride);
+    this.#writeInlineRange(field, start, end);
+    const open = this.#opens.pop()!;
+    this.#fields[open | BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
+    this.#fieldLength += BlockTokenField.Stride;
+  }
+
+  #writeInlineRange(field: number, start: number, end: number): void {
     this.#fields[field | BlockTokenField.Kind] = start < end ? BlockKind.InlineChunk : BlockKind.None;
     this.#fields[field | BlockTokenField.Start] = start;
     this.#fields[field | BlockTokenField.End] = end;
     this.#fields[field | BlockTokenField.Length] = 0;
-    const open = this.#opens.pop()!;
-    this.#fields[open | BlockTokenField.Length] = (field - open) / BlockTokenField.Stride + 1;
-    this.#fieldLength += BlockTokenField.Stride;
   }
 
   /** Indexes an open or closing structural token. */

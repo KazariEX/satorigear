@@ -302,11 +302,13 @@ function emitOpening(
 ): void {
   tokens.push(BlockKind.BlockComponentOpen, contentOffset, opening.nameEnd);
   if (opening.labelStart !== void 0 && opening.labelEnd !== void 0) {
-    tokens.push(BlockKind.BlockComponentLabelOpen, opening.labelStart, opening.labelStart + 1);
-    if (opening.labelEnd > opening.labelStart + 2) {
-      tokens.push(BlockKind.InlineChunk, opening.labelStart + 1, opening.labelEnd - 1);
-    }
-    tokens.push(BlockKind.BlockComponentLabelClose, opening.labelEnd - 1, opening.labelEnd);
+    tokens.pushInlineFrame(
+      BlockKind.BlockComponentLabelOpen,
+      opening.labelStart,
+      opening.labelEnd,
+      opening.labelStart + 1,
+      opening.labelEnd - 1,
+    );
   }
   if (opening.attributesStart !== void 0 && opening.attributesEnd !== void 0) {
     tokens.push(BlockKind.BlockComponentAttributes, opening.attributesStart, opening.attributesEnd);
@@ -315,7 +317,6 @@ function emitOpening(
 
 const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
-  const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
   const start = context.locator.locationAt(tokens.start(tokenStart));
   const children = buildInlineFragment(tokenStart, false, context).children;
   return {
@@ -323,7 +324,7 @@ const buildBlockLabel: BlockNodeBuilder<Paragraph> = (tokenStart, context) => {
     children,
     position: {
       start,
-      end: context.locator.locationAt(tokens.end(close)),
+      end: context.locator.locationAt(tokens.end(tokenStart)),
     },
   };
 };
