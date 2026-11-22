@@ -15,8 +15,8 @@ import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inlin
 import { hasInlinePadding, semanticText } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-const complexInfo = /[\\& \t]/;
-const separator = /[ \t]/;
+const complexInfo = /[\\& \t]/g;
+const separator = /[ \t]/g;
 
 const backtickFence = createFencedBlock({
   kind: BlockKind.FencedCodeBlock,
@@ -84,7 +84,8 @@ export const feature: SyntaxFeature = {
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
           let info = tokens.value<string>(tokenStart) ?? "";
-          let langEnd = info.search(complexInfo);
+          complexInfo.lastIndex = 0;
+          let langEnd = complexInfo.test(info) ? complexInfo.lastIndex - 1 : -1;
           if (langEnd >= 0) {
             const code = info.charCodeAt(langEnd);
             if (code === Character.Space || code === Character.CharacterTabulation) {
@@ -93,7 +94,8 @@ export const feature: SyntaxFeature = {
             }
             else {
               info = decodeString(info);
-              langEnd = info.search(separator);
+              separator.lastIndex = langEnd;
+              langEnd = separator.test(info) ? separator.lastIndex - 1 : -1;
             }
           }
           return {
