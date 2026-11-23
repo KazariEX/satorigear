@@ -16,10 +16,7 @@ export interface BlockBuildContext {
 }
 
 // Core owns build traversal; profiles supply every syntax-specific node builder.
-export type BlockNodeBuilder<T extends object = Node> = (
-  tokenStart: number,
-  context: BlockBuildContext,
-) => T;
+export type BlockNodeBuilder<T extends object = Node> = (tokenStart: number, context: BlockBuildContext) => T;
 
 export function leafBlockPosition(
   tokenStart: number,

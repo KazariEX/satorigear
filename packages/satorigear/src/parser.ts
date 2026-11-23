@@ -20,10 +20,9 @@ export function createParser(options?: ParserOptions): Parser {
 
   return {
     createDocument: (source) => new DocumentImpl(source, profile),
-    parse: (source) => DocumentImpl.parse(
-      source,
-      profile,
-      blockScanner ??= new BlockScanner(profile.block),
-    ),
+    parse: (source) => {
+      blockScanner ??= new BlockScanner(profile.block);
+      return blockScanner.parse(source, profile.inline);
+    },
   };
 }

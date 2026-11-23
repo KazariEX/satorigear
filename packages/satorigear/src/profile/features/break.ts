@@ -1,7 +1,5 @@
-import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { leafBlockPosition } from "../../fragment/block.ts";
 import { inlineTokenData } from "../../inline/tokens.ts";
 import type { BlockLines } from "../../block/lines.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -35,17 +33,6 @@ export function isThematicBreak(
 
 export const feature: SyntaxFeature = {
   block: {
-    builds: [
-      {
-        token: BlockKind.ThematicBreak,
-        build(tokenStart, context) {
-          return {
-            type: "thematicBreak",
-            position: leafBlockPosition(tokenStart, context),
-          };
-        },
-      },
-    ],
     starts: [
       {
         codes: [
@@ -60,8 +47,15 @@ export const feature: SyntaxFeature = {
           if (!isThematicBreak(source, lines, start, contentOffset)) {
             return;
           }
-          tokens.push(BlockKind.ThematicBreak, contentOffset, lines.end(start));
-          return start + 1;
+          return {
+            node: {
+              type: "thematicBreak",
+              position: void 0,
+            },
+            nextLine: start + 1,
+            start: contentOffset,
+            end: lines.end(start),
+          };
         },
       },
     ],

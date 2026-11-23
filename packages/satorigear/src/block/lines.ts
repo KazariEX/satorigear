@@ -282,6 +282,11 @@ export class BlockLines implements SourceLocator {
     return this;
   }
 
+  /** Starts the next position lookup at this one-based line number. */
+  advanceToLine(line: number): void {
+    this.#locatorField = (line - 1) * BlockLineField.Stride;
+  }
+
   /** Normalizes a fragment only when retained source may contain carriage returns. */
   normalizeLineEndings(value: string): string {
     return this.#normalized || !value.includes("\r")

@@ -2,6 +2,7 @@ import { BlockKind, BlockRole } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
 import type { BlockLines } from "./lines.ts";
+import type { DirectNode } from "./profile.ts";
 
 const enum BlockTokenField {
   Kind,
@@ -16,6 +17,7 @@ const enum BlockTokenCapacity {
 }
 
 interface BlockTokenMeta {
+  node?: DirectNode["node"];
   definitionKey?: string;
   text?: string;
   value?: unknown;
@@ -400,6 +402,10 @@ export class BlockTokenStream implements DefinitionLookup {
 
   text(source: string, index: number): string {
     return this.#metadata?.[index]?.text ?? source.slice(this.start(index), this.end(index));
+  }
+
+  node(index: number): DirectNode["node"] | undefined {
+    return this.#metadata?.[index]?.node;
   }
 
   value<T>(index: number): T | undefined {

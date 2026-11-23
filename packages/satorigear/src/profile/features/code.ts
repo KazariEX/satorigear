@@ -1,5 +1,5 @@
 import { decodeString } from "micromark-util-decode-string";
-import { createFencedBlock } from "../../block/fence.ts";
+import { createFence } from "../../block/fence.ts";
 import {
   type BlockLines,
   isBlankLine,
@@ -7,28 +7,28 @@ import {
   physicalColumnAt,
   trimLineWhitespaceStart,
 } from "../../block/lines.ts";
-import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { inlineMarkerRunEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
 import { hasInlinePadding, semanticText } from "../utils.ts";
+import type { BlockStartRegistration } from "../../block/profile.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 const complexInfo = /[\\& \t]/g;
 const separator = /[ \t]/g;
 
-const backtickFence = createFencedBlock({
-  kind: BlockKind.FencedCodeBlock,
+const backtickFence = createFence({
   marker: Character.GraveAccent,
   minimumLength: 3,
+  normalizeEndings: true,
   allowMarkerInInfo: false,
 });
 
-const tildeFence = createFencedBlock({
-  kind: BlockKind.FencedCodeBlock,
+const tildeFence = createFence({
   marker: Character.Tilde,
   minimumLength: 3,
+  normalizeEndings: true,
   allowMarkerInInfo: true,
 });
 
@@ -75,39 +75,6 @@ function indentedContent(source: string, lines: BlockLines, start: number, end: 
 
 export const feature: SyntaxFeature = {
   block: {
-    builds: [
-      {
-        token: [
-          BlockKind.FencedCodeBlock,
-          BlockKind.IndentedCodeBlock,
-        ],
-        build(tokenStart, context) {
-          const tokens = context.structure.tokens;
-          let info = tokens.value<string>(tokenStart) ?? "";
-          complexInfo.lastIndex = 0;
-          let langEnd = complexInfo.test(info) ? complexInfo.lastIndex - 1 : -1;
-          if (langEnd >= 0) {
-            const code = info.charCodeAt(langEnd);
-            if (code === Character.Space || code === Character.CharacterTabulation) {
-              // Decoding the suffix leaves the first delimiter at its original offset.
-              info = semanticText(info);
-            }
-            else {
-              info = decodeString(info);
-              separator.lastIndex = langEnd;
-              langEnd = separator.test(info) ? separator.lastIndex - 1 : -1;
-            }
-          }
-          return {
-            type: "code",
-            lang: langEnd >= 0 ? info.slice(0, langEnd) : info || null,
-            meta: langEnd >= 0 && info.slice(trimLineWhitespaceStart(info, langEnd, info.length)) || null,
-            value: tokens.text(context.source, tokenStart),
-            position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
-          };
-        },
-      },
-    ],
     starts: [
       {
         codes: [
@@ -123,14 +90,57 @@ export const feature: SyntaxFeature = {
           while (contentEnd > start + 1 && isBlankLine(source, lines, contentEnd - 1)) {
             contentEnd--;
           }
-          tokens.push(BlockKind.IndentedCodeBlock, lines.start(start), lines.end(contentEnd - 1), {
-            text: indentedContent(source, lines, start, contentEnd),
-          });
-          return end;
+          return {
+            node: {
+              type: "code",
+              lang: null,
+              meta: null,
+              value: indentedContent(source, lines, start, contentEnd),
+              position: void 0,
+            },
+            nextLine: end,
+            start: lines.start(start),
+            end: lines.end(contentEnd - 1),
+          };
         },
       },
-      backtickFence,
-      tildeFence,
+      ...[backtickFence, tildeFence].map<BlockStartRegistration>((fence) => ({
+        codes: fence.codes,
+        interrupt: fence.interrupt,
+        start(source, lines, tokens, start, offset) {
+          const match = fence.match(source, lines, start, offset);
+          if (!match) {
+            return;
+          }
+          let info = match.info;
+          complexInfo.lastIndex = 0;
+          let langEnd = complexInfo.test(info) ? complexInfo.lastIndex - 1 : -1;
+          if (langEnd >= 0) {
+            const code = info.charCodeAt(langEnd);
+            if (code === Character.Space || code === Character.CharacterTabulation) {
+              // Decoding the suffix leaves the first delimiter at its original offset.
+              info = semanticText(info);
+            }
+            else {
+              info = decodeString(info);
+              separator.lastIndex = langEnd;
+              langEnd = separator.test(info) ? separator.lastIndex - 1 : -1;
+            }
+          }
+          return {
+            node: {
+              type: "code",
+              lang: langEnd >= 0 ? info.slice(0, langEnd) : info || null,
+              meta: langEnd >= 0 && info.slice(trimLineWhitespaceStart(info, langEnd, info.length)) || null,
+              value: match.value,
+              position: void 0,
+            },
+            nextLine: match.nextLine,
+            start: offset,
+            end: match.end,
+          };
+        },
+      })),
     ],
   },
   inline: {

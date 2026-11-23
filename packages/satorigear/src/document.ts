@@ -1,10 +1,5 @@
 import type { Root, TopLevelContent } from "mdast";
-import {
-  type BlockRecord,
-  type BlockScanChange,
-  BlockScanner,
-  type SourceChange,
-} from "./block/scanner.ts";
+import { type BlockRecord, type BlockScanChange, BlockScanner, type SourceChange } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
 import { InlineRegionCursor, InlineRegionState, type ResolvedInlineRegion } from "./inline/region.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
@@ -96,7 +91,7 @@ export class DocumentImpl implements Document {
     this.#profile = profile;
     this.#source = source;
     this.#blockScanner = new BlockScanner(profile.block);
-    this.#blockScanner.scan(source, true);
+    this.#blockScanner.scan(source);
     this.#regionState = new InlineRegionState(profile.inline, this.#blockScanner);
     this.#updateTree(this.#regionState.update(source));
   }
@@ -211,37 +206,6 @@ export class DocumentImpl implements Document {
     root.position = {
       start,
       end: locator.locationAt(this.#source.length),
-    };
-  }
-
-  static parse(
-    source: string,
-    profile: SyntaxProfile,
-    blockScanner: BlockScanner,
-  ): Root {
-    blockScanner.scan(source);
-
-    const locator = blockScanner.locator();
-    const context: BlockBuildContext = {
-      inlineContext: void 0,
-      cursor: void 0,
-      locator,
-      structure: blockScanner,
-      profile: profile.inline,
-      source,
-    };
-
-    const start = locator.locationAt(0);
-    const tokens = blockScanner.tokens;
-    const children: TopLevelContent[] = [];
-    for (let token = 0; token < tokens.length; token += tokens.nodeLength(token)) {
-      children.push(buildBlockNode(token, context));
-    }
-
-    return {
-      type: "root",
-      children,
-      position: { start, end: locator.locationAt(source.length) },
     };
   }
 }

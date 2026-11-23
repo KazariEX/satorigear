@@ -1,23 +1,28 @@
-import { BlockKind } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { type BlockLines, physicalColumnAt, trimLineWhitespaceStart } from "./lines.ts";
-import type { BlockFeature } from "./profile.ts";
-import type { BlockTokenStream } from "./tokens.ts";
+import type { BlockStartRegistration } from "./profile.ts";
 
 interface FenceOptions {
-  kind: BlockKind.FencedCodeBlock | BlockKind.MathBlock;
   marker: number;
   minimumLength: 2 | 3;
+  normalizeEndings: boolean;
   allowMarkerInInfo: boolean;
 }
 
-type FencedBlock = NonNullable<BlockFeature["starts"]>[number] & {
-  closingLineAt: (source: string, lines: BlockLines, open: number, limit: number, offset: number) => number | undefined;
-};
+interface FenceMatch {
+  value: string;
+  info: string;
+  nextLine: number;
+  end: number;
+}
 
-export function createFencedBlock(options: FenceOptions): FencedBlock {
-  const { marker, kind } = options;
-  const normalizeEndings = kind === BlockKind.FencedCodeBlock;
+interface Fence extends Pick<BlockStartRegistration, "codes" | "interrupt"> {
+  closingLineAt: (source: string, lines: BlockLines, open: number, limit: number, offset: number) => number | undefined;
+  match: (source: string, lines: BlockLines, start: number, offset: number) => FenceMatch | undefined;
+}
+
+export function createFence(options: FenceOptions): Fence {
+  const { marker, normalizeEndings } = options;
   const opening = createOpening(marker, options);
   const closing = createClosing(marker);
 
@@ -44,12 +49,26 @@ export function createFencedBlock(options: FenceOptions): FencedBlock {
         return findFenceClose(source, lines, open, limit, marker, markerEnd - offset, closing);
       }
     },
-    start(source, lines, tokens, start, offset) {
+    match(source, lines, start, offset) {
       const markerEnd = openingEnd(source, offset);
-      if (markerEnd >= 0) {
-        const close = findFenceClose(source, lines, start, lines.length, marker, markerEnd - offset, closing);
-        return emitFencedBlock(source, lines, tokens, kind, start, close, offset, markerEnd, normalizeEndings);
+      if (markerEnd < 0) {
+        return;
       }
+      const close = findFenceClose(source, lines, start, lines.length, marker, markerEnd - offset, closing);
+      const indent = lines.prefixColumns(start) + offset - lines.start(start);
+      const closed = close < lines.length;
+      const last = closed ? close : close - 1;
+      const content = lines.physicallyContiguous()
+        ? physicalFenceContent(source, lines, start, close - 1, indent, normalizeEndings)
+        : logicalFenceContent(source, lines, start, close - 1, closed, indent, normalizeEndings);
+      const lineEnd = lines.end(start);
+      const infoStart = trimLineWhitespaceStart(source, markerEnd, lineEnd);
+      return {
+        nextLine: last + 1,
+        end: !closed && lines.next(last) === source.length ? source.length : lines.end(last),
+        value: content,
+        info: source.slice(infoStart, lineEnd),
+      };
     },
   };
 }
@@ -118,39 +137,6 @@ const fenceTabIndent = [
   /^(?<![\u2028\u2029]) ?\t/gm,
   /^(?<![\u2028\u2029]) {0,2}\t/gm,
 ];
-
-/** Consumes the fenced block and returns the first line after it. */
-function emitFencedBlock(
-  source: string,
-  lines: BlockLines,
-  tokens: BlockTokenStream,
-  kind: BlockKind,
-  start: number,
-  close: number,
-  offset: number,
-  markerEnd: number,
-  normalizeEndings: boolean,
-): number {
-  const indent = lines.prefixColumns(start) + offset - lines.start(start);
-  const closed = close < lines.length;
-  const end = closed ? close + 1 : close;
-  const content = lines.physicallyContiguous()
-    ? physicalFenceContent(source, lines, start, close - 1, indent, normalizeEndings)
-    : logicalFenceContent(source, lines, start, close - 1, closed, indent, normalizeEndings);
-  const lineEnd = lines.end(start);
-  const infoStart = trimLineWhitespaceStart(source, markerEnd, lineEnd);
-  const consumedEnd = lines.next(end - 1);
-  tokens.push(
-    kind,
-    offset,
-    closed || consumedEnd < source.length ? lines.end(end - 1) : consumedEnd,
-    {
-      text: content,
-      value: source.slice(infoStart, lineEnd),
-    },
-  );
-  return end;
-}
 
 function physicalFenceContent(
   source: string,

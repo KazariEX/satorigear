@@ -1,32 +1,32 @@
-import { createFencedBlock } from "../../../block/fence.ts";
-import { BlockKind } from "../../../constants/block.ts";
+import { createFence } from "../../../block/fence.ts";
 import { Character } from "../../../constants/character.ts";
 import { semanticText } from "../../utils.ts";
 import type { BlockFeature } from "../../../block/profile.ts";
 
-const mathFence = createFencedBlock({
-  kind: BlockKind.MathBlock,
+const fence = createFence({
   marker: Character.DollarSign,
   minimumLength: 2,
+  normalizeEndings: false,
   allowMarkerInInfo: false,
 });
 
-export const blockBuilds: BlockFeature["builds"] = [
-  {
-    token: BlockKind.MathBlock,
-    build(tokenStart, context) {
-      const tokens = context.structure.tokens;
-      const meta = semanticText(tokens.value<string>(tokenStart)!);
+export const blockStarts: BlockFeature["starts"] = [{
+  codes: fence.codes,
+  interrupt: fence.interrupt,
+  start(source, lines, tokens, start, offset) {
+    const match = fence.match(source, lines, start, offset);
+    if (match) {
       return {
-        type: "math",
-        meta: meta || null,
-        value: tokens.text(context.source, tokenStart),
-        position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
+        node: {
+          type: "math",
+          meta: semanticText(match.info) || null,
+          value: match.value,
+          position: void 0,
+        },
+        nextLine: match.nextLine,
+        start: offset,
+        end: match.end,
       };
-    },
+    }
   },
-];
-
-export const blockStarts: BlockFeature["starts"] = [
-  mathFence,
-];
+}];

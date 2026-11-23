@@ -1,9 +1,16 @@
-// Block features compile into the immutable scanner, structure, and node builders shared by a parser.
-import type { BlockKind } from "../constants/block.ts";
+import type { TopLevelContent } from "mdast";
+import { BlockKind } from "../constants/block.ts";
 import type { BlockNodeBuilder } from "../fragment/block.ts";
+import type { SourceSpan } from "../source-view.ts";
 import type { BlockLines } from "./lines.ts";
 import type { BlockScanContext } from "./scanner.ts";
 import type { BlockTokenStream } from "./tokens.ts";
+
+// Completed leaves have no children whose positions or references still need projection.
+export interface DirectNode extends SourceSpan {
+  node: Exclude<TopLevelContent, { children: unknown }>;
+  nextLine: number;
+}
 
 export type BlockStart = (
   source: string,
@@ -12,7 +19,7 @@ export type BlockStart = (
   start: number,
   contentOffset: number,
   context: BlockScanContext,
-) => number | undefined;
+) => number | DirectNode | undefined;
 
 type BlockInterrupt = (
   source: string,
@@ -29,7 +36,7 @@ type LazyContinuationUnwrapper = (
   target: BlockLines,
 ) => boolean;
 
-interface BlockStartRegistration {
+export interface BlockStartRegistration {
   codes: readonly number[];
   // A container owns the inverse view needed to test its lazy paragraph continuation.
   unwrapLazyContinuation?: LazyContinuationUnwrapper;
@@ -103,6 +110,13 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
   const interrupts: BlockInterrupt[][] = [];
   const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
   const starts: BlockStart[][] = [];
+
+  builds[BlockKind.DirectNode] = (token, context) => {
+    const tokens = context.structure.tokens;
+    const node = tokens.node(token)!;
+    node.position = context.locator.positionAt(tokens.start(token), tokens.end(token));
+    return node;
+  };
 
   for (const feature of features) {
     if (feature.builds) {

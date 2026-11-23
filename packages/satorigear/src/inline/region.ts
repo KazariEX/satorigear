@@ -185,7 +185,12 @@ export class InlineRegionState {
         ? previousRegionsByBlock[blockIndex]
         : void 0;
       const tokenStart = structure.records[blockIndex].tokenStart;
-      const tokenEnd = tokenStart + tokens.nodeLength(tokenStart);
+      const blockLength = tokens.nodeLength(tokenStart);
+      if (blockLength === 1) {
+        regionsByBlock.push(emptyArray);
+        continue;
+      }
+      const tokenEnd = tokenStart + blockLength;
       const regions: InlineRegion[] = [];
       // Only frames that directly own inline chunks contribute regions.
       for (let token = tokenStart; token < tokenEnd; token++) {

@@ -1,6 +1,10 @@
+import type { Root, TopLevelContent } from "mdast";
+import { BlockKind } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
+import { type BlockBuildContext, buildBlockNode } from "../fragment/block.ts";
 import { BlockLines, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
+import type { InlineProfile } from "../inline/profile.ts";
 import type { SourceLocator, SourceSpan } from "../source-view.ts";
 import type { BlockProfile } from "./profile.ts";
 
@@ -52,6 +56,8 @@ function sameShiftedBlock(
   }
   return true;
 }
+
+type RootSequence = (TopLevelContent | number)[];
 
 export class BlockScanContext {
   #lineViews: BlockLines[] = [];
@@ -123,6 +129,7 @@ export class BlockScanContext {
     lines: BlockLines,
     tokens: BlockTokenStream,
     visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
+    sequence?: RootSequence,
   ): void {
     const { starts, fallback } = this.#profile;
     this.#scanDepth++;
@@ -151,14 +158,44 @@ export class BlockScanContext {
         }
         const lineStart = index;
         const tokenStart = tokens.length;
-        const end = (
+        const result = (
           starts[code + 1]?.(source, lines, tokens, index, contentOffset, this) ??
           fallback?.(source, lines, tokens, index, contentOffset, this)
         );
-        if (end === void 0) {
+        if (result === void 0) {
           throw new Error("No block fallback");
         }
-        index = end;
+        if (typeof result === "number") {
+          index = result;
+          sequence?.push(tokenStart);
+        }
+        else {
+          index = result.nextLine;
+          if (sequence) {
+            let last = index - 1;
+            // An indented block may consume blank rows beyond its semantic end.
+            while (lines.start(last) > result.end) {
+              last--;
+            }
+            const afterEnding = result.end > lines.end(last) && result.end === lines.next(last);
+            result.node.position = {
+              start: {
+                line: lineStart + 1,
+                column: result.start - lines.start(lineStart) + 1,
+                offset: result.start,
+              },
+              end: {
+                line: last + (afterEnding ? 2 : 1),
+                column: afterEnding ? 1 : result.end - lines.start(last) + 1,
+                offset: result.end,
+              },
+            };
+            sequence.push(result.node);
+          }
+          else {
+            tokens.push(BlockKind.DirectNode, result.start, result.end, result);
+          }
+        }
         if (visit?.(lineStart, index, tokenStart, tokens.length)) {
           return;
         }
@@ -185,19 +222,50 @@ export class BlockScanner {
     this.builds = profile.builds;
   }
 
-  scan(source: string, indexed?: boolean): void {
+  parse(source: string, profile: InlineProfile): Root {
+    this.#reset(source);
+    const children: RootSequence = [];
+    this.#context.scanBlockLines(source, this.#lines, this.#tokens, void 0, children);
+    const lines = this.#lines;
+    const locator = lines.locator();
+    const context: BlockBuildContext = {
+      inlineContext: void 0,
+      cursor: void 0,
+      locator,
+      structure: this,
+      profile,
+      source,
+    };
+
+    const start = locator.locationAt(0);
+    for (let index = 0; index < children.length; index++) {
+      const entry = children[index];
+      if (typeof entry === "number") {
+        children[index] = buildBlockNode(entry, context);
+      }
+      else {
+        lines.advanceToLine(entry.position!.end.line);
+      }
+    }
+
+    return {
+      type: "root",
+      children: children as TopLevelContent[],
+      position: { start, end: locator.locationAt(source.length) },
+    };
+  }
+
+  #reset(source: string): void {
+    this.#context.resetLookahead();
+    this.#lines.scan(source, true);
+    this.#tokens.reset();
+  }
+
+  scan(source: string): void {
+    this.#reset(source);
     const context = this.#context;
     const lines = this.#lines;
     const tokens = this.#tokens;
-    context.resetLookahead();
-    lines.scan(source, true);
-    tokens.reset();
-
-    if (!indexed) {
-      context.scanBlockLines(source, lines, tokens);
-      return;
-    }
-
     const records = this.#records;
     let recordIndex = 0;
 
