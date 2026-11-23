@@ -167,54 +167,6 @@ export class BlockTokenStream implements DefinitionLookup {
     return this.#fields[index * BlockTokenField.Stride | BlockTokenField.Length];
   }
 
-  equalsAfterShift(
-    index: number,
-    next: BlockTokenStream,
-    nextIndex: number,
-    delta: number,
-    damageStart?: number,
-    damageEnd?: number,
-  ): boolean {
-    const start = this.start(index);
-    const end = this.end(index);
-    const nextStart = next.start(nextIndex);
-    const nextEnd = next.end(nextIndex);
-    if (
-      this.kind(index) !== next.kind(nextIndex) ||
-      start + delta !== nextStart ||
-      end + delta !== nextEnd
-    ) {
-      return false;
-    }
-    const metadata = this.#metadata?.[index];
-    const nextMetadata = next.#metadata?.[nextIndex];
-    if (metadata !== nextMetadata) {
-      if (metadata?.definitionKey !== nextMetadata?.definitionKey) {
-        return false;
-      }
-      const value = metadata?.value;
-      const nextValue = nextMetadata?.value;
-      if (
-        value !== nextValue && (
-          value === null || typeof value !== "object" ||
-          nextValue === null || typeof nextValue !== "object"
-        )
-      ) {
-        return false;
-      }
-      const text = metadata?.text;
-      const nextText = nextMetadata?.text;
-      if (text !== void 0 || nextText !== void 0) {
-        return text === nextText;
-      }
-    }
-    // Without a damage range, the caller has already proved the covered source stable.
-    if (damageStart === void 0 || damageEnd === void 0) {
-      return true;
-    }
-    return start === end || end <= damageStart || start >= damageEnd;
-  }
-
   replace(
     start: number,
     end: number,
@@ -232,7 +184,7 @@ export class BlockTokenStream implements DefinitionLookup {
     let stablePrefixLength = 0;
     while (
       stablePrefixLength < overlapLength &&
-      this.equalsAfterShift(
+      this.#matchesAfterShift(
         start + stablePrefixLength,
         replacement,
         stablePrefixLength,
@@ -246,7 +198,7 @@ export class BlockTokenStream implements DefinitionLookup {
     let stableSuffixLength = 0;
     while (
       stableSuffixLength < overlapLength - stablePrefixLength &&
-      this.equalsAfterShift(
+      this.#matchesAfterShift(
         end - 1 - stableSuffixLength,
         replacement,
         replacementLength - 1 - stableSuffixLength,
@@ -343,18 +295,48 @@ export class BlockTokenStream implements DefinitionLookup {
     return change;
   }
 
-  truncate(length: number): void {
-    this.#fieldLength = length * BlockTokenField.Stride;
-    const metadata = this.#metadata;
-    if (metadata) {
-      for (let index = length; index < metadata.length; index++) {
-        const value = metadata[index];
-        if (value) {
-          this.#updateDefinitionCount(value.definitionKey, -1, false);
-        }
-      }
-      metadata.length = Math.min(metadata.length, length);
+  #matchesAfterShift(
+    index: number,
+    next: BlockTokenStream,
+    nextIndex: number,
+    delta: number,
+    damageStart: number,
+    damageEnd: number,
+  ): boolean {
+    const start = this.start(index);
+    const end = this.end(index);
+    const nextStart = next.start(nextIndex);
+    const nextEnd = next.end(nextIndex);
+    if (
+      this.kind(index) !== next.kind(nextIndex) ||
+      start + delta !== nextStart ||
+      end + delta !== nextEnd
+    ) {
+      return false;
     }
+    const metadata = this.#metadata?.[index];
+    const nextMetadata = next.#metadata?.[nextIndex];
+    if (metadata !== nextMetadata) {
+      if (metadata?.definitionKey !== nextMetadata?.definitionKey) {
+        return false;
+      }
+      const value = metadata?.value;
+      const nextValue = nextMetadata?.value;
+      if (
+        value !== nextValue && (
+          value === null || typeof value !== "object" ||
+          nextValue === null || typeof nextValue !== "object"
+        )
+      ) {
+        return false;
+      }
+      const text = metadata?.text;
+      const nextText = nextMetadata?.text;
+      if (text !== void 0 || nextText !== void 0) {
+        return text === nextText;
+      }
+    }
+    return start === end || end <= damageStart || start >= damageEnd;
   }
 
   kind(index: number): BlockKind {

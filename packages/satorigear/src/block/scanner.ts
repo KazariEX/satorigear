@@ -30,33 +30,6 @@ export interface BlockRecord extends SourceSpan {
   tokenStart: number;
 }
 
-function sameShiftedBlock(
-  previous: BlockTokenStream,
-  record: BlockRecord,
-  next: BlockTokenStream,
-  tokenStart: number,
-  tokenEnd: number,
-  delta: number,
-): boolean {
-  const length = previous.nodeLength(record.tokenStart);
-  if (length !== tokenEnd - tokenStart) {
-    return false;
-  }
-  // Convergence only considers the unchanged source suffix, so matching geometry
-  // also proves that each token covers the same text after the shift.
-  for (let index = 0; index < length; index++) {
-    if (!previous.equalsAfterShift(
-      record.tokenStart + index,
-      next,
-      tokenStart + index,
-      delta,
-    )) {
-      return false;
-    }
-  }
-  return true;
-}
-
 type RootSequence = (TopLevelContent | number)[];
 
 export class BlockScanContext {
@@ -128,7 +101,8 @@ export class BlockScanContext {
     source: string,
     lines: BlockLines,
     tokens: BlockTokenStream,
-    visit?: (lineStart: number, lineEnd: number, tokenStart: number, tokenEnd: number) => true | void,
+    visit?: (lineStart: number, lineEnd: number, tokenStart: number) => void,
+    stopsBefore?: (start: number) => boolean,
     sequence?: RootSequence,
   ): void {
     const { starts, fallback } = this.#profile;
@@ -151,6 +125,9 @@ export class BlockScanContext {
         if (contentOffset === lineEnd) {
           index++;
           continue;
+        }
+        if (stopsBefore?.(lines.start(index))) {
+          return;
         }
         if (columns > 3) {
           contentOffset = -1;
@@ -196,9 +173,7 @@ export class BlockScanContext {
             tokens.push(BlockKind.DirectNode, result.start, result.end, result);
           }
         }
-        if (visit?.(lineStart, index, tokenStart, tokens.length)) {
-          return;
-        }
+        visit?.(lineStart, index, tokenStart);
       }
     }
     finally {
@@ -225,7 +200,7 @@ export class BlockScanner {
   parse(source: string, profile: InlineProfile): Root {
     this.#reset(source);
     const children: RootSequence = [];
-    this.#context.scanBlockLines(source, this.#lines, this.#tokens, void 0, children);
+    this.#context.scanBlockLines(source, this.#lines, this.#tokens, void 0, void 0, children);
     const lines = this.#lines;
     const locator = lines.locator();
     const context: BlockBuildContext = {
@@ -332,62 +307,49 @@ export class BlockScanner {
     const stableBlockCount = Math.max(0, restartIndex);
     const oldTokenStart = restartRecord?.tokenStart ?? 0;
 
-    // 2. Rescan from that boundary until block geometry and shifted tokens match an old record.
+    // 2. Rescan from that boundary until the unchanged suffix starts at a shared root block boundary.
     const replacement = new BlockTokenStream();
     const rescannedRecords: BlockRecord[] = [];
     const scanLines = scanLineStart === 0 ? nextLines : nextLines.view(scanLineStart);
-    let convergedIndex = -1;
-    let convergenceIndex = affectedIndex;
+    let oldRecordEnd = previousRecords.length;
+    let candidate = affectedIndex;
     context.resetLookahead();
-    context.scanBlockLines(nextSource, scanLines, replacement, (
-      lineStart,
-      lineEnd,
-      tokenStart,
-      tokenEnd,
-    ) => {
-      const blockStart = scanLines.start(lineStart);
-      const blockEnd = scanLines.next(lineEnd - 1);
-      const dependencyEnd = Math.max(blockEnd, context.consumeLookahead());
-      if (blockEnd >= changedSpan.end) {
-        const candidateStart = Math.max(oldChangedEnd, blockStart - offsetDelta);
-        while (
-          convergenceIndex < previousRecords.length &&
-          previousRecords[convergenceIndex].start < candidateStart
-        ) {
-          convergenceIndex++;
+    context.scanBlockLines(
+      nextSource,
+      scanLines,
+      replacement,
+      (lineStart, lineEnd, tokenStart) => {
+        const end = scanLines.next(lineEnd - 1);
+        rescannedRecords.push({
+          start: scanLines.start(lineStart),
+          end,
+          dependencyEnd: Math.max(end, context.consumeLookahead()),
+          tokenStart: oldTokenStart + tokenStart,
+        });
+      },
+      (start) => {
+        if (start < changedSpan.end) {
+          return false;
         }
-        const candidateRecord = previousRecords[convergenceIndex];
-        if (
-          candidateRecord?.start + offsetDelta === blockStart &&
-          candidateRecord.end + offsetDelta === blockEnd &&
-          candidateRecord.dependencyEnd + offsetDelta === dependencyEnd &&
-          sameShiftedBlock(
-            this.#tokens,
-            candidateRecord,
-            replacement,
-            tokenStart,
-            tokenEnd,
-            offsetDelta,
-          )
-        ) {
-          replacement.truncate(tokenStart);
-          convergedIndex = convergenceIndex;
-          return true;
+        const oldStart = start - offsetDelta;
+        // Moving a block across offset zero can change frontmatter recognition.
+        if (offsetDelta && (start === 0 || oldStart === 0) && this.builds[BlockKind.Frontmatter]) {
+          return false;
         }
-      }
-      rescannedRecords.push({
-        start: blockStart,
-        end: blockEnd,
-        dependencyEnd,
-        tokenStart: oldTokenStart + tokenStart,
-      });
-    });
+        while (candidate < previousRecords.length && previousRecords[candidate].start < oldStart) {
+          candidate++;
+        }
+        if (previousRecords[candidate]?.start !== oldStart) {
+          return false;
+        }
+        oldRecordEnd = candidate;
+        return true;
+      },
+    );
 
     // 3. Replace the rescanned token window, then map the narrowed token damage to record ranges.
     const oldTokenLength = this.#tokens.length;
-    const oldTokenEnd = convergedIndex < 0
-      ? oldTokenLength
-      : previousRecords[convergedIndex].tokenStart;
+    const oldTokenEnd = previousRecords[oldRecordEnd]?.tokenStart ?? oldTokenLength;
     const tokenChange: BlockTokenChange = this.#tokens.replace(
       oldTokenStart,
       oldTokenEnd,
@@ -405,24 +367,18 @@ export class BlockScanner {
     ) {
       oldRecordStart++;
     }
-    // A matching token suffix may have moved inside a rebuilt ancestor. Only
-    // whole-block convergence proves that its former root record can be retained.
-    const oldRecordEnd = convergedIndex < 0 ? previousRecords.length : convergedIndex;
-
     const nextRecords = previousRecords.slice(0, stableBlockCount);
     nextRecords.push(...rescannedRecords);
     const shiftSuffix = offsetDelta !== 0 || tokenDelta !== 0;
-    if (convergedIndex >= 0) {
-      for (let index = convergedIndex; index < previousRecords.length; index++) {
-        const record = previousRecords[index];
-        if (shiftSuffix) {
-          record.start += offsetDelta;
-          record.end += offsetDelta;
-          record.dependencyEnd += offsetDelta;
-          record.tokenStart += tokenDelta;
-        }
-        nextRecords.push(record);
+    for (let index = oldRecordEnd; index < previousRecords.length; index++) {
+      const record = previousRecords[index];
+      if (shiftSuffix) {
+        record.start += offsetDelta;
+        record.end += offsetDelta;
+        record.dependencyEnd += offsetDelta;
+        record.tokenStart += tokenDelta;
       }
+      nextRecords.push(record);
     }
     const newRecordEnd = oldRecordEnd + nextRecords.length - previousRecords.length;
 

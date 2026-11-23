@@ -221,6 +221,19 @@ describe("markdown document", () => {
     });
   });
 
+  it("recognizes frontmatter again when its fence returns to the first line", () => {
+    const parser = createParser({ features: { frontmatter: true } });
+    const document = parser.createDocument("---\ntitle: example\n---");
+
+    document.edit([{ start: 0, end: 0, text: "\n" }]);
+    expect(document.tree.children[0].type).toBe("thematicBreak");
+    expect(document.tree).toEqual(parser.parse(document.source));
+
+    document.edit([{ start: 0, end: 1, text: "" }]);
+    expect(document.tree.children[0].type).toBe("yaml");
+    expect(document.tree).toEqual(parser.parse(document.source));
+  });
+
   it("resolves a forward reference across a code block", () => {
     const source = "[label][x]\n\n    code\n\n[x]: /url";
     const tree = parser.parse(source);
