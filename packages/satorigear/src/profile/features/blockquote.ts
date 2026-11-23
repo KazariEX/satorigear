@@ -62,7 +62,7 @@ export const feature: SyntaxFeature = {
         codes: [
           Character.GreaterThanSign,
         ],
-        unwrapLazyContinuation(source, lines, index, contentOffset, target) {
+        unwrap(source, lines, index, contentOffset, target) {
           const marker = blockQuoteOffset(source, lines, index, contentOffset);
           if (!marker) {
             return false;

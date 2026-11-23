@@ -54,7 +54,7 @@ export class BlockScanContext {
         return false;
       }
       let unwrapped = false;
-      for (const unwrap of this.#profile.lazyContinuationUnwrappers) {
+      for (const unwrap of this.#profile.unwraps) {
         unwrapped = unwrap(source, contentLines, contentIndex, contentOffset, this.#unwrappedLine);
         if (unwrapped) {
           break;

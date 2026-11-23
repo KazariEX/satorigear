@@ -408,7 +408,7 @@ export function feature(taskList = false): SyntaxFeature {
             Character.DigitEight,
             Character.DigitNine,
           ],
-          unwrapLazyContinuation(source, lines, index, contentOffset, target) {
+          unwrap(source, lines, index, contentOffset, target) {
             const marker = listMarkerAt(source, lines, index, contentOffset);
             if (!marker) {
               return false;

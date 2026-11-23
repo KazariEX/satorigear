@@ -28,7 +28,7 @@ type BlockInterrupt = (
   contentOffset: number,
 ) => boolean;
 
-type LazyContinuationUnwrapper = (
+type BlockUnwrap = (
   source: string,
   lines: BlockLines,
   index: number,
@@ -39,7 +39,7 @@ type LazyContinuationUnwrapper = (
 export interface BlockStartRegistration {
   codes: readonly number[];
   // A container owns the inverse view needed to test its lazy paragraph continuation.
-  unwrapLazyContinuation?: LazyContinuationUnwrapper;
+  unwrap?: BlockUnwrap;
   interrupt?: BlockInterrupt;
   start: BlockStart;
 }
@@ -66,7 +66,7 @@ export interface BlockProfile {
   starts: readonly (BlockStart | undefined)[];
   fallback: BlockStart | undefined;
   interrupt: BlockInterrupt;
-  lazyContinuationUnwrappers: readonly LazyContinuationUnwrapper[];
+  unwraps: readonly BlockUnwrap[];
 }
 
 function composeStarts(starts: readonly BlockStart[]): BlockStart | undefined {
@@ -108,7 +108,7 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
   const decorators: BlockDecoratorRegistration[] = [];
   const fallbacks: BlockStart[] = [];
   const interrupts: BlockInterrupt[][] = [];
-  const lazyContinuationUnwrappers: LazyContinuationUnwrapper[] = [];
+  const unwraps: BlockUnwrap[] = [];
   const starts: BlockStart[][] = [];
 
   builds[BlockKind.DirectNode] = (token, context) => {
@@ -136,8 +136,8 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     }
     if (feature.starts) {
       for (const registration of feature.starts) {
-        if (registration.unwrapLazyContinuation) {
-          lazyContinuationUnwrappers.push(registration.unwrapLazyContinuation);
+        if (registration.unwrap) {
+          unwraps.push(registration.unwrap);
         }
         for (const code of registration.codes) {
           (starts[code] ??= []).push(registration.start);
@@ -169,6 +169,6 @@ export function compileBlockProfile(features: readonly BlockFeature[]): BlockPro
     }),
     fallback: composeStarts(fallbacks),
     interrupt: composeInterrupts(interrupts),
-    lazyContinuationUnwrappers,
+    unwraps,
   };
 }

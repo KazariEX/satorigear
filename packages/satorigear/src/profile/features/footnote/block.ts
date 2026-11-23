@@ -71,7 +71,7 @@ export const blockStarts: BlockFeature["starts"] = [
     codes: [
       Character.LeftSquareBracket,
     ],
-    unwrapLazyContinuation(source, lines, index, contentOffset, target) {
+    unwrap(source, lines, index, contentOffset, target) {
       const match = definitionAt(source, lines, index, contentOffset);
       if (!match) {
         return false;
