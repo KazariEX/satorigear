@@ -47,7 +47,6 @@ export const enum BlockKind {
 
   DirectNode = BlockRole.Leaf,
   LinkDefinition,
-  HtmlBlock,
   Frontmatter,
   BlockComponentYamlProps,
   TableAlignNone,

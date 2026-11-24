@@ -1,7 +1,5 @@
 import { htmlBlockNames, htmlRawNames } from "micromark-util-html-tag-name";
 import { type BlockLines, isBlankLine } from "../../block/lines.ts";
-import { appendLogicalToken } from "../../block/tokens.ts";
-import { BlockKind } from "../../constants/block.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
 import { matchInlinePatternEnd } from "../../inline/tokenizer.ts";
@@ -70,32 +68,6 @@ function htmlStartAt(
 
 export const feature: SyntaxFeature = {
   block: {
-    builds: [
-      {
-        token: BlockKind.HtmlBlock,
-        build(tokenStart, context) {
-          const tokens = context.structure.tokens;
-          const offset = tokens.start(tokenStart);
-          const end = tokens.end(tokenStart);
-          // The HTML scanner records termination state on every emitted block token.
-          const unterminated = tokens.value<boolean>(tokenStart)!;
-          let html = context.locator.normalizeLineEndings(
-            tokens.text(context.source, tokenStart),
-          );
-          if (!unterminated && html.endsWith("\n")) {
-            html = html.slice(0, -1);
-          }
-          return {
-            type: "html",
-            value: html,
-            position: context.locator.positionAt(
-              offset,
-              html.endsWith("\n") ? end : tokens.contentEnd(context.source, tokenStart),
-            ),
-          };
-        },
-      },
-    ],
     starts: [
       {
         codes: [
@@ -131,8 +103,18 @@ export const feature: SyntaxFeature = {
               end++;
             }
           }
-          appendLogicalToken(source, lines, tokens, BlockKind.HtmlBlock, start, end, unterminated);
-          return end;
+          const value = lines.text(source, start, end, unterminated);
+          const last = end - 1;
+          return {
+            node: {
+              type: "html",
+              value,
+              position: void 0,
+            },
+            nextLine: end,
+            start: lines.start(start),
+            end: value.endsWith("\n") ? lines.next(last) : lines.end(last),
+          };
         },
       },
     ],

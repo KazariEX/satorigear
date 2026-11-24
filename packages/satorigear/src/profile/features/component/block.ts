@@ -1,16 +1,16 @@
 import type { Paragraph } from "mdast";
 import { type BlockLines, lineIndentOffset, trimLineWhitespaceStart } from "../../../block/lines.ts";
-import { appendLogicalToken, type BlockTokenStream } from "../../../block/tokens.ts";
 import { BlockKind } from "../../../constants/block.ts";
 import { Character } from "../../../constants/character.ts";
 import { type BlockNodeBuilder, buildBlockChildren } from "../../../fragment/block.ts";
 import { buildInlineFragment } from "../../../fragment/inline.ts";
 import { attributesEnd, parseAttributes } from "../attributes/shared.ts";
 import { codeFenceClosingLine } from "../code.ts";
-import { buildYamlBlock } from "../frontmatter.ts";
+import { appendYamlBlock, buildYamlBlock } from "../frontmatter.ts";
 import { componentNameEnd, normalizeComponentName } from "./shared.ts";
 import type { BlockFeature, BlockStart } from "../../../block/profile.ts";
 import type { BlockScanContext } from "../../../block/scanner.ts";
+import type { BlockTokenStream } from "../../../block/tokens.ts";
 import type { Attributes } from "../attributes/types.ts";
 
 interface BlockOpening {
@@ -269,7 +269,7 @@ function emitComponentBody(
   let cursor = start;
   const yamlEnd = cursor < end ? yamlPropsEnd(source, lines, cursor, end) : void 0;
   if (yamlEnd !== void 0) {
-    appendLogicalToken(source, lines, tokens, BlockKind.BlockComponentYamlProps, cursor, yamlEnd);
+    appendYamlBlock(source, lines, tokens, BlockKind.BlockComponentYamlProps, cursor, yamlEnd);
     cursor = yamlEnd;
   }
   let slot = nextSlot(source, lines, cursor, end);

@@ -328,6 +328,28 @@ export class BlockLines implements SourceLocator {
     return this.#sourceLength > 0;
   }
 
+  /** Reads a range of logical lines with normalized line endings. */
+  text(source: string, start: number, end: number, includesEnding = false): string {
+    if (start >= end) {
+      return "";
+    }
+    const last = end - 1;
+    if (this.physicallyContiguous()) {
+      return this.normalizeLineEndings(
+        source.slice(this.start(start), includesEnding ? this.next(last) : this.end(last)),
+      );
+    }
+    const parts: string[] = [];
+    for (let line = start; line < end; line++) {
+      const lineEnd = this.end(line);
+      parts.push(" ".repeat(this.prefixColumns(line)) + source.slice(this.start(line), lineEnd));
+      if ((line < last || includesEnding) && lineEnd < this.next(line)) {
+        parts.push("\n");
+      }
+    }
+    return parts.join("");
+  }
+
   push(
     start: number,
     end: number,

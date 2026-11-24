@@ -1,7 +1,6 @@
 import { BlockKind, BlockRole } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { emptySet } from "../primitives.ts";
-import type { BlockLines } from "./lines.ts";
 import type { DirectNode } from "./profile.ts";
 
 const enum BlockTokenField {
@@ -19,7 +18,6 @@ const enum BlockTokenCapacity {
 interface BlockTokenMeta {
   node?: DirectNode["node"];
   definitionKey?: string;
-  text?: string;
   value?: unknown;
 }
 
@@ -330,11 +328,6 @@ export class BlockTokenStream implements DefinitionLookup {
       ) {
         return false;
       }
-      const text = metadata?.text;
-      const nextText = nextMetadata?.text;
-      if (text !== void 0 || nextText !== void 0) {
-        return text === nextText;
-      }
     }
     return start === end || end <= damageStart || start >= damageEnd;
   }
@@ -383,7 +376,7 @@ export class BlockTokenStream implements DefinitionLookup {
   }
 
   text(source: string, index: number): string {
-    return this.#metadata?.[index]?.text ?? source.slice(this.start(index), this.end(index));
+    return source.slice(this.start(index), this.end(index));
   }
 
   node(index: number): DirectNode["node"] | undefined {
@@ -441,57 +434,4 @@ export class BlockTokenStream implements DefinitionLookup {
     fields.set(this.#fields.subarray(0, this.#fieldLength));
     this.#fields = fields;
   }
-}
-
-export function appendLogicalToken(
-  source: string,
-  lines: BlockLines,
-  tokens: BlockTokenStream,
-  kind: BlockKind,
-  start: number,
-  end: number,
-  value?: unknown,
-): void {
-  const count = end - start;
-  const tokenStart = lines.start(start);
-  const lastLine = end - 1;
-  const tokenEnd = lines.next(lastLine);
-  let canSliceSource = lines.physicallyContiguous();
-  if (!canSliceSource) {
-    const previous = source.charCodeAt(tokenStart - 1);
-    canSliceSource = (
-      // Tab overshoot is represented as virtual leading columns absent from the source slice.
-      lines.prefixColumns(start) === 0 && (
-        // A derived first line may begin inside its physical line after a container marker.
-        tokenStart === 0 || previous === Character.LineFeed || previous === Character.CarriageReturn
-      )
-    );
-    let previousLineEnd = lines.next(start);
-    for (let line = start + 1; canSliceSource && line < end; line++) {
-      // Continuity proves later lines begin at physical boundaries without rechecking source text.
-      if (lines.prefixColumns(line) !== 0 || lines.start(line) !== previousLineEnd) {
-        canSliceSource = false;
-        break;
-      }
-      previousLineEnd = lines.next(line);
-    }
-  }
-
-  let text: string | undefined;
-  if (!canSliceSource) {
-    const logicalLines = new Array<string>(count);
-    for (let index = 0; index < count; index++) {
-      const line = start + index;
-      logicalLines[index] = " ".repeat(lines.prefixColumns(line)) + source.slice(lines.start(line), lines.next(line));
-    }
-    text = logicalLines.join("");
-  }
-  tokens.push(
-    kind,
-    tokenStart,
-    tokenEnd,
-    text === void 0 && value === void 0
-      ? void 0
-      : { text, value },
-  );
 }

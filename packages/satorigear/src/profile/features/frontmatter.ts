@@ -1,8 +1,8 @@
 import type { Yaml } from "mdast";
 import { type BlockLines, trimLineWhitespaceStart } from "../../block/lines.ts";
-import { appendLogicalToken } from "../../block/tokens.ts";
 import { BlockKind } from "../../constants/block.ts";
-import { type BlockNodeBuilder, leafBlockPosition } from "../../fragment/block.ts";
+import type { BlockTokenStream } from "../../block/tokens.ts";
+import type { BlockNodeBuilder } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
 export type FrontmatterMarker = "+" | "-";
@@ -29,18 +29,30 @@ function frontmatterFenceAt(
   return trimLineWhitespaceStart(source, start + 3, end) === end;
 }
 
+export function appendYamlBlock(
+  source: string,
+  lines: BlockLines,
+  tokens: BlockTokenStream,
+  kind: BlockKind,
+  start: number,
+  end: number,
+): void {
+  tokens.push(
+    kind,
+    lines.start(start),
+    lines.end(end - 1),
+    {
+      value: lines.text(source, start + 1, end - 1),
+    },
+  );
+}
+
 export const buildYamlBlock: BlockNodeBuilder<Yaml> = (tokenStart, context) => {
   const tokens = context.structure.tokens;
-  const text = context.locator.normalizeLineEndings(
-    tokens.text(context.source, tokenStart),
-  );
-  const contentStart = text.indexOf("\n") + 1;
-  const closingEnd = text.endsWith("\n") ? text.length - 1 : text.length;
-  const closingStart = text.lastIndexOf("\n", closingEnd - 1) + 1;
   return {
     type: "yaml",
-    value: text.slice(contentStart, Math.max(contentStart, closingStart - 1)),
-    position: leafBlockPosition(tokenStart, context),
+    value: tokens.value<string>(tokenStart)!,
+    position: context.locator.positionAt(tokens.start(tokenStart), tokens.end(tokenStart)),
   };
 };
 
@@ -55,14 +67,16 @@ export function feature(marker: FrontmatterMarker): SyntaxFeature {
       ],
       starts: [
         {
-          codes: [marker.charCodeAt(0)],
+          codes: [
+            marker.charCodeAt(0),
+          ],
           start(source, lines, tokens, start, contentOffset, context) {
             if (lines.start(start) !== 0 || !frontmatterFenceAt(source, lines, start, marker)) {
               return;
             }
             for (let end = start + 1; end < lines.length; end++) {
               if (frontmatterFenceAt(source, lines, end, marker)) {
-                appendLogicalToken(source, lines, tokens, BlockKind.Frontmatter, start, end + 1);
+                appendYamlBlock(source, lines, tokens, BlockKind.Frontmatter, start, end + 1);
                 return end + 1;
               }
             }
