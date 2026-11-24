@@ -155,7 +155,6 @@ function canPair(opener: DelimiterRun, closer: DelimiterRun): boolean {
 export class DelimiterStack {
   readonly #replacements: DelimiterReplacement[][] = [];
   readonly #runs: DelimiterRun[] = [];
-  #length = 0;
 
   add(source: string, tokens: InlineTokenStream, tokenIndex: number, config: CompiledDelimiterConfig): void {
     const offset = inlineTokenStart(tokens, tokenIndex);
@@ -170,7 +169,7 @@ export class DelimiterStack {
     }
     const delimiterFlanking = flanking(source, offset, end, config);
     if (delimiterFlanking !== 0) {
-      this.#runs[this.#length++] = {
+      this.#runs.push({
         tokenIndex,
         config,
         start: offset,
@@ -178,13 +177,13 @@ export class DelimiterStack {
         state: delimiterFlanking | (
           (length % DelimiterRunLayout.LengthModuloCount) << DelimiterRunLayout.OriginalLengthModuloShift
         ),
-      };
+      });
     }
   }
 
   close(tokens: number[], afterToken = -1): void {
     const runs = this.#runs;
-    const end = this.#length;
+    const end = runs.length;
     let start = 0;
     // Runs from a closed label form a suffix. Each run is removed when its scope closes.
     if (afterToken >= 0) {
@@ -244,7 +243,7 @@ export class DelimiterStack {
         top = candidate + (opener.remaining ? 1 : 0);
       }
     }
-    this.#length = start;
+    runs.length = start;
   }
 
   #record(tokens: number[], index: number, start: number, end: number, kind: InlineKind): void {
