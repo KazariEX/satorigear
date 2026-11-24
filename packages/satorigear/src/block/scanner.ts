@@ -109,9 +109,17 @@ export class BlockScanContext {
     this.#scanDepth++;
     try {
       for (let index = 0; index < lines.length;) {
+        let start = lines.start(index);
+        let lineEnd = lines.end(index);
+        while (start === lineEnd) {
+          if (++index === lines.length) {
+            return;
+          }
+          start = lines.start(index);
+          lineEnd = lines.end(index);
+        }
         // Scan leading whitespace once to distinguish blank lines from block indent.
-        let contentOffset = lines.start(index);
-        const lineEnd = lines.end(index);
+        let contentOffset = start;
         let columns = lines.prefixColumns(index);
         let code = Character.VirtualBlockIndent;
         while (contentOffset < lineEnd) {
@@ -126,7 +134,7 @@ export class BlockScanContext {
           index++;
           continue;
         }
-        if (stopsBefore?.(lines.start(index))) {
+        if (stopsBefore?.(start)) {
           return;
         }
         if (columns > 3) {
@@ -154,7 +162,7 @@ export class BlockScanContext {
             result.node.position = {
               start: {
                 line: lineStart + 1,
-                column: result.start - lines.start(lineStart) + 1,
+                column: result.start - start + 1,
                 offset: result.start,
               },
               end: {
