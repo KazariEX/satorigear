@@ -375,10 +375,6 @@ export class BlockTokenStream implements DefinitionLookup {
         : end;
   }
 
-  text(source: string, index: number): string {
-    return source.slice(this.start(index), this.end(index));
-  }
-
   node(index: number): DirectNode["node"] | undefined {
     return this.#metadata?.[index]?.node;
   }

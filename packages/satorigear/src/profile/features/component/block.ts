@@ -387,12 +387,14 @@ export const blockBuilds: BlockFeature["builds"] = [
         parsed = parseAttributes(context.source, tokens.start(openingToken));
         openingToken++;
       }
+      const nameEnd = tokens.end(tokenStart);
       const start = context.locator.locationAt(tokens.start(tokenStart));
       const children = buildBlockChildren(tokenStart, context);
-      const opening = tokens.text(context.source, tokenStart);
       return {
         type: "blockComponent",
-        name: normalizeComponentName(opening.slice(opening.lastIndexOf(":") + 1).trim()),
+        name: normalizeComponentName(
+          context.source.slice(context.source.lastIndexOf(":", nameEnd) + 1, nameEnd).trim(),
+        ),
         attributes: parsed ?? {},
         position: {
           start,
@@ -425,7 +427,9 @@ export const blockBuilds: BlockFeature["builds"] = [
         },
         attributes: {
           ...parsed,
-          name: normalizeComponentName(tokens.text(context.source, tokenStart).slice(1).trim()),
+          name: normalizeComponentName(
+            context.source.slice(tokens.start(tokenStart) + 1, tokens.end(tokenStart)).trim(),
+          ),
         },
       };
     },
