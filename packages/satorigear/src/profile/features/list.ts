@@ -47,50 +47,40 @@ function listMarkerAt(
     marker === Character.PlusSign ||
     marker === Character.Asterisk
   ) {
-    const following = source.charCodeAt(markerEnd);
-    if (
-      markerEnd !== lineEnd &&
-      following !== Character.Space &&
-      following !== Character.CharacterTabulation
-    ) {
-      return;
-    }
     delimiter = marker;
   }
   else {
     if (!isAsciiDigit(marker)) {
       return;
     }
-    let orderedEnd = contentOffset + 1;
-    // CommonMark caps ordered markers at nine digits, so the prefix is cheaper to scan than to slice and match.
     while (
-      orderedEnd < lineEnd &&
-      orderedEnd - contentOffset < 9 &&
-      isAsciiDigit(source.charCodeAt(orderedEnd))
+      markerEnd < lineEnd &&
+      markerEnd - contentOffset < 9 &&
+      isAsciiDigit(source.charCodeAt(markerEnd))
     ) {
-      orderedEnd++;
+      markerEnd++;
     }
-    delimiter = source.charCodeAt(orderedEnd);
+    delimiter = source.charCodeAt(markerEnd);
     if (delimiter !== Character.FullStop && delimiter !== Character.RightParenthesis) {
       return;
     }
-    if (orderedEnd + 1 < lineEnd) {
-      const code = source.charCodeAt(orderedEnd + 1);
-      if (code !== Character.Space && code !== Character.CharacterTabulation) {
-        return;
-      }
-    }
-    markerEnd = orderedEnd + 1;
+    markerEnd++;
   }
 
-  const indent = lines.prefixColumns(index) + contentOffset - lines.start(index);
-  const markerColumn = indent + markerEnd - contentOffset;
+  const padding = source.charCodeAt(markerEnd);
+  if (markerEnd < lineEnd && padding !== Character.Space && padding !== Character.CharacterTabulation) {
+    return;
+  }
+
+  const markerColumn = lines.prefixColumns(index) + markerEnd - lines.start(index);
   let contentIndent = markerColumn + 1;
   let contentStart = markerEnd;
   let hasContent = false;
   let prefixColumns = 0;
   if (markerEnd < lineEnd) {
-    let column = markerColumn;
+    const firstPaddingColumns = padding === Character.CharacterTabulation ? 4 - markerColumn % 4 : 1;
+    let column = markerColumn + firstPaddingColumns;
+    contentStart++;
     while (contentStart < lineEnd) {
       const code = source.charCodeAt(contentStart);
       if (code === Character.Space) {
@@ -113,9 +103,6 @@ function listMarkerAt(
       contentIndent = column;
     }
     else {
-      const firstPaddingColumns = source.charCodeAt(markerEnd) === Character.CharacterTabulation
-        ? 4 - (markerColumn % 4)
-        : 1;
       contentStart = markerEnd + 1;
       prefixColumns = firstPaddingColumns - 1;
     }
