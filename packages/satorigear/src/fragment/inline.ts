@@ -37,12 +37,10 @@ export interface InlineFragment {
 }
 
 interface InlineOutput extends InlineFragment {
-  // The cursor bounds source text that remains implicit between semantic tokens.
-  cursor: number;
+  // End of consumed text in view coordinates, including the pending text child.
+  end: number;
   // The text child is published immediately; only its source end remains pending.
   pendingText: Text | undefined;
-  // Keep the end in view coordinates until the merged text is complete.
-  pendingEnd: number;
   // Keep only the consecutive literal suffix; decoded whitespace is semantic text.
   pendingLiteral: string;
 }
@@ -102,13 +100,13 @@ function appendText(
     output.pendingText.value += value;
     output.pendingLiteral = literal ? output.pendingLiteral + value : "";
   }
-  output.pendingEnd = end;
+  output.end = end;
 }
 
 function finishText(context: InlineBuildContext, output: InlineOutput): void {
   if (output.pendingText) {
     output.pendingText.position!.end = context.locator.locationAt(
-      context.view.mapEnd(output.pendingEnd),
+      context.view.mapEnd(output.end),
     );
   }
 }
@@ -121,11 +119,11 @@ function trimTrailingText(context: InlineBuildContext, output: InlineOutput): vo
       // Removing an all-whitespace pending gap must also move its source start.
       if (removed === output.pendingText.value.length) {
         output.pendingText.position!.start = context.locator.locationAt(
-          context.view.mapOffset(output.pendingEnd),
+          context.view.mapOffset(output.end),
         );
       }
       output.pendingText.value = output.pendingText.value.slice(0, -removed);
-      output.pendingEnd -= removed;
+      output.end -= removed;
       output.pendingLiteral = "";
     }
   }
@@ -152,8 +150,8 @@ function appendTextRange(context: InlineBuildContext, output: InlineOutput, trim
     }
     const childStart = inlineTokenStart(context.tokens, index);
     if (kind < InlineRole.Leaf) {
-      if (childStart > output.cursor) {
-        appendGap(context, output, output.cursor, childStart);
+      if (childStart > output.end) {
+        appendGap(context, output, output.end, childStart);
       }
       const childEnd = inlineTokenEnd(context.tokens, index);
       if (kind === InlineKind.Newline) {
@@ -164,7 +162,6 @@ function appendTextRange(context: InlineBuildContext, output: InlineOutput, trim
         const build = context.builders[kind] as InlineTextBuilder;
         appendText(context, output, build(index, context), childStart, childEnd, kind === InlineKind.LiteralText);
       }
-      output.cursor = childEnd;
       index++;
       continue;
     }
@@ -180,14 +177,13 @@ function appendTextRange(context: InlineBuildContext, output: InlineOutput, trim
       // Applied decorators may mutate the exposed child list, so refresh the cached projection.
       const previous = output.children.at(-1);
       output.pendingText = previous?.type === "text" ? previous as Text : void 0;
-      output.pendingEnd = childEnd;
-      output.cursor = childEnd;
+      output.end = childEnd;
     }
     index++;
   }
   const contentEnd = index < end ? inlineTokenStart(context.tokens, index) : context.view.text.length;
-  if (contentEnd > output.cursor) {
-    appendGap(context, output, output.cursor, contentEnd);
+  if (contentEnd > output.end) {
+    appendGap(context, output, output.end, contentEnd);
   }
   // Trailing whitespace is trimmed only at the end of the outer fragment.
   if (trimEnd && index === end) {
@@ -197,7 +193,7 @@ function appendTextRange(context: InlineBuildContext, output: InlineOutput, trim
     }
   }
   finishText(context, output);
-  output.cursor = contentEnd;
+  output.end = contentEnd;
   context.tokenIndex = index;
 }
 
@@ -223,20 +219,19 @@ function buildFragment(context: InlineBuildContext, cursor: number, closer: Inli
     }
     if (kind < InlineRole.Leaf || kind >= InlineRole.Decorate) {
       if (output) {
-        output.cursor = cursor;
+        output.end = cursor;
         output.pendingText = void 0;
       }
       else {
         output = {
           children,
-          cursor,
+          end: cursor,
           pendingText: void 0,
-          pendingEnd: 0,
           pendingLiteral: "",
         };
       }
       appendTextRange(context, output, trimEnd);
-      cursor = output.cursor;
+      cursor = output.end;
       continue;
     }
     const startOffset = inlineTokenStart(tokens, index);
