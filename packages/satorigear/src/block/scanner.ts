@@ -144,7 +144,7 @@ export class BlockScanContext {
         }
         if (typeof result === "number") {
           index = result;
-          sequence?.push(tokenStart);
+          sequence?.push(lineStart);
         }
         else {
           index = result.nextLine;
@@ -209,13 +209,13 @@ export class BlockScanner {
     };
 
     const start = locator.locationAt(0);
+    let token = 0;
     for (let index = 0; index < children.length; index++) {
       const entry = children[index];
       if (typeof entry === "number") {
-        children[index] = buildBlockNode(entry, context);
-      }
-      else {
-        lines.advanceToLine(entry.position!.end.line);
+        lines.advanceToLine(entry);
+        children[index] = buildBlockNode(token, context);
+        token += this.#tokens.nodeLength(token);
       }
     }
 

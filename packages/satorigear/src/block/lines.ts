@@ -280,13 +280,13 @@ export class BlockLines implements SourceLocator {
       field += BlockLineField.Stride;
     }
     fields[field | BlockLineField.Start] = this.#sourceLength + 1;
-    this.advanceToLine(1);
+    this.advanceToLine(0);
     return this;
   }
 
-  /** Starts the next position lookup at this one-based line number. */
-  advanceToLine(line: number): void {
-    const field = (line - 1) * BlockLineField.Stride;
+  /** Starts the next position lookup at a known physical row. */
+  advanceToLine(index: number): void {
+    const field = index * BlockLineField.Stride;
     this.#locatorField = field;
     this.#locatorStart = this.#fields[field | BlockLineField.Start];
     this.#locatorNext = this.#fields[(field + BlockLineField.Stride) | BlockLineField.Start];
