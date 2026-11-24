@@ -47,20 +47,17 @@ export function buildBlockChildren<T extends object = RootContent>(
   // Avoid the capacity allocation overhead of push() on a single child node.
   let children: T[] | undefined;
   for (let child = tokenStart + 1; child < tokenEnd;) {
-    const length = tokens.nodeLength(child);
-    if (length > 0) {
-      const build = builds[tokens.kind(child)];
-      if (build) {
-        const node = build(child, context) as T;
-        if (children) {
-          children.push(node);
-        }
-        else {
-          children = [node];
-        }
+    const build = builds[tokens.kind(child)];
+    if (build) {
+      const node = build(child, context) as T;
+      if (children) {
+        children.push(node);
+      }
+      else {
+        children = [node];
       }
     }
-    child += length || 1;
+    child += tokens.nodeLength(child);
   }
   return children ?? [];
 }
