@@ -24,9 +24,9 @@ function skipWhitespace(source: string, start: number, end = source.length): num
   return start;
 }
 
-function linkDestinationEnd(source: string, start: number): number {
+function linkDestinationEnd(source: string, start: number, end: number): number {
   if (source.charCodeAt(start) === Character.LessThanSign) {
-    let end = start + 1;
+    end = start + 1;
     while (end < source.length) {
       const code = source.charCodeAt(end);
       if (code === Character.GreaterThanSign) {
@@ -45,43 +45,32 @@ function linkDestinationEnd(source: string, start: number): number {
   }
 
   let depth = 0;
-  let end = start;
-  let consumed = false;
   while (end < source.length) {
     const code = source.charCodeAt(end);
     if (code === Character.ReverseSolidus) {
       if (end + 1 >= source.length) {
         break;
       }
-      consumed = true;
-      end += 2;
-      continue;
+      end++;
     }
-    if (code === Character.LeftParenthesis) {
+    else if (code === Character.LeftParenthesis) {
       if (depth === 32) {
         return -1;
       }
       depth++;
-      consumed = true;
-      end++;
-      continue;
     }
-    if (code === Character.RightParenthesis) {
+    else if (code === Character.RightParenthesis) {
       if (depth === 0) {
         break;
       }
       depth--;
-      consumed = true;
-      end++;
-      continue;
     }
-    if (isSpaceTabOrLineEnding(code)) {
+    else if (isSpaceTabOrLineEnding(code)) {
       break;
     }
-    consumed = true;
     end++;
   }
-  return consumed && depth === 0 ? end : -1;
+  return end > start && depth === 0 ? end : -1;
 }
 
 function linkTitleEnd(source: string, start: number): number {
@@ -108,23 +97,25 @@ function linkTitleEnd(source: string, start: number): number {
   return -1;
 }
 
-const simpleLinkTail = /[^<\\()\t\n\r ]+\)/y;
+const destinationTail = /[^<\\()\t\n\r ]*\)?/y;
 
 function scanLinkTail(source: string, start: number, tokens: number[]): number {
   if (source.charCodeAt(start + 1) !== Character.LeftParenthesis) {
     return -1;
   }
-  simpleLinkTail.lastIndex = start + 2;
-  // Match an unescaped destination and its closing parenthesis together.
-  if (simpleLinkTail.test(source)) {
-    const end = simpleLinkTail.lastIndex;
-    appendInlineToken(tokens, InlineKind.LinkTail, start, end, end - start - 1);
-    return end;
+  const contentStart = start + 2;
+  // An ordinary destination consumes its closing parenthesis in the same match.
+  destinationTail.lastIndex = contentStart;
+  destinationTail.test(source);
+  const prefixEnd = destinationTail.lastIndex;
+  if (source.charCodeAt(prefixEnd - 1) === Character.RightParenthesis) {
+    appendInlineToken(tokens, InlineKind.LinkTail, start, prefixEnd);
+    return prefixEnd;
   }
-  let offset = skipWhitespace(source, start + 2);
+  let offset = skipWhitespace(source, contentStart);
   let destinationEnd = offset;
   if (source.charCodeAt(offset) !== Character.RightParenthesis) {
-    destinationEnd = linkDestinationEnd(source, offset);
+    destinationEnd = linkDestinationEnd(source, offset, Math.max(offset, prefixEnd));
     if (destinationEnd < 0) {
       return -1;
     }
@@ -203,28 +194,33 @@ function createBuildMedia(media: "image" | "link", resourceKind: "direct" | "ref
         };
     }
     : (openToken, closeToken, position, children, context) => {
-      let url = "";
+      const source = context.view.text;
+      const tokenStart = inlineTokenStart(context.tokens, closeToken);
+      const end = inlineTokenEnd(context.tokens, closeToken) - 1;
+      let start = tokenStart + 2;
+      let destinationEnd = end;
       let title: string | null = null;
 
-      const tokenStart = inlineTokenStart(context.tokens, closeToken);
-      let end = inlineTokenEnd(context.tokens, closeToken) - 1;
-      const resourceEnd = tokenStart + inlineTokenData(context.tokens, closeToken);
-      let start = skipWhitespace(context.view.text, tokenStart + 2, resourceEnd);
-      if (start !== end) {
-        let destinationEnd = resourceEnd;
-        if (context.view.text.charCodeAt(start) === Character.LessThanSign) {
+      // Only the general form records a separate end for its destination.
+      const endInTail = inlineTokenData(context.tokens, closeToken);
+      if (endInTail) {
+        const resourceEnd = tokenStart + endInTail;
+        start = skipWhitespace(source, start, resourceEnd);
+        destinationEnd = resourceEnd;
+        if (source.charCodeAt(start) === Character.LessThanSign) {
           start++;
           destinationEnd--;
         }
-        url = semanticText(context.view.text.slice(start, destinationEnd));
-        start = skipWhitespace(context.view.text, resourceEnd, end);
-        if (start < end) {
-          while (end > start && isSpaceTabOrLineEnding(context.view.text.charCodeAt(end - 1))) {
-            end--;
+        const titleStart = skipWhitespace(source, resourceEnd, end);
+        if (titleStart < end) {
+          let titleEnd = end;
+          while (isSpaceTabOrLineEnding(source.charCodeAt(titleEnd - 1))) {
+            titleEnd--;
           }
-          title = semanticText(context.view.text.slice(start + 1, end - 1));
+          title = semanticText(source.slice(titleStart + 1, titleEnd - 1));
         }
       }
+      const url = semanticText(source.slice(start, destinationEnd));
 
       return isImage
         ? {
