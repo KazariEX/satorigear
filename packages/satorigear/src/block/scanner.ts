@@ -149,11 +149,7 @@ export class BlockScanContext {
         else {
           index = result.nextLine;
           if (sequence) {
-            let last = index - 1;
-            // An indented block may consume blank rows beyond its semantic end.
-            while (lines.start(last) > result.end) {
-              last--;
-            }
+            const last = index - 1;
             const afterEnding = result.end > lines.end(last) && result.end === lines.next(last);
             result.node.position = {
               start: {

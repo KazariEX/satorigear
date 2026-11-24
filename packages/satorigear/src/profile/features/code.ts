@@ -85,22 +85,20 @@ export const feature: SyntaxFeature = {
           while (end < lines.length && lineIndentOffset(source, lines, end) < 0) {
             end++;
           }
-          // Trailing blanks are consumed outside the code span. Its opening line already has content.
-          let contentEnd = end;
-          while (contentEnd > start + 1 && isBlankLine(source, lines, contentEnd - 1)) {
-            contentEnd--;
+          while (end > start + 1 && isBlankLine(source, lines, end - 1)) {
+            end--;
           }
           return {
             node: {
               type: "code",
               lang: null,
               meta: null,
-              value: indentedContent(source, lines, start, contentEnd),
+              value: indentedContent(source, lines, start, end),
               position: void 0,
             },
             nextLine: end,
             start: lines.start(start),
-            end: lines.end(contentEnd - 1),
+            end: lines.end(end - 1),
           };
         },
       },
