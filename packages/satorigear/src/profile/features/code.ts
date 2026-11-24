@@ -9,7 +9,7 @@ import {
 } from "../../block/lines.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { inlineMarkerRunEnd } from "../../inline/tokenizer.ts";
+import { findClosingRunEnd, findMarkerRunEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../inline/tokens.ts";
 import { hasInlinePadding, semanticText } from "../utils.ts";
 import type { BlockStartRegistration } from "../../block/profile.ts";
@@ -146,25 +146,17 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.GraveAccent,
         scan(source, start, tokens) {
-          const openEnd = inlineMarkerRunEnd(source, start, Character.GraveAccent);
+          const openEnd = findMarkerRunEnd(source, start, Character.GraveAccent);
           if (source.charCodeAt(start - 1) === Character.GraveAccent) {
             return openEnd;
           }
           const markerLength = openEnd - start;
-          let offset = openEnd;
-          while (offset < source.length) {
-            offset = source.indexOf("`", offset);
-            if (offset < 0) {
-              break;
-            }
-            const closeEnd = inlineMarkerRunEnd(source, offset, Character.GraveAccent);
-            if (closeEnd - offset === markerLength) {
-              appendInlineToken(tokens, InlineKind.CodeSpan, start, closeEnd, markerLength);
-              return closeEnd;
-            }
-            offset = closeEnd;
+          const end = findClosingRunEnd(source, openEnd, markerLength, "`", Character.GraveAccent);
+          if (end < 0) {
+            return openEnd;
           }
-          return openEnd;
+          appendInlineToken(tokens, InlineKind.CodeSpan, start, end, markerLength);
+          return end;
         },
       },
     ],

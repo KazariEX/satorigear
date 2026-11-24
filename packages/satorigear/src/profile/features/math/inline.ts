@@ -1,6 +1,6 @@
 import { Character } from "../../../constants/character.ts";
 import { InlineKind } from "../../../constants/inline.ts";
-import { inlineMarkerRunEnd, type InlineScanRule } from "../../../inline/tokenizer.ts";
+import { findClosingRunEnd, findMarkerRunEnd, type InlineScanRule } from "../../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenData, inlineTokenText } from "../../../inline/tokens.ts";
 import { hasInlinePadding } from "../../utils.ts";
 import type { InlineBuildRule } from "../../../inline/profile.ts";
@@ -11,24 +11,11 @@ export function createMathScanRule(singleDollarTextMath: boolean): InlineScanRul
     marker: Character.DollarSign,
     scan(source, start, tokens) {
       // Math must claim its closer before ordinary tokens can span across that boundary.
-      const openEnd = inlineMarkerRunEnd(source, start, Character.DollarSign);
+      const openEnd = findMarkerRunEnd(source, start, Character.DollarSign);
       const markerLength = openEnd - start;
-      let end = -1;
-      if (markerLength >= minimum) {
-        let close = openEnd;
-        while (close < source.length) {
-          close = source.indexOf("$", close);
-          if (close < 0) {
-            break;
-          }
-          const closeEnd = inlineMarkerRunEnd(source, close, Character.DollarSign);
-          if (closeEnd - close === markerLength) {
-            end = closeEnd;
-            break;
-          }
-          close = closeEnd;
-        }
-      }
+      const end = markerLength >= minimum
+        ? findClosingRunEnd(source, openEnd, markerLength, "$", Character.DollarSign)
+        : -1;
       if (end < 0) {
         return openEnd;
       }

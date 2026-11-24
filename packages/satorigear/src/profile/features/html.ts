@@ -2,7 +2,7 @@ import { htmlBlockNames, htmlRawNames } from "micromark-util-html-tag-name";
 import { type BlockLines, isBlankLine } from "../../block/lines.ts";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { matchInlinePatternEnd } from "../../inline/tokenizer.ts";
+import { findPatternEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import { isAsciiLetter } from "../utils.ts";
 import type { SyntaxFeature } from "../types.ts";
@@ -124,14 +124,14 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.LessThanSign,
         scan(source, start, tokens) {
-          let end = matchInlinePatternEnd(source, start, htmlComment);
+          let end = findPatternEnd(source, start, htmlComment);
           let kind = InlineKind.InlineHtml;
           if (end < 0) {
-            end = matchInlinePatternEnd(source, start, autolink);
+            end = findPatternEnd(source, start, autolink);
             kind = InlineKind.Autolink;
           }
           if (end < 0) {
-            end = matchInlinePatternEnd(source, start, inlineHtml);
+            end = findPatternEnd(source, start, inlineHtml);
             kind = InlineKind.InlineHtml;
           }
           if (end < 0) {

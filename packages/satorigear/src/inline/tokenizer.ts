@@ -31,17 +31,29 @@ function createMasks(chars: string): Uint8Array {
   return masks;
 }
 
-export function matchInlinePatternEnd(source: string, start: number, pattern: RegExp): number {
+export function findPatternEnd(source: string, start: number, pattern: RegExp): number {
   pattern.lastIndex = start;
   return pattern.test(source) ? pattern.lastIndex : -1;
 }
 
-export function inlineMarkerRunEnd(source: string, start: number, marker: number): number {
+export function findMarkerRunEnd(source: string, start: number, marker: number): number {
   let end = start + 1;
   while (source.charCodeAt(end) === marker) {
     end++;
   }
   return end;
+}
+
+export function findClosingRunEnd(source: string, start: number, width: number, marker: string, code: number): number {
+  let close = source.indexOf(marker, start);
+  while (close >= 0) {
+    const end = findMarkerRunEnd(source, close, code);
+    if (end - close === width) {
+      return end;
+    }
+    close = source.indexOf(marker, end);
+  }
+  return -1;
 }
 
 function scanLineEnding(source: string, start: number, tokens: number[]): number {
@@ -133,7 +145,7 @@ function createInlineTokenizer(
     const boundary = withBoundaryBreak ? boundarySlow : boundaryFast;
     let tokens: number[] | undefined;
     for (let cursor = 0; cursor < source.length;) {
-      const offset = matchInlinePatternEnd(source, cursor, boundary) - 1;
+      const offset = findPatternEnd(source, cursor, boundary) - 1;
       if (offset < 0) {
         break;
       }

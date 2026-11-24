@@ -1,6 +1,6 @@
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { inlineMarkerRunEnd, type InlineScanRule } from "../../inline/tokenizer.ts";
+import { findMarkerRunEnd, type InlineScanRule } from "../../inline/tokenizer.ts";
 import { appendInlineToken } from "../../inline/tokens.ts";
 import type { DelimiterConfig } from "../../inline/delimiter.ts";
 import type { InlineBuildRule } from "../../inline/profile.ts";
@@ -23,7 +23,7 @@ function createFormatting(
     scanner: {
       marker,
       scan(source, start, tokens) {
-        const end = inlineMarkerRunEnd(source, start, marker);
+        const end = findMarkerRunEnd(source, start, marker);
         appendInlineToken(tokens, delimiter.token, start, end);
         return end;
       },

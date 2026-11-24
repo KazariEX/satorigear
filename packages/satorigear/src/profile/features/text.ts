@@ -1,7 +1,7 @@
 import { decodeString } from "micromark-util-decode-string";
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
-import { matchInlinePatternEnd } from "../../inline/tokenizer.ts";
+import { findPatternEnd } from "../../inline/tokenizer.ts";
 import { appendInlineToken, inlineTokenText } from "../../inline/tokens.ts";
 import { isAsciiPunctuation } from "../utils.ts";
 import type { InlineTextBuilder } from "../../fragment/inline.ts";
@@ -28,7 +28,7 @@ export const feature: SyntaxFeature = {
       {
         marker: Character.Ampersand,
         scan(source, start, tokens) {
-          const matchEnd = matchInlinePatternEnd(source, start, entity);
+          const matchEnd = findPatternEnd(source, start, entity);
           if (matchEnd < 0) {
             return start + 1;
           }
