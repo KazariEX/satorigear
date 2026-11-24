@@ -201,6 +201,8 @@ export class BlockLines implements SourceLocator {
   #fields: Int32Array;
   #length = 0;
   #locatorField = 0;
+  #locatorNext = 0;
+  #locatorStart = 0;
   #normalized = true;
   #sourceLength: number;
 
@@ -263,7 +265,6 @@ export class BlockLines implements SourceLocator {
 
   /** Resets and returns the line-owned locator for monotonically increasing source offsets. */
   locator(): SourceLocator {
-    this.#locatorField = 0;
     let field = this.#length * BlockLineField.Stride;
     const emptyLast = (
       field === 0 ||
@@ -279,12 +280,16 @@ export class BlockLines implements SourceLocator {
       field += BlockLineField.Stride;
     }
     fields[field | BlockLineField.Start] = this.#sourceLength + 1;
+    this.advanceToLine(1);
     return this;
   }
 
   /** Starts the next position lookup at this one-based line number. */
   advanceToLine(line: number): void {
-    this.#locatorField = (line - 1) * BlockLineField.Stride;
+    const field = (line - 1) * BlockLineField.Stride;
+    this.#locatorField = field;
+    this.#locatorStart = this.#fields[field | BlockLineField.Start];
+    this.#locatorNext = this.#fields[(field + BlockLineField.Stride) | BlockLineField.Start];
   }
 
   /** Normalizes a fragment only when retained source may contain carriage returns. */
@@ -299,18 +304,24 @@ export class BlockLines implements SourceLocator {
    * Each successor's start is the exclusive boundary of the current line.
    */
   locationAt(offset: number): SourceLocation {
-    const fields = this.#fields;
     let field = this.#locatorField;
-    if (fields[field + BlockLineField.Stride | BlockLineField.Start] <= offset) {
+    let start = this.#locatorStart;
+    let next = this.#locatorNext;
+    if (next <= offset) {
+      const fields = this.#fields;
       do {
         field += BlockLineField.Stride;
+        start = next;
+        next = fields[(field + BlockLineField.Stride) | BlockLineField.Start];
       }
-      while (fields[field + BlockLineField.Stride | BlockLineField.Start] <= offset);
+      while (next <= offset);
       this.#locatorField = field;
+      this.#locatorStart = start;
+      this.#locatorNext = next;
     }
     return {
       line: field / BlockLineField.Stride + 1,
-      column: offset - fields[field | BlockLineField.Start] + 1,
+      column: offset - start + 1,
       offset,
     };
   }
