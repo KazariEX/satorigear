@@ -200,7 +200,7 @@ class Index0 {
 export class BlockLines implements SourceLocator {
   #fields: Int32Array;
   #length = 0;
-  #locatorField = 0;
+  #locatorLine = 1;
   #locatorNext = 0;
   #locatorStart = 0;
   #normalized = true;
@@ -213,7 +213,7 @@ export class BlockLines implements SourceLocator {
 
   /** Rebuilds the physical line index while retaining its backing store. */
   scan(source: string, scratch = false): void {
-    this.#locatorField = 0;
+    this.#locatorLine = 1;
     this.#sourceLength = source.length;
     const fields = growLineFields(this.#fields, getLineCapacity(source.length) * BlockLineField.Stride);
     const result = scratch && ScratchView.supports
@@ -287,7 +287,7 @@ export class BlockLines implements SourceLocator {
   /** Starts the next position lookup at a known physical row. */
   advanceToLine(index: number): void {
     const field = index * BlockLineField.Stride;
-    this.#locatorField = field;
+    this.#locatorLine = index + 1;
     this.#locatorStart = this.#fields[field | BlockLineField.Start];
     this.#locatorNext = this.#fields[(field + BlockLineField.Stride) | BlockLineField.Start];
   }
@@ -304,23 +304,23 @@ export class BlockLines implements SourceLocator {
    * Each successor's start is the exclusive boundary of the current line.
    */
   locationAt(offset: number): SourceLocation {
-    let field = this.#locatorField;
+    let line = this.#locatorLine;
     let start = this.#locatorStart;
     let next = this.#locatorNext;
     if (next <= offset) {
       const fields = this.#fields;
       do {
-        field += BlockLineField.Stride;
+        line++;
         start = next;
-        next = fields[(field + BlockLineField.Stride) | BlockLineField.Start];
+        next = fields[line * BlockLineField.Stride | BlockLineField.Start];
       }
       while (next <= offset);
-      this.#locatorField = field;
+      this.#locatorLine = line;
       this.#locatorStart = start;
       this.#locatorNext = next;
     }
     return {
-      line: field / BlockLineField.Stride + 1,
+      line,
       column: offset - start + 1,
       offset,
     };
