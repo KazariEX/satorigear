@@ -99,34 +99,36 @@ class Latin1 {
           /* .... */ | Math.imul(hits6 >>> 4 | hits7, 0x00204081) >>> 24 << 24;
           const last = cursor + 31;
           do {
-            const at = last - Math.clz32(events & -events);
-            const code = source.charCodeAt(at);
             // Latin1 copying retains low bytes, so exclude non-Latin1 aliases:
             // "上"(0x4E0A), "不"(0x4E0D), "č"(0x010D), ...
-            if (code === Character.LineFeed || code === Character.CarriageReturn) {
-              let next = at + 1;
-              if (code === Character.CarriageReturn) {
-                crnext = next;
-                // Consume an adjacent LF in this block; cross-block LF uses the carry below.
-                if (events >>> (at & 31) & 2 && source.charCodeAt(next) === Character.LineFeed) {
-                  next++;
-                  events &= events - 1;
-                }
-              }
-              else if (at === crnext) {
-                // Absorb the cross-block LF into the previous row's next.
-                fields[field - BlockLineField.Stride | BlockLineField.Next] = next;
-                start = next;
+            const at = last - Math.clz32(events & -events);
+            const code = source.charCodeAt(at);
+            let next = at + 1;
+            if (code !== Character.LineFeed) {
+              if (code !== Character.CarriageReturn) {
                 continue;
               }
-              fields[field | BlockLineField.Start] = start;
-              fields[field | BlockLineField.End] = at;
-              fields[field | BlockLineField.Next] = next;
-              fields[field | BlockLineField.State] = 0;
-              field += BlockLineField.Stride;
-              start = next;
+              crnext = next;
+              // Consume an adjacent LF in this block; cross-block LF uses the carry below.
+              if (events >>> (at & 31) & 2 && source.charCodeAt(next) === Character.LineFeed) {
+                next++;
+                events &= events - 1;
+              }
             }
-          } while (events &= events - 1);
+            else if (at === crnext) {
+              // Absorb the cross-block LF into the previous row's next.
+              fields[field - BlockLineField.Stride | BlockLineField.Next] = next;
+              start = next;
+              continue;
+            }
+            fields[field | BlockLineField.Start] = start;
+            fields[field | BlockLineField.End] = at;
+            fields[field | BlockLineField.Next] = next;
+            fields[field | BlockLineField.State] = 0;
+            field += BlockLineField.Stride;
+            start = next;
+          }
+          while (events &= events - 1);
         }
         cursor += 32;
         if (cursor >= wordEnd) {
