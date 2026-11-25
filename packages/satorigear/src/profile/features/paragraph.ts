@@ -11,9 +11,9 @@ export const feature: SyntaxFeature = {
     fallbacks: [
       (source, lines, tokens, start, contentOffset, context) => {
         // Earlier fallbacks rejected this nonblank line, so it begins the paragraph.
-        let openToken = -1;
+        const openToken = tokens.openInlineFrame();
         let kind = BlockKind.ParagraphOpen;
-        let end = contentOffset;
+        let underlineEnd: number | undefined;
         // Keep one chunk across contiguous lines; split only where source has a gap.
         let chunkOffset = contentOffset;
         let chunkEnd = lines.end(start);
@@ -38,7 +38,7 @@ export const feature: SyntaxFeature = {
             const setext = setextMarkerAt(source, first, contentStart, lineEnd);
             if (setext) {
               kind = setext === Character.EqualsSign ? BlockKind.SetextHeading1Open : BlockKind.SetextHeading2Open;
-              end = lineEnd;
+              underlineEnd = lineEnd;
               index++;
               break;
             }
@@ -58,29 +58,13 @@ export const feature: SyntaxFeature = {
             }
           }
           if (chunkStart !== previousEnd) {
-            if (openToken < 0) {
-              openToken = tokens.length;
-              tokens.push(BlockKind.ParagraphOpen, contentOffset, contentOffset);
-            }
             tokens.push(BlockKind.InlineChunk, chunkOffset, previousEnd);
             chunkOffset = chunkStart;
           }
           chunkEnd = lineEnd;
           index++;
         }
-        if (openToken >= 0) {
-          if (kind !== BlockKind.ParagraphOpen) {
-            tokens.setKind(openToken, kind);
-            tokens.setEnd(openToken, end);
-          }
-          tokens.closeInlineFrame(chunkOffset, chunkEnd);
-        }
-        else {
-          if (withBoundaryBreak) {
-            openToken = tokens.length;
-          }
-          tokens.pushInlineFrame(kind, contentOffset, end, chunkOffset, chunkEnd);
-        }
+        tokens.closeInlineFrame(openToken, kind, contentOffset, underlineEnd ?? chunkEnd, chunkOffset, chunkEnd);
         if (withBoundaryBreak) {
           tokens.setValue(openToken, boundaryBreak);
         }
@@ -92,7 +76,6 @@ export const feature: SyntaxFeature = {
         token: BlockKind.ParagraphOpen,
         build(tokenStart, context) {
           const tokens = context.structure.tokens;
-          const close = tokenStart + tokens.nodeLength(tokenStart) - 1;
           const start = context.locator.locationAt(tokens.start(tokenStart));
           const inline = buildInlineFragment(tokenStart, false, context);
           const result: Paragraph = {
@@ -100,7 +83,7 @@ export const feature: SyntaxFeature = {
             children: inline.children,
             position: {
               start,
-              end: context.locator.locationAt(tokens.end(close)),
+              end: context.locator.locationAt(tokens.end(tokenStart)),
             },
           };
           if (inline.attributes) {
