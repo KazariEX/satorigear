@@ -456,26 +456,15 @@ export class BlockLines implements SourceLocator {
     return result;
   }
 
-  #copy(): BlockLines {
-    // Editing owns an independent copy of the geometry it will overwrite.
-    const next = new BlockLines(this.#sourceLength, 0);
-    next.#fields = this.#fields.slice(0, (this.#length + BlockLineCapacity.LocatorTail) * BlockLineField.Stride);
-    next.#length = this.#length;
-    next.#normalized = this.#normalized;
-    return next;
-  }
-
-  update(
+  edit(
     nextSource: string,
     damageStart: number,
     oldDamageEnd: number,
     delta: number,
-  ): BlockLines {
+  ): void {
     // The first line starting strictly after the old edit end has an unchanged left boundary.
     const suffix = this.indexAtOrAfter(oldDamageEnd + 1);
-    const oldSuffixOffset = suffix < this.length
-      ? this.start(suffix)
-      : nextSource.length - delta;
+    const oldSuffixOffset = suffix < this.length ? this.start(suffix) : nextSource.length - delta;
     const newSuffixOffset = oldSuffixOffset + delta;
     // Include the preceding line at an exact boundary so CR and LF can join across the edit.
     const prefixEnd = Math.max(0, this.indexAtOrAfter(damageStart) - 1);
@@ -487,51 +476,32 @@ export class BlockLines implements SourceLocator {
     if (restartOffset !== 0) {
       changed.#shiftPositions(0, restartOffset);
     }
-    // Equal-length edits preserve line slots, so only overwrite the rebuilt window.
-    if (delta === 0 && changed.length === suffix - prefixEnd) {
-      const next = this.#copy();
-      const target = prefixEnd * BlockLineField.Stride;
-      const fieldLength = changed.length * BlockLineField.Stride;
-      for (let field = 0; field < fieldLength; field++) {
-        next.#fields[target + field] = changed.#fields[field];
-      }
-      next.#normalized &&= changed.#normalized;
-      return next;
+    const nextSuffix = prefixEnd + changed.length;
+    const length = nextSuffix + this.#length - suffix;
+    const fields = this.#fields = growLineFields(this.#fields, length * BlockLineField.Stride);
+    if (nextSuffix !== suffix) {
+      fields.copyWithin(
+        nextSuffix * BlockLineField.Stride,
+        suffix * BlockLineField.Stride,
+        this.#length * BlockLineField.Stride,
+      );
     }
-    const next = new BlockLines(
-      nextSource.length,
-      prefixEnd + changed.length + this.length - suffix + BlockLineCapacity.LocatorTail,
+    fields.set(
+      changed.#fields.subarray(0, changed.length * BlockLineField.Stride),
+      prefixEnd * BlockLineField.Stride,
     );
-    // Stored coordinates stay absolute. The retained suffix moves once with the edit.
-    next.#appendRawRange(this, 0, prefixEnd);
-    next.#appendRawRange(changed, 0, changed.length);
-    const suffixStart = next.length;
-    next.#appendRawRange(this, suffix, this.length);
+    this.#length = length;
+    this.#sourceLength = nextSource.length;
+    this.#normalized &&= changed.#normalized;
     if (delta !== 0) {
-      next.#shiftPositions(suffixStart, delta);
+      this.#shiftPositions(nextSuffix, delta);
     }
-    next.#normalized = this.#normalized && changed.#normalized;
-    return next;
   }
 
   pop(): void {
     if (this.#length > 0) {
       this.#length--;
     }
-  }
-
-  /** Appends stored fields unchanged. */
-  #appendRawRange(lines: BlockLines, start: number, end: number): void {
-    if (start >= end) {
-      return;
-    }
-    const sourceStart = start * BlockLineField.Stride;
-    const sourceEnd = end * BlockLineField.Stride;
-    const targetStart = this.#length * BlockLineField.Stride;
-    const targetEnd = targetStart + sourceEnd - sourceStart;
-    this.#fields = growLineFields(this.#fields, targetEnd);
-    this.#fields.set(lines.#fields.subarray(sourceStart, sourceEnd), targetStart);
-    this.#length += end - start;
   }
 
   #shiftPositions(start: number, delta: number): void {

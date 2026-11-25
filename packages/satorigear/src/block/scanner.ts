@@ -286,6 +286,7 @@ export class BlockScanner {
   edit(change: SourceChange): BlockScanChange {
     const { changedSpan, nextSource, offsetDelta } = change;
     const context = this.#context;
+    const lines = this.#lines;
     // Map the new damage end back to the old source with the total edit delta.
     const oldChangedEnd = changedSpan.end - offsetDelta;
 
@@ -306,15 +307,15 @@ export class BlockScanner {
     );
     const restartRecord = previousRecords[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
-    const nextLines = this.#lines.update(nextSource, changedSpan.start, oldChangedEnd, offsetDelta);
-    const scanLineStart = nextLines.indexAtOrAfter(restartOffset);
+    lines.edit(nextSource, changedSpan.start, oldChangedEnd, offsetDelta);
+    const scanLineStart = lines.indexAtOrAfter(restartOffset);
     const stableBlockCount = Math.max(0, restartIndex);
     const oldTokenStart = restartRecord?.tokenStart ?? 0;
 
     // 2. Rescan from that boundary until the unchanged suffix starts at a shared root block boundary.
     const replacement = new BlockTokenStream();
     const rescannedRecords: BlockRecord[] = [];
-    const scanLines = scanLineStart === 0 ? nextLines : nextLines.view(scanLineStart);
+    const scanLines = scanLineStart === 0 ? lines : lines.view(scanLineStart);
     let oldRecordEnd = previousRecords.length;
     let candidate = affectedIndex;
     context.resetLookahead();
@@ -386,8 +387,7 @@ export class BlockScanner {
     }
     const newRecordEnd = oldRecordEnd + nextRecords.length - previousRecords.length;
 
-    // 4. Commit the matching physical lines and reconciled records as scanner state.
-    this.#lines = nextLines;
+    // 4. Commit the reconciled records as scanner state.
     this.#records = nextRecords;
 
     return {
