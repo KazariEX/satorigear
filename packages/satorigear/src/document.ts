@@ -120,7 +120,7 @@ export class DocumentImpl implements Document {
 
   #updateTree(invalidatedBlocks: readonly number[], change?: BlockScanChange): void {
     const records = this.#blockScanner.records;
-    const regionsByBlock = this.#regionState.regionsByBlock();
+    const regionsByBlock = this.#regionState.regionsByBlock;
     const locator = this.#blockScanner.locator();
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.

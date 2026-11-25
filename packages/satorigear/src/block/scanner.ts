@@ -2,6 +2,7 @@ import type { Root, TopLevelContent } from "mdast";
 import { BlockKind } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
 import { type BlockBuildContext, buildBlockNode } from "../fragment/block.ts";
+import { shiftTail } from "../primitives.ts";
 import { BlockLines, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
 import type { InlineProfile } from "../inline/profile.ts";
@@ -291,12 +292,12 @@ export class BlockScanner {
     const oldChangedEnd = changedSpan.end - offsetDelta;
 
     // 1. Locate a conservative block restart and update the physical lines around the edit.
-    const previousRecords = this.#records;
-    let affectedIndex = previousRecords.findIndex((record) => record.dependencyEnd >= changedSpan.start);
+    const records = this.#records;
+    let affectedIndex = records.findIndex((record) => record.dependencyEnd >= changedSpan.start);
     if (affectedIndex < 0) {
-      affectedIndex = Math.max(0, previousRecords.length - 1);
+      affectedIndex = Math.max(0, records.length - 1);
     }
-    const affectedRecord = previousRecords[affectedIndex];
+    const affectedRecord = records[affectedIndex];
     const restartIndex = (
       // Only the leading gap has no preceding record to provide the usual one-record lookbehind.
       affectedIndex === 0 && affectedRecord?.start > changedSpan.start
@@ -305,7 +306,7 @@ export class BlockScanner {
           ? affectedIndex
           : Math.max(0, affectedIndex - 1)
     );
-    const restartRecord = previousRecords[restartIndex];
+    const restartRecord = records[restartIndex];
     const restartOffset = restartRecord?.start ?? 0;
     lines.edit(nextSource, changedSpan.start, oldChangedEnd, offsetDelta);
     const scanLineStart = lines.indexAtOrAfter(restartOffset);
@@ -316,7 +317,7 @@ export class BlockScanner {
     const replacement = new BlockTokenStream();
     const rescannedRecords: BlockRecord[] = [];
     const scanLines = scanLineStart === 0 ? lines : lines.view(scanLineStart);
-    let oldRecordEnd = previousRecords.length;
+    let oldRecordEnd = records.length;
     let candidate = affectedIndex;
     context.resetLookahead();
     context.scanBlockLines(
@@ -341,10 +342,10 @@ export class BlockScanner {
         if (offsetDelta && (start === 0 || oldStart === 0) && this.builds[BlockKind.Frontmatter]) {
           return false;
         }
-        while (candidate < previousRecords.length && previousRecords[candidate].start < oldStart) {
+        while (candidate < records.length && records[candidate].start < oldStart) {
           candidate++;
         }
-        if (previousRecords[candidate]?.start !== oldStart) {
+        if (records[candidate]?.start !== oldStart) {
           return false;
         }
         oldRecordEnd = candidate;
@@ -354,7 +355,7 @@ export class BlockScanner {
 
     // 3. Replace the rescanned token window, then map the narrowed token damage to record ranges.
     const oldTokenLength = this.#tokens.length;
-    const oldTokenEnd = previousRecords[oldRecordEnd]?.tokenStart ?? oldTokenLength;
+    const oldTokenEnd = records[oldRecordEnd]?.tokenStart ?? oldTokenLength;
     const tokenChange: BlockTokenChange = this.#tokens.replace(
       oldTokenStart,
       oldTokenEnd,
@@ -367,28 +368,25 @@ export class BlockScanner {
     // Record ranges are contiguous, and their starts remain in old coordinates until suffix shifting below.
     let oldRecordStart = stableBlockCount;
     while (
-      oldRecordStart < previousRecords.length &&
-      (previousRecords[oldRecordStart + 1]?.tokenStart ?? oldTokenLength) <= tokenChange.oldStart
+      oldRecordStart < records.length &&
+      (records[oldRecordStart + 1]?.tokenStart ?? oldTokenLength) <= tokenChange.oldStart
     ) {
       oldRecordStart++;
     }
-    const nextRecords = previousRecords.slice(0, stableBlockCount);
-    nextRecords.push(...rescannedRecords);
-    const shiftSuffix = offsetDelta !== 0 || tokenDelta !== 0;
-    for (let index = oldRecordEnd; index < previousRecords.length; index++) {
-      const record = previousRecords[index];
-      if (shiftSuffix) {
+    const newRecordEnd = stableBlockCount + rescannedRecords.length;
+    shiftTail(records, oldRecordEnd, newRecordEnd);
+    for (let index = 0; index < rescannedRecords.length; index++) {
+      records[stableBlockCount + index] = rescannedRecords[index];
+    }
+    if (offsetDelta !== 0 || tokenDelta !== 0) {
+      for (let index = newRecordEnd; index < records.length; index++) {
+        const record = records[index];
         record.start += offsetDelta;
         record.end += offsetDelta;
         record.dependencyEnd += offsetDelta;
         record.tokenStart += tokenDelta;
       }
-      nextRecords.push(record);
     }
-    const newRecordEnd = oldRecordEnd + nextRecords.length - previousRecords.length;
-
-    // 4. Commit the reconciled records as scanner state.
-    this.#records = nextRecords;
 
     return {
       newRecordEnd,

@@ -1,5 +1,5 @@
 import { BlockKind } from "../constants/block.ts";
-import { emptyArray, emptySet } from "../primitives.ts";
+import { emptyArray, emptySet, shiftTail } from "../primitives.ts";
 import { SourceView } from "../source-view.ts";
 import type { BlockScanChange, BlockStructure } from "../block/scanner.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
@@ -145,7 +145,7 @@ export class InlineRegionState {
     this.#structure = structure;
   }
 
-  regionsByBlock(): readonly (readonly InlineRegion[])[] {
+  get regionsByBlock(): readonly (readonly InlineRegion[])[] {
     return this.#regionsByBlock;
   }
 
@@ -153,23 +153,20 @@ export class InlineRegionState {
     // 1. Retain the scanner-stable prefix and collect displaced regions for correspondence.
     const structure = this.#structure;
     const tokens = structure.tokens;
-    const previousRegionsByBlock = this.#regionsByBlock;
+    const regionsByBlock = this.#regionsByBlock;
     const stableBlockCount = change?.stableBlockCount ?? 0;
     const oldRecordStart = change?.oldRecordStart ?? 0;
     const oldRecordEnd = change?.oldRecordEnd ?? 0;
     const newRecordEnd = change?.newRecordEnd ?? structure.records.length;
     const offsetDelta = change?.offsetDelta ?? 0;
     const definitionMembershipChanges = change?.tokenChange.definitionMembershipChanges ?? emptySet;
-    const regionsByBlock = stableBlockCount === 0
-      ? []
-      : previousRegionsByBlock.slice(0, stableBlockCount);
     let invalidatedBlocks: number[] | undefined;
 
     const tokenChange = change?.tokenChange;
     const suffixTokenDelta = tokenChange ? tokenChange.newEnd - tokenChange.oldEnd : 0;
     const displacedRegions: InlineRegion[] = [];
     for (let index = oldRecordStart; index < oldRecordEnd; index++) {
-      for (const region of previousRegionsByBlock[index]) {
+      for (const region of regionsByBlock[index]) {
         displacedRegions.push(region);
       }
     }
@@ -177,17 +174,18 @@ export class InlineRegionState {
     // Token replacement already proves source-order correspondence outside its damage window,
     // so one forward cursor can reuse regions whose opening token survived the edit.
     let displacedIndex = 0;
+    shiftTail(regionsByBlock, oldRecordEnd, newRecordEnd);
 
     // 2. Rebuild region lists directly from tokens. Prefix regions reuse by block position;
     // displaced regions reuse only when their opening token survived token replacement.
     for (let blockIndex = stableBlockCount; blockIndex < newRecordEnd; blockIndex++) {
       const previousRegions = blockIndex < oldRecordStart
-        ? previousRegionsByBlock[blockIndex]
+        ? regionsByBlock[blockIndex]
         : void 0;
       const tokenStart = structure.records[blockIndex].tokenStart;
       const blockLength = tokens.nodeLength(tokenStart);
       if (blockLength === 1) {
-        regionsByBlock.push(emptyArray);
+        regionsByBlock[blockIndex] = emptyArray;
         continue;
       }
       const tokenEnd = tokenStart + blockLength;
@@ -227,23 +225,21 @@ export class InlineRegionState {
 
       // Token-equivalent records before the narrowed damage can reuse region caches,
       // but the scanner's rebuilt interval still requires corresponding tree rebuilds.
-      regionsByBlock.push(regions);
+      regionsByBlock[blockIndex] = regions;
     }
 
     // 3. Shift the retained suffix only after displaced-region correspondence is complete.
-    for (let index = oldRecordEnd; index < previousRegionsByBlock.length; index++) {
-      const regions = previousRegionsByBlock[index];
-      if (offsetDelta !== 0 || suffixTokenDelta !== 0) {
-        for (const region of regions) {
+    if (offsetDelta !== 0 || suffixTokenDelta !== 0) {
+      for (let index = newRecordEnd; index < regionsByBlock.length; index++) {
+        for (const region of regionsByBlock[index]) {
           region.shift(offsetDelta, suffixTokenDelta);
         }
       }
-      regionsByBlock.push(regions);
     }
 
     // 4. Propagate changed definition visibility to retained blocks outside the rebuilt range.
     // Regions track consulted labels, so unrelated definitions preserve block identity.
-    if (previousRegionsByBlock.length > 0 && definitionMembershipChanges.size > 0) {
+    if (definitionMembershipChanges.size > 0) {
       const refreshDefinitions = (start: number, end: number): void => {
         for (let index = start; index < end; index++) {
           const regions = regionsByBlock[index];
@@ -261,7 +257,6 @@ export class InlineRegionState {
       refreshDefinitions(0, stableBlockCount);
       refreshDefinitions(newRecordEnd, regionsByBlock.length);
     }
-    this.#regionsByBlock = regionsByBlock;
 
     return invalidatedBlocks ?? emptyArray;
   }
