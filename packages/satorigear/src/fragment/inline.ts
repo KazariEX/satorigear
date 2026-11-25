@@ -10,19 +10,14 @@ import {
   inlineTokenStart,
   type InlineTokenStream,
 } from "../inline/tokens.ts";
-import {
-  type SourceLocator,
-  type SourcePosition,
-  type SourceSpan,
-  SourceView,
-} from "../source-view.ts";
 import type { InlineProfile } from "../inline/profile.ts";
+import type { SourceLocator, SourcePosition, SourceSpan, SourceView } from "../source-view.ts";
 import type { BlockBuildContext } from "./block.ts";
 
 type InlineNonText = Exclude<PhrasingContent, Text>;
 
 export interface InlineBuildContext {
-  builders: InlineProfile["builders"];
+  profile: InlineProfile;
   // Recursive builders publish the next token here; a child range stops at its closer.
   tokenIndex: number;
   locator: SourceLocator;
@@ -159,7 +154,7 @@ function appendTextRange(context: InlineBuildContext, output: InlineOutput, trim
         appendText(context, output, "\n", childStart, childEnd, false);
       }
       else {
-        const build = context.builders[kind] as InlineTextBuilder;
+        const build = context.profile.builders[kind] as InlineTextBuilder;
         appendText(context, output, build(index, context), childStart, childEnd, kind === InlineKind.LiteralText);
       }
       index++;
@@ -172,7 +167,7 @@ function appendTextRange(context: InlineBuildContext, output: InlineOutput, trim
       start: sourceStart,
       end: childStart === childEnd ? sourceStart : context.view.mapEnd(childEnd),
     };
-    const decorate = context.builders[kind] as InlineTokenDecorator;
+    const decorate = context.profile.builders[kind] as InlineTokenDecorator;
     if (decorate(index, sourceSpan, context, output)) {
       // Applied decorators may mutate the exposed child list, so refresh the cached projection.
       const previous = output.children.at(-1);
@@ -263,7 +258,7 @@ function buildFragment(context: InlineBuildContext, cursor: number, closer: Inli
         startOffset === endOffset ? sourceStart : context.view.mapEnd(endOffset),
       ),
     };
-    const build = context.builders[kind];
+    const build = context.profile.builders[kind];
     const node = nested
       ? (build as InlinePairBuilder)(index, close, position, nested, context)
       : (build as InlineLeafBuilder)(index, position, context);
@@ -303,7 +298,7 @@ export function buildInlineFragment(
       return { children: [] };
     }
 
-    view = context.inlineContext?.view ?? new SourceView();
+    view = context.view;
     view.reset(context.source, blockTokens, tokenStart, nodeLength);
     tokens = view.tokenize(context.profile.tokenize, ScratchView.supports);
     if (tokens.length) {
@@ -311,26 +306,18 @@ export function buildInlineFragment(
     }
   }
 
-  const inlineContext = context.inlineContext ??= {
-    builders: context.profile.builders,
-    tokenIndex: 0,
-    locator: context.locator,
-    tableCell,
-    tokens,
-    view,
-  };
-  inlineContext.tableCell = tableCell;
-  inlineContext.tokens = tokens;
-  inlineContext.view = view;
+  context.tableCell = tableCell;
+  context.tokens = tokens;
+  context.view = view;
 
   if (tokens.length === 0) {
     const end = trimLineWhitespaceEnd(view.text, 0, view.text.length);
     return {
       children: end <= 0 ? [] : [
-        buildLiteral(inlineContext, 0, end),
+        buildLiteral(context, 0, end),
       ],
     };
   }
-  inlineContext.tokenIndex = 0;
-  return buildFragment(inlineContext, 0, InlineKind.None);
+  context.tokenIndex = 0;
+  return buildFragment(context, 0, InlineKind.None);
 }

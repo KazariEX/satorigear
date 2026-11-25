@@ -1,7 +1,7 @@
 import type { Root, TopLevelContent } from "mdast";
 import { BlockKind } from "../constants/block.ts";
 import { Character } from "../constants/character.ts";
-import { type BlockBuildContext, buildBlockNode } from "../fragment/block.ts";
+import { buildBlockNode, createBuildContext } from "../fragment/block.ts";
 import { shiftTail } from "../primitives.ts";
 import { BlockLines, lineIndentOffset } from "./lines.ts";
 import { type BlockTokenChange, BlockTokenStream } from "./tokens.ts";
@@ -194,7 +194,7 @@ export class BlockScanner {
   #context: BlockScanContext;
   #lines = new BlockLines();
   #records: BlockRecord[] = [];
-  #tokens = new BlockTokenStream();
+  readonly tokens = new BlockTokenStream();
   readonly builds: BlockProfile["builds"];
 
   constructor(profile: BlockProfile) {
@@ -205,17 +205,10 @@ export class BlockScanner {
   parse(source: string, profile: InlineProfile): Root {
     this.#reset(source);
     const children: RootSequence = [];
-    this.#context.scanBlockLines(source, this.#lines, this.#tokens, void 0, void 0, children);
+    this.#context.scanBlockLines(source, this.#lines, this.tokens, void 0, void 0, children);
     const lines = this.#lines;
     const locator = lines.locator();
-    const context: BlockBuildContext = {
-      inlineContext: void 0,
-      cursor: void 0,
-      locator,
-      structure: this,
-      profile,
-      source,
-    };
+    const context = createBuildContext(source, this, profile, locator);
 
     const start = locator.locationAt(0);
     let token = 0;
@@ -224,7 +217,7 @@ export class BlockScanner {
       if (typeof entry === "number") {
         lines.advanceToLine(entry);
         children[index] = buildBlockNode(token, context);
-        token += this.#tokens.nodeLength(token);
+        token += this.tokens.nodeLength(token);
       }
     }
 
@@ -238,14 +231,14 @@ export class BlockScanner {
   #reset(source: string): void {
     this.#context.resetLookahead();
     this.#lines.scan(source, true);
-    this.#tokens.reset();
+    this.tokens.reset();
   }
 
   scan(source: string): void {
     this.#reset(source);
     const context = this.#context;
     const lines = this.#lines;
-    const tokens = this.#tokens;
+    const tokens = this.tokens;
     const records = this.#records;
     let recordIndex = 0;
 
@@ -270,10 +263,6 @@ export class BlockScanner {
       }
     });
     records.length = recordIndex;
-  }
-
-  get tokens(): BlockTokenStream {
-    return this.#tokens;
   }
 
   get records(): readonly BlockRecord[] {
@@ -354,9 +343,9 @@ export class BlockScanner {
     );
 
     // 3. Replace the rescanned token window, then map the narrowed token damage to record ranges.
-    const oldTokenLength = this.#tokens.length;
+    const oldTokenLength = this.tokens.length;
     const oldTokenEnd = records[oldRecordEnd]?.tokenStart ?? oldTokenLength;
-    const tokenChange: BlockTokenChange = this.#tokens.replace(
+    const tokenChange: BlockTokenChange = this.tokens.replace(
       oldTokenStart,
       oldTokenEnd,
       replacement,

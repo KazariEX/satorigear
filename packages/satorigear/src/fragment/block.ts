@@ -1,32 +1,38 @@
 import type { Node, RootContent, TopLevelContent } from "mdast";
+import { emptyArray } from "../primitives.ts";
+import { type SourceLocator, SourceView } from "../source-view.ts";
 import type { BlockStructure } from "../block/scanner.ts";
 import type { InlineProfile } from "../inline/profile.ts";
 import type { InlineRegionCursor } from "../inline/region.ts";
-import type { SourceLocator, SourcePosition } from "../source-view.ts";
 import type { InlineBuildContext } from "./inline.ts";
-
-export interface BlockBuildContext {
-  // Inline regions build serially, so this context can be rebound for each region.
-  inlineContext: InlineBuildContext | undefined;
-  cursor: InlineRegionCursor | undefined;
-  locator: SourceLocator;
-  structure: BlockStructure;
-  profile: InlineProfile;
-  source: string;
-}
 
 // Core owns build traversal; profiles supply every syntax-specific node builder.
 export type BlockNodeBuilder<T extends object = Node> = (tokenStart: number, context: BlockBuildContext) => T;
 
-export function leafBlockPosition(
-  tokenStart: number,
-  context: BlockBuildContext,
-): SourcePosition {
-  const tokens = context.structure.tokens;
-  return context.locator.positionAt(
-    tokens.start(tokenStart),
-    tokens.contentEnd(context.source, tokenStart),
-  );
+export interface BlockBuildContext extends InlineBuildContext {
+  cursor: InlineRegionCursor | undefined;
+  structure: BlockStructure;
+  source: string;
+}
+
+export function createBuildContext(
+  source: string,
+  structure: BlockStructure,
+  profile: InlineProfile,
+  locator: SourceLocator,
+  cursor?: InlineRegionCursor,
+): BlockBuildContext {
+  return {
+    source,
+    structure,
+    profile,
+    locator,
+    cursor,
+    tokens: emptyArray,
+    tokenIndex: 0,
+    tableCell: false,
+    view: new SourceView(),
+  };
 }
 
 export function buildBlockNode<T extends object = TopLevelContent>(

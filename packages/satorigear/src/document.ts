@@ -1,6 +1,6 @@
 import type { Root, TopLevelContent } from "mdast";
 import { type BlockRecord, type BlockScanChange, BlockScanner, type SourceChange } from "./block/scanner.ts";
-import { type BlockBuildContext, buildBlockNode } from "./fragment/block.ts";
+import { type BlockBuildContext, buildBlockNode, createBuildContext } from "./fragment/block.ts";
 import { InlineRegionCursor, InlineRegionState, type ResolvedInlineRegion } from "./inline/region.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan } from "./source-view.ts";
@@ -124,14 +124,13 @@ export class DocumentImpl implements Document {
     const locator = this.#blockScanner.locator();
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.
-    const context: BlockBuildContext = {
-      inlineContext: void 0,
-      cursor: new InlineRegionCursor(),
+    const context = createBuildContext(
+      this.#source,
+      this.#blockScanner,
+      this.#profile.inline,
       locator,
-      structure: this.#blockScanner,
-      profile: this.#profile.inline,
-      source: this.#source,
-    };
+      new InlineRegionCursor(),
+    );
 
     const root = this.#tree;
     const start = locator.locationAt(0);
