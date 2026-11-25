@@ -33,12 +33,12 @@ export function cloneLocation(location: SourceLocation): SourceLocation {
   };
 }
 
-function containingSegment(segments: number[], offset: number): number {
+function containingSegment(mappings: number[], offset: number): number {
   let low = 0;
-  let high = segments.length >>> 1;
+  let high = (mappings.length >>> 1) - 1;
   while (low < high) {
     const middle = (low + high) >>> 1;
-    if (offset < segments[middle * 2 + 1]) {
+    if (offset < mappings[middle * 2 + 1]) {
       high = middle;
     }
     else {
@@ -63,15 +63,15 @@ export class SourceView {
     if (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk) {
       const parts = [source.slice(firstStart, end)];
       let viewEnd = end - firstStart;
-      const segments = [firstStart, viewEnd];
+      const mappings = [firstStart, viewEnd];
       do {
         const start = tokens.start(token);
         end = tokens.end(token++);
         parts.push(source.slice(start, end));
-        segments.push(start - viewEnd, viewEnd += end - start);
+        mappings.push(start - viewEnd, viewEnd += end - start);
       }
       while (token < tokenEnd && tokens.kind(token) === BlockKind.InlineChunk);
-      this.#mappings = segments;
+      this.#mappings = mappings;
       this.text = parts.join("");
       return;
     }
@@ -89,27 +89,24 @@ export class SourceView {
     );
   }
 
-  /** Maps an offset at an internal gap to the following source segment. */
+  /** Maps an offset at an internal gap to the following source mapping. */
   mapOffset(offset: number): number {
     const mappings = this.#mappings;
     if (typeof mappings === "number") {
       return mappings + offset;
     }
-    if (offset === this.text.length) {
-      return mappings[mappings.length - 2] + offset;
-    }
-    const segment = containingSegment(mappings, offset);
-    return mappings[segment] + offset;
+    const index = containingSegment(mappings, offset);
+    return mappings[index] + offset;
   }
 
-  /** Maps an exclusive end at an internal gap to the preceding source segment. */
+  /** Maps an exclusive end at an internal gap to the preceding source mapping. */
   mapEnd(offset: number): number {
     const mappings = this.#mappings;
     if (typeof mappings === "number") {
       return mappings + offset;
     }
-    const segment = containingSegment(mappings, Math.max(0, offset - 1));
-    return mappings[segment] + offset;
+    const index = containingSegment(mappings, Math.max(0, offset - 1));
+    return mappings[index] + offset;
   }
 
   shift(delta: number): void {
