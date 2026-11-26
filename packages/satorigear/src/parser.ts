@@ -1,7 +1,7 @@
 import type { Root } from "mdast";
 import { BlockScanner } from "./block/scanner.ts";
 import { type Document, DocumentImpl } from "./document.ts";
-import { compileProfile, type FeatureOptions } from "./profile/index.ts";
+import { createProfile, type FeatureOptions } from "./profile/index.ts";
 
 export interface Parser {
   createDocument: (source: string) => Document;
@@ -13,7 +13,7 @@ export interface ParserOptions {
 }
 
 export function createParser(options?: ParserOptions): Parser {
-  const profile = compileProfile(options?.features);
+  const profile = createProfile(options?.features);
   // One-shot trees retain no syntax references, so parses can reuse the block workspace.
   // Incremental documents receive an independent workspace below.
   let blockScanner: BlockScanner | undefined;

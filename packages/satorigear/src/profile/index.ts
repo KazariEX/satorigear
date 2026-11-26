@@ -1,5 +1,5 @@
-import { type BlockFeature, compileBlockProfile } from "../block/profile.ts";
-import { compileInlineProfile, type InlineFeature } from "../inline/profile.ts";
+import { type BlockFeature, createBlockProfile } from "../block/profile.ts";
+import { createInlineProfile, type InlineFeature } from "../inline/profile.ts";
 import { feature as featureAttributes } from "./features/attributes/index.ts";
 import { feature as featureBinding } from "./features/binding.ts";
 import { feature as featureBlockQuote } from "./features/blockquote.ts";
@@ -19,7 +19,6 @@ import { feature as featureParagraph } from "./features/paragraph.ts";
 import { feature as featureReference } from "./features/reference.ts";
 import { feature as featureTable } from "./features/table.ts";
 import { feature as featureText } from "./features/text.ts";
-import { compileInlineResolver } from "./resolve.ts";
 import type { MathOptions } from "./features/math/types.ts";
 import type { SyntaxProfile } from "./types.ts";
 
@@ -37,7 +36,7 @@ export interface FeatureOptions {
 }
 
 // Compilation builds the hot dispatch tables once; documents only retain the immutable result.
-export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
+export function createProfile(options: FeatureOptions = {}): SyntaxProfile {
   const features = [
     featureHeading,
     featureBreak,
@@ -104,13 +103,10 @@ export function compileProfile(options: FeatureOptions = {}): SyntaxProfile {
   }
 
   return {
-    block: compileBlockProfile(blockFeatures),
-    inline: compileInlineProfile(
-      inlineFeatures,
-      compileInlineResolver({
-        component: options.component === true,
-        footnote: options.footnote === true,
-      }),
-    ),
+    block: createBlockProfile(blockFeatures),
+    inline: createInlineProfile(inlineFeatures, {
+      component: options.component === true,
+      footnote: options.footnote === true,
+    }),
   };
 }

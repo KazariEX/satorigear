@@ -197,7 +197,10 @@ function generateInlineTokenizer(
   );
 }
 
-export function compileInlineTokenizer(rules: readonly InlineScanRule[]): InlineTokenizer {
+// eslint-disable-next-line ts/no-use-before-define
+export { create as createInlineTokenizer };
+
+function create(rules: readonly InlineScanRule[]): InlineTokenizer {
   const scanners: InlineScanRule["scan"][] = [];
   const codes: number[] = [];
   for (const rule of rules) {

@@ -103,7 +103,7 @@ function composeInterrupts(interrupts: BlockInterrupt[][]): BlockInterrupt {
   };
 }
 
-export function compileBlockProfile(features: readonly BlockFeature[]): BlockProfile {
+export function createBlockProfile(features: readonly BlockFeature[]): BlockProfile {
   const builds: (BlockNodeBuilder | undefined)[] = [];
   const decorators: BlockDecoratorRegistration[] = [];
   const fallbacks: BlockStart[] = [];

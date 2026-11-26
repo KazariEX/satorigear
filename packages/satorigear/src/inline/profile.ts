@@ -1,4 +1,5 @@
-import { compileInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./tokenizer.ts";
+import { createInlineResolver, type InlineResolver, type InlineResolverOptions } from "../profile/resolve.ts";
+import { createInlineTokenizer, type InlineScanRule, type InlineTokenizer } from "./tokenizer.ts";
 import type { InlineKind } from "../constants/inline.ts";
 import type {
   InlineBuilder,
@@ -7,8 +8,6 @@ import type {
   InlineTextBuilder,
   InlineTokenDecorator,
 } from "../fragment/inline.ts";
-// Inline features compile into one token pipeline and the projection tables that consume it.
-import type { InlineResolver, InlineResolverFactory } from "../profile/resolve.ts";
 import type { DelimiterConfig } from "./delimiter.ts";
 
 export type InlineBuildRule =
@@ -36,7 +35,7 @@ export type InlineBuildRule =
 export interface InlineFeature {
   /** Recognize source ranges and append raw inline tokens. */
   scans?: readonly InlineScanRule[];
-  /** Participate in compiled delimiter pairing. */
+  /** Participate in resolved delimiter pairing. */
   delimiters?: readonly DelimiterConfig[];
   /** Build semantic nodes from the resolved token stream. */
   builds?: readonly InlineBuildRule[];
@@ -48,9 +47,9 @@ export interface InlineProfile {
   tokenize: InlineTokenizer;
 }
 
-export function compileInlineProfile(
+export function createInlineProfile(
   features: readonly InlineFeature[],
-  compileInlineResolver: InlineResolverFactory,
+  resolverOptions: InlineResolverOptions,
 ): InlineProfile {
   const builders: (InlineBuilder | undefined)[] = [];
   const delimiters: DelimiterConfig[] = [];
@@ -85,7 +84,7 @@ export function compileInlineProfile(
 
   return {
     builders,
-    resolve: compileInlineResolver(delimiters),
-    tokenize: compileInlineTokenizer(scanRules),
+    resolve: createInlineResolver(resolverOptions, delimiters),
+    tokenize: createInlineTokenizer(scanRules),
   };
 }

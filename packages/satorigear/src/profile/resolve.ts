@@ -1,6 +1,6 @@
 import { Character } from "../constants/character.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
-import { compileDelimiterConfigs, type DelimiterConfig, DelimiterStack, emitResolvedTokens } from "../inline/delimiter.ts";
+import { type DelimiterConfig, DelimiterStack, emitResolvedTokens, resolveDelimiterConfigs } from "../inline/delimiter.ts";
 import {
   inlineTokenCount,
   inlineTokenEnd,
@@ -15,7 +15,7 @@ import { footnoteLabelAt } from "./features/footnote/shared.ts";
 import { isSpaceTabOrLineEnding, normalizeIdentifier } from "./utils.ts";
 import type { DefinitionLookup } from "../block/tokens.ts";
 
-interface InlineResolverOptions {
+export interface InlineResolverOptions {
   component: boolean;
   footnote: boolean;
 }
@@ -26,8 +26,6 @@ export type InlineResolver = (
   definitions: DefinitionLookup,
   consume?: boolean,
 ) => InlineTokenStream;
-
-export type InlineResolverFactory = (delimiters: readonly DelimiterConfig[]) => InlineResolver;
 
 function referenceLabelEnd(source: string, start: number): number {
   if (source.charCodeAt(start) !== Character.LeftSquareBracket) {
@@ -164,7 +162,7 @@ function resolvePairs(
   tokens: number[],
   definitions: DefinitionLookup,
   options: InlineResolverOptions,
-  delimiters: ReturnType<typeof compileDelimiterConfigs>,
+  delimiters: ReturnType<typeof resolveDelimiterConfigs>,
   start: number,
 ): InlineTokenStream {
   // This suffix is owned by resolution. The lexer stream retained for edits stays reusable.
@@ -299,67 +297,66 @@ function resolvePairs(
   return scopes.emit(tokens);
 }
 
-export function compileInlineResolver(options: InlineResolverOptions): InlineResolverFactory {
-  return (delimiterConfigs) => {
-    const delimiterByKind = compileDelimiterConfigs(delimiterConfigs);
-    return (source, tokens, definitions, consume) => {
-      let start = 0;
-      let resolved = consume ? tokens as number[] : void 0;
-      let literalBrackets = 0;
-      const end = inlineTokenCount(tokens);
-      while (start < end) {
-        const kind = inlineTokenKind(tokens, start);
-        if (kind >= InlineRole.Text) {
-          start++;
-          continue;
-        }
-        if (kind !== InlineKind.BracketOpen && kind !== InlineKind.ImageOpen) {
-          break;
-        }
-        if (kind === InlineKind.BracketOpen && options.component && opensComponentLabel(tokens, start)) {
-          break;
-        }
-        let close = start + 1;
-        while (close < end) {
-          const inner = inlineTokenKind(tokens, close);
-          if (inner < InlineRole.Text || inner === InlineKind.LinkTail) {
-            break;
-          }
-          close++;
-        }
-        const closing = close === end ? InlineKind.None : inlineTokenKind(tokens, close);
-        const resource = closing === InlineKind.LinkTail;
-        if (
-          closing !== InlineKind.None && !resource && (
-            closing !== InlineKind.BracketClose ||
-            options.component ||
-            options.footnote && source.charCodeAt(inlineTokenEnd(tokens, start)) === Character.CircumflexAccent || definitions.hasDefinitions()
-          )
-        ) {
-          break;
-        }
-        if (!resource) {
-          // The opener and any closer remain literal. The tokens between them are semantic.
-          literalBrackets += close < end ? 2 : 1;
-          start = close < end ? close + 1 : end;
-          continue;
-        }
-        // A flat resource changes only its two boundaries, preserving every token index.
-        resolved ??= tokens.slice();
-        const opening = kind === InlineKind.ImageOpen ? InlineKind.ImageLinkOpen : InlineKind.LinkOpen;
-        resolved[start * InlineTokenField.Stride | InlineTokenField.Kind] = opening;
-        resolved[close * InlineTokenField.Stride | InlineTokenField.Kind] = opening + 1;
-        start = close + 1;
+export function createInlineResolver(options: InlineResolverOptions, delimiters: DelimiterConfig[]): InlineResolver {
+  const delimiterByKind = resolveDelimiterConfigs(delimiters);
+  return (source, tokens, definitions, consume) => {
+    let start = 0;
+    let resolved = consume ? tokens as number[] : void 0;
+    let literalBrackets = 0;
+    const end = inlineTokenCount(tokens);
+    while (start < end) {
+      const kind = inlineTokenKind(tokens, start);
+      if (kind >= InlineRole.Text) {
+        start++;
+        continue;
       }
-      if (start === end) {
-        const settled = resolved ?? tokens;
-        switch (literalBrackets) {
-          case 0: return settled;
-          case end: return emptyArray;
-          default: return emitResolvedTokens(settled);
-        }
+      if (kind !== InlineKind.BracketOpen && kind !== InlineKind.ImageOpen) {
+        break;
       }
-      return resolvePairs(source, resolved ?? tokens.slice(), definitions, options, delimiterByKind, start);
-    };
+      if (kind === InlineKind.BracketOpen && options.component && opensComponentLabel(tokens, start)) {
+        break;
+      }
+      let close = start + 1;
+      while (close < end) {
+        const inner = inlineTokenKind(tokens, close);
+        if (inner < InlineRole.Text || inner === InlineKind.LinkTail) {
+          break;
+        }
+        close++;
+      }
+      const closing = close === end ? InlineKind.None : inlineTokenKind(tokens, close);
+      const resource = closing === InlineKind.LinkTail;
+      if (
+        closing !== InlineKind.None && !resource && (
+          closing !== InlineKind.BracketClose ||
+          options.component ||
+          options.footnote && source.charCodeAt(inlineTokenEnd(tokens, start)) === Character.CircumflexAccent ||
+          definitions.hasDefinitions()
+        )
+      ) {
+        break;
+      }
+      if (!resource) {
+        // The opener and any closer remain literal. The tokens between them are semantic.
+        literalBrackets += close < end ? 2 : 1;
+        start = close < end ? close + 1 : end;
+        continue;
+      }
+      // A flat resource changes only its two boundaries, preserving every token index.
+      resolved ??= tokens.slice();
+      const opening = kind === InlineKind.ImageOpen ? InlineKind.ImageLinkOpen : InlineKind.LinkOpen;
+      resolved[start * InlineTokenField.Stride | InlineTokenField.Kind] = opening;
+      resolved[close * InlineTokenField.Stride | InlineTokenField.Kind] = opening + 1;
+      start = close + 1;
+    }
+    if (start === end) {
+      const settled = resolved ?? tokens;
+      switch (literalBrackets) {
+        case 0: return settled;
+        case end: return emptyArray;
+        default: return emitResolvedTokens(settled);
+      }
+    }
+    return resolvePairs(source, resolved ?? tokens.slice(), definitions, options, delimiterByKind, start);
   };
 }

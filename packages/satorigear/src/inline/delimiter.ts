@@ -35,7 +35,7 @@ export type DelimiterConfig = BaseDelimiterConfig & (
   }
 );
 
-export interface CompiledDelimiterConfig {
+export interface ResolvedDelimiterConfig {
   single?: DelimiterPair;
   double?: DelimiterPair;
   bits: number;
@@ -43,7 +43,7 @@ export interface CompiledDelimiterConfig {
 
 interface DelimiterRun {
   tokenIndex: number;
-  config: CompiledDelimiterConfig;
+  config: ResolvedDelimiterConfig;
   start: number;
   remaining: number;
   state: number;
@@ -117,7 +117,7 @@ function delimiterCharacterClass(source: string, index: number): DelimiterClass 
   return DelimiterClass.Other;
 }
 
-function flanking(source: string, start: number, end: number, config: CompiledDelimiterConfig): number {
+function flanking(source: string, start: number, end: number, config: ResolvedDelimiterConfig): number {
   const before = delimiterCharacterClass(source, start - 1);
   const after = delimiterCharacterClass(source, end);
   // The higher class is inside the span.
@@ -157,7 +157,7 @@ export class DelimiterStack {
   readonly #replacements: DelimiterReplacement[][] = [];
   readonly #runs: DelimiterRun[] = [];
 
-  add(source: string, tokens: InlineTokenStream, tokenIndex: number, config: CompiledDelimiterConfig): void {
+  add(source: string, tokens: InlineTokenStream, tokenIndex: number, config: ResolvedDelimiterConfig): void {
     const offset = inlineTokenStart(tokens, tokenIndex);
     const end = inlineTokenEnd(tokens, tokenIndex);
     const length = end - offset;
@@ -316,11 +316,11 @@ export function emitResolvedTokens(
   return result;
 }
 
-export function compileDelimiterConfigs(
-  delimiterConfigs: readonly DelimiterConfig[],
-): readonly (CompiledDelimiterConfig | undefined)[] {
-  const delimiterByKind: (CompiledDelimiterConfig | undefined)[] = [];
-  delimiterConfigs.forEach((config, index) => {
+export function resolveDelimiterConfigs(
+  configs: readonly DelimiterConfig[],
+): readonly (ResolvedDelimiterConfig | undefined)[] {
+  const delimiterByKind: (ResolvedDelimiterConfig | undefined)[] = [];
+  configs.forEach((config, index) => {
     delimiterByKind[config.token] = {
       single: config.single,
       double: config.double,
