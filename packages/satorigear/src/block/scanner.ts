@@ -74,16 +74,6 @@ export class BlockScanContext {
     this.#lookaheadEnd = Math.max(this.#lookaheadEnd, end);
   }
 
-  resetLookahead(): void {
-    this.#lookaheadEnd = 0;
-  }
-
-  consumeLookahead(): number {
-    const end = this.#lookaheadEnd;
-    this.#lookaheadEnd = 0;
-    return end;
-  }
-
   /** Borrows the projected view for children of the active scan. */
   createLineView(
     lines: BlockLines,
@@ -185,6 +175,28 @@ export class BlockScanContext {
       this.#scanDepth--;
     }
   }
+
+  scanRecords(
+    source: string,
+    lines: BlockLines,
+    tokens: BlockTokenStream,
+    tokenOffset = 0,
+    stopsBefore?: (start: number) => boolean,
+  ): BlockRecord[] {
+    const records: BlockRecord[] = [];
+    this.#lookaheadEnd = 0;
+    this.scanBlockLines(source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
+      const end = lines.next(lineEnd - 1);
+      records.push({
+        start: lines.start(lineStart),
+        end,
+        dependencyEnd: Math.max(end, this.#lookaheadEnd),
+        tokenStart: tokenOffset + tokenStart,
+      });
+      this.#lookaheadEnd = 0;
+    }, stopsBefore);
+    return records;
+  }
 }
 
 // Projection and inline resolution borrow only the scanner's indexed semantic view.
@@ -234,41 +246,14 @@ export class BlockScanner {
     };
   }
 
-  #reset(source: string): void {
-    this.#context.resetLookahead();
-    this.#lines.scan(source, true);
-    this.tokens.reset();
-  }
-
   scan(source: string): void {
     this.#reset(source);
-    const context = this.#context;
-    const lines = this.#lines;
-    const tokens = this.tokens;
-    const records = this.#records;
-    let recordIndex = 0;
+    this.#records = this.#context.scanRecords(source, this.#lines, this.tokens);
+  }
 
-    context.scanBlockLines(source, lines, tokens, (lineStart, lineEnd, tokenStart) => {
-      const end = lines.next(lineEnd - 1);
-      const dependencyEnd = Math.max(end, context.consumeLookahead());
-      const record = records[recordIndex++];
-      // Reuse top-level records across indexed scans instead of allocating one per block.
-      if (record) {
-        record.start = lines.start(lineStart);
-        record.end = end;
-        record.dependencyEnd = dependencyEnd;
-        record.tokenStart = tokenStart;
-      }
-      else {
-        records.push({
-          start: lines.start(lineStart),
-          end,
-          dependencyEnd,
-          tokenStart,
-        });
-      }
-    });
-    records.length = recordIndex;
+  #reset(source: string): void {
+    this.#lines.scan(source, true);
+    this.tokens.reset();
   }
 
   get records(): readonly BlockRecord[] {
@@ -310,43 +295,27 @@ export class BlockScanner {
 
     // 2. Rescan from that boundary until the unchanged suffix starts at a shared root block boundary.
     const replacement = new BlockTokenStream();
-    const rescannedRecords: BlockRecord[] = [];
     const scanLines = scanLineStart === 0 ? lines : lines.view(scanLineStart);
     let oldRecordEnd = records.length;
     let candidate = affectedIndex;
-    context.resetLookahead();
-    context.scanBlockLines(
-      nextSource,
-      scanLines,
-      replacement,
-      (lineStart, lineEnd, tokenStart) => {
-        const end = scanLines.next(lineEnd - 1);
-        rescannedRecords.push({
-          start: scanLines.start(lineStart),
-          end,
-          dependencyEnd: Math.max(end, context.consumeLookahead()),
-          tokenStart: oldTokenStart + tokenStart,
-        });
-      },
-      (start) => {
-        if (start < changedSpan.end) {
-          return false;
-        }
-        const oldStart = start - offsetDelta;
-        // Moving a block across offset zero can change frontmatter recognition.
-        if (offsetDelta && (start === 0 || oldStart === 0) && this.builds[BlockKind.Frontmatter]) {
-          return false;
-        }
-        while (candidate < records.length && records[candidate].start < oldStart) {
-          candidate++;
-        }
-        if (records[candidate]?.start !== oldStart) {
-          return false;
-        }
-        oldRecordEnd = candidate;
-        return true;
-      },
-    );
+    const rescannedRecords = context.scanRecords(nextSource, scanLines, replacement, oldTokenStart, (start) => {
+      if (start < changedSpan.end) {
+        return false;
+      }
+      const oldStart = start - offsetDelta;
+      // Moving a block across offset zero can change frontmatter recognition.
+      if (offsetDelta && (start === 0 || oldStart === 0) && this.builds[BlockKind.Frontmatter]) {
+        return false;
+      }
+      while (candidate < records.length && records[candidate].start < oldStart) {
+        candidate++;
+      }
+      if (records[candidate]?.start !== oldStart) {
+        return false;
+      }
+      oldRecordEnd = candidate;
+      return true;
+    });
 
     // 3. Replace the rescanned token window, then map the narrowed token damage to record ranges.
     const oldTokenLength = this.tokens.length;
