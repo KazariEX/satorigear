@@ -23,6 +23,7 @@ export interface SourceLocator {
   normalizeLineEndings: (value: string) => string;
   locationAt: (offset: number) => SourceLocation;
   positionAt: (start: number, end: number) => SourcePosition;
+  locationEnd: () => SourceLocation;
 }
 
 export function cloneLocation(location: SourceLocation): SourceLocation {

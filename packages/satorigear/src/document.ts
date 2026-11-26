@@ -121,7 +121,11 @@ export class DocumentImpl implements Document {
   #updateTree(invalidatedBlocks: readonly number[], change?: BlockScanChange): void {
     const records = this.#blockScanner.records;
     const regionsByBlock = this.#regionState.regionsByBlock;
-    const locator = this.#blockScanner.locator();
+    const root = this.#tree;
+    const children = root.children;
+    const rebuildStart = change?.stableBlockCount ?? 0;
+    const first = Math.min(rebuildStart, invalidatedBlocks[0] ?? rebuildStart);
+    const locator = this.#blockScanner.locator(children[first - 1]?.position?.end.line);
 
     // Reuse one cursor across all rebuilt blocks; emitted nodes retain no build context.
     const context = createBuildContext(
@@ -132,10 +136,6 @@ export class DocumentImpl implements Document {
       new InlineRegionCursor(),
     );
 
-    const root = this.#tree;
-    const start = locator.locationAt(0);
-    const children = root.children;
-    const rebuildStart = change?.stableBlockCount ?? 0;
     const oldRebuildEnd = change?.oldRecordEnd ?? 0;
     const newRebuildEnd = change?.newRecordEnd ?? records.length;
     const blockDelta = newRebuildEnd - oldRebuildEnd;
@@ -203,8 +203,12 @@ export class DocumentImpl implements Document {
       children[index] = buildTreeBlock(records[index], regionsByBlock[index], context);
     }
     root.position = {
-      start,
-      end: locator.locationAt(this.#source.length),
+      start: {
+        line: 1,
+        column: 1,
+        offset: 0,
+      },
+      end: locator.locationEnd(),
     };
   }
 }

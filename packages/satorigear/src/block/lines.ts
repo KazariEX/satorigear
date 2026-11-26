@@ -266,7 +266,7 @@ export class BlockLines implements SourceLocator {
   }
 
   /** Resets and returns the line-owned locator for monotonically increasing source offsets. */
-  locator(): SourceLocator {
+  locator(startLine?: number): SourceLocator {
     let field = this.#length * BlockLineField.Stride;
     const emptyLast = (
       field === 0 ||
@@ -282,7 +282,7 @@ export class BlockLines implements SourceLocator {
       field += BlockLineField.Stride;
     }
     fields[field | BlockLineField.Start] = this.#sourceLength + 1;
-    this.advanceToLine(0);
+    this.advanceToLine(startLine ?? 0);
     return this;
   }
 
@@ -291,7 +291,7 @@ export class BlockLines implements SourceLocator {
     const field = index * BlockLineField.Stride;
     this.#locatorLine = index + 1;
     this.#locatorStart = this.#fields[field | BlockLineField.Start];
-    this.#locatorNext = this.#fields[(field + BlockLineField.Stride) | BlockLineField.Start];
+    this.#locatorNext = this.#fields[field + BlockLineField.Stride | BlockLineField.Start];
   }
 
   /** Normalizes a fragment only when retained source may contain carriage returns. */
@@ -328,11 +328,22 @@ export class BlockLines implements SourceLocator {
     };
   }
 
-  /** Locates both boundaries when no nested projection must occur between them. */
+  /** Locates both boundaries when no nested location must occur between them. */
   positionAt(start: number, end: number): SourcePosition {
     return {
       start: this.locationAt(start),
       end: this.locationAt(end),
+    };
+  }
+
+  /** Reads the document end without moving the ordered position cursor. */
+  locationEnd(): SourceLocation {
+    const offset = this.#sourceLength;
+    const index = this.start(this.#length) === offset ? this.#length : this.#length - 1;
+    return {
+      line: index + 1,
+      column: offset - this.start(index) + 1,
+      offset,
     };
   }
 
@@ -431,6 +442,12 @@ export class BlockLines implements SourceLocator {
     this.pushFrom(lines, index, void 0, void 0, true);
   }
 
+  pop(): void {
+    if (this.#length > 0) {
+      this.#length--;
+    }
+  }
+
   resetFrom(
     lines: BlockLines,
     index: number,
@@ -495,12 +512,6 @@ export class BlockLines implements SourceLocator {
     this.#normalized &&= changed.#normalized;
     if (delta !== 0) {
       this.#shiftPositions(nextSuffix, delta);
-    }
-  }
-
-  pop(): void {
-    if (this.#length > 0) {
-      this.#length--;
     }
   }
 

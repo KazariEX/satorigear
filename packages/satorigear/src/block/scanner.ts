@@ -210,7 +210,6 @@ export class BlockScanner {
     const locator = lines.locator();
     const context = createBuildContext(source, this, profile, locator);
 
-    const start = locator.locationAt(0);
     let token = 0;
     for (let index = 0; index < children.length; index++) {
       const entry = children[index];
@@ -224,7 +223,14 @@ export class BlockScanner {
     return {
       type: "root",
       children: children as TopLevelContent[],
-      position: { start, end: locator.locationAt(source.length) },
+      position: {
+        start: {
+          line: 1,
+          column: 1,
+          offset: 0,
+        },
+        end: locator.locationEnd(),
+      },
     };
   }
 
@@ -269,8 +275,8 @@ export class BlockScanner {
     return this.#records;
   }
 
-  locator(): SourceLocator {
-    return this.#lines.locator();
+  locator(startLine?: number): SourceLocator {
+    return this.#lines.locator(startLine);
   }
 
   edit(change: SourceChange): BlockScanChange {
