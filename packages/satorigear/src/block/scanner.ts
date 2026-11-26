@@ -97,6 +97,7 @@ export class BlockScanContext {
     sequence?: RootSequence,
   ): void {
     const { starts, fallback } = this.#profile;
+    const physicallyContiguous = lines.physicallyContiguous();
     this.#scanDepth++;
     try {
       for (let index = 0; index < lines.length;) {
@@ -111,7 +112,7 @@ export class BlockScanContext {
         }
         // Scan leading whitespace once to distinguish blank lines from block indent.
         let contentOffset = start;
-        let columns = lines.prefixColumns(index);
+        let columns = physicallyContiguous ? 0 : lines.prefixColumns(index);
         let code = Character.VirtualBlockIndent;
         while (contentOffset < lineEnd) {
           code = source.charCodeAt(contentOffset);

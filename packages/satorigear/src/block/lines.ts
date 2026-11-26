@@ -124,7 +124,6 @@ class Latin1 {
             fields[field | BlockLineField.Start] = start;
             fields[field | BlockLineField.End] = at;
             fields[field | BlockLineField.Next] = next;
-            fields[field | BlockLineField.State] = 0;
             field += BlockLineField.Stride;
             start = next;
           }
@@ -142,7 +141,6 @@ class Latin1 {
       fields[field | BlockLineField.Start] = start;
       fields[field | BlockLineField.End] = limit;
       fields[field | BlockLineField.Next] = limit;
-      fields[field | BlockLineField.State] = 0;
       field += BlockLineField.Stride;
     }
 
@@ -186,7 +184,6 @@ class Index0 {
       fields[field | BlockLineField.Start] = start;
       fields[field | BlockLineField.End] = end;
       fields[field | BlockLineField.Next] = next;
-      fields[field | BlockLineField.State] = 0;
       field += BlockLineField.Stride;
       start = next;
     }
