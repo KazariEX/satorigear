@@ -8,144 +8,110 @@ import type { InlineTokenStream } from "./tokens.ts";
 
 const definitionAny = Symbol();
 
-class TrackedDefinitionLookup implements DefinitionLookup {
-  readonly definitions: DefinitionLookup;
-  dependencies?: Set<string> | typeof definitionAny;
+export type ResolvedInlineRegion = Readonly<
+  Pick<InlineRegion, "tokenStart" | "tokens" | "view">
+>;
 
-  constructor(definitions: DefinitionLookup) {
-    this.definitions = definitions;
+interface InlineRegion {
+  tokenStart: number;
+  view: SourceView;
+  tokens: InlineTokenStream;
+  rawTokens: InlineTokenStream;
+  dependencies: ReadonlySet<string> | typeof definitionAny;
+}
+
+function isDefinitionShared(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  const smaller = left.size < right.size ? left : right;
+  const larger = smaller === left ? right : left;
+  for (const key of smaller) {
+    if (larger.has(key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+class InlineRegionResolver implements DefinitionLookup {
+  #profile: InlineProfile;
+  #definitions: DefinitionLookup;
+  #dependencies?: Set<string> | typeof definitionAny;
+
+  constructor(profile: InlineProfile, definitions: DefinitionLookup) {
+    this.#profile = profile;
+    this.#definitions = definitions;
   }
 
   hasDefinition(key: string): boolean {
-    if (this.dependencies !== definitionAny) {
-      this.dependencies ??= new Set();
-      this.dependencies.add(key);
+    if (this.#dependencies !== definitionAny) {
+      this.#dependencies ??= new Set();
+      this.#dependencies.add(key);
     }
-    return this.definitions.hasDefinition(key);
+    return this.#definitions.hasDefinition(key);
   }
 
   hasDefinitions(): boolean {
-    const hasAny = this.definitions.hasDefinitions();
+    const hasAny = this.#definitions.hasDefinitions();
     if (!hasAny) {
       // Without keys to consult, any later definition can change a bracket candidate.
-      this.dependencies = definitionAny;
+      this.#dependencies = definitionAny;
     }
     return hasAny;
   }
-}
-
-export interface ResolvedInlineRegion {
-  readonly tokenStart: number;
-  readonly tokens: InlineTokenStream;
-  readonly view: SourceView;
-}
-
-class InlineRegion implements ResolvedInlineRegion {
-  // Track consulted definitions, or all future definitions when no concrete key can be consulted.
-  #definitionDependencies!: ReadonlySet<string> | typeof definitionAny;
-  // Keep unresolved tokens so a definition-map change can re-resolve without re-lexing unchanged text.
-  #rawTokens?: InlineTokenStream;
-  #profile: InlineProfile;
-  tokens!: InlineTokenStream;
-  tokenStart: number;
-  view: SourceView;
-
-  constructor(
-    profile: InlineProfile,
-    tokenStart: number,
-    view: SourceView,
-    definitions: TrackedDefinitionLookup,
-  ) {
-    this.#profile = profile;
-    this.tokenStart = tokenStart;
-    this.view = view;
-    this.#updateTokens(view, definitions, emptySet);
-  }
 
   update(
+    previous: InlineRegion | undefined,
     tokenStart: number,
     view: SourceView,
-    definitions: TrackedDefinitionLookup,
-    definitionMembershipChanges: ReadonlySet<string>,
-  ): this {
-    this.#updateTokens(view, definitions, definitionMembershipChanges);
-    this.tokenStart = tokenStart;
-    this.view = view;
-    return this;
-  }
-
-  updateDefinitions(
-    definitions: TrackedDefinitionLookup,
-    definitionMembershipChanges: ReadonlySet<string>,
-  ): boolean {
-    return this.#updateTokens(this.view, definitions, definitionMembershipChanges);
-  }
-
-  shift(delta: number, tokenDelta: number): void {
-    this.tokenStart += tokenDelta;
-    this.view.shift(delta);
-  }
-
-  #dependenciesChanged(definitionMembershipChanges: ReadonlySet<string>): boolean {
-    const dependencies = this.#definitionDependencies;
-    if (dependencies === definitionAny) {
-      return definitionMembershipChanges.size > 0;
+    changes: ReadonlySet<string>,
+  ): InlineRegion {
+    if (previous && previous.view.text === view.text) {
+      previous.tokenStart = tokenStart;
+      previous.view = view;
+      this.updateDefinitions(previous, changes);
+      return previous;
     }
-    // Definition-heavy edits stay linear in the smaller side of the intersection.
-    if (dependencies.size < definitionMembershipChanges.size) {
-      for (const key of dependencies) {
-        if (definitionMembershipChanges.has(key)) {
-          return true;
-        }
-      }
-    }
-    else {
-      for (const key of definitionMembershipChanges) {
-        if (dependencies.has(key)) {
-          return true;
-        }
-      }
-    }
-    return false;
+    const rawTokens = view.tokenize(this.#profile.tokenize);
+    const tokens = this.#resolve(view, rawTokens);
+    return {
+      tokenStart,
+      view,
+      tokens,
+      rawTokens,
+      dependencies: this.#dependencies ?? emptySet,
+    };
   }
 
-  #updateTokens(
-    view: SourceView,
-    definitions: TrackedDefinitionLookup,
-    definitionMembershipChanges: ReadonlySet<string>,
-  ): boolean {
-    const previousTokens = this.#rawTokens;
-    const sourceUnchanged = previousTokens !== void 0 && view.text === this.view.text;
-    if (sourceUnchanged && !this.#dependenciesChanged(definitionMembershipChanges)) {
+  updateDefinitions(region: InlineRegion, changes: ReadonlySet<string>): boolean {
+    if (changes.size === 0) {
       return false;
     }
-
-    // Incremental regions retain exactly the definition lookups that can invalidate them.
-    definitions.dependencies = void 0;
-    const rawTokens = sourceUnchanged ? previousTokens : view.tokenize(this.#profile.tokenize);
-    const tokens = this.#profile.resolve(view.text, rawTokens, definitions);
-
-    this.#definitionDependencies = definitions.dependencies ?? emptySet;
-    this.#rawTokens = rawTokens;
-    this.tokens = tokens;
+    const dependencies = region.dependencies;
+    if (dependencies !== definitionAny && !isDefinitionShared(dependencies, changes)) {
+      return false;
+    }
+    region.tokens = this.#resolve(region.view, region.rawTokens);
+    region.dependencies = this.#dependencies ?? emptySet;
     return true;
+  }
+
+  #resolve(view: SourceView, rawTokens: InlineTokenStream): InlineTokenStream {
+    this.#dependencies = void 0;
+    return this.#profile.resolve(view.text, rawTokens, this);
   }
 }
 
 export class InlineRegionState {
   // Inline regions resolve serially, so one tracker can serve every update.
-  #lookup: TrackedDefinitionLookup;
-  #profile: InlineProfile;
+  #resolver: InlineRegionResolver;
   #regionsByBlock: (readonly InlineRegion[])[] = [];
   #structure: BlockStructure;
 
   constructor(profile: InlineProfile, structure: BlockStructure) {
-    this.#lookup = new TrackedDefinitionLookup(structure.tokens);
-    this.#profile = profile;
+    this.#resolver = new InlineRegionResolver(profile, structure.tokens);
     this.#structure = structure;
   }
 
-  get regionsByBlock(): readonly (readonly InlineRegion[])[] {
+  get regionsByBlock(): readonly (readonly ResolvedInlineRegion[])[] {
     return this.#regionsByBlock;
   }
 
@@ -216,10 +182,7 @@ export class InlineRegionState {
         }
         const view = new SourceView();
         view.reset(source, tokens, token, nodeLength);
-        regions.push(
-          candidate?.update(token, view, this.#lookup, definitionMembershipChanges) ??
-          new InlineRegion(this.#profile, token, view, this.#lookup),
-        );
+        regions.push(this.#resolver.update(candidate, token, view, definitionMembershipChanges));
         token += nodeLength - 1;
       }
 
@@ -232,7 +195,8 @@ export class InlineRegionState {
     if (offsetDelta !== 0 || suffixTokenDelta !== 0) {
       for (let index = newRecordEnd; index < regionsByBlock.length; index++) {
         for (const region of regionsByBlock[index]) {
-          region.shift(offsetDelta, suffixTokenDelta);
+          region.tokenStart += suffixTokenDelta;
+          region.view.shift(offsetDelta);
         }
       }
     }
@@ -245,7 +209,7 @@ export class InlineRegionState {
           const regions = regionsByBlock[index];
           let changed = false;
           for (const region of regions) {
-            if (region.updateDefinitions(this.#lookup, definitionMembershipChanges)) {
+            if (this.#resolver.updateDefinitions(region, definitionMembershipChanges)) {
               changed = true;
             }
           }
