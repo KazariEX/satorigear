@@ -22,20 +22,18 @@ interface Fence extends Pick<BlockStartRegistration, "codes" | "interrupt"> {
 }
 
 export function createFence(options: FenceOptions): Fence {
-  const { marker, normalizeEndings } = options;
-  const opening = createOpening(marker, options);
-  const closing = createClosing(marker);
+  const { marker, minimumLength, allowMarkerInInfo, normalizeEndings } = options;
+  const escaped = "\\u" + marker.toString(16).padStart(4, "0");
+  const group = `(?:${escaped.repeat(minimumLength)})`;
+  const remains = `${escaped}{0,${minimumLength - 1}}`;
+  const opening = new RegExp(`${group}+${remains + (
+    allowMarkerInInfo ? "" : `(?=[^${escaped}\\r\\n]*(?:\\r|\\n|$))`
+  )}`, "y");
+  const closing = new RegExp(`${group}*${remains}[ \t]*`, "y");
 
-  // Block dispatch already matched the first marker.
-  function openingEnd(source: string, markerOffset: number): number {
-    if (
-      source.charCodeAt(markerOffset + 1) === marker && (
-        opening.lastIndex = markerOffset + 2, opening.test(source)
-      )
-    ) {
-      return opening.lastIndex;
-    }
-    return -1;
+  function openingEnd(source: string, offset: number): number {
+    opening.lastIndex = offset;
+    return opening.test(source) ? opening.lastIndex : -1;
   }
 
   return {
@@ -71,21 +69,6 @@ export function createFence(options: FenceOptions): Fence {
       };
     },
   };
-}
-
-function createOpening(marker: number, options: FenceOptions): RegExp {
-  const escaped = "\\u" + marker.toString(16).padStart(4, "0");
-  const pattern = escaped + "{" + (options.minimumLength - 2) + ",}" + (
-    !options.allowMarkerInInfo
-      ? "(?=[^" + escaped + "\\r\\n]*(?:\\r|\\n|$))"
-      : ""
-  );
-  return new RegExp(pattern, "y");
-}
-
-function createClosing(marker: number): RegExp {
-  const escaped = "\\u" + marker.toString(16).padStart(4, "0");
-  return new RegExp(escaped + "*[ \t]*", "y");
 }
 
 /** Returns the closing line, or the exclusive search limit for an unclosed fence. */
