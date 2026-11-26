@@ -229,61 +229,36 @@ export class BlockTokenStream implements DefinitionLookup {
     // 2. Replace packed fields in place. A size-changing middle edit shifts the suffix,
     // growing the dense backing store only when its retained capacity is insufficient.
     const fieldStart = start * BlockTokenField.Stride;
-    const replacementFieldLength = replacement.#fieldLength;
-    let fieldLength = this.#fieldLength;
-    if (end === previousLength) {
-      fieldLength = fieldStart + replacementFieldLength;
-      this.#ensureCapacity(fieldLength);
+    const indexDelta = replacementLength - replacedLength;
+    const newSuffixStart = start + replacementLength;
+    const fieldLength = this.#fieldLength + indexDelta * BlockTokenField.Stride;
+    this.#ensureCapacity(fieldLength);
+    if (indexDelta !== 0 && end < previousLength) {
+      this.#fields.copyWithin(newSuffixStart * BlockTokenField.Stride, end * BlockTokenField.Stride, this.#fieldLength);
     }
-    else if (replacementLength !== replacedLength) {
-      const oldFieldEnd = end * BlockTokenField.Stride;
-      const newFieldEnd = fieldStart + replacementFieldLength;
-      fieldLength += newFieldEnd - oldFieldEnd;
-      this.#ensureCapacity(fieldLength);
-      this.#fields.copyWithin(newFieldEnd, oldFieldEnd, this.#fieldLength);
-    }
-    this.#fields.set(replacement.#fields.subarray(0, replacementFieldLength), fieldStart);
+    this.#fields.set(replacement.#fields.subarray(0, replacement.#fieldLength), fieldStart);
     this.#fieldLength = fieldLength;
 
-    // 4. Splice sparse metadata. Stable indexes update in place; a size-changing
-    // middle replacement shifts suffix slots into a new array.
-    const indexDelta = replacementLength - replacedLength;
-    if (end === previousLength || indexDelta === 0) {
-      const metadata = this.#metadata;
-      if (metadata) {
+    // 3. Preserve metadata outside the replaced range. Only a shifted suffix needs new slots.
+    const metadata = this.#metadata;
+    if (metadata) {
+      if (end === previousLength || end >= metadata.length) {
+        metadata.length = Math.min(start, metadata.length);
+      }
+      else if (indexDelta === 0) {
         metadata.fill(void 0, start, end);
       }
-      const replacementMetadata = replacement.#metadata;
-      if (replacementMetadata) {
-        const target = this.#metadata ??= [];
-        copyMetadata(target, replacementMetadata, 0, replacementLength, start);
-      }
-      if (end === previousLength && this.#metadata) {
-        this.#metadata.length = Math.min(this.#metadata.length, start + replacementLength);
+      else {
+        const shifted = this.#metadata = [];
+        copyMetadata(shifted, metadata, 0, start, 0);
+        copyMetadata(shifted, metadata, end, previousLength, newSuffixStart);
       }
     }
-    else {
-      const metadata: (BlockTokenMeta | undefined)[] = [];
-      const previousMetadata = this.#metadata;
-      if (previousMetadata) {
-        copyMetadata(metadata, previousMetadata, 0, start, 0);
-        copyMetadata(
-          metadata,
-          previousMetadata,
-          end,
-          previousMetadata.length,
-          end + indexDelta,
-        );
-      }
-      const replacementMetadata = replacement.#metadata;
-      if (replacementMetadata) {
-        copyMetadata(metadata, replacementMetadata, 0, replacementLength, start);
-      }
-      this.#metadata = metadata.length > 0 ? metadata : void 0;
+    if (replacement.#metadata) {
+      copyMetadata(this.#metadata ??= [], replacement.#metadata, 0, replacementLength, start);
     }
 
     // All coordinates stay absolute, so the retained suffix moves once with this edit.
-    const newSuffixStart = start + replacementLength;
     if (sourceDelta !== 0 && newSuffixStart < this.length) {
       const suffixFieldStart = newSuffixStart * BlockTokenField.Stride;
       for (let field = suffixFieldStart; field < this.#fieldLength; field += BlockTokenField.Stride) {

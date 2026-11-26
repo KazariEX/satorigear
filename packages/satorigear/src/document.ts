@@ -2,6 +2,7 @@ import type { Root, TopLevelContent } from "mdast";
 import { type BlockRecord, type BlockScanChange, BlockScanner, type SourceChange } from "./block/scanner.ts";
 import { type BlockBuildContext, buildBlockNode, createBuildContext } from "./fragment/block.ts";
 import { InlineRegionCursor, InlineRegionState, type ResolvedInlineRegion } from "./inline/region.ts";
+import { shiftTail } from "./primitives.ts";
 import type { SyntaxProfile } from "./profile/types.ts";
 import type { SourceLocation, SourceSpan } from "./source-view.ts";
 
@@ -138,23 +139,11 @@ export class DocumentImpl implements Document {
 
     const oldRebuildEnd = change?.oldRecordEnd ?? 0;
     const newRebuildEnd = change?.newRecordEnd ?? records.length;
-    const blockDelta = newRebuildEnd - oldRebuildEnd;
     const suffixOffsetDelta = change?.offsetDelta ?? 0;
 
     // 1. Align materialized children with the scanner's record replacement by moving the
     // retained suffix once; rebuilt nodes fill the replacement slots below.
-    if (blockDelta > 0 && children.length > 0) {
-      const previousLength = children.length;
-      children.length += blockDelta;
-      children.copyWithin(newRebuildEnd, oldRebuildEnd, previousLength);
-    }
-    else if (blockDelta > 0) {
-      children.length = blockDelta;
-    }
-    else if (blockDelta < 0) {
-      children.copyWithin(newRebuildEnd, oldRebuildEnd);
-      children.length += blockDelta;
-    }
+    shiftTail(children, oldRebuildEnd, newRebuildEnd);
 
     // 2. Rebuild sparse definition invalidations before the continuous scanner damage range,
     // then replace every child within that range.
