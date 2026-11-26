@@ -1,6 +1,6 @@
 import { Character } from "../constants/character.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
-import { compileDelimiterConfigs, type DelimiterConfig, DelimiterStack } from "../inline/delimiter.ts";
+import { compileDelimiterConfigs, type DelimiterConfig, DelimiterStack, emitResolvedTokens } from "../inline/delimiter.ts";
 import {
   inlineTokenCount,
   inlineTokenEnd,
@@ -296,7 +296,7 @@ function resolvePairs(
     scopes.close(tokens, open);
   }
   scopes.close(tokens);
-  return scopes.emitResolvedTokens(tokens);
+  return scopes.emit(tokens);
 }
 
 export function compileInlineResolver(options: InlineResolverOptions): InlineResolverFactory {
@@ -356,7 +356,7 @@ export function compileInlineResolver(options: InlineResolverOptions): InlineRes
         switch (literalBrackets) {
           case 0: return settled;
           case end: return emptyArray;
-          default: return new DelimiterStack().emitResolvedTokens(settled);
+          default: return emitResolvedTokens(settled);
         }
       }
       return resolvePairs(source, resolved ?? tokens.slice(), definitions, options, delimiterByKind, start);

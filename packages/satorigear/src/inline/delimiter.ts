@@ -1,5 +1,6 @@
 import { Character } from "../constants/character.ts";
 import { InlineKind, InlineRole } from "../constants/inline.ts";
+import { emptyArray } from "../primitives.ts";
 import { isAsciiPunctuation, isAsciiWhitespace } from "../profile/utils.ts";
 import {
   appendInlineToken,
@@ -256,69 +257,63 @@ export class DelimiterStack {
     this.#replacements[index].push({ start, end, kind });
   }
 
-  emitResolvedTokens(tokens: InlineTokenStream): InlineTokenStream {
-    let end = inlineTokenCount(tokens);
-    let index = 0;
-    while (index < end && inlineTokenKind(tokens, index) >= InlineRole.Text) {
-      index++;
-    }
-    if (index === end) {
-      return tokens;
-    }
-    // Past the last partial match, trailing raw markers remain implicit source text.
-    const limit = Math.max(index, this.#replacements.length);
-    while (end > limit && inlineTokenKind(tokens, end - 1) < InlineRole.Text) {
-      end--;
-    }
-    const result = tokens.slice(0, index * InlineTokenField.Stride);
-    for (; index < end; index++) {
-      const kind = inlineTokenKind(tokens, index);
-      if (kind >= InlineRole.Text) {
-        const field = index * InlineTokenField.Stride;
-        result.push(
-          kind,
-          tokens[field + InlineTokenField.Start],
-          tokens[field + InlineTokenField.End],
-          tokens[field + InlineTokenField.Data],
-        );
-      }
-      else if (kind !== InlineKind.None) {
-        this.#appendMatches(result, tokens, index);
-      }
-    }
-    return result;
-  }
-
-  #appendMatches(result: number[], tokens: InlineTokenStream, tokenIndex: number): void {
-    const matched = this.#replacements[tokenIndex];
-    let last: DelimiterReplacement | undefined;
-    if (matched) {
-      // Closing matches arrive in source order, followed by opening matches in reverse.
-      let left = 0;
-      let right = matched.length;
-      while (left < right) {
-        last = matched[left].kind & 1 ? matched[left++] : matched[--right];
-        appendInlineToken(result, last.kind, last.start, last.end);
-      }
-    }
-    appendMarkerText(result, tokens, tokenIndex, last?.end);
+  emit(tokens: InlineTokenStream): InlineTokenStream {
+    return emitResolvedTokens(tokens, this.#replacements);
   }
 }
 
-/** A decorator may attach to the literal portion left after a marker run. */
-function appendMarkerText(
-  result: number[],
+export function emitResolvedTokens(
   tokens: InlineTokenStream,
-  tokenIndex: number,
-  afterMatch?: number,
-): void {
-  if (inlineTokenKind(tokens, tokenIndex + 1) >= InlineRole.Decorate) {
-    const start = afterMatch ?? inlineTokenStart(tokens, tokenIndex);
-    const end = inlineTokenEnd(tokens, tokenIndex);
-    if (start < end) {
-      appendInlineToken(result, InlineKind.LiteralText, start, end);
+  replacements: readonly DelimiterReplacement[][] = emptyArray,
+): InlineTokenStream {
+  let end = inlineTokenCount(tokens);
+  let index = 0;
+  while (index < end && inlineTokenKind(tokens, index) >= InlineRole.Text) {
+    index++;
+  }
+  if (index === end) {
+    return tokens;
+  }
+  // Past the last partial match, trailing raw markers remain implicit source text.
+  const limit = Math.max(index, replacements.length);
+  while (end > limit && inlineTokenKind(tokens, end - 1) < InlineRole.Text) {
+    end--;
+  }
+  const result = tokens.slice(0, index * InlineTokenField.Stride);
+  for (; index < end; index++) {
+    const kind = inlineTokenKind(tokens, index);
+    if (kind >= InlineRole.Text) {
+      const field = index * InlineTokenField.Stride;
+      result.push(
+        kind,
+        tokens[field + InlineTokenField.Start],
+        tokens[field + InlineTokenField.End],
+        tokens[field + InlineTokenField.Data],
+      );
+    }
+    else if (kind !== InlineKind.None) {
+      const matched = replacements[index];
+      let last: DelimiterReplacement | undefined;
+      if (matched) {
+        // Closing matches arrive in source order, followed by opening matches in reverse.
+        let left = 0;
+        let right = matched.length;
+        while (left < right) {
+          last = matched[left].kind & 1 ? matched[left++] : matched[--right];
+          appendInlineToken(result, last.kind, last.start, last.end);
+        }
+      }
+      // A decorator may attach to the literal portion left after a marker run.
+      if (inlineTokenKind(tokens, index + 1) >= InlineRole.Decorate) {
+        const start = last?.end ?? inlineTokenStart(tokens, index);
+        const end = inlineTokenEnd(tokens, index);
+        if (start < end) {
+          appendInlineToken(result, InlineKind.LiteralText, start, end);
+        }
+      }
     }
   }
+  return result;
 }
 
 export function compileDelimiterConfigs(
