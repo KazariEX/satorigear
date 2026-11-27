@@ -9,7 +9,12 @@ export interface InlineScanRule {
   scan: (source: string, start: number, tokens: number[]) => number;
 }
 
-export type InlineTokenizer = (source: string, withBoundaryBreak: boolean, base?: number) => InlineTokenStream;
+export type InlineTokenizer = (
+  source: string,
+  withBoundaryBreak: boolean,
+  // One physical base or pairs of physical delta and exclusive logical end.
+  mapping?: number | readonly number[],
+) => InlineTokenStream;
 
 const cacheMasks = new Map<string, Uint8Array>();
 
@@ -138,9 +143,9 @@ function createInlineTokenizer(
   masks: Uint8Array | undefined,
   scanners: InlineScanRule["scan"][],
 ): InlineTokenizer {
-  return (source, withBoundaryBreak, base) => {
-    if (masks && base !== void 0) {
-      return tokenizeLatin1(source, base, masks, scanners);
+  return (source, withBoundaryBreak, mapping) => {
+    if (masks && typeof mapping === "number") {
+      return tokenizeLatin1(source, mapping, masks, scanners);
     }
     const boundary = withBoundaryBreak ? boundarySlow : boundaryFast;
     let tokens: number[] | undefined;
@@ -164,37 +169,102 @@ function generateInlineTokenizer(
   codes: number[],
   scanners: InlineScanRule["scan"][],
 ): InlineTokenizer {
-  const names = codes.map((code, index) => `s${index}`);
-  const cases = codes
-    .map((code, index) => `case ${code}:d=s${index}(s,o,t);break;`)
-    .join("");
-
-  // Low-byte matches can alias markers. Dispatch checks the original UTF-16 code unit.
-  const dispatch = `if(t===a)t=[];let d;switch(s.charCodeAt(o)){${cases}default:d=o}p=d>o?d:o+1`;
-
-  return Function("b1", "b2", "v", "a", "m", "c", ...names, [
-    `return(s,u,z)=>{let t=a,p=0;`,
-    masks && [
-      /** Mirror {@link tokenizeLatin1}. */
-      `if(z!==void 0){`,
-      `const w=v.words,e=z+s.length;let k=z;`,
-      `for(let g=z&~15;k<e;){let b=c(w,m,g)&-1<<(k&15);while(!b&&(g+=16)<e)b=c(w,m,g);if(!b)break;const q=g+16;`,
-      `do{const o=g+31-Math.clz32(b&-b)-z;if(o>=s.length)return t;`,
-      `${dispatch};k=z+p;if(k>=q)break;b&=-1<<(k&15)}while(b);`,
-      `k=Math.max(k,q);g=k&~15}return t}`,
-    ].join(""),
-    `const x=u?b2:b1;while(p<s.length){x.lastIndex=p;if(!x.test(s))break;`,
-    `const o=x.lastIndex-1;`,
-    `${dispatch}}return t}`,
-  ].join(""))(
+  const bindings: Record<string, unknown> = {
     boundaryFast,
     boundarySlow,
-    ScratchView,
+    createBitmap,
     emptyArray,
     masks,
-    createBitmap,
-    ...codes.map((code) => scanners[code]),
-  );
+    ScratchView,
+  };
+
+  const cases: string[] = [];
+  for (let index = 0; index < codes.length; index++) {
+    const code = codes[index];
+    const name = `scan${index}`;
+    bindings[name] = scanners[code];
+    cases.push(`case ${code}: next = ${name}(source, markerOffset, tokens); break;`);
+  }
+
+  // Low-byte matches can alias markers, so dispatch checks the UTF-16 code unit.
+  const dispatch = /* TS */`
+    if (tokens === emptyArray) {
+      tokens = [];
+    }
+    let next;
+    switch (source.charCodeAt(markerOffset)) {
+      ${cases.join("\n")}
+      default: next = markerOffset;
+    }
+    offset = next > markerOffset ? next : markerOffset + 1;
+  `;
+
+  // Bitmap bounds are physical, but rules advance the logical offset across segments.
+  const scanBitmap = /* TS */`
+    const limit = start + end;
+    let cursor = start + offset;
+    groups: for (let group = cursor & ~15; cursor < limit;) {
+      let bits = createBitmap(words, masks, group) & -1 << (cursor & 15);
+      while (!bits && (group += 16) < limit) bits = createBitmap(words, masks, group);
+      if (!bits) break;
+      const groupEnd = group + 16;
+      do {
+        const markerOffset = group + 31 - Math.clz32(bits & -bits) - start;
+        if (markerOffset >= end) {
+          break groups;
+        }
+        ${dispatch}
+        cursor = start + offset;
+        if (cursor >= groupEnd) {
+          break;
+        }
+        bits &= -1 << (cursor & 15);
+      }
+      while (bits);
+      cursor = Math.max(cursor, groupEnd);
+      group = cursor & ~15;
+    }
+  `;
+
+  return Function(...Object.keys(bindings), /* TS */`
+    ${masks ? /* TS */`
+      function segments(source, mappings) {
+        const words = ScratchView.words;
+        let tokens = emptyArray;
+        let offset = 0;
+        for (let i = 0; i < mappings.length; i += 2) {
+          const start = mappings[i];
+          const end = mappings[i + 1];
+          if (offset >= end) continue;
+          ${scanBitmap}
+          offset = Math.max(offset, end);
+        }
+        return tokens;
+      }
+    ` : ""}
+    return (source, withBoundaryBreak, mappings) => {
+      let tokens = emptyArray;
+      let offset = 0;
+      ${masks ? /* TS */`
+        if (mappings !== void 0) {
+          if (typeof mappings !== "number") return segments(source, mappings);
+          const words = ScratchView.words;
+          const start = mappings;
+          const end = source.length;
+          ${scanBitmap}
+          return tokens;
+        }
+      ` : ""}
+      const boundary = withBoundaryBreak ? boundarySlow : boundaryFast;
+      while (offset < source.length) {
+        boundary.lastIndex = offset;
+        if (!boundary.test(source)) break;
+        const markerOffset = boundary.lastIndex - 1;
+        ${dispatch}
+      }
+      return tokens;
+    };
+  `)(...Object.values(bindings));
 }
 
 // eslint-disable-next-line ts/no-use-before-define
