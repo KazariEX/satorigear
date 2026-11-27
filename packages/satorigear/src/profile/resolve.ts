@@ -168,7 +168,7 @@ function resolvePairs(
   // This suffix is owned by resolution. The lexer stream retained for edits stays reusable.
   const end = inlineTokenCount(tokens);
   const openers: number[] = [];
-  const scopes = new DelimiterStack();
+  let scopes: DelimiterStack | undefined;
   let mates: number[] | undefined;
   let lastVisibleOpener = -1;
   let lastLinkOpener = -1;
@@ -201,6 +201,7 @@ function resolvePairs(
     }
     const delimiter = delimiters[kind];
     if (delimiter) {
+      scopes ??= new DelimiterStack();
       scopes.add(source, tokens, index, delimiter);
       continue;
     }
@@ -291,10 +292,9 @@ function resolvePairs(
         consumedEnd = closeEnd;
       }
     }
-    scopes.close(tokens, open);
+    scopes?.close(tokens, open);
   }
-  scopes.close(tokens);
-  return scopes.emit(tokens);
+  return scopes?.finish(tokens) ?? emitResolvedTokens(tokens);
 }
 
 export function createInlineResolver(options: InlineResolverOptions, delimiters: DelimiterConfig[]): InlineResolver {

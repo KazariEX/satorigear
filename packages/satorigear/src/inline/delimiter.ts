@@ -257,7 +257,8 @@ export class DelimiterStack {
     this.#replacements[index].push({ start, end, kind });
   }
 
-  emit(tokens: InlineTokenStream): InlineTokenStream {
+  finish(tokens: number[]): InlineTokenStream {
+    this.close(tokens);
     return emitResolvedTokens(tokens, this.#replacements);
   }
 }
