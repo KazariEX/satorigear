@@ -426,10 +426,8 @@ export class BlockLines implements SourceLocator {
     if (consumed < columns) {
       return consumed <= 3 ? offset : IndentedLine.Indented;
     }
-    const contentOffset = offset;
-    const prefixColumns = consumed - columns;
     if (trimLineWhitespaceStart(source, offset, end) < end) {
-      this.pushFrom(lines, index, contentOffset, prefixColumns);
+      this.push(offset, end, lines.next(index), consumed - columns, lines.lazy(index));
       return IndentedLine.Appended;
     }
     return IndentedLine.Blank;
