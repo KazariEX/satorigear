@@ -181,9 +181,9 @@ function generateInlineTokenizer(
   const cases: string[] = [];
   for (let index = 0; index < codes.length; index++) {
     const code = codes[index];
-    const name = `scan${index}`;
+    const name = `s${index}`;
     bindings[name] = scanners[code];
-    cases.push(`case ${code}: next = ${name}(source, markerOffset, tokens); break;`);
+    cases.push(`case ${code}:next=${name}(source,markerOffset,tokens);break;`);
   }
 
   // Low-byte matches can alias markers, so dispatch checks the UTF-16 code unit.
@@ -199,7 +199,10 @@ function generateInlineTokenizer(
     offset = next > markerOffset ? next : markerOffset + 1;
   `;
 
-  // Bitmap bounds are physical, but rules advance the logical offset across segments.
+  /**
+   * Mirrors {@link tokenizeLatin1}.
+   * Bitmap bounds are physical, but rules advance the logical offset across segments.
+   */
   const scanBitmap = /* TS */`
     const limit = start + end;
     let cursor = start + offset;
