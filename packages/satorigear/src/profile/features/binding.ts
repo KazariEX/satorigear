@@ -1,5 +1,6 @@
 import { Character } from "../../constants/character.ts";
 import { InlineKind } from "../../constants/inline.ts";
+import { findPatternEnd } from "../../inline/tokenizer.ts";
 import {
   appendInlineToken,
   inlineTokenData,
@@ -8,6 +9,8 @@ import {
 } from "../../inline/tokens.ts";
 import type { SyntaxFeature } from "../types.ts";
 import type { Attributes } from "./attributes/types.ts";
+
+const leadingWhitespace = /\s*/y;
 
 export const feature: SyntaxFeature = {
   inline: {
@@ -22,9 +25,18 @@ export const feature: SyntaxFeature = {
           if (close < 0) {
             return -1;
           }
-          const separator = source.indexOf("||", start + 2);
-          const valueEnd = separator < 0 || separator > close ? close : separator;
-          if (!source.slice(start + 2, valueEnd).trim()) {
+          const valueStart = findPatternEnd(source, start + 2, leadingWhitespace);
+          let valueEnd = close;
+          for (let offset = valueStart; offset + 1 < close; offset++) {
+            if (
+              source.charCodeAt(offset) === Character.VerticalLine &&
+              source.charCodeAt(offset + 1) === Character.VerticalLine
+            ) {
+              valueEnd = offset;
+              break;
+            }
+          }
+          if (valueStart >= valueEnd) {
             return -1;
           }
           const end = close + 2;

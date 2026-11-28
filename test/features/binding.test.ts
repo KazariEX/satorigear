@@ -56,8 +56,10 @@ describe("binding", () => {
   it("leaves invalid bindings to ordinary inline parsing", () => {
     for (const source of [
       "x {{  }} y",
+      "x {{ \u00a0 }} y",
       "x {{ unclosed *emphasis*",
       "x {{ || fallback }} y",
+      "x {{ || }} y",
       "single { value } here",
     ]) {
       expect(parser.parse(source)).toEqual(defaultParser.parse(source));
