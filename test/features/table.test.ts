@@ -63,10 +63,31 @@ describe("table", () => {
     });
   });
 
-  it("keeps variable body widths and stops at another block", () => {
-    const source = "a | b\n--- | ---\none\nthree | four | five\n> quote\n";
-    const tree = parser.parse(source);
-    expect(tree.children).toMatchObject([
+  it("keeps empty cells and trailing delimiter whitespace", () => {
+    expect(parser.parse("|  | value |\n| --- | --- |\n").children[0]).toMatchObject({
+      type: "table",
+      children: [
+        {
+          children: [
+            { type: "tableCell", children: [] },
+            { type: "tableCell", children: [{ type: "text", value: "value" }] },
+          ],
+        },
+      ],
+    });
+
+    expect(parser.parse("| a |\n| :- |   \n| b |\n").children[0]).toMatchObject({
+      type: "table",
+      align: ["left"],
+      children: [
+        { type: "tableRow", children: [{ type: "tableCell" }] },
+        { type: "tableRow", children: [{ type: "tableCell" }] },
+      ],
+    });
+  });
+
+  it("keeps variable body widths and stops at block or bare-pipe boundaries", () => {
+    expect(parser.parse("a | b\n--- | ---\none\nthree | four | five\n> quote\n").children).toMatchObject([
       {
         type: "table",
         align: [null, null],
@@ -81,6 +102,28 @@ describe("table", () => {
       },
       { type: "blockquote" },
     ]);
+
+    expect(parser.parse("| a |\n| - |\n|\n").children).toMatchObject([
+      {
+        type: "table",
+        children: [{ type: "tableRow", children: [{ type: "tableCell" }] }],
+      },
+      { type: "paragraph" },
+    ]);
+  });
+
+  it("rejects malformed headers and delimiter rows", () => {
+    for (const source of [
+      "a | b\n: | ---\n",
+      "a | b\n--- | :\n",
+      "a | b\n| : | --- |\n",
+      "a | b\n\t: | ---\n",
+      "a | b\n| --- | |\n",
+      "a\n|\n",
+      "paragraph\n:---\n",
+    ]) {
+      expect(parser.parse(source).children[0].type).toBe("paragraph");
+    }
   });
 
   it("recognizes tables inside CommonMark containers", () => {
@@ -94,43 +137,41 @@ describe("table", () => {
     });
   });
 
-  it("keeps full and incremental table parsing equivalent", () => {
-    const document = parser.createDocument("| a | b |\n| === | --- |\n| c | d |\n");
-    document.edit([{ start: 12, end: 15, text: "---" }]);
-    expect(document.tree).toEqual(parser.parse(document.source));
-    expect(document.tree.children[0]).toMatchObject({ type: "table" });
+  it("promotes, splits, and demotes tables across edits", () => {
+    const promoted = parser.createDocument("| a | b |\n| === | --- |\n| c | d |\n");
+    promoted.edit([{ start: 12, end: 15, text: "---" }]);
+    expect(promoted.tree).toEqual(parser.parse(promoted.source));
+    expect(promoted.tree.children[0]).toMatchObject({ type: "table" });
 
-    const body = document.source.indexOf("| c | d |");
-    document.edit([{ start: body, end: body + 9, text: "# heading" }]);
-    expect(document.tree).toEqual(parser.parse(document.source));
-    expect(document.tree.children.map((node) => node.type)).toEqual(["table", "heading"]);
+    const body = promoted.source.indexOf("| c | d |");
+    promoted.edit([{ start: body, end: body + 9, text: "# heading" }]);
+    expect(promoted.tree).toEqual(parser.parse(promoted.source));
+    expect(promoted.tree.children.map((node) => node.type)).toEqual(["table", "heading"]);
+
+    const demoted = parser.createDocument("a | b\n:-: | ---\n");
+    demoted.edit([{ start: 7, end: 9, text: "" }]);
+    expect(demoted.tree).toEqual(parser.parse(demoted.source));
+    expect(demoted.tree.children[0].type).toBe("paragraph");
   });
 
-  it("invalidates an unchanged-size cell edit", () => {
-    const source = "| a | b |\n| --- | --- |\n| c | d |\n";
+  it("preserves table identity and updates cells and positions across edits", () => {
+    const fixed = parser.createDocument("| a | b |\n| --- | --- |\n| c | d |\n");
+    const cellOffset = fixed.source.indexOf("c");
+    fixed.edit([{ start: cellOffset, end: cellOffset + 1, text: "x" }]);
+    expect(fixed.tree).toEqual(parser.parse(fixed.source));
+
+    const source = "before\n\n| a | **b** |\n| --- | --- |\n| c | **d** |  \n";
     const document = parser.createDocument(source);
-    const cell = source.indexOf("c");
-    document.edit([{ start: cell, end: cell + 1, text: "x" }]);
+    const table = document.tree.children[1];
+    document.edit([{ start: 0, end: 0, text: "\n" }]);
+    expect(document.tree.children[1]).toBe(table);
     expect(document.tree).toEqual(parser.parse(document.source));
-  });
 
-  it("keeps empty cells empty", () => {
-    expect(parser.parse("|  | value |\n| --- | --- |\n").children[0]).toMatchObject({
-      type: "table",
-      children: [
-        {
-          children: [
-            { type: "tableCell", children: [] },
-            { type: "tableCell", children: [{ type: "text", value: "value" }] },
-          ],
-        },
-      ],
-    });
-  });
-
-  it("rejects delimiter cells without hyphens", () => {
-    expect(parser.parse("| a | b |\n| : | : |\n| c | d |\n").children[0]).toMatchObject({
-      type: "paragraph",
-    });
+    const cell = document.source.indexOf("**d**") + 2;
+    document.edit([{ start: cell, end: cell + 1, text: "longer" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
+    const pipe = document.source.lastIndexOf("|");
+    document.edit([{ start: pipe, end: pipe + 1, text: "" }]);
+    expect(document.tree).toEqual(parser.parse(document.source));
   });
 });

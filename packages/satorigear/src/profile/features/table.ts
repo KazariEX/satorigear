@@ -12,94 +12,41 @@ import type { BlockTokenStream } from "../../block/tokens.ts";
 import type { BlockBuildContext } from "../../fragment/block.ts";
 import type { SyntaxFeature } from "../types.ts";
 
-// Cell records start as [frame start, trimmed content start, trimmed content end].
-// Delimiter validation reuses the content-start slot for its alignment kind.
-const enum CellSlot {
-  ContentStart = 1,
-  Alignment = ContentStart,
-  ContentEnd = 2,
-  Stride = 3,
+const enum DelimiterSlot {
+  Start,
+  Alignment,
+  Stride,
 }
 
-function appendTableCell(
-  cells: number[],
-  source: string,
-  start: number,
-  contentStart: number,
-  contentEnd: number,
-): void {
-  contentStart = trimLineWhitespaceStart(source, contentStart, contentEnd);
-  contentEnd = trimLineWhitespaceEnd(source, contentStart, contentEnd);
-  cells.push(start, contentStart, contentEnd);
-}
-
-function tableCellsAt(
-  source: string,
-  lines: BlockLines,
-  index: number,
-  requirePipe: boolean,
-  contentOffset: number,
-): number[] | undefined {
-  if (contentOffset < 0) {
-    return;
+function isEscapedPipe(source: string, contentOffset: number, pipe: number): boolean {
+  let escapeStart = pipe;
+  while (escapeStart > contentOffset && source.charCodeAt(escapeStart - 1) === Character.ReverseSolidus) {
+    escapeStart--;
   }
+  return ((pipe - escapeStart) & 1) !== 0;
+}
 
+function countHeaderCells(source: string, lines: BlockLines, index: number, contentOffset: number): number {
   const lineEnd = lines.end(index);
   const row = source.slice(contentOffset, lineEnd);
-  const cells: number[] = [];
-  let contentStart = contentOffset;
-  let spanStart = contentOffset;
-  let lastPipe: number | undefined;
+  let count = 0;
+  let lastPipe = -1;
   for (let pipe = row.indexOf("|"); pipe >= 0; pipe = row.indexOf("|", pipe + 1)) {
-    let escapeStart = pipe;
-    while (escapeStart > 0 && row.charCodeAt(escapeStart - 1) === Character.ReverseSolidus) {
-      escapeStart--;
-    }
-    if ((pipe - escapeStart) % 2 !== 0) {
+    const sourcePipe = contentOffset + pipe;
+    if (isEscapedPipe(source, contentOffset, sourcePipe)) {
       continue;
     }
-    lastPipe = contentOffset + pipe;
-    if (pipe === 0) {
-      contentStart++;
-      continue;
+    lastPipe = sourcePipe;
+    if (pipe > 0) {
+      count++;
     }
-    appendTableCell(cells, source, spanStart, contentStart, lastPipe);
-    spanStart = lastPipe;
-    contentStart = lastPipe + 1;
   }
-  if (requirePipe && lastPipe === void 0) {
-    return;
+  if (lastPipe < 0) {
+    return 0;
   }
 
   const visibleEnd = trimLineWhitespaceEnd(source, contentOffset, lineEnd);
-  if (lastPipe !== visibleEnd - 1) {
-    appendTableCell(cells, source, spanStart, contentStart, lineEnd);
-  }
-  return cells.length > 0 ? cells : void 0;
-}
-
-function alignmentAt(source: string, cells: readonly number[], cell: number): BlockKind | undefined {
-  let start = cells[cell + CellSlot.ContentStart];
-  let end = cells[cell + CellSlot.ContentEnd];
-  const left = source.charCodeAt(start) === Character.Colon;
-  if (left) {
-    start++;
-  }
-  const right = source.charCodeAt(end - 1) === Character.Colon;
-  if (right) {
-    end--;
-  }
-  if (start >= end) {
-    return;
-  }
-  for (let offset = start; offset < end; offset++) {
-    if (source.charCodeAt(offset) !== Character.HyphenMinus) {
-      return;
-    }
-  }
-  return left
-    ? right ? BlockKind.TableAlignCenter : BlockKind.TableAlignLeft
-    : right ? BlockKind.TableAlignRight : BlockKind.TableAlignNone;
+  return lastPipe !== visibleEnd - 1 ? count + 1 : count;
 }
 
 function delimiterAt(
@@ -116,41 +63,100 @@ function delimiterAt(
   ) {
     return;
   }
-  const cells = tableCellsAt(source, lines, index, false, contentOffset);
-  if (!cells) {
-    return;
-  }
-  for (let cell = 0; cell < cells.length; cell += CellSlot.Stride) {
-    const alignment = alignmentAt(source, cells, cell);
-    if (alignment === void 0) {
+  const lineEnd = lines.end(index);
+  const delimiter: number[] = [];
+  let spanStart = contentOffset;
+  let offset = first === Character.VerticalLine ? contentOffset + 1 : contentOffset;
+  while (offset < lineEnd) {
+    offset = trimLineWhitespaceStart(source, offset, lineEnd);
+    if (offset === lineEnd) {
+      break;
+    }
+    const left = source.charCodeAt(offset) === Character.Colon;
+    if (left) {
+      offset++;
+    }
+    const hyphenStart = offset;
+    while (offset < lineEnd && source.charCodeAt(offset) === Character.HyphenMinus) {
+      offset++;
+    }
+    if (offset === hyphenStart) {
       return;
     }
-    cells[cell + CellSlot.Alignment] = alignment;
+    const right = offset < lineEnd && source.charCodeAt(offset) === Character.Colon;
+    if (right) {
+      offset++;
+    }
+    offset = trimLineWhitespaceStart(source, offset, lineEnd);
+    let nextSpanStart = lineEnd;
+    if (offset < lineEnd) {
+      if (source.charCodeAt(offset) !== Character.VerticalLine) {
+        return;
+      }
+      nextSpanStart = offset;
+      offset++;
+    }
+    delimiter.push(
+      spanStart,
+      left
+        ? right ? BlockKind.TableAlignCenter : BlockKind.TableAlignLeft
+        : right ? BlockKind.TableAlignRight : BlockKind.TableAlignNone,
+    );
+    spanStart = nextSpanStart;
   }
-  return cells;
+  return delimiter.length > 0 ? delimiter : void 0;
 }
 
-function emitTableRow(
-  lines: BlockLines,
+function emitTableCell(
+  source: string,
   tokens: BlockTokenStream,
-  index: number,
-  cells: readonly number[],
+  spanStart: number,
+  contentStart: number,
+  contentEnd: number,
 ): void {
-  tokens.push(BlockKind.TableRowOpen, cells[0], cells[0]);
-  for (let cell = 0; cell < cells.length; cell += CellSlot.Stride) {
-    // The possibly empty inline chunk closes the cell frame. The next cell or
-    // row-close token marks its outer end, so no separate close token is needed.
-    const start = cells[cell];
-    tokens.pushInlineFrame(
-      BlockKind.TableCellOpen,
-      start,
-      start,
-      cells[cell + CellSlot.ContentStart],
-      cells[cell + CellSlot.ContentEnd],
-    );
+  contentStart = trimLineWhitespaceStart(source, contentStart, contentEnd);
+  contentEnd = trimLineWhitespaceEnd(source, contentStart, contentEnd);
+  // The possibly empty inline chunk closes the cell frame; the next cell or row close marks its end.
+  tokens.pushInlineFrame(BlockKind.TableCellOpen, spanStart, spanStart, contentStart, contentEnd);
+}
+
+// Header validation proved an unescaped `|` exists; advancing `nextPipe` monotonically across
+// rows keeps worst-case pipe discovery O(N) over the document without per-row slicing.
+function emitTableRow(
+  source: string,
+  tokens: BlockTokenStream,
+  contentOffset: number,
+  lineEnd: number,
+  visibleEnd: number,
+  nextPipe: number,
+): number {
+  tokens.push(BlockKind.TableRowOpen, contentOffset, contentOffset);
+  let contentStart = contentOffset;
+  let spanStart = contentOffset;
+  let lastPipe = -1;
+  if (nextPipe !== -1 && nextPipe < contentOffset) {
+    nextPipe = source.indexOf("|", contentOffset);
   }
-  const lineEnd = lines.end(index);
+  while (nextPipe >= 0 && nextPipe < lineEnd) {
+    const pipe = nextPipe;
+    nextPipe = source.indexOf("|", pipe + 1);
+    if (isEscapedPipe(source, contentOffset, pipe)) {
+      continue;
+    }
+    lastPipe = pipe;
+    if (pipe === contentOffset) {
+      contentStart++;
+      continue;
+    }
+    emitTableCell(source, tokens, spanStart, contentStart, pipe);
+    spanStart = pipe;
+    contentStart = pipe + 1;
+  }
+  if (lastPipe !== visibleEnd - 1) {
+    emitTableCell(source, tokens, spanStart, contentStart, lineEnd);
+  }
   tokens.push(BlockKind.TableRowClose, lineEnd, lineEnd);
+  return nextPipe;
 }
 
 function buildTableRow(tokenStart: number, context: BlockBuildContext): TableRow {
@@ -221,22 +227,29 @@ export const feature: SyntaxFeature = {
           return;
         }
         const delimiter = delimiterAt(source, lines, delimiterLine, delimiterOffset);
-        if (!delimiter) {
-          return;
-        }
-        const header = tableCellsAt(source, lines, start, true, contentOffset);
-        if (header?.length !== delimiter.length) {
+        if (
+          !delimiter ||
+          countHeaderCells(source, lines, start, contentOffset) !== delimiter.length / DelimiterSlot.Stride
+        ) {
           return;
         }
 
-        tokens.push(BlockKind.TableOpen, header[0], header[0]);
-        emitTableRow(lines, tokens, start, header);
+        tokens.push(BlockKind.TableOpen, contentOffset, contentOffset);
+        const headerEnd = lines.end(start);
+        let nextPipe = emitTableRow(
+          source,
+          tokens,
+          contentOffset,
+          headerEnd,
+          trimLineWhitespaceEnd(source, contentOffset, headerEnd),
+          source.indexOf("|", contentOffset),
+        );
         const delimiterEnd = lines.end(delimiterLine);
-        for (let cell = 0; cell < delimiter.length; cell += CellSlot.Stride) {
+        for (let cell = 0; cell < delimiter.length; cell += DelimiterSlot.Stride) {
           tokens.push(
-            delimiter[cell + CellSlot.Alignment],
-            delimiter[cell],
-            delimiter[cell + CellSlot.Stride] ?? delimiterEnd,
+            delimiter[cell + DelimiterSlot.Alignment],
+            delimiter[cell + DelimiterSlot.Start],
+            delimiter[cell + DelimiterSlot.Stride + DelimiterSlot.Start] ?? delimiterEnd,
           );
         }
 
@@ -249,11 +262,12 @@ export const feature: SyntaxFeature = {
           ) {
             break;
           }
-          const cells = tableCellsAt(source, lines, end, false, contentOffset);
-          if (!cells) {
+          const lineEnd = lines.end(end);
+          const visibleEnd = trimLineWhitespaceEnd(source, contentOffset, lineEnd);
+          if (visibleEnd === contentOffset + 1 && source.charCodeAt(contentOffset) === Character.VerticalLine) {
             break;
           }
-          emitTableRow(lines, tokens, end, cells);
+          nextPipe = emitTableRow(source, tokens, contentOffset, lineEnd, visibleEnd, nextPipe);
           end++;
         }
         const tableEnd = lines.end(end - 1);
