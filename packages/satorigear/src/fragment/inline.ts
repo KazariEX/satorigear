@@ -36,8 +36,8 @@ interface InlineOutput extends InlineFragment {
   end: number;
   // The text child is published immediately; only its source end remains pending.
   pendingText: Text | undefined;
-  // Keep only the consecutive literal suffix; decoded whitespace is semantic text.
-  pendingLiteral: string;
+  // Text before this boundary can contain whitespace produced by decoding.
+  literalStart: number;
 }
 
 export type InlineLeafBuilder = (
@@ -85,15 +85,20 @@ function appendText(
     const text: Text = {
       type: "text",
       value,
-      position: { start: startLocation, end: startLocation },
+      position: {
+        start: startLocation,
+        end: startLocation,
+      },
     };
     output.children.push(text);
     output.pendingText = text;
-    output.pendingLiteral = literal ? value : "";
+    output.literalStart = 0;
   }
   else {
     output.pendingText.value += value;
-    output.pendingLiteral = literal ? output.pendingLiteral + value : "";
+  }
+  if (!literal) {
+    output.literalStart = output.pendingText.value.length;
   }
   output.end = end;
 }
@@ -106,32 +111,33 @@ function finishText(context: InlineBuildContext, output: InlineOutput): void {
   }
 }
 
-function trimTrailingText(context: InlineBuildContext, output: InlineOutput): void {
+function appendGap(context: InlineBuildContext, output: InlineOutput, start: number, end: number): void {
+  const value = context.view.text.slice(start, end);
+  appendText(context, output, value, start, end, true);
+}
+
+function appendTrimmedGap(context: InlineBuildContext, output: InlineOutput, end: number): void {
+  if (end > output.end) {
+    const gapEnd = trimLineWhitespaceEnd(context.view.text, output.end, end);
+    if (gapEnd > output.end) {
+      appendGap(context, output, output.end, gapEnd);
+      return;
+    }
+  }
   if (output.pendingText) {
-    const literal = output.pendingLiteral;
-    const removed = literal.length - trimLineWhitespaceEnd(literal, 0, literal.length);
-    if (removed > 0) {
+    const value = output.pendingText.value;
+    const trimmedEnd = trimLineWhitespaceEnd(value, output.literalStart, value.length);
+    if (trimmedEnd < value.length) {
       // Removing an all-whitespace pending gap must also move its source start.
-      if (removed === output.pendingText.value.length) {
+      if (trimmedEnd === 0) {
         output.pendingText.position!.start = context.locator.locationAt(
           context.view.mapOffset(output.end),
         );
       }
-      output.pendingText.value = output.pendingText.value.slice(0, -removed);
-      output.end -= removed;
-      output.pendingLiteral = "";
+      output.pendingText.value = value.slice(0, trimmedEnd);
+      output.end -= value.length - trimmedEnd;
     }
   }
-}
-
-function appendGap(
-  context: InlineBuildContext,
-  output: InlineOutput,
-  start: number,
-  end: number,
-): void {
-  const value = context.view.text.slice(start, end);
-  appendText(context, output, value, start, end, true);
 }
 
 // Text builders and decorators can change the preceding text. Finish their run at the next node boundary.
@@ -145,15 +151,15 @@ function appendTextRange(context: InlineBuildContext, output: InlineOutput, trim
     }
     const childStart = inlineTokenStart(context.tokens, index);
     if (kind < InlineRole.Leaf) {
-      if (childStart > output.end) {
-        appendGap(context, output, output.end, childStart);
-      }
       const childEnd = inlineTokenEnd(context.tokens, index);
       if (kind === InlineKind.Newline) {
-        trimTrailingText(context, output);
+        appendTrimmedGap(context, output, childStart);
         appendText(context, output, "\n", childStart, childEnd, false);
       }
       else {
+        if (childStart > output.end) {
+          appendGap(context, output, output.end, childStart);
+        }
         const build = context.profile.builders[kind] as InlineTextBuilder;
         appendText(context, output, build(index, context), childStart, childEnd, kind === InlineKind.LiteralText);
       }
@@ -177,15 +183,15 @@ function appendTextRange(context: InlineBuildContext, output: InlineOutput, trim
     index++;
   }
   const contentEnd = index < end ? inlineTokenStart(context.tokens, index) : context.view.text.length;
-  if (contentEnd > output.end) {
-    appendGap(context, output, output.end, contentEnd);
-  }
   // Trailing whitespace is trimmed only at the end of the outer fragment.
   if (trimEnd && index === end) {
-    trimTrailingText(context, output);
+    appendTrimmedGap(context, output, contentEnd);
     if (output.pendingText && !output.pendingText.value) {
       output.children.pop();
     }
+  }
+  else if (contentEnd > output.end) {
+    appendGap(context, output, output.end, contentEnd);
   }
   finishText(context, output);
   output.end = contentEnd;
@@ -216,13 +222,14 @@ function buildFragment(context: InlineBuildContext, cursor: number, closer: Inli
       if (output) {
         output.end = cursor;
         output.pendingText = void 0;
+        output.literalStart = 0;
       }
       else {
         output = {
           children,
           end: cursor,
           pendingText: void 0,
-          pendingLiteral: "",
+          literalStart: 0,
         };
       }
       appendTextRange(context, output, trimEnd);
