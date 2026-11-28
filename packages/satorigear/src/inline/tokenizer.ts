@@ -9,7 +9,12 @@ export interface InlineScanRule {
   scan: (source: string, start: number, tokens: number[]) => number;
 }
 
-export type InlineTokenizer = (source: string, withBoundaryBreak: boolean, base?: number) => InlineTokenStream;
+export type InlineTokenizer = (
+  source: string,
+  withBoundaryBreak: boolean,
+  // One physical base or pairs of physical delta and exclusive logical end.
+  mapping?: number | readonly number[],
+) => InlineTokenStream;
 
 const cacheMasks = new Map<string, Uint8Array>();
 
@@ -94,53 +99,68 @@ function createBitmap(words: Uint32Array, masks: Uint8Array, group: number): num
 }
 
 function tokenizeLatin1(
-  source: string,
-  base: number,
-  masks: Uint8Array,
   scanners: InlineScanRule["scan"][],
+  masks: Uint8Array,
+  source: string,
+  mapping: number | readonly number[],
 ): InlineTokenStream {
   const words = ScratchView.words;
-  const limit = base + source.length;
-  let cursor = base;
+  const contiguous = typeof mapping === "number";
+  let base = contiguous ? mapping : mapping[0];
+  let end = contiguous ? source.length : mapping[1];
+  let offset = 0;
   let tokens: number[] | undefined;
-  for (let group = base & ~15; cursor < limit;) {
-    let bits = createBitmap(words, masks, group) & -1 << (cursor & 15);
-    while (!bits && (group += 16) < limit) {
-      bits = createBitmap(words, masks, group);
-    }
-    if (!bits) {
-      break;
-    }
-    const groupEnd = group + 16;
-    do {
-      const offset = group + 31 - Math.clz32(bits & -bits) - base;
-      if (offset >= source.length) {
-        return tokens ?? emptyArray;
+  for (let index = 2; ; index += 2) {
+    const limit = base + end;
+    let cursor = base + offset;
+    groups: for (let group = cursor & ~15; cursor < limit;) {
+      let bits: number;
+      let mask = -1 << (cursor & 15);
+      do {
+        bits = createBitmap(words, masks, group) & mask;
+        mask = -1;
       }
-      const scan = scanners[source.charCodeAt(offset)];
-      const end = scan?.(source, offset, tokens ??= []) ?? offset;
-      cursor = base + (end > offset ? end : offset + 1);
-      if (cursor >= groupEnd) {
+      while (!bits && (group += 16) < limit);
+      if (!bits) {
         break;
       }
-      bits &= -1 << (cursor & 15);
+      const groupEnd = group + 16;
+      do {
+        const markerOffset = group + 31 - Math.clz32(bits & -bits) - base;
+        if (markerOffset >= end) {
+          break groups;
+        }
+        const scan = scanners[source.charCodeAt(markerOffset)];
+        const next = scan?.(source, markerOffset, tokens ??= []) ?? markerOffset;
+        offset = next > markerOffset ? next : markerOffset + 1;
+        cursor = base + offset;
+        if (cursor >= groupEnd) {
+          break;
+        }
+        bits &= -1 << (cursor & 15);
+      }
+      while (bits);
+      cursor = Math.max(cursor, groupEnd);
+      group = cursor & ~15;
     }
-    while (bits);
-    cursor = Math.max(cursor, groupEnd);
-    group = cursor & ~15;
+    if (contiguous || index >= mapping.length) {
+      return tokens ?? emptyArray;
+    }
+    offset = Math.max(offset, end);
+    base = mapping[index];
+    end = mapping[index + 1];
   }
-  return tokens ?? emptyArray;
 }
 
 function createInlineTokenizer(
   boundaryFast: RegExp,
   boundarySlow: RegExp,
-  masks: Uint8Array | undefined,
   scanners: InlineScanRule["scan"][],
+  masks: Uint8Array | undefined,
 ): InlineTokenizer {
-  return (source, withBoundaryBreak, base) => {
-    if (masks && base !== void 0) {
-      return tokenizeLatin1(source, base, masks, scanners);
+  return (source, withBoundaryBreak, mapping) => {
+    if (masks && mapping !== void 0) {
+      return tokenizeLatin1(scanners, masks, source, mapping);
     }
     const boundary = withBoundaryBreak ? boundarySlow : boundaryFast;
     let tokens: number[] | undefined;
@@ -160,41 +180,69 @@ function createInlineTokenizer(
 function generateInlineTokenizer(
   boundaryFast: RegExp,
   boundarySlow: RegExp,
+  scanners: InlineScanRule["scan"][],
   masks: Uint8Array | undefined,
   codes: number[],
-  scanners: InlineScanRule["scan"][],
 ): InlineTokenizer {
-  const names = codes.map((code, index) => `s${index}`);
-  const cases = codes
-    .map((code, index) => `case ${code}:d=s${index}(s,o,t);break;`)
-    .join("");
+  const bindings: Record<string, unknown> = {
+    b1: boundaryFast,
+    b2: boundarySlow,
+    cb: createBitmap,
+    ea: emptyArray,
+    ms: masks,
+    sv: ScratchView,
+  };
 
-  // Low-byte matches can alias markers. Dispatch checks the original UTF-16 code unit.
-  const dispatch = `if(t===a)t=[];let d;switch(s.charCodeAt(o)){${cases}default:d=o}p=d>o?d:o+1`;
+  const cases: string[] = [];
+  for (let index = 0; index < codes.length; index++) {
+    const code = codes[index];
+    const name = `s${index}`;
+    bindings[name] = scanners[code];
+    cases.push(`case ${code}:n=${name}(s,mo,t);break;`);
+  }
 
-  return Function("b1", "b2", "v", "a", "m", "c", ...names, [
-    `return(s,u,z)=>{let t=a,p=0;`,
+  // Low-byte matches can alias markers, so dispatch checks the UTF-16 code unit.
+  const dispatch = `if(t===ea)t=[];let n;switch(s.charCodeAt(mo)){${cases.join("")}default:n=mo}o=n>mo?n:mo+1;`;
+
+  /**
+   * Mirrors {@link tokenizeLatin1}.
+   * Bitmap bounds are physical, but rules advance the logical offset across segments.
+   */
+  const scanBitmap = [
+    `const l=b+e;let c=b+o;`,
+    `g:for(let g=c&~15;c<l;){let bs,m=-1<<(c&15);`,
+    `do{bs=cb(w,ms,g)&m;m=-1}while(!bs&&(g+=16)<l);`,
+    `if(!bs)break;const ge=g+16;`,
+    `do{const mo=g+31-Math.clz32(bs&-bs)-b;if(mo>=e)break g;`,
+    dispatch,
+    `c=b+o;if(c>=ge)break;bs&=-1<<(c&15)`,
+    `}while(bs);c=Math.max(c,ge);g=c&~15}`,
+  ].join("");
+
+  return Function(...Object.keys(bindings), [
     masks && [
-      /** Mirror {@link tokenizeLatin1}. */
-      `if(z!==void 0){`,
-      `const w=v.words,e=z+s.length;let k=z;`,
-      `for(let g=z&~15;k<e;){let b=c(w,m,g)&-1<<(k&15);while(!b&&(g+=16)<e)b=c(w,m,g);if(!b)break;const q=g+16;`,
-      `do{const o=g+31-Math.clz32(b&-b)-z;if(o>=s.length)return t;`,
-      `${dispatch};k=z+p;if(k>=q)break;b&=-1<<(k&15)}while(b);`,
-      `k=Math.max(k,q);g=k&~15}return t}`,
+      // Keep segmented scanning separate so V8 can inline more scanner calls on the contiguous path.
+      `function sg(s,mp){`,
+      `const w=sv.words;let t=ea,o=0;`,
+      `for(let i=0;i<mp.length;i+=2){`,
+      `const b=mp[i],e=mp[i+1];if(o>=e)continue;`,
+      scanBitmap,
+      `o=Math.max(o,e)}return t}`,
     ].join(""),
-    `const x=u?b2:b1;while(p<s.length){x.lastIndex=p;if(!x.test(s))break;`,
-    `const o=x.lastIndex-1;`,
-    `${dispatch}}return t}`,
-  ].join(""))(
-    boundaryFast,
-    boundarySlow,
-    ScratchView,
-    emptyArray,
-    masks,
-    createBitmap,
-    ...codes.map((code) => scanners[code]),
-  );
+    `return(s,wb,mp)=>{let t=ea,o=0;`,
+    masks && [
+      `if(mp!==void 0){`,
+      `if(typeof mp!=="number")return sg(s,mp);`,
+      `const w=sv.words,b=mp,e=s.length;`,
+      scanBitmap,
+      `return t}`,
+    ].join(""),
+    `const b0=wb?b2:b1;while(o<s.length){`,
+    `b0.lastIndex=o;if(!b0.test(s))break;`,
+    `const mo=b0.lastIndex-1;`,
+    dispatch,
+    `}return t}`,
+  ].join(""))(...Object.values(bindings));
 }
 
 // eslint-disable-next-line ts/no-use-before-define
@@ -232,9 +280,9 @@ function create(rules: readonly InlineScanRule[]): InlineTokenizer {
   codes.push(Character.LineFeed, Character.CarriageReturn);
 
   try {
-    return generateInlineTokenizer(boundaryFast, boundarySlow, masks, codes, scanners);
+    return generateInlineTokenizer(boundaryFast, boundarySlow, scanners, masks, codes);
   }
   catch {
-    return createInlineTokenizer(boundaryFast, boundarySlow, masks, scanners);
+    return createInlineTokenizer(boundaryFast, boundarySlow, scanners, masks);
   }
 }

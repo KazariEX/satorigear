@@ -84,7 +84,7 @@ export class SourceView {
     return tokenize(
       this.text,
       this.#withBoundaryBreak,
-      !scratch || typeof this.#mappings !== "number" || this.#withBoundaryBreak
+      !scratch || this.#withBoundaryBreak
         ? void 0
         : this.#mappings,
     );
